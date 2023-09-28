@@ -2,20 +2,20 @@ using SQLite, DataFrames, Revise, JLD2
 # cd("VCT")
 # using .VCTModule
 home_dir = cd(pwd,homedir())
-run(`cp $(home_dir)/PhysiCell_JHU/data/spec_folders/test/config/PhysiCell_settings_default.xml $(home_dir)/PhysiCell_JHU/data/spec_folders/test/config/PhysiCell_settings.xml`)
+run(`cp $(home_dir)/pcvct/data/spec_folders/test/config/PhysiCell_settings_default.xml $(home_dir)/pcvct/data/spec_folders/test/config/PhysiCell_settings.xml`)
 include("./VCTModule.jl")
 
 VCTModule.resetDatabase()
 
-cd(home_dir*"/PhysiCell_JHU/src")
+cd(home_dir*"/pcvct/src")
 
 db = VCTModule.VCTDatabase.db
 # DBInterface.execute(db,"INSERT INTO patients (patient_name) VALUES('test');")
 # DBInterface.execute(db,"INSERT INTO variations (variation_id) VALUES(0);")
 DBInterface.execute(db,"INSERT OR IGNORE INTO cohorts (intervention) VALUES('none');")
-# DBInterface.execute(db,"INSERT INTO folders (patient_id,cohort_id,path) VALUES(1,1,'/Users/bergmand/PhysiCell_JHU/data/spec_folders/test');")
+# DBInterface.execute(db,"INSERT INTO folders (patient_id,cohort_id,path) VALUES(1,1,'/Users/bergmand/pcvct/data/spec_folders/test');")
 
-VCTModule.addPatient("test",home_dir*"/PhysiCell_JHU/data/spec_folders/test/")
+VCTModule.addPatient("test",home_dir*"/pcvct/data/spec_folders/test/")
 
 xml_paths = [["cell_definitions","cell_definition:name:PD-L1lo_tumor","phenotype","cycle","phase_transition_rates","rate"]]
 push!(xml_paths,["cell_definitions","cell_definition:name:PD-L1lo_tumor","phenotype","death","model:name:apoptosis","death_rate"])

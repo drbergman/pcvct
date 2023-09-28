@@ -7,7 +7,7 @@ using MAT, LightXML, SQLite, DataFrames
 home_dir = cd(pwd,homedir())
 
 include("./VCTConfiguration.jl")
-db = SQLite.DB(home_dir*"/PhysiCell_JHU/vct.db")
+db = SQLite.DB(home_dir*"/pcvct/vct.db")
 
 ############# Helper functions #############
 function grabOutputFiles(path_to_output_folder::String, filename_suffix::String)
@@ -93,7 +93,7 @@ function loadTimeTimeSeries(path_to_output_folders::Vector{String})
 end
 
 function loadTimeTimeSeries(simulation_id::Union{Int,Vector{Int}})
-    return loadTimeTimeSeries([home_dir*"/PhysiCell_JHU/data/simulations/$d/output/" for d in simulation_id])
+    return loadTimeTimeSeries([home_dir*"/pcvct/data/simulations/$d/output/" for d in simulation_id])
 end
 
 function loadTimeTimeSeries(patient_id::Int, variation_id::Int, cohort_id::Int)
@@ -110,7 +110,7 @@ function loadCellCountTimeSeries(path_to_output_folders::Vector{String})
 end
 
 function loadCellCountTimeSeries(simulation_id::Union{Int,Vector{Int}})
-    return loadCellCountTimeSeries([home_dir*"/PhysiCell_JHU/data/simulations/$d/output/" for d in simulation_id])
+    return loadCellCountTimeSeries([home_dir*"/pcvct/data/simulations/$d/output/" for d in simulation_id])
 end
 
 function loadCellCountTimeSeries(patient_id::Int, variation_id::Int, cohort_id::Int)
@@ -134,7 +134,7 @@ function loadCellTypeCountTimeSeries(path_to_output_folders::Vector{String}, cel
 end
 
 function loadCellTypeCountTimeSeries(simulation_id::Union{Int,Vector{Int}}, cell_type_id::Union{Int,Vector{Int}})
-    return loadCellTypeCountTimeSeries([home_dir*"/PhysiCell_JHU/data/simulations/$d/output/" for d in simulation_id], cell_type_id)
+    return loadCellTypeCountTimeSeries([home_dir*"/pcvct/data/simulations/$d/output/" for d in simulation_id], cell_type_id)
 end
 
 function loadCellTypeCountTimeSeries(patient_id::Int, variation_id::Int, cohort_id::Int, cell_type_id::Union{Int,Vector{Int}})

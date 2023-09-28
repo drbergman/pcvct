@@ -40,6 +40,13 @@ function getField(xml_path::Vector{String})
     return retrieveElement(xml_path) |> content
 end
 
+function getOutputFolder(path_to_xml)
+    VCTConfiguration.openXML(path_to_xml)
+    rel_path_to_output = getField(["save", "folder"])
+    VCTConfiguration.closeXML()
+    return rel_path_to_output
+end
+
 function updateField(xml_path::Vector{String},new_value::String)
     current_element = retrieveElement(xml_path)
     set_content(current_element, new_value)

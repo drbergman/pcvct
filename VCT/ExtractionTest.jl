@@ -2,8 +2,8 @@ using Plots
 
 include("./VCTExtraction.jl")
 
-cd("/Users/bergmand/PhysiCell_JHU/data/")
-path_to_outputs = ["/Users/bergmand/PhysiCell_JHU/data/simulations/$d/output/" for d in 1:8]
+cd("/Users/bergmand/pcvct/data/")
+path_to_outputs = ["/Users/bergmand/pcvct/data/simulations/$d/output/" for d in 1:8]
 t = VCTExtraction.loadTimeTimeSeries(path_to_outputs)
 counts = VCTExtraction.loadCellCountTimeSeries(path_to_outputs)
 

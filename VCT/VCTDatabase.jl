@@ -2,11 +2,19 @@ module VCTDatabase
 using SQLite, Tables, DataFrames
 
 home_dir = cd(pwd,homedir())
-db = SQLite.DB(home_dir*"/PhysiCell_JHU/vct.db")
+db = SQLite.DB()
+
+function initializeDatabase(path_to_database::String)
+    VCTDatabase.db = SQLite.DB(path_to_database)
+    return createSchema()
+end
 
 function initializeDatabase()
-    db = SQLite.DB(home_dir*"/PhysiCell_JHU/vct.db")
+    VCTDatabase.db = SQLite.DB()
+    return createSchema()
+end
 
+function createSchema()
     SQLite.execute(db, "CREATE TABLE IF NOT EXISTS patients (
         patient_id INTEGER PRIMARY KEY,
         patient_name TEXT
