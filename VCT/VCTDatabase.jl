@@ -60,12 +60,20 @@ function createSchema()
             REFERENCES folders (folder_id)
         )    
     ")
+
+    SQLite.execute(db, "CREATE TABLE IF NOT EXISTS trials (
+        trial_id INTEGER PRIMARY KEY,
+        datetime TEXT,
+        description TEXT
+        )
+    ")
     return db, control_cohort_id
 end
 
 function selectRow(table_name::String, condition_stmt::String)
-    df = DBInterface.execute(db, "SELECT * FROM $(table_name) " * condition_stmt * ";") |> DataFrame
-    @assert size(df,1)==1 "Did not find exactly one row matching the query."
+    s = "SELECT * FROM $(table_name) " * condition_stmt * ";"
+    df = DBInterface.execute(db, s) |> DataFrame
+    @assert size(df,1)==1 "Did not find exactly one row matching the query:\n\ts"
     return df
 end
 

@@ -1,5 +1,5 @@
 module VCTModule
-using SQLite, DataFrames, LightXML, LazyGrids
+using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables
 include("./VCTDatabase.jl")
 include("./VCTConfiguration.jl")
 
@@ -11,6 +11,7 @@ data_dir = "./data"
 current_folder_id = 0
 db, VCTModule.control_cohort_id = VCTDatabase.initializeDatabase()
 control_cohort_id = 0
+
 function initializeVCT(path_to_physicell, path_to_data)
     VCTModule.physicell_dir = path_to_physicell
     VCTModule.data_dir = path_to_data
@@ -42,24 +43,32 @@ function Simulation(patient_id::Int, cohort_id::Int, folder_id::Int)
     Simulation(simulation_id, patient_id, variation_id, cohort_id, folder_id)
 end
 
+function copyMakeFolderFiles(folder_id::Int)
+    path_to_folder = VCTDatabase.selectRow("path","folders","WHERE folder_id=$(folder_id)")
+    path_to_config = path_to_folder * "config/"
+    run(`cp -r $(path_to_config) ./config`)
+    
+    path_to_custom_modules = path_to_folder * "custom_modules/"
+    run(`cp -r $(path_to_custom_modules) ./custom_modules`)
+    
+    run(`make CC=/opt/homebrew/bin/g++-13`)
+    
+    VCTModule.current_folder_id = folder_id
+end
+
+function copyMakeFolderFiles(simulation::Simulation)
+    copyMakeFolderFiles(simulation.folder_id)
+end
+
 function runSimulation!(simulation::Simulation)
     cd(VCTModule.physicell_dir)
-    path_to_new_output = VCTModule.data_dir*"/simulations/"*string(simulation.id)*"/"
+    path_to_new_output = VCTModule.data_dir * "/simulations/" * string(simulation.id) * "/"
     if isfile(path_to_new_output * "initial_mesh0.mat")
         ran = false
         return ran
     end
     if simulation.folder_id!=VCTModule.current_folder_id
-        path_to_folder = VCTDatabase.selectRow("path","folders","WHERE folder_id=$(simulation.folder_id)")
-        path_to_config = path_to_folder * "config/"
-        run(`cp -r $(path_to_config) ./config`)
-        
-        path_to_custom_modules = path_to_folder * "custom_modules/"
-        run(`cp -r $(path_to_custom_modules) ./custom_modules`)
-        
-        run(`make CC=/opt/homebrew/bin/g++-13`)
-        
-        VCTModule.current_folder_id = simulation.folder_id
+        copyMakeFolderFiles(simulation)
     end
     run(`./project`)
 
@@ -102,51 +111,57 @@ function resetDatabase()
     return nothing
 end
 
-function runReplicates(patient_id::Int, variation_id::Int, cohort_id::Int, folder_id::Int, num_replicates::Int)
+function runReplicates(patient_id::Int, variation_id::Int, cohort_id::Int, folder_id::Int, num_replicates::Int; use_previous_sims::Bool = false)
+    if use_previous_sims
+        simulation_ids = DBInterface.execute(db, "SELECT simulation_id FROM simulations WHERE (patient_id,variation_id,cohort_id,folder_id)=($(patient_id),$(variation_id),$(cohort_id),$(folder_id));") |> DataFrame |> x->x.simulation_id
+        num_replicates -= length(simulation_ids)
+    else
+        simulation_ids = Int[]
+    end
     for i in 1:num_replicates
         s = Simulation(patient_id, variation_id, cohort_id, folder_id)
         runSimulation!(s)
+        push!(simulation_ids,s.id)
     end
-    return nothing
+    return simulation_ids
 end
 
-function runReplicates(patient_id::Int, variation_id::Int, cohort_id::Int, num_replicates::Int)
+function runReplicates(patient_id::Int, variation_id::Int, cohort_id::Int, num_replicates::Int; use_previous_sims::Bool = false)
     folder_id = VCTDatabase.getFolderID(patient_id,cohort_id)
-    runReplicates(patient_id, variation_id, cohort_id, folder_id, num_replicates)
+    return runReplicates(patient_id, variation_id, cohort_id, folder_id, num_replicates; use_previous_sims = use_previous_sims)
 end
 
-function runVirtualClinicalTrial(patient_ids::Union{Int,Vector{Int}}, variation_ids::Vector{Vector{Int}}, cohort_ids::Union{Int,Vector{Int}}, num_replicates::Int)
+function runVirtualClinicalTrial(patient_ids::Union{Int,Vector{Int}}, variation_ids::Vector{Vector{Int}}, cohort_ids::Union{Int,Vector{Int}}, num_replicates::Int; use_previous_sims::Bool = false, description::String = String[])
+    time_started  = now()
     num_patients = length(patient_ids)
     @assert num_patients == length(variation_ids) # make sure each patient has their own variation ids assigned
+    simulation_ids = Int[]
     for i in 1:num_patients
         patient_id = patient_ids[i]
         variation_table_name = "patient_variations_$(patient_id)"
         for cohort_id in cohort_ids
+            df = DBInterface.execute(db, "SELECT folder_id,path FROM folders WHERE patient_id=$(patient_id) AND cohort_id=$(cohort_id)") |> DataFrame
+            path_to_xml = df.path[1]
+            copyMakeFolderFiles(df.folder_id[1])
             path_to_xml = VCTDatabase.selectRow("path","folders","WHERE patient_id=$(patient_id) AND cohort_id=$(cohort_id)") * "config/PhysiCell_settings.xml"
             for variation_id in variation_ids[i]
                 variation_row = VCTDatabase.selectRow(variation_table_name,"WHERE variation_id=$(variation_id);")
-                VCTConfiguration.loadVariation(path_to_xml,variation_row)
-                runReplicates(patient_id, variation_id, cohort_id, num_replicates)
+                VCTConfiguration.loadVariation(path_to_xml, variation_row, physicell_dir)
+                append!(simulation_ids, runReplicates(patient_id, variation_id, cohort_id, num_replicates; use_previous_sims=use_previous_sims))
             end
         end
     end
+    recordTrialInfo(simulation_ids, time_started, description)
     return nothing
 end
 
-function runVirtualClinicalTrial(patient_ids::Int, variation_ids::Vector{Int}, cohort_ids::Union{Int,Vector{Int}}, num_replicates::Int)
-    return runVirtualClinicalTrial(patient_ids, [variation_ids], cohort_ids, num_replicates)
+function runVirtualClinicalTrial(patient_ids::Int, variation_ids::Vector{Int}, cohort_ids::Union{Int,Vector{Int}}, num_replicates::Int; use_previous_sims::Bool=false, description::String=String[])
+    return runVirtualClinicalTrial(patient_ids, [variation_ids], cohort_ids, num_replicates; use_previous_sims=use_previous_sims, description=description)
 end
 
-function runVirtualClinicalTrial(patient_id::Int, cohort_ids::Union{Int,Vector{Int}}, num_replicates::Int)
-    variation_ids = DBInterface.execute(db, "SELECT variation_id FROM patient_variations_$(patient_id);") |> DataFrame |> x -> x.variation_id
-    runVirtualClinicalTrial(patient_id, variation_ids, cohort_ids, num_replicates)
-    return nothing
-end
-
-function runVirtualClinicalTrial(patient_ids::Vector{Int}, cohort_ids::Union{Int,Vector{Int}}, num_replicates::Int)
+function runVirtualClinicalTrial(patient_ids::Union{Int,Vector{Int}}, cohort_ids::Union{Int,Vector{Int}}, num_replicates::Int; use_previous_sims::Bool=false, description::String=String[])
     variation_ids = [(DBInterface.execute(db, "SELECT variation_id FROM patient_variations_$(patient_id);") |> DataFrame |> x -> Vector(x.variation_id)) for patient_id in patient_ids]
-    runVirtualClinicalTrial(patient_ids, variation_ids, cohort_ids, num_replicates)
-    return nothing
+    return runVirtualClinicalTrial(patient_ids, variation_ids, cohort_ids, num_replicates; use_previous_sims=use_previous_sims, description=description)
 end
 
 function addPatient(patient_name::String,path_to_control_folder::String)
@@ -201,7 +216,7 @@ function addGVAX(patient_id::Int; cd4_multiplier::AbstractFloat=10., cd8_multipl
     return gvax_cohort_id
 end
 
-function addVariationColumns(patient_id::Int, xml_paths::Vector{Vector{String}})
+function addVariationColumns(patient_id::Int, xml_paths::Vector{Vector{String}}, variable_types::Vector{DataType})
     table_name = "patient_variations_$(patient_id)"
     column_names = DBInterface.execute(db, "PRAGMA table_info($(table_name));") |> DataFrame |> x->x[!,:name]
     filter!(x->x!="variation_id",column_names)
@@ -211,14 +226,23 @@ function addVariationColumns(patient_id::Int, xml_paths::Vector{Vector{String}})
     if any(is_new_column)
         new_column_names = varied_column_names[is_new_column]
 
-        for new_column_name in new_column_names
-            DBInterface.execute(db, "ALTER TABLE $(table_name) ADD COLUMN '$(new_column_name)' TEXT;")
-        end
         path_to_xml = VCTDatabase.selectRow("path", "folders", "WHERE patient_id=$(patient_id) AND cohort_id=$(VCTModule.control_cohort_id)")
         path_to_xml *= "config/PhysiCell_settings.xml"
         VCTConfiguration.openXML(path_to_xml)
         default_values_for_new = [VCTConfiguration.getField(xml_path) for xml_path in xml_paths[is_new_column]]
         VCTConfiguration.closeXML()
+        for (i, new_column_name) in enumerate(new_column_names)
+            if variable_types[i] == Bool
+                sqlite_data_type = "TEXT"
+            elseif variable_types[i] <: Int
+                sqlite_data_type = "INT"
+            elseif variable_types[i] <: Real
+                sqlite_data_type = "REAL"
+            else
+                sqlite_data_type = "TEXT"
+            end
+            DBInterface.execute(db, "ALTER TABLE $(table_name) ADD COLUMN '$(new_column_name)' $(sqlite_data_type);")
+        end
         DBInterface.execute(db, "UPDATE $(table_name) SET ($(join("\"".*new_column_names.*"\"",",")))=($(join("\"".*default_values_for_new.*"\"",",")));")
 
         index_name = table_name * "_index"
@@ -248,17 +272,20 @@ function addVariationRow(table_name::String, table_features::String, static_valu
     return addVariationRow(table_name, table_features, "$(static_values)$(varied_values)")
 end
 
-function addVariationToTable(patient_id::Int, D::Vector{Vector{Vector}}; reference_variation::Int=0)
+"""
+function addGridVariationToTable(patient_id::Int, D::Vector{Vector{Vector}}; reference_variation::Int=0)
+Creates a grid of parameter values defined by D to the variations tables for a specified patient.
+A reference variation id can be suppplied so that any currently unvaried values are pulled from that variation.
+D is a vector of parameter info.
+Each entry in D has two elements: D[i][1] is the xml_path based on the config file; D[i][2] is the vector of values to use for the ith parameter.
+"""
+
+function addGridVariationToTable(patient_id::Int, D::Vector{Vector{Vector}}; reference_variation::Int=0)
     xml_paths = [d[1] for d in D]
     new_values = [d[2] for d in D]
-    table_name, static_column_names, varied_column_names = addVariationColumns(patient_id, xml_paths)
-    static_values = VCTDatabase.selectRow(static_column_names, table_name, "WHERE variation_id=$(reference_variation)") |> x -> join("\"" .* x .* "\"", ",")
-    table_features = join("\"" .* static_column_names .* "\"", ",")
-    if !isempty(static_column_names)
-        static_values *= ","
-        table_features *= ","
-    end
-    table_features *= join("\"" .* varied_column_names .* "\"", ",")
+    table_name, static_column_names, varied_column_names = addVariationColumns(patient_id, xml_paths, [typeof(d[2][1]) for d in D])
+    static_values, table_features = prepareAddNewVariations(table_name, static_column_names, varied_column_names; reference_variation = reference_variation)
+
     NDG = ndgrid(new_values...)
     sz_variations = size(NDG[1])
     variation_ids = zeros(Int, sz_variations)
@@ -270,9 +297,76 @@ function addVariationToTable(patient_id::Int, D::Vector{Vector{Vector}}; referen
     return variation_ids, is_new_variation_id
 end
 
-function addVariationToTable(patient_id::Int, xml_paths::Vector{Vector{String}}, new_values::Vector{Vector{T}} where {T<:Real}; reference_variation::Int=0)
+"""
+function addGridVariationToTable(patient_id::Int, xml_paths::Vector{Vector{String}}, new_values::Vector{Vector{T}} where {T<:Real}; reference_variation::Int=0)
+Does the same as addGridVariationToTable(patient_id::Int, D::Vector{Vector{Vector}}; reference_variation::Int=0) but first assembles D from xml_paths and new_values.
+"""
+
+function addGridVariationToTable(patient_id::Int, xml_paths::Vector{Vector{String}}, new_values::Vector{Vector{T}} where {T<:Real}; reference_variation::Int=0)
     D = [[xml_paths[i], new_values[i]] for i in eachindex(xml_paths)]
-    return addVariationToTable(patient_id, D; reference_variation=reference_variation)
+    return addGridVariationToTable(patient_id, D; reference_variation=reference_variation)
+end
+
+function addSampleVariationToTable(patient_id::Int, xml_paths::Vector{Vector{String}}, parameter_matrix::Matrix{T} where T; reference_variation=0)
+    table_name, static_column_names, varied_column_names = addVariationColumns(patient_id, xml_paths, [typeof(parameter_matrix[1,i]) for i in axes(parameter_matrix,2)])
+    static_values, table_features = prepareAddNewVariations(table_name, static_column_names, varied_column_names; reference_variation = reference_variation)
+    
+    sz_variations = size(parameter_matrix,1)
+    variation_ids = zeros(Int, sz_variations)
+    is_new_variation_id = falses(sz_variations)
+    for i in axes(parameter_matrix,1)
+        varied_values = [parameter_matrix[i,j] for j in axes(parameter_matrix,2)] .|> string |> x -> join("\"" .* x .* "\"", ",")
+        variation_ids[i], is_new_variation_id[i] = addVariationRow(table_name, table_features, static_values, varied_values)
+    end
+    return variation_ids, is_new_variation_id
+end
+
+function prepareAddNewVariations(table_name::String, static_column_names::Vector{String}, varied_column_names::Vector{String}; reference_variation::Int=0)
+    static_values = VCTDatabase.selectRow(static_column_names, table_name, "WHERE variation_id=$(reference_variation)") |> x -> join("\"" .* string.(x) .* "\"", ",")
+    table_features = join("\"" .* static_column_names .* "\"", ",")
+    if !isempty(static_column_names)
+        static_values *= ","
+        table_features *= ","
+    end
+    table_features *= join("\"" .* varied_column_names .* "\"", ",")
+    return static_values, table_features
+end
+
+function recordTrialInfo(simulation_ids::Vector{Int}, time_started::DateTime, description::String)
+    if isempty(description)
+        println("No description submitted for this trial. Do you think you can remember everything? No. Enter a description now:")
+        description = readline()
+    end
+    s =  "INSERT INTO trials (datetime,description) VALUES('$(Dates.format(time_started,"yymmddHHMM"))','$(description)') RETURNING trial_id;"
+    trial_id = DBInterface.execute(db, s) |> DataFrame |> x -> x.trial_id[1]
+    path_to_trial_folder = VCTModule.data_dir * "/trials/" * string(trial_id) * "/"
+    run(`mkdir -p $(path_to_trial_folder)`)
+    path_to_csv = path_to_trial_folder * "simulations.csv"
+    lines_table = compressSimulationIDs(simulation_ids)
+    CSV.write(path_to_csv, lines_table; writeheader=false)
+end
+
+function compressSimulationIDs(simulation_ids::Vector{Int})
+    sort!(simulation_ids)
+    lines = String[]
+    while !isempty(simulation_ids)
+        if length(simulation_ids) == 1
+            next_line = string(simulation_ids[1])
+            popfirst!(simulation_ids)
+        else
+            I = findfirst(diff(simulation_ids) .> 1)
+            I = isnothing(I) ? length(simulation_ids) : I # if none found, then all the diffs are 1 so we want to take the entire list
+            if I > 1
+                next_line = "$(simulation_ids[1]):$(simulation_ids[I])"
+                simulation_ids = simulation_ids[I+1:end]
+            else
+                next_line = string(simulation_ids[1])
+                popfirst!(simulation_ids)
+            end
+        end
+        push!(lines, next_line)
+    end
+    return Tables.table(lines)
 end
 
 end

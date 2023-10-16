@@ -47,22 +47,22 @@ function getOutputFolder(path_to_xml)
     return rel_path_to_output
 end
 
-function updateField(xml_path::Vector{String},new_value::String)
+function updateField(xml_path::Vector{String},new_value::Union{Int,Real,String})
     current_element = retrieveElement(xml_path)
-    set_content(current_element, new_value)
+    set_content(current_element, string(new_value))
     return nothing
 end
 
-function updateField(xml_path_and_value::Vector{String})
+function updateField(xml_path_and_value::Vector{Any})
     return updateField(xml_path_and_value[1:end-1],xml_path_and_value[end])
 end
 
-function updateField(path_to_xml::String,xml_path::Vector{String},new_value::String)
+function updateField(path_to_xml::String,xml_path::Vector{String},new_value::Union{Int,Real,String})
     openXML(path_to_xml)
     return updateField(xml_path,new_value)
 end
 
-function updateField(xml_doc_temp::XMLDocument,xml_path::Vector{String},new_value::String)
+function updateField(xml_doc_temp::XMLDocument,xml_path::Vector{String},new_value::Union{Int,Real,String})
     current_element = root(xml_doc_temp)
     retrieveElement!(current_element,xml_path)
     set_content(current_element, new_value)
@@ -94,14 +94,17 @@ function updateFieldsFromCSV(path_to_csv::String,path_to_xml::String)
     updateFieldsFromCSV(path_to_csv)
 end
 
-function loadVariation(path_to_xml::String, variation_row::DataFrame)
+function loadVariation(path_to_xml::String, variation_row::DataFrame, physicell_dir::String)
     openXML(path_to_xml)
     for column_name in names(variation_row)
-        if column_name=="variation_id"; continue; end
+        if column_name == "variation_id"
+            continue
+        end
         xml_path = split(column_name,"/") .|> string
         updateField(xml_path,variation_row[1,column_name])
     end
     save_file(VCTConfiguration.xml_doc, path_to_xml)
+    save_file(VCTConfiguration.xml_doc, physicell_dir * "/config/PhysiCell_settings.xml")
     closeXML()
     return nothing
 end

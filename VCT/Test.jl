@@ -22,13 +22,13 @@ push!(xml_paths,["cell_definitions","cell_definition:name:PD-L1lo_tumor","phenot
 new_values = [[1e-2,1e-1]]
 push!(new_values, [0,1e-6])
 
-variation_ids1, is_new_variation_id = VCTModule.addVariationToTable(1,xml_paths,new_values)
+variation_ids1, is_new_variation_id = VCTModule.addGridVariationToTable(1,xml_paths,new_values)
 
 # xml_paths = [["cell_definitions","cell_definition:name:PD-L1hi_tumor","phenotype","cycle","phase_transition_rates","rate"]]
 # push!(xml_paths,["cell_definitions","cell_definition:name:PD-L1hi_tumor","phenotype","death","model:name:apoptosis","death_rate"])
 # new_values = [[2.2e-3,4.4e-2]]
 # push!(new_values, [7e-5,8e-4])
-# variation_ids2, is_new_variation_id = VCTModule.addVariationToTable(1,xml_paths,new_values; reference_variation=5)
+# variation_ids2, is_new_variation_id = VCTModule.addGridVariationToTable(1,xml_paths,new_values; reference_variation=5)
 
 # VCTModule.addVariation(1,["cell_definitions","cell_definition:name:PD-L1lo_tumor","phenotype","cycle","phase_transition_rates","rate"],[1e-4,1e-3])
 # VCTModule.addVariation(1,["cell_definitions","cell_definition:name:PD-L1lo_tumor","phenotype","death","model:name:apoptosis","death_rate"],[0,1e-6])

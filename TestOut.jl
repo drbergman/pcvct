@@ -25,8 +25,7 @@ DBInterface.execute(db,"INSERT OR IGNORE INTO cohorts (intervention) VALUES('non
 
 VCTModule.addPatient("main",path_to_data_folder*"/spec_folders/main/")
 
-D = [[["cell_definitions","cell_definition:name:mesenchymal_normal","phenotype","motility","speed"], [1.0,2.0,3.0]]]
-push!(D, [["user_parameters","ecm_by_biofvm"],[false,true]])
+D = [[["user_parameters","ecm_by_biofvm"],[false,true]]]
 # xml_paths = 
 # push!(xml_paths,)
 # new_values = []
@@ -36,18 +35,23 @@ push!(D, [["user_parameters","ecm_by_biofvm"],[false,true]])
 
 # D = [[xml_paths[i],new_values[i]]]
 
-variation_ids1, is_new_variation_id = VCTModule.addVariationToTable(1,D)
+variation_ids1, is_new_variation_id = VCTModule.addGridVariationToTable(1,D)
 
 reference_variation_ids = DBInterface.execute(db, "SELECT variation_id FROM patient_variations_1 WHERE \"user_parameters/ecm_by_biofvm\"=\"false\";") |> DataFrame |> x->x.variation_id
 D = [[["user_parameters","use_simple_ecm_to_cell_interactions"],[false,true]]]
 for reference_variation_id in reference_variation_ids
-    VCTModule.addVariationToTable(1, D; reference_variation=reference_variation_id)
+    VCTModule.addGridVariationToTable(1, D; reference_variation=reference_variation_id)
 end
+
+D = [[["cell_definitions","cell_definition:name:mesenchymal_tumor","custom_data","ecm_sensitivity_anisotropy_ec50_slope"],[-1.0,-0.9,-0.8]]]
+VCTModule.addGridVariationToTable(1, D; reference_variation=reference_variation_ids[1])
+D = [[["cell_definitions","cell_definition:name:mesenchymal_tumor","custom_data","ecm_sensitivity_anisotropy_ec50_slope"],[-1.00,-0.90,-00.8000]]]
+variation_ids, is_new_variation_id = VCTModule.addGridVariationToTable(1, D; reference_variation=reference_variation_ids[1])
 # xml_paths = [["cell_definitions","cell_definition:name:PD-L1hi_tumor","phenotype","cycle","phase_transition_rates","rate"]]
 # push!(xml_paths,["cell_definitions","cell_definition:name:PD-L1hi_tumor","phenotype","death","model:name:apoptosis","death_rate"])
 # new_values = [[2.2e-3,4.4e-2]]
 # push!(new_values, [7e-5,8e-4])
-# variation_ids2, is_new_variation_id = VCTModule.addVariationToTable(1,xml_paths,new_values; reference_variation=5)
+# variation_ids2, is_new_variation_id = VCTModule.addGridVariationToTable(1,xml_paths,new_values; reference_variation=5)
 
 # VCTModule.addVariation(1,["cell_definitions","cell_definition:name:PD-L1lo_tumor","phenotype","cycle","phase_transition_rates","rate"],[1e-4,1e-3])
 # VCTModule.addVariation(1,["cell_definitions","cell_definition:name:PD-L1lo_tumor","phenotype","death","model:name:apoptosis","death_rate"],[0,1e-6])
