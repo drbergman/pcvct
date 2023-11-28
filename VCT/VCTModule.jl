@@ -3,6 +3,11 @@ using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables
 include("./VCTDatabase.jl")
 include("./VCTConfiguration.jl")
 
+# I considered doing this with a structure of parameters, but I don't think that will work well here:
+#   1. the main purpose would be to make this thread safe, but one machine will not run multiple sims at once most likely
+#   2. Even if we did run multiple at once, it would need to be from the same executable file, so all the global variables would be the same for all
+#   3. The cost of checking the global scope is absolutely minimal compared to the simulations I'm running, so who cares about that overhead
+
 physicell_dir = ""
 data_dir = ""
 
