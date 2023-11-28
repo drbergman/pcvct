@@ -3,20 +3,24 @@ using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables
 include("./VCTDatabase.jl")
 include("./VCTConfiguration.jl")
 
-home_dir = cd(pwd, homedir())
+physicell_dir = ""
+data_dir = ""
 
-physicell_dir = "./src"
-data_dir = "./data"
-
-current_folder_id = 0
-db, VCTModule.control_cohort_id = VCTDatabase.initializeDatabase()
+current_folder_id = Ref{Int}(0)
+db = SQLite.DB()
 control_cohort_id = 0
 
-function initializeVCT(path_to_physicell, path_to_data)
-    VCTModule.physicell_dir = path_to_physicell
-    VCTModule.data_dir = path_to_data
+function __init()__
+    global physicell_dir = "./src"
+    global data_dir = "./data"
+    global current_folder_id = 0
+    global db, control_cohort_id = VCTDatabase.initializeDatabase()
+end
 
-    VCTModule.db, VCTModule.control_cohort_id = VCTDatabase.initializeDatabase(path_to_data * "/vct.db")
+function initializeVCT(path_to_physicell::String, path_to_data::String)
+    global physicell_dir = path_to_physicell
+    global data_dir = path_to_data
+    global db, control_cohort_id = VCTDatabase.initializeDatabase(path_to_data * "/vct.db")
 end
 
 struct Simulation
@@ -53,7 +57,7 @@ function copyMakeFolderFiles(folder_id::Int)
     
     run(`make CC=/opt/homebrew/bin/g++-13`)
     
-    VCTModule.current_folder_id = folder_id
+    global current_folder_id = folder_id
 end
 
 function copyMakeFolderFiles(simulation::Simulation)
@@ -61,18 +65,18 @@ function copyMakeFolderFiles(simulation::Simulation)
 end
 
 function runSimulation!(simulation::Simulation)
-    cd(VCTModule.physicell_dir)
-    path_to_new_output = VCTModule.data_dir * "/simulations/" * string(simulation.id) * "/"
+    cd(physicell_dir)
+    path_to_new_output = data_dir * "/simulations/" * string(simulation.id) * "/"
     if isfile(path_to_new_output * "initial_mesh0.mat")
         ran = false
         return ran
     end
-    if simulation.folder_id!=VCTModule.current_folder_id
+    if simulation.folder_id != current_folder_id
         copyMakeFolderFiles(simulation)
     end
     run(`./project`)
 
-    path_to_sim_output = VCTModule.physicell_dir * "/" * VCTConfiguration.getOutputFolder("./config/PhysiCell_settings.xml")
+    path_to_sim_output = physicell_dir * "/" * VCTConfiguration.getOutputFolder("./config/PhysiCell_settings.xml")
 
     run(`mkdir -p $(path_to_new_output)`)
     run(`mv $(path_to_sim_output) $(path_to_new_output)`)
@@ -128,10 +132,10 @@ function resetDatabase()
         deleteSimulation(simulation_ids)
     end
     if db.file == ":memory:"
-        VCTModule.db, VCTModule.control_cohort_id = VCTDatabase.initializeDatabase()
+        global db, control_cohort_id = VCTDatabase.initializeDatabase()
     else
         run(`rm -f $(data_dir)/vct.db`)
-        VCTModule.db, VCTModule.control_cohort_id = VCTDatabase.initializeDatabase(VCTModule.data_dir * "/vct.db")
+        global db, control_cohort_id = VCTDatabase.initializeDatabase(data_dir * "/vct.db")
     end
     return nothing
 end
@@ -202,7 +206,7 @@ function addPatient(patient_name::String,path_to_control_folder::String)
         )
     ")
     DBInterface.execute(db, "INSERT INTO $(table_name) (variation_id) VALUES(0);")
-    DBInterface.execute(db, "INSERT INTO folders (patient_id, cohort_id, path) VALUES($(patient_id),$(VCTModule.control_cohort_id),'$(path_to_control_folder)');")
+    DBInterface.execute(db, "INSERT INTO folders (patient_id, cohort_id, path) VALUES($(patient_id),$(control_cohort_id),'$(path_to_control_folder)');")
     
     path_to_xml = path_to_control_folder * "config/PhysiCell_settings.xml"
     path_to_default_xml = path_to_control_folder * "config/PhysiCell_settings_default.xml"
@@ -217,7 +221,7 @@ function addGVAX(patient_id::Int; cd4_multiplier::AbstractFloat=10., cd8_multipl
     else
         gvax_cohort_id = gvax_cohort_id[1]
     end
-    path_to_control_folder = DBInterface.execute(db, "SELECT path FROM folders WHERE patient_id=$(patient_id) AND cohort_id=$(VCTModule.control_cohort_id);") |> DataFrame |> x->x.path[1]
+    path_to_control_folder = DBInterface.execute(db, "SELECT path FROM folders WHERE patient_id=$(patient_id) AND cohort_id=$(control_cohort_id);") |> DataFrame |> x->x.path[1]
     path_to_folder = path_to_control_folder[1:end-1] * "_with_gvax/"
     folder_id = DBInterface.execute(db, "INSERT OR IGNORE INTO folders (patient_id,cohort_id,path) 
         VALUES
@@ -252,7 +256,7 @@ function addVariationColumns(patient_id::Int, xml_paths::Vector{Vector{String}},
     if any(is_new_column)
         new_column_names = varied_column_names[is_new_column]
 
-        path_to_xml = VCTDatabase.selectRow("path", "folders", "WHERE patient_id=$(patient_id) AND cohort_id=$(VCTModule.control_cohort_id)")
+        path_to_xml = VCTDatabase.selectRow("path", "folders", "WHERE patient_id=$(patient_id) AND cohort_id=$(control_cohort_id)")
         path_to_xml *= "config/PhysiCell_settings.xml"
         VCTConfiguration.openXML(path_to_xml)
         default_values_for_new = [VCTConfiguration.getField(xml_path) for xml_path in xml_paths[is_new_column]]
@@ -365,7 +369,7 @@ function recordTrialInfo(simulation_ids::Vector{Int}, time_started::DateTime, de
     end
     s =  "INSERT INTO trials (datetime,description) VALUES('$(Dates.format(time_started,"yymmddHHMM"))','$(description)') RETURNING trial_id;"
     trial_id = DBInterface.execute(db, s) |> DataFrame |> x -> x.trial_id[1]
-    path_to_trial_folder = VCTModule.data_dir * "/trials/" * string(trial_id) * "/"
+    path_to_trial_folder = data_dir * "/trials/" * string(trial_id) * "/"
     run(`mkdir -p $(path_to_trial_folder)`)
     path_to_csv = path_to_trial_folder * "simulations.csv"
     lines_table = compressSimulationIDs(simulation_ids)
