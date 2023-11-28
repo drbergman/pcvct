@@ -5,12 +5,12 @@ home_dir = cd(pwd,homedir())
 db = SQLite.DB()
 
 function initializeDatabase(path_to_database::String)
-    VCTDatabase.db = SQLite.DB(path_to_database)
+    global db = SQLite.DB(path_to_database)
     return createSchema()
 end
 
 function initializeDatabase()
-    VCTDatabase.db = SQLite.DB()
+    global db = SQLite.DB()
     return createSchema()
 end
 

@@ -14,7 +14,7 @@ using .VCTConfiguration: getOutputFolder, loadVariation, openXML, multiplyField,
 physicell_dir = ""
 data_dir = ""
 
-current_folder_id = Ref{Int}(0)
+current_folder_id = 0
 db = SQLite.DB()
 control_cohort_id = 0
 

@@ -6,14 +6,14 @@ global xml_doc::XMLDocument;
 getXML() = xml_doc
 
 function openXML(path_to_xml::String)
-    VCTConfiguration.xml_doc = parse_file(path_to_xml)
+    global xml_doc = parse_file(path_to_xml)
     return nothing
 end
 
-closeXML() = free(VCTConfiguration.xml_doc)
+closeXML() = free(xml_doc)
 
 function retrieveElement(xml_path::Vector{String})
-    current_element = root(VCTConfiguration.xml_doc)
+    current_element = root(xml_doc)
     for path_element in xml_path
         if !occursin(":",path_element)
             current_element = find_element(current_element, path_element)
@@ -43,9 +43,9 @@ function getField(xml_path::Vector{String})
 end
 
 function getOutputFolder(path_to_xml)
-    VCTConfiguration.openXML(path_to_xml)
+    openXML(path_to_xml)
     rel_path_to_output = getField(["save", "folder"])
-    VCTConfiguration.closeXML()
+    closeXML()
     return rel_path_to_output
 end
 
@@ -105,8 +105,8 @@ function loadVariation(path_to_xml::String, variation_row::DataFrame, physicell_
         xml_path = split(column_name,"/") .|> string
         updateField(xml_path,variation_row[1,column_name])
     end
-    save_file(VCTConfiguration.xml_doc, path_to_xml)
-    save_file(VCTConfiguration.xml_doc, physicell_dir * "/config/PhysiCell_settings.xml")
+    save_file(xml_doc, path_to_xml)
+    save_file(xml_doc, physicell_dir * "/config/PhysiCell_settings.xml")
     closeXML()
     return nothing
 end

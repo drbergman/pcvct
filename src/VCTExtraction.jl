@@ -7,14 +7,17 @@ using MAT, LightXML, SQLite, DataFrames, CSV
 home_dir = cd(pwd,homedir())
 data_dir = "./data"
 
-include("./VCTConfiguration.jl")
-include("./VCTDatabase.jl")
+include("VCTConfiguration.jl")
+include("VCTDatabase.jl")
 
-db, ~ = VCTDatabase.initializeDatabase()
+using .VCTConfiguration: openXML, closeXML, retrieveElement, getField
+using .VCTDatabase: initializeDatabase
+
+db, ~ = initializeDatabase()
 
 function loadVCT(path_to_data)
-    VCTExtraction.data_dir = path_to_data
-    VCTExtraction.db, _ = VCTDatabase.initializeDatabase(path_to_data * "/vct.db")
+    global data_dir = path_to_data
+    global db, _ = initializeDatabase(path_to_data * "/vct.db")
 end
 
 ############# Helper functions #############
@@ -27,31 +30,31 @@ end
 
 function getLabelIndex(path_to_xml::String, label::String)
     xml_path = ["cellular_information", "cell_populations", "cell_population", "custom", "simplified_data", "labels"]
-    VCTConfiguration.openXML(path_to_xml)
-    labels_element = VCTConfiguration.retrieveElement(xml_path)
+    openXML(path_to_xml)
+    labels_element = retrieveElement(xml_path)
     for label_element in child_elements(labels_element)
         if content(label_element) == label
             label_ind_start = attribute(label_element, "index"; required=true) |> x -> parse(Int, x)
             label_ind_width = attribute(label_element, "size"; required=true) |> x -> parse(Int, x)
-            VCTConfiguration.closeXML()
+            closeXML()
             return label_ind_start .+ (1:label_ind_width)
         end
     end
-    VCTConfiguration.closeXML()
+    closeXML()
 end
 
 function getSubstrateID(path_to_xml::String, name::String)
     xml_path = ["microenvironment","domain","variables"]
-    VCTConfiguration.openXML(path_to_xml)
-    variables_element = VCTConfiguration.retrieveElement(xml_path)
+    openXML(path_to_xml)
+    variables_element = retrieveElement(xml_path)
     for variable_element in child_elements(variables_element)
         if attribute(variable_element, "name"; required=true)==name
             substrate_id = attribute(variable_element, "ID"; required=true) |> x->parse(Int,x)
-            VCTConfiguration.closeXML()
+            closeXML()
             return substrate_id
         end
     end
-    VCTConfiguration.closeXML()
+    closeXML()
 end
 
 function selectSimulations(; patient_id::Int, variation_id::Int, cohort_id::Int)
@@ -59,7 +62,7 @@ function selectSimulations(; patient_id::Int, variation_id::Int, cohort_id::Int)
 end
 
 function selectTrialSimulations(trial_id::Int)
-    path_to_trial = VCTExtraction.data_dir * "/trials/" * string(trial_id) * "/"
+    path_to_trial = data_dir * "/trials/" * string(trial_id) * "/"
     df = CSV.read(path_to_trial*"simulations.csv",DataFrame; header=false,silencewarnings=true,types=String,delim=",")
     simulation_ids = Int[]
     for i in axes(df,1)
@@ -78,9 +81,9 @@ end
 
 function extractTime(path_to_output_file::String)
     xml_path = ["metadata", "current_time"]
-    VCTConfiguration.openXML(path_to_output_file)
-    t = VCTConfiguration.getField(xml_path) |> x -> parse(Float64, x)
-    VCTConfiguration.closeXML()
+    openXML(path_to_output_file)
+    t = getField(xml_path) |> x -> parse(Float64, x)
+    closeXML()
     return t
 end
 
@@ -120,7 +123,7 @@ function loadTimeTimeSeries(path_to_output_folders::Vector{String})
 end
 
 function loadTimeTimeSeries(simulation_id::Union{Int,Vector{Int}})
-    return loadTimeTimeSeries([VCTExtraction.data_dir*"/simulations/$d/output/" for d in simulation_id])
+    return loadTimeTimeSeries([data_dir*"/simulations/$d/output/" for d in simulation_id])
 end
 
 function loadTimeTimeSeries(patient_id::Int, variation_id::Int, cohort_id::Int)
@@ -137,7 +140,7 @@ function loadCellCountTimeSeries(path_to_output_folders::Vector{String})
 end
 
 function loadCellCountTimeSeries(simulation_id::Union{Int,Vector{Int}})
-    return loadCellCountTimeSeries([VCTExtraction.data_dir*"/simulations/$d/output/" for d in simulation_id])
+    return loadCellCountTimeSeries([data_dir*"/simulations/$d/output/" for d in simulation_id])
 end
 
 function loadCellCountTimeSeries(patient_id::Int, variation_id::Int, cohort_id::Int)
@@ -152,14 +155,14 @@ end
 
 function loadCellDataTimeSeries(label::String)
     simulation_ids = DBInterface.execute(db, "SELECT simulation_id FROM simulations;") |> DataFrame |> x->x.simulation_id
-    paths_to_output_folder = (VCTExtraction.data_dir * "/simulations/") .* (string.(simulation_ids) .* "/output/")
+    paths_to_output_folder = (data_dir * "/simulations/") .* (string.(simulation_ids) .* "/output/")
     all_cell_data = [loadCellDataTimeSeries(path_to_output_folder, label) for path_to_output_folder in paths_to_output_folder]
     return DataFrame("simulation_id" => simulation_ids, label => all_cell_data)
 end
 
 function loadCellDataTimeSeries(trial_id::Int, label::String)
     simulation_ids = selectTrialSimulations(trial_id)
-    return DataFrame("simulation_id" => simulation_ids, label => [loadCellDataTimeSeries(VCTExtraction.data_dir * "/simulations/" * string(simulation_id) * "/output/", label) for simulation_id in simulation_ids])
+    return DataFrame("simulation_id" => simulation_ids, label => [loadCellDataTimeSeries(data_dir * "/simulations/" * string(simulation_id) * "/output/", label) for simulation_id in simulation_ids])
 end
 
 function loadCellTypeCountTimeSeries(path_to_output_folder::String, cell_type_id::Union{Int,Vector{Int}})
@@ -173,7 +176,7 @@ function loadCellTypeCountTimeSeries(path_to_output_folders::Vector{String}, cel
 end
 
 function loadCellTypeCountTimeSeries(simulation_id::Union{Int,Vector{Int}}, cell_type_id::Union{Int,Vector{Int}})
-    return loadCellTypeCountTimeSeries([VCTExtraction.data_dir*"/simulations/$d/output/" for d in simulation_id], cell_type_id)
+    return loadCellTypeCountTimeSeries([data_dir*"/simulations/$d/output/" for d in simulation_id], cell_type_id)
 end
 
 function loadCellTypeCountTimeSeries(patient_id::Int, variation_id::Int, cohort_id::Int, cell_type_id::Union{Int,Vector{Int}})
