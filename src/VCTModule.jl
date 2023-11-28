@@ -1,7 +1,10 @@
 module VCTModule
 using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables
-include("./VCTDatabase.jl")
-include("./VCTConfiguration.jl")
+include("VCTDatabase.jl")
+include("VCTConfiguration.jl")
+
+using .VCTDatabase: initializeDatabase, getFolderID, selectRow
+using .VCTConfiguration: getOutputFolder, loadVariation, openXML, multiplyField, closeXML, getField, getXML
 
 # I considered doing this with a structure of parameters, but I don't think that will work well here:
 #   1. the main purpose would be to make this thread safe, but one machine will not run multiple sims at once most likely
@@ -19,13 +22,14 @@ function __init()__
     global physicell_dir = "./src"
     global data_dir = "./data"
     global current_folder_id = 0
-    global db, control_cohort_id = VCTDatabase.initializeDatabase()
+    global db, control_cohort_id = initializeDatabase()
 end
 
 function initializeVCT(path_to_physicell::String, path_to_data::String)
+    println("----------INITIALIZING----------")
     global physicell_dir = path_to_physicell
     global data_dir = path_to_data
-    global db, control_cohort_id = VCTDatabase.initializeDatabase(path_to_data * "/vct.db")
+    global db, control_cohort_id = initializeDatabase(path_to_data * "/vct.db")
 end
 
 struct Simulation
@@ -37,7 +41,7 @@ struct Simulation
 end
 
 function Simulation(patient_id::Int, cohort_id::Int)
-    folder_id = VCTDatabase.getFolderID(patient_id, cohort_id)
+    folder_id = getFolderID(patient_id, cohort_id)
     variation_id = 0 # base variation (no variation)
     Simulation(patient_id, variation_id, cohort_id, folder_id)
 end
@@ -53,7 +57,7 @@ function Simulation(patient_id::Int, cohort_id::Int, folder_id::Int)
 end
 
 function copyMakeFolderFiles(folder_id::Int)
-    path_to_folder = VCTDatabase.selectRow("path","folders","WHERE folder_id=$(folder_id)")
+    path_to_folder = selectRow("path","folders","WHERE folder_id=$(folder_id)")
     path_to_config = path_to_folder * "config/"
     run(`cp -r $(path_to_config) ./config`)
     
@@ -81,7 +85,7 @@ function runSimulation!(simulation::Simulation)
     end
     run(`./project`)
 
-    path_to_sim_output = physicell_dir * "/" * VCTConfiguration.getOutputFolder("./config/PhysiCell_settings.xml")
+    path_to_sim_output = physicell_dir * "/" * getOutputFolder("./config/PhysiCell_settings.xml")
 
     run(`mkdir -p $(path_to_new_output)`)
     run(`mv $(path_to_sim_output) $(path_to_new_output)`)
@@ -137,10 +141,10 @@ function resetDatabase()
         deleteSimulation(simulation_ids)
     end
     if db.file == ":memory:"
-        global db, control_cohort_id = VCTDatabase.initializeDatabase()
+        global db, control_cohort_id = initializeDatabase()
     else
         run(`rm -f $(data_dir)/vct.db`)
-        global db, control_cohort_id = VCTDatabase.initializeDatabase(data_dir * "/vct.db")
+        global db, control_cohort_id = initializeDatabase(data_dir * "/vct.db")
     end
     return nothing
 end
@@ -161,7 +165,7 @@ function runReplicates(patient_id::Int, variation_id::Int, cohort_id::Int, folde
 end
 
 function runReplicates(patient_id::Int, variation_id::Int, cohort_id::Int, num_replicates::Int; use_previous_sims::Bool = false)
-    folder_id = VCTDatabase.getFolderID(patient_id,cohort_id)
+    folder_id = getFolderID(patient_id,cohort_id)
     return runReplicates(patient_id, variation_id, cohort_id, folder_id, num_replicates; use_previous_sims = use_previous_sims)
 end
 
@@ -177,10 +181,10 @@ function runVirtualClinicalTrial(patient_ids::Union{Int,Vector{Int}}, variation_
             df = DBInterface.execute(db, "SELECT folder_id,path FROM folders WHERE patient_id=$(patient_id) AND cohort_id=$(cohort_id)") |> DataFrame
             path_to_xml = df.path[1]
             copyMakeFolderFiles(df.folder_id[1])
-            path_to_xml = VCTDatabase.selectRow("path","folders","WHERE patient_id=$(patient_id) AND cohort_id=$(cohort_id)") * "config/PhysiCell_settings.xml"
+            path_to_xml = selectRow("path","folders","WHERE patient_id=$(patient_id) AND cohort_id=$(cohort_id)") * "config/PhysiCell_settings.xml"
             for variation_id in variation_ids[i]
-                variation_row = VCTDatabase.selectRow(variation_table_name,"WHERE variation_id=$(variation_id);")
-                VCTConfiguration.loadVariation(path_to_xml, variation_row, physicell_dir)
+                variation_row = selectRow(variation_table_name,"WHERE variation_id=$(variation_id);")
+                loadVariation(path_to_xml, variation_row, physicell_dir)
                 append!(simulation_ids, runReplicates(patient_id, variation_id, cohort_id, num_replicates; use_previous_sims=use_previous_sims))
             end
         end
@@ -239,15 +243,15 @@ function addGVAX(patient_id::Int; cd4_multiplier::AbstractFloat=10., cd8_multipl
     end
     run(`cp -r $(path_to_control_folder) $(path_to_folder)`)
     path_to_xml = path_to_folder * "config/PhysiCell_settings.xml"
-    VCTConfiguration.openXML(path_to_xml)
-    VCTConfiguration.multiplyField(["user_parameters","number_of_PD-1hi_CD4_Tcell"],cd4_multiplier)
-    VCTConfiguration.multiplyField(["user_parameters","number_of_PD-1lo_CD4_Tcell"],cd4_multiplier)
-    VCTConfiguration.multiplyField(["user_parameters","number_of_PD-1hi_CD137hi_CD8_Tcell"],cd8_multiplier)
-    VCTConfiguration.multiplyField(["user_parameters","number_of_PD-1lo_CD137hi_CD8_Tcell"],cd8_multiplier)
-    VCTConfiguration.multiplyField(["user_parameters","number_of_PD-1hi_CD137lo_CD8_Tcell"],cd8_multiplier)
-    VCTConfiguration.multiplyField(["user_parameters","number_of_PD-1lo_CD137lo_CD8_Tcell"],cd8_multiplier)
-    save_file(VCTConfiguration.xml_doc, path_to_xml)
-    VCTConfiguration.closeXML()
+    openXML(path_to_xml)
+    multiplyField(["user_parameters","number_of_PD-1hi_CD4_Tcell"],cd4_multiplier)
+    multiplyField(["user_parameters","number_of_PD-1lo_CD4_Tcell"],cd4_multiplier)
+    multiplyField(["user_parameters","number_of_PD-1hi_CD137hi_CD8_Tcell"],cd8_multiplier)
+    multiplyField(["user_parameters","number_of_PD-1lo_CD137hi_CD8_Tcell"],cd8_multiplier)
+    multiplyField(["user_parameters","number_of_PD-1hi_CD137lo_CD8_Tcell"],cd8_multiplier)
+    multiplyField(["user_parameters","number_of_PD-1lo_CD137lo_CD8_Tcell"],cd8_multiplier)
+    save_file(getXML(), path_to_xml)
+    closeXML()
     return gvax_cohort_id
 end
 
@@ -261,11 +265,11 @@ function addVariationColumns(patient_id::Int, xml_paths::Vector{Vector{String}},
     if any(is_new_column)
         new_column_names = varied_column_names[is_new_column]
 
-        path_to_xml = VCTDatabase.selectRow("path", "folders", "WHERE patient_id=$(patient_id) AND cohort_id=$(control_cohort_id)")
+        path_to_xml = selectRow("path", "folders", "WHERE patient_id=$(patient_id) AND cohort_id=$(control_cohort_id)")
         path_to_xml *= "config/PhysiCell_settings.xml"
-        VCTConfiguration.openXML(path_to_xml)
-        default_values_for_new = [VCTConfiguration.getField(xml_path) for xml_path in xml_paths[is_new_column]]
-        VCTConfiguration.closeXML()
+        openXML(path_to_xml)
+        default_values_for_new = [getField(xml_path) for xml_path in xml_paths[is_new_column]]
+        closeXML()
         for (i, new_column_name) in enumerate(new_column_names)
             if variable_types[i] == Bool
                 sqlite_data_type = "TEXT"
@@ -298,7 +302,7 @@ function addVariationRow(table_name::String, table_features::String, values::Str
     new_variation_id = DBInterface.execute(db, "INSERT OR IGNORE INTO $(table_name) ($(table_features)) VALUES($(values)) RETURNING variation_id;") |> DataFrame |> x->x.variation_id
     new_variation_added = length(new_variation_id)==1
     if  !new_variation_added
-        new_variation_id = VCTDatabase.selectRow("variation_id", table_name, "WHERE ($(table_features))=($(values))")
+        new_variation_id = selectRow("variation_id", table_name, "WHERE ($(table_features))=($(values))")
     end
     return new_variation_id[1], new_variation_added
 end
@@ -357,7 +361,7 @@ function addSampleVariationToTable(patient_id::Int, xml_paths::Vector{Vector{Str
 end
 
 function prepareAddNewVariations(table_name::String, static_column_names::Vector{String}, varied_column_names::Vector{String}; reference_variation::Int=0)
-    static_values = VCTDatabase.selectRow(static_column_names, table_name, "WHERE variation_id=$(reference_variation)") |> x -> join("\"" .* string.(x) .* "\"", ",")
+    static_values = selectRow(static_column_names, table_name, "WHERE variation_id=$(reference_variation)") |> x -> join("\"" .* string.(x) .* "\"", ",")
     table_features = join("\"" .* static_column_names .* "\"", ",")
     if !isempty(static_column_names)
         static_values *= ","

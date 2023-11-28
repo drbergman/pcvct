@@ -3,6 +3,8 @@ using LightXML, CSV, DataFrames, SQLite
 
 global xml_doc::XMLDocument;
 
+getXML() = xml_doc
+
 function openXML(path_to_xml::String)
     VCTConfiguration.xml_doc = parse_file(path_to_xml)
     return nothing
