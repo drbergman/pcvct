@@ -84,9 +84,7 @@ function runSimulation!(simulation::Simulation)
 end
 
 function deleteSimulation(simulation_id::Int)
-    DBInterface.execute(db,"DELETE FROM simulations WHERE simulation_id=$(simulation_id);")
-    run(`rm -rf $(data_dir)/simulations/$(simulation_id)`)
-    return nothing
+    return deleteSimulation([simulation_id])
 end
 
 function deleteSimulation(simulation_ids::Vector{Int})
@@ -97,7 +95,34 @@ function deleteSimulation(simulation_ids::Vector{Int})
     return nothing
 end
 
+function trialRowToIds(r::String)
+    if !contains(r,":")
+        return parse(Int,r)
+    end
+    # otherwise has a colon and need to expand
+    s = split(r,":") .|> String .|> x->parse(Int,x)
+    return collect(s[1]:s[2])
+end
+
+function deleteTrial(trial_ids::Vector{Int})
+    DBInterface.execute(db,"DELETE FROM trials WHERE trial_id IN ($(join(trial_ids,",")));")
+    for trial_id in trial_ids
+        rows = CSV.read("$(data_dir)/trials/$(trial_id)/simulations.csv",DataFrame,header=false,delim=",",types=String) |>
+            x->x.Column1 .|> trialRowToIds
+        for row in rows
+            deleteSimulation(row)
+        end
+        run(`rm -rf $(data_dir)/trials/$(trial_id)`)
+    end
+    return nothing
+end
+
 function resetDatabase()
+    trial_ids = DBInterface.execute(db, "SELECT trial_id FROM trials;") |> DataFrame |> x->x.trial_id
+    if !isempty(trial_ids)
+        deleteTrial(trial_ids)
+    end
+
     simulation_ids = DBInterface.execute(db, "SELECT simulation_id FROM simulations;") |> DataFrame |> x->x.simulation_id
     if !isempty(simulation_ids)
         deleteSimulation(simulation_ids)
@@ -165,9 +190,10 @@ function runVirtualClinicalTrial(patient_ids::Union{Int,Vector{Int}}, cohort_ids
 end
 
 function addPatient(patient_name::String,path_to_control_folder::String)
-    if path_to_control_folder in (DBInterface.execute(db, "SELECT path FROM folders;") |> DataFrame |> x->x.path)
+    df = DBInterface.execute(db, "SELECT patient_id FROM folders WHERE path='$(path_to_control_folder)';") |> DataFrame
+    if !isempty(df)
         println("This folder location is already present. No patient added.")
-        return nothing
+        return df.patient_id[1]
     end
     patient_id = DBInterface.execute(db, "INSERT INTO patients (patient_name) VALUES('$(patient_name)') RETURNING patient_id;") |> DataFrame |> x->x.patient_id[1]
     table_name = "patient_variations_$(patient_id)"
@@ -181,7 +207,7 @@ function addPatient(patient_name::String,path_to_control_folder::String)
     path_to_xml = path_to_control_folder * "config/PhysiCell_settings.xml"
     path_to_default_xml = path_to_control_folder * "config/PhysiCell_settings_default.xml"
     run(`cp $(path_to_xml) $(path_to_default_xml)`)
-    return nothing
+    return patient_id
 end
 
 function addGVAX(patient_id::Int; cd4_multiplier::AbstractFloat=10., cd8_multiplier::AbstractFloat=2.)

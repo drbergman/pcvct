@@ -109,4 +109,45 @@ function loadVariation(path_to_xml::String, variation_row::DataFrame, physicell_
     return nothing
 end
 
+function motilityPath(cell_definition::String, field_name::String)
+    return ["cell_definitions", "cell_definition:name:$(cell_definition)", "phenotype", "motility", field_name]
+end
+
+function addMotilityVariationDimension!(D::Vector{Vector{Vector}}, cell_definition::String, field_name::String, values::Vector{T} where T)
+    xml_path = motilityPath(cell_definition, field_name)
+    new_var = [xml_path, values]
+    push!(D, new_var)
+end
+
+function customDataPath(cell_definition::String, field_name::String)
+    return ["cell_definitions", "cell_definition:name:$(cell_definition)", "custom_data", field_name]
+end
+
+function customDataPath(cell_definition::String, field_names::Vector{String})
+    return [customDataPath(cell_definition, field_name) for field_name in field_names]
+end
+
+function addCustomDataVariationDimension!(D::Vector{Vector{Vector}}, cell_definition::String, field_name::String, values::Vector{T} where T)
+    xml_path = customDataPath(cell_definition, field_name)
+    new_var = [xml_path, values]
+    push!(D, new_var)
+end
+
+function addCustomDataVariationDimension!(D::Vector{Vector{Vector}}, cell_definition::String, field_names::Vector{String}, values::Vector{Vector})
+    for x in zip(field_names,values)
+        field_name, value = x
+        addCustomDataVariationDimension!(D, cell_definition, field_name, value)
+    end
+end
+
+function userParameterPath(field_name::String)
+    return ["user_parameters", field_name]
+end
+
+function userParameterPath(field_names::Vector{String})
+    return [userParameterPath(field_name) for field_name in field_names]
+end
+
+
+
 end

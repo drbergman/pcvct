@@ -73,7 +73,7 @@ end
 function selectRow(table_name::String, condition_stmt::String)
     s = "SELECT * FROM $(table_name) " * condition_stmt * ";"
     df = DBInterface.execute(db, s) |> DataFrame
-    @assert size(df,1)==1 "Did not find exactly one row matching the query:\n\ts"
+    @assert size(df,1)==1 "Did not find exactly one row matching the query:\n\tDatabase file: $(db)\n\tQuery: $(s)\nResult: $(df)"
     return df
 end
 
