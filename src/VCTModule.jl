@@ -1,10 +1,13 @@
 module VCTModule
+
+export initializeVCT, resetDatabase, selectTrialSimulations
+
 using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables
 include("VCTDatabase.jl")
 include("VCTConfiguration.jl")
 
-using .VCTDatabase: initializeDatabase, getFolderID, selectRow
-using .VCTConfiguration: getOutputFolder, loadVariation, openXML, multiplyField, closeXML, getField, getXML
+using .VCTDatabase
+using .VCTConfiguration
 
 # I considered doing this with a structure of parameters, but I don't think that will work well here:
 #   1. the main purpose would be to make this thread safe, but one machine will not run multiple sims at once most likely
@@ -30,6 +33,7 @@ function initializeVCT(path_to_physicell::String, path_to_data::String)
     global physicell_dir = path_to_physicell
     global data_dir = path_to_data
     global db, control_cohort_id = initializeDatabase(path_to_data * "/vct.db")
+    println(db)
 end
 
 struct Simulation
@@ -58,6 +62,10 @@ end
 
 function copyMakeFolderFiles(folder_id::Int)
     path_to_folder = selectRow("path","folders","WHERE folder_id=$(folder_id)")
+
+    run(`cp $(path_to_folder)main.cpp .`)
+    run(`cp $(path_to_folder)Makefile .`)
+
     path_to_config = path_to_folder * "config/"
     run(`cp -r $(path_to_config) ./config`)
     
@@ -120,11 +128,13 @@ end
 function deleteTrial(trial_ids::Vector{Int})
     DBInterface.execute(db,"DELETE FROM trials WHERE trial_id IN ($(join(trial_ids,",")));")
     for trial_id in trial_ids
-        rows = CSV.read("$(data_dir)/trials/$(trial_id)/simulations.csv",DataFrame,header=false,delim=",",types=String) |>
-            x->x.Column1 .|> trialRowToIds
-        for row in rows
-            deleteSimulation(row)
-        end
+        selectTrialSimulations(trial_id) |> deleteSimulation
+        # deleteSimulation()
+        # rows = CSV.read("$(data_dir)/trials/$(trial_id)/simulations.csv",DataFrame,header=false,delim=",",types=String) |>
+        #     x->x.Column1 .|> trialRowToIds
+        # for row in rows
+        #     deleteSimulation(row)
+        # end
         run(`rm -rf $(data_dir)/trials/$(trial_id)`)
     end
     return nothing
@@ -406,6 +416,22 @@ function compressSimulationIDs(simulation_ids::Vector{Int})
         push!(lines, next_line)
     end
     return Tables.table(lines)
+end
+
+function selectTrialSimulations(trial_id::Int)
+    path_to_trial = data_dir * "/trials/" * string(trial_id) * "/"
+    df = CSV.read(path_to_trial*"simulations.csv",DataFrame; header=false,silencewarnings=true,types=String,delim=",")
+    simulation_ids = Int[]
+    for i in axes(df,1)
+        s = df.Column1[i]
+        I = split(s,":") .|> string .|> x->parse(Int,x)
+        if length(I)==1
+            push!(simulation_ids,I[1])
+        else
+            append!(simulation_ids,I[1]:I[2])
+        end
+    end
+    return simulation_ids
 end
 
 end

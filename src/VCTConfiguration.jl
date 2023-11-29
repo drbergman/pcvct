@@ -1,4 +1,7 @@
 module VCTConfiguration
+
+export getOutputFolder, loadVariation, openXML, multiplyField, closeXML, getField, getXML, retrieveElement
+
 using LightXML, CSV, DataFrames, SQLite
 
 global xml_doc::XMLDocument;

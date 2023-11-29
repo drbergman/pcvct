@@ -1,8 +1,13 @@
 module VCTDatabase
-using SQLite, Tables, DataFrames
+
+export initializeDatabase, getFolderID, selectRow, getDB
+
+using SQLite, Tables, DataFrames, CSV
 
 home_dir = cd(pwd,homedir())
 db = SQLite.DB()
+
+getDB() = db
 
 function initializeDatabase(path_to_database::String)
     global db = SQLite.DB(path_to_database)

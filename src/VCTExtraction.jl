@@ -1,17 +1,19 @@
 module VCTExtraction
 
-export loadTimeTimeSeries, loadCellCountTimeSeries, loadCellDataTimeSeries
+export loadTimeTimeSeries, loadCellCountTimeSeries, loadCellDataTimeSeries, loadVCT
 
 using MAT, LightXML, SQLite, DataFrames, CSV
 
 home_dir = cd(pwd,homedir())
 data_dir = "./data"
 
-include("VCTConfiguration.jl")
-include("VCTDatabase.jl")
+include("VCTModule.jl")
+# include("VCTConfiguration.jl")
+# include("VCTDatabase.jl")
 
-using .VCTConfiguration: openXML, closeXML, retrieveElement, getField
-using .VCTDatabase: initializeDatabase
+using .VCTModule
+# using .VCTConfiguration
+# using .VCTDatabase
 
 db, ~ = initializeDatabase()
 
@@ -59,22 +61,6 @@ end
 
 function selectSimulations(; patient_id::Int, variation_id::Int, cohort_id::Int)
     return DBInterface.execute(db, "SELECT simulation_id FROM simulations WHERE (patient_id, variation_id, cohort_id)=($(patient_id),$(variation_id),$(cohort_id));") |> DataFrame |> x -> x.simulation_id
-end
-
-function selectTrialSimulations(trial_id::Int)
-    path_to_trial = data_dir * "/trials/" * string(trial_id) * "/"
-    df = CSV.read(path_to_trial*"simulations.csv",DataFrame; header=false,silencewarnings=true,types=String,delim=",")
-    simulation_ids = Int[]
-    for i in axes(df,1)
-        s = df.Column1[i]
-        I = split(s,":") .|> string .|> x->parse(Int,x)
-        if length(I)==1
-            push!(simulation_ids,I[1])
-        else
-            append!(simulation_ids,I[1]:I[2])
-        end
-    end
-    return simulation_ids
 end
 
 ############# Atomic extraction functions #############
