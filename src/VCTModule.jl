@@ -1,6 +1,6 @@
 module VCTModule
 
-export initializeVCT, resetDatabase, selectTrialSimulations
+export initializeVCT, resetDatabase, selectTrialSimulations, getDB
 
 using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables
 include("VCTDatabase.jl")
@@ -18,22 +18,22 @@ physicell_dir = ""
 data_dir = ""
 
 current_folder_id = 0
-db = SQLite.DB()
 control_cohort_id = 0
 
 function __init()__
     global physicell_dir = "./src"
     global data_dir = "./data"
     global current_folder_id = 0
-    global db, control_cohort_id = initializeDatabase()
+    _, control_id = initializeDatabase()
+    global control_cohort_id = control_id
 end
 
 function initializeVCT(path_to_physicell::String, path_to_data::String)
     println("----------INITIALIZING----------")
     global physicell_dir = path_to_physicell
     global data_dir = path_to_data
-    global db, control_cohort_id = initializeDatabase(path_to_data * "/vct.db")
-    println(db)
+    _, control_id = initializeDatabase(path_to_data * "/vct.db")
+    global control_cohort_id = control_id
 end
 
 struct Simulation
@@ -51,7 +51,7 @@ function Simulation(patient_id::Int, cohort_id::Int)
 end
 
 function Simulation(patient_id::Int, variation_id::Int, cohort_id::Int, folder_id::Int)
-    simulation_id = DBInterface.execute(db, "INSERT INTO simulations (patient_id,variation_id,cohort_id,folder_id) VALUES($(patient_id),$(variation_id),$(cohort_id),$(folder_id)) RETURNING simulation_id;") |> DataFrame |> x->x.simulation_id[1]
+    simulation_id = DBInterface.execute(getDB(), "INSERT INTO simulations (patient_id,variation_id,cohort_id,folder_id) VALUES($(patient_id),$(variation_id),$(cohort_id),$(folder_id)) RETURNING simulation_id;") |> DataFrame |> x->x.simulation_id[1]
     Simulation(simulation_id, patient_id, variation_id, cohort_id, folder_id)
 end
 
@@ -104,17 +104,28 @@ function runSimulation!(simulation::Simulation)
     return ran
 end
 
-function deleteSimulation(simulation_id::Int)
-    return deleteSimulation([simulation_id])
-end
-
 function deleteSimulation(simulation_ids::Vector{Int})
+    db = getDB()
     DBInterface.execute(db,"DELETE FROM simulations WHERE simulation_id IN ($(join(simulation_ids,",")));")
     for simulation_id in simulation_ids
         run(`rm -rf $(data_dir)/simulations/$(simulation_id)`)
     end
+
+    trial_ids = DBInterface.execute(db, "SELECT trial_id FROM trials;") |> DataFrame |> x->x.trial_id
+    for trial_id in trial_ids
+        trial_simulation_ids = selectTrialSimulations(trial_id)
+        filter!(x->!(x in simulation_ids), trial_simulation_ids)
+        if isempty(trial_simulation_ids)
+            deleteTrial([trial_id])
+        else
+            recordTrialSimulationIDs(trial_id, trial_simulation_ids)
+        end
+    end
+
     return nothing
 end
+
+deleteSimulation(simulation_id::Int) = deleteSimulation([simulation_id])
 
 function trialRowToIds(r::String)
     if !contains(r,":")
@@ -126,7 +137,7 @@ function trialRowToIds(r::String)
 end
 
 function deleteTrial(trial_ids::Vector{Int})
-    DBInterface.execute(db,"DELETE FROM trials WHERE trial_id IN ($(join(trial_ids,",")));")
+    DBInterface.execute(getDB(),"DELETE FROM trials WHERE trial_id IN ($(join(trial_ids,",")));")
     for trial_id in trial_ids
         selectTrialSimulations(trial_id) |> deleteSimulation
         # deleteSimulation()
@@ -140,7 +151,10 @@ function deleteTrial(trial_ids::Vector{Int})
     return nothing
 end
 
+deleteTrial(trial_id::Int) = deleteTrial([trial_id])
+
 function resetDatabase()
+    db = getDB()
     trial_ids = DBInterface.execute(db, "SELECT trial_id FROM trials;") |> DataFrame |> x->x.trial_id
     if !isempty(trial_ids)
         deleteTrial(trial_ids)
@@ -151,17 +165,19 @@ function resetDatabase()
         deleteSimulation(simulation_ids)
     end
     if db.file == ":memory:"
-        global db, control_cohort_id = initializeDatabase()
+        _, control_id = initializeDatabase()
+        global control_cohort_id = control_id
     else
         run(`rm -f $(data_dir)/vct.db`)
-        global db, control_cohort_id = initializeDatabase(data_dir * "/vct.db")
+        _, control_id = initializeDatabase(data_dir * "/vct.db")
+        global control_cohort_id = control_id
     end
     return nothing
 end
 
 function runReplicates(patient_id::Int, variation_id::Int, cohort_id::Int, folder_id::Int, num_replicates::Int; use_previous_sims::Bool = false)
     if use_previous_sims
-        simulation_ids = DBInterface.execute(db, "SELECT simulation_id FROM simulations WHERE (patient_id,variation_id,cohort_id,folder_id)=($(patient_id),$(variation_id),$(cohort_id),$(folder_id));") |> DataFrame |> x->x.simulation_id
+        simulation_ids = DBInterface.execute(getDB(), "SELECT simulation_id FROM simulations WHERE (patient_id,variation_id,cohort_id,folder_id)=($(patient_id),$(variation_id),$(cohort_id),$(folder_id));") |> DataFrame |> x->x.simulation_id
         num_replicates -= length(simulation_ids)
     else
         simulation_ids = Int[]
@@ -183,6 +199,7 @@ function runVirtualClinicalTrial(patient_ids::Union{Int,Vector{Int}}, variation_
     time_started  = now()
     num_patients = length(patient_ids)
     @assert num_patients == length(variation_ids) # make sure each patient has their own variation ids assigned
+    db = getDB()
     simulation_ids = Int[]
     for i in 1:num_patients
         patient_id = patient_ids[i]
@@ -213,6 +230,7 @@ function runVirtualClinicalTrial(patient_ids::Union{Int,Vector{Int}}, cohort_ids
 end
 
 function addPatient(patient_name::String,path_to_control_folder::String)
+    db = getDB()
     df = DBInterface.execute(db, "SELECT patient_id FROM folders WHERE path='$(path_to_control_folder)';") |> DataFrame
     if !isempty(df)
         println("This folder location is already present. No patient added.")
@@ -234,6 +252,7 @@ function addPatient(patient_name::String,path_to_control_folder::String)
 end
 
 function addGVAX(patient_id::Int; cd4_multiplier::AbstractFloat=10., cd8_multiplier::AbstractFloat=2.)
+    db = getDB()
     gvax_cohort_id = DBInterface.execute(db, "SELECT cohort_id FROM cohorts WHERE intervention='gvax';") |> DataFrame |> x->x.cohort_id
     if isempty(gvax_cohort_id)
         gvax_cohort_id = DBInterface.execute(db, "INSERT INTO cohorts (intervention) VALUES('gvax') RETURNING cohort_id;") |> DataFrame |> x->x.cohort_id[1]
@@ -266,6 +285,7 @@ function addGVAX(patient_id::Int; cd4_multiplier::AbstractFloat=10., cd8_multipl
 end
 
 function addVariationColumns(patient_id::Int, xml_paths::Vector{Vector{String}}, variable_types::Vector{DataType})
+    db = getDB()
     table_name = "patient_variations_$(patient_id)"
     column_names = DBInterface.execute(db, "PRAGMA table_info($(table_name));") |> DataFrame |> x->x[!,:name]
     filter!(x->x!="variation_id",column_names)
@@ -309,7 +329,7 @@ function addVariationColumns(patient_id::Int, xml_paths::Vector{Vector{String}},
 end
 
 function addVariationRow(table_name::String, table_features::String, values::String)
-    new_variation_id = DBInterface.execute(db, "INSERT OR IGNORE INTO $(table_name) ($(table_features)) VALUES($(values)) RETURNING variation_id;") |> DataFrame |> x->x.variation_id
+    new_variation_id = DBInterface.execute(getDB(), "INSERT OR IGNORE INTO $(table_name) ($(table_features)) VALUES($(values)) RETURNING variation_id;") |> DataFrame |> x->x.variation_id
     new_variation_added = length(new_variation_id)==1
     if  !new_variation_added
         new_variation_id = selectRow("variation_id", table_name, "WHERE ($(table_features))=($(values))")
@@ -387,7 +407,11 @@ function recordTrialInfo(simulation_ids::Vector{Int}, time_started::DateTime, de
         description = readline()
     end
     s =  "INSERT INTO trials (datetime,description) VALUES('$(Dates.format(time_started,"yymmddHHMM"))','$(description)') RETURNING trial_id;"
-    trial_id = DBInterface.execute(db, s) |> DataFrame |> x -> x.trial_id[1]
+    trial_id = DBInterface.execute(getDB(), s) |> DataFrame |> x -> x.trial_id[1]
+    recordTrialSimulationIDs(trial_id,simulation_ids)
+end
+
+function recordTrialSimulationIDs(trial_id::Int, simulation_ids::Vector{Int})
     path_to_trial_folder = data_dir * "/trials/" * string(trial_id) * "/"
     run(`mkdir -p $(path_to_trial_folder)`)
     path_to_csv = path_to_trial_folder * "simulations.csv"
