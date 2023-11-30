@@ -153,6 +153,9 @@ function userParameterPath(field_names::Vector{String})
     return [userParameterPath(field_name) for field_name in field_names]
 end
 
+function initialConditionPath()
+    return ["initial_conditions","cell_positions","filename"]
+end
 
 
 end
