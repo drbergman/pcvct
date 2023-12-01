@@ -1,23 +1,25 @@
-module VCTExtraction
+# module VCTExtraction
 
-export loadTimeTimeSeries, loadCellCountTimeSeries, loadCellDataTimeSeries, loadVCT
+# export loadTimeTimeSeries, loadCellCountTimeSeries, loadCellDataTimeSeries, loadVCT
 
-using MAT, LightXML, SQLite, DataFrames, CSV
+# using MAT, LightXML, SQLite, DataFrames, CSV
+using MAT
 
-home_dir = cd(pwd,homedir())
+# home_dir = cd(pwd,homedir())
 # data_dir = "./data"
 
-include("VCTModule.jl")
+# include("VCTModule.jl")
 # include("VCTConfiguration.jl")
 # include("VCTDatabase.jl")
 
-using .VCTModule
+# using .VCTModule
 # using .VCTConfiguration
 # using .VCTDatabase
 
 function loadVCT(path_to_data)
-    global data_dir = path_to_data
-    global db, _ = initializeVCT("",path_to_data) # don't bother with setting the physicell directory with this (hacky, I know)
+    # global data_dir = path_to_data
+    global db, _ = initializeDatabase(path_to_data * "/vct.db")
+    # global db, _ = initializeVCT("",path_to_data) # don't bother with setting the physicell directory with this (hacky, I know)
 end
 
 ############# Helper functions #############
@@ -30,44 +32,44 @@ end
 
 function getLabelIndex(path_to_xml::String, label::String)
     xml_path = ["cellular_information", "cell_populations", "cell_population", "custom", "simplified_data", "labels"]
-    VCTModule.openXML(path_to_xml)
-    labels_element = VCTModule.retrieveElement(xml_path)
+    openXML(path_to_xml)
+    labels_element = retrieveElement(xml_path)
     for label_element in child_elements(labels_element)
         if content(label_element) == label
             label_ind_start = attribute(label_element, "index"; required=true) |> x -> parse(Int, x)
             label_ind_width = attribute(label_element, "size"; required=true) |> x -> parse(Int, x)
-            VCTModule.closeXML()
+            closeXML()
             return label_ind_start .+ (1:label_ind_width)
         end
     end
-    VCTModule.closeXML()
+    closeXML()
 end
 
 function getSubstrateID(path_to_xml::String, name::String)
     xml_path = ["microenvironment","domain","variables"]
-    VCTModule.openXML(path_to_xml)
-    variables_element = VCTModule.retrieveElement(xml_path)
+    openXML(path_to_xml)
+    variables_element = retrieveElement(xml_path)
     for variable_element in child_elements(variables_element)
         if attribute(variable_element, "name"; required=true)==name
             substrate_id = attribute(variable_element, "ID"; required=true) |> x->parse(Int,x)
-            VCTModule.closeXML()
+            closeXML()
             return substrate_id
         end
     end
-    VCTModule.closeXML()
+    closeXML()
 end
 
 function selectSimulations(; patient_id::Int, variation_id::Int, cohort_id::Int)
-    return DBInterface.execute(VCTModule.getDB(), "SELECT simulation_id FROM simulations WHERE (patient_id, variation_id, cohort_id)=($(patient_id),$(variation_id),$(cohort_id));") |> DataFrame |> x -> x.simulation_id
+    return DBInterface.execute(db, "SELECT simulation_id FROM simulations WHERE (patient_id, variation_id, cohort_id)=($(patient_id),$(variation_id),$(cohort_id));") |> DataFrame |> x -> x.simulation_id
 end
 
 ############# Atomic extraction functions #############
 
 function extractTime(path_to_output_file::String)
     xml_path = ["metadata", "current_time"]
-    VCTModule.openXML(path_to_output_file)
+    openXML(path_to_output_file)
     t = getField(xml_path) |> x -> parse(Float64, x)
-    VCTModule.closeXML()
+    closeXML()
     return t
 end
 
@@ -107,7 +109,7 @@ function loadTimeTimeSeries(path_to_output_folders::Vector{String})
 end
 
 function loadTimeTimeSeries(simulation_id::Union{Int,Vector{Int}})
-    return loadTimeTimeSeries([VCTModule.data_dir*"/simulations/$d/output/" for d in simulation_id])
+    return loadTimeTimeSeries([data_dir*"/simulations/$d/output/" for d in simulation_id])
 end
 
 function loadTimeTimeSeries(patient_id::Int, variation_id::Int, cohort_id::Int)
@@ -124,7 +126,7 @@ function loadCellCountTimeSeries(path_to_output_folders::Vector{String})
 end
 
 function loadCellCountTimeSeries(simulation_id::Union{Int,Vector{Int}})
-    return loadCellCountTimeSeries([VCTModule.data_dir*"/simulations/$d/output/" for d in simulation_id])
+    return loadCellCountTimeSeries([data_dir*"/simulations/$d/output/" for d in simulation_id])
 end
 
 function loadCellCountTimeSeries(patient_id::Int, variation_id::Int, cohort_id::Int)
@@ -138,15 +140,15 @@ function loadCellDataTimeSeries(path_to_output_folder::String, label::String)
 end
 
 function loadCellDataTimeSeries(label::String)
-    simulation_ids = DBInterface.execute(VCTModule.getDB(), "SELECT simulation_id FROM simulations;") |> DataFrame |> x->x.simulation_id
-    paths_to_output_folder = (VCTModule.data_dir * "/simulations/") .* (string.(simulation_ids) .* "/output/")
+    simulation_ids = DBInterface.execute(db, "SELECT simulation_id FROM simulations;") |> DataFrame |> x->x.simulation_id
+    paths_to_output_folder = (data_dir * "/simulations/") .* (string.(simulation_ids) .* "/output/")
     all_cell_data = [loadCellDataTimeSeries(path_to_output_folder, label) for path_to_output_folder in paths_to_output_folder]
     return DataFrame("simulation_id" => simulation_ids, label => all_cell_data)
 end
 
 function loadCellDataTimeSeries(trial_id::Int, label::String)
     simulation_ids = selectTrialSimulations(trial_id)
-    return DataFrame("simulation_id" => simulation_ids, label => [loadCellDataTimeSeries(VCTModule.data_dir * "/simulations/" * string(simulation_id) * "/output/", label) for simulation_id in simulation_ids])
+    return DataFrame("simulation_id" => simulation_ids, label => [loadCellDataTimeSeries(data_dir * "/simulations/" * string(simulation_id) * "/output/", label) for simulation_id in simulation_ids])
 end
 
 function loadCellTypeCountTimeSeries(path_to_output_folder::String, cell_type_id::Union{Int,Vector{Int}})
@@ -160,7 +162,7 @@ function loadCellTypeCountTimeSeries(path_to_output_folders::Vector{String}, cel
 end
 
 function loadCellTypeCountTimeSeries(simulation_id::Union{Int,Vector{Int}}, cell_type_id::Union{Int,Vector{Int}})
-    return loadCellTypeCountTimeSeries([VCTModule.data_dir*"/simulations/$d/output/" for d in simulation_id], cell_type_id)
+    return loadCellTypeCountTimeSeries([data_dir*"/simulations/$d/output/" for d in simulation_id], cell_type_id)
 end
 
 function loadCellTypeCountTimeSeries(patient_id::Int, variation_id::Int, cohort_id::Int, cell_type_id::Union{Int,Vector{Int}})
@@ -186,4 +188,4 @@ function loadSubstrateDensityTimeSeries(path_to_output_folders::Union{String,Vec
     return loadSubstrateDensityTimeSeries(path_to_output_folders, [substrate_name])
 end
 
-end
+# end

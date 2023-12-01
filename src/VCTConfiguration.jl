@@ -1,8 +1,8 @@
-module VCTConfiguration
+# module VCTConfiguration
 
-export getOutputFolder, loadVariation, openXML, multiplyField, closeXML, getField, getXML, retrieveElement
+# export getOutputFolder, loadVariation, openXML, multiplyField, closeXML, getField, getXML, retrieveElement
 
-using LightXML, CSV, DataFrames, SQLite
+# using LightXML, CSV, DataFrames, SQLite
 
 global xml_doc::XMLDocument;
 
@@ -158,4 +158,4 @@ function initialConditionPath()
 end
 
 
-end
+# end

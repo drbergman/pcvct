@@ -5,9 +5,10 @@ export initializeVCT, resetDatabase, selectTrialSimulations, getDB
 using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables
 include("VCTDatabase.jl")
 include("VCTConfiguration.jl")
+include("VCTExtraction.jl")
 
-using .VCTDatabase
-using .VCTConfiguration
+# using .VCTDatabase
+# using .VCTConfiguration
 
 # I considered doing this with a structure of parameters, but I don't think that will work well here:
 #   1. the main purpose would be to make this thread safe, but one machine will not run multiple sims at once most likely
