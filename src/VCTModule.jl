@@ -92,7 +92,13 @@ function runSimulation!(simulation::Simulation)
     if simulation.folder_id != current_folder_id
         copyMakeFolderFiles(simulation)
     end
-    run(`./project`)
+    try
+        run(`./project`)
+    catch e
+        ran = false
+        deleteSimulation(simulation.id)
+        return ran
+    end
 
     path_to_sim_output = physicell_dir * "/" * getOutputFolder("./config/PhysiCell_settings.xml")
 
