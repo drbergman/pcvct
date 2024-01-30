@@ -3,6 +3,7 @@ module VCTModule
 export initializeVCT, resetDatabase, selectTrialSimulations, getDB
 
 using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables
+include("VCTClasses.jl")
 include("VCTDatabase.jl")
 include("VCTConfiguration.jl")
 include("VCTExtraction.jl")
@@ -35,30 +36,6 @@ function initializeVCT(path_to_physicell::String, path_to_data::String)
     global data_dir = path_to_data
     _, control_id = initializeDatabase(path_to_data * "/vct.db")
     global control_cohort_id = control_id
-end
-
-struct Simulation
-    id::Int # string uniquely identifying this simulation
-    patient_id::Int # integer identifying the patient that this simulation corresponds to
-    variation_id::Int # integer identifying the variation (varied parameters) that this simulation corresponds to
-    cohort_id::Int # integer identifying the cohort (treatment arm) this simulation belongs to
-    folder_id::Int # integer identifying the folder that contains the custom and config folders
-end
-
-function Simulation(patient_id::Int, cohort_id::Int)
-    folder_id = getFolderID(patient_id, cohort_id)
-    variation_id = 0 # base variation (no variation)
-    Simulation(patient_id, variation_id, cohort_id, folder_id)
-end
-
-function Simulation(patient_id::Int, variation_id::Int, cohort_id::Int, folder_id::Int)
-    simulation_id = DBInterface.execute(getDB(), "INSERT INTO simulations (patient_id,variation_id,cohort_id,folder_id) VALUES($(patient_id),$(variation_id),$(cohort_id),$(folder_id)) RETURNING simulation_id;") |> DataFrame |> x->x.simulation_id[1]
-    Simulation(simulation_id, patient_id, variation_id, cohort_id, folder_id)
-end
-
-function Simulation(patient_id::Int, cohort_id::Int, folder_id::Int)
-    variation_id = 0 # base variation (no variation)
-    Simulation(simulation_id, patient_id, variation_id, cohort_id, folder_id)
 end
 
 function copyMakeFolderFiles(folder_id::Int)
@@ -182,6 +159,11 @@ function resetDatabase()
     return nothing
 end
 
+function runMonad!(monad::Monad, use_previous_sims::Bool=false)
+    monad.simulation_ids = runReplicates(monad.patient_id, monad.variation_id, monad.cohort_id, monad.folder_id, monad.size; use_previous_sims=use_previous_sims)
+    return monad.simulation_ids
+end
+
 function runReplicates(patient_id::Int, variation_id::Int, cohort_id::Int, folder_id::Int, num_replicates::Int; use_previous_sims::Bool = false)
     if use_previous_sims
         simulation_ids = DBInterface.execute(getDB(), "SELECT simulation_id FROM simulations WHERE (patient_id,variation_id,cohort_id,folder_id)=($(patient_id),$(variation_id),$(cohort_id),$(folder_id));") |> DataFrame |> x->x.simulation_id
@@ -217,9 +199,11 @@ function runVirtualClinicalTrial(patient_ids::Union{Int,Vector{Int}}, variation_
             copyMakeFolderFiles(df.folder_id[1])
             path_to_xml = selectRow("path","folders","WHERE patient_id=$(patient_id) AND cohort_id=$(cohort_id)") * "config/PhysiCell_settings.xml"
             for variation_id in variation_ids[i]
+                monad = Monad(monad_id, num_replicates, Int[], patient_id, variation_id, cohort_id)
                 variation_row = selectRow(variation_table_name,"WHERE variation_id=$(variation_id);")
                 loadVariation(path_to_xml, variation_row, physicell_dir)
-                append!(simulation_ids, runReplicates(patient_id, variation_id, cohort_id, num_replicates; use_previous_sims=use_previous_sims))
+                # append!(simulation_ids, runReplicates(patient_id, variation_id, cohort_id, num_replicates; use_previous_sims=use_previous_sims))
+                append!(simulation_ids, runMonad!(monad; use_previous_sims=use_previous_sims))
             end
         end
     end

@@ -1,9 +1,3 @@
-# module VCTConfiguration
-
-# export getOutputFolder, loadVariation, openXML, multiplyField, closeXML, getField, getXML, retrieveElement
-
-# using LightXML, CSV, DataFrames, SQLite
-
 global xml_doc::XMLDocument;
 
 getXML() = xml_doc
@@ -156,6 +150,3 @@ end
 function initialConditionPath()
     return ["initial_conditions","cell_positions","filename"]
 end
-
-
-# end

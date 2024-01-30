@@ -1,10 +1,3 @@
-# module VCTDatabase
-
-# export initializeDatabase, getFolderID, selectRow, getDB
-
-# using SQLite, Tables, DataFrames, CSV
-
-# home_dir = cd(pwd,homedir())
 db = SQLite.DB()
 
 getDB() = db
@@ -99,5 +92,3 @@ end
 function retrieveFolderInfo(folder_id::Int)
     return selectRow("folders","WHERE folder_id=$(folder_id)")
 end
-
-# end

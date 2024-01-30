@@ -1,20 +1,4 @@
-# module VCTExtraction
-
-# export loadTimeTimeSeries, loadCellCountTimeSeries, loadCellDataTimeSeries, loadVCT
-
-# using MAT, LightXML, SQLite, DataFrames, CSV
 using MAT
-
-# home_dir = cd(pwd,homedir())
-# data_dir = "./data"
-
-# include("VCTModule.jl")
-# include("VCTConfiguration.jl")
-# include("VCTDatabase.jl")
-
-# using .VCTModule
-# using .VCTConfiguration
-# using .VCTDatabase
 
 function loadVCT(path_to_data)
     # global data_dir = path_to_data
