@@ -28,10 +28,7 @@ function initializeVCT(path_to_physicell::String, path_to_data::String)
     println("----------INITIALIZING----------")
     global physicell_dir = path_to_physicell
     global data_dir = path_to_data
-    temp = initializeDatabase(path_to_data * "/vct.db")
-    global current_base_config_id = temp[1]
-    global current_ic_id = temp[2]
-    global current_custom_code_id = temp[3]
+    initializeDatabase(path_to_data * "/vct.db")
 end
 
 function copyMakeFolderFiles(folder_id::Int)
