@@ -2,6 +2,11 @@ global xml_doc::XMLDocument;
 
 getXML() = xml_doc
 
+function getConfigDB(base_config_id::Int)
+    folder_name = DBInterface.execute(db, "SELECT folder_name FROM base_configs WHERE (base_config_id)=($(base_config_id));") |> DataFrame |> x->x.folder_name[1]
+    return "$(data_dir)/base_configs/$(folder_name)/variations.db" |> SQLite.DB
+end
+
 function openXML(path_to_xml::String)
     global xml_doc = parse_file(path_to_xml)
     return nothing
