@@ -7,19 +7,18 @@ current_custom_code_id = -1
 function initializeDatabase(path_to_database::String)
     println(path_to_database)
     global db = SQLite.DB(path_to_database)
-    return cd(createSchema)
+    return createSchema()
 end
 
 function initializeDatabase()
     global db = SQLite.DB()
-    return cd(createSchema)
+    return createSchema()
 end
 
 function createSchema()
 
-    cd(data_dir)
-    
-    data_dir_contents = readdir(sort=false)
+    data_dir_contents = readdir(data_dir, sort=false)
+    println(data_dir_contents)
     if !("custom_codes" in data_dir_contents)
         error("No $(data_dir)/custom_codes found. This is where to put the folders for custom_modules, main.cpp, and Makefile.")
     end
@@ -34,7 +33,7 @@ function createSchema()
         )
     ")
         
-    custom_codes_folders = readdir("custom_codes", sort=false) |> filter(x->isdir("custom_codes/$(x)"))
+    custom_codes_folders = readdir("$(data_dir)/custom_codes", sort=false) |> filter(x->isdir("$(data_dir)/custom_codes/$(x)"))
     if isempty(custom_codes_folders)
         error("No folders in $(data_dir)/custom_codes found. Add custom_modules, main.cpp, and Makefile to a folder here to move forward.")
     end
@@ -65,7 +64,7 @@ function createSchema()
         )
     ")
         
-    base_configs_folders = readdir("base_configs", sort=false) |> filter(x->isdir("base_configs/$(x)"))
+    base_configs_folders = readdir("$(data_dir)/base_configs", sort=false) |> filter(x->isdir("$(data_dir)/base_configs/$(x)"))
     if isempty(base_configs_folders)
         error("No folders in $(data_dir)/base_configs found. Add PhysiCell_settings.xml and rules files here.")
     end
@@ -75,6 +74,7 @@ function createSchema()
         DBInterface.execute(db_config, "CREATE TABLE IF NOT EXISTS variations (
             variation_id INTEGER PRIMARY KEY
         );")
+        DBInterface.execute(db_config, "INSERT OR IGNORE INTO variations (variation_id) VALUES(0);")
     end
             
     SQLite.execute(db, "CREATE TABLE IF NOT EXISTS simulations (
@@ -86,7 +86,7 @@ function createSchema()
         FOREIGN KEY (custom_code_id)
             REFERENCES custom_codes (custom_code_id),
         FOREIGN KEY (ic_id)
-            REFERENCES ics (ic_id)
+            REFERENCES ics (ic_id),
         FOREIGN KEY (base_config_id)
             REFERENCES base_configs (base_config_id)
         )    
@@ -101,9 +101,10 @@ function createSchema()
         FOREIGN KEY (custom_code_id)
             REFERENCES custom_codes (custom_code_id),
         FOREIGN KEY (ic_id)
-            REFERENCES ics (ic_id)
+            REFERENCES ics (ic_id),
         FOREIGN KEY (base_config_id)
-            REFERENCES base_configs (base_config_id)
+            REFERENCES base_configs (base_config_id),
+        UNIQUE (custom_code_id,ic_id,base_config_id,variation_id)
         )    
     ")
 
@@ -115,7 +116,7 @@ function createSchema()
         FOREIGN KEY (custom_code_id)
             REFERENCES custom_codes (custom_code_id),
         FOREIGN KEY (ic_id)
-            REFERENCES ics (ic_id)
+            REFERENCES ics (ic_id),
         FOREIGN KEY (base_config_id)
             REFERENCES base_configs (base_config_id)
         )    
@@ -130,29 +131,21 @@ function createSchema()
     return
 end
 
-function selectRow(table_name::String, condition_stmt::String)
+function selectRow(table_name::String, condition_stmt::String; db::SQLite.DB=db)
     s = "SELECT * FROM $(table_name) " * condition_stmt * ";"
     df = DBInterface.execute(db, s) |> DataFrame
     @assert size(df,1)==1 "Did not find exactly one row matching the query:\n\tDatabase file: $(db)\n\tQuery: $(s)\nResult: $(df)"
     return df
 end
 
-function selectRow(column_names::Vector{String}, table_name::String, condition_stmt::String)
-    df = selectRow(table_name, condition_stmt)
+function selectRow(column_names::Vector{String}, table_name::String, condition_stmt::String; db::SQLite.DB=db)
+    df = selectRow(table_name, condition_stmt; db=db)
     return [df[1,column_name] for column_name in column_names]
 end
 
-function selectRow(column_name::String, table_name::String, condition_stmt::String)
-    df = selectRow(table_name, condition_stmt)
+function selectRow(column_name::String, table_name::String, condition_stmt::String; db::SQLite.DB=db)
+    df = selectRow(table_name, condition_stmt; db=db)
     return df[1,column_name]
-end
-
-function getFolderID(patient_id::Int,cohort_id::Int)
-    return selectRow("folder_id","folders","WHERE patient_id=$(patient_id) AND cohort_id=$(cohort_id)")
-end
-
-function retrieveFolderInfo(folder_id::Int)
-    return selectRow("folders","WHERE folder_id=$(folder_id)")
 end
 
 function retrievePathInfo(base_config_id::Int, ic_id::Int, custom_code_id::Int)

@@ -1,4 +1,5 @@
 global xml_doc::XMLDocument;
+current_variation_id = 0
 
 getXML() = xml_doc
 
@@ -107,10 +108,38 @@ function loadVariation(path_to_xml::String, variation_row::DataFrame, physicell_
         xml_path = split(column_name,"/") .|> string
         updateField(xml_path,variation_row[1,column_name])
     end
-    save_file(xml_doc, path_to_xml)
+    # save_file(xml_doc, path_to_xml)
     save_file(xml_doc, physicell_dir * "/config/PhysiCell_settings.xml")
     closeXML()
     return nothing
+end
+
+function loadVariation(simulation::Simulation)
+    path_to_xml = "$(physicell_dir)/config/PhysiCell_settings.xml"
+    if current_base_config_id != simulation.base_config_id
+        path_to_xml_src = "$(data_dir)/base_configs/$(simulation.base_config_folder)/PhysiCell_settings.xml"
+        cp(path_to_xml_src, path_to_xml, force=true)
+        global current_base_config_id = simulation.base_config_id
+        global current_variation_id = 0
+    end
+
+    if current_variation_id == simulation.variation_id
+        return
+    end
+
+    openXML(path_to_xml)
+    variation_row = selectRow("variations", "WHERE variation_id=$(simulation.variation_id);", db=getConfigDB(simulation.base_config_id))
+    for column_name in names(variation_row)
+        if column_name == "variation_id"
+            continue
+        end
+        xml_path = split(column_name,"/") .|> string
+        updateField(xml_path,variation_row[1,column_name])
+    end
+    save_file(xml_doc, path_to_xml)
+    global current_variation_id = simulation.variation_id
+    closeXML()
+    return
 end
 
 function motilityPath(cell_definition::String, field_name::String)
