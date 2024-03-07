@@ -1,6 +1,6 @@
 db = SQLite.DB()
 
-current_base_config_id = -1
+# current_base_config_id = -1
 current_ic_id = -1
 current_custom_code_id = -1
 

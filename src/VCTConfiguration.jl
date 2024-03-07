@@ -1,7 +1,5 @@
-global xml_doc::XMLDocument;
-current_variation_id = 0
-
-getXML() = xml_doc
+# global xml_doc::XMLDocument;
+# current_variation_id = 0
 
 function getConfigDB(base_config_id::Int)
     folder_name = DBInterface.execute(db, "SELECT folder_name FROM base_configs WHERE (base_config_id)=($(base_config_id));") |> DataFrame |> x->x.folder_name[1]
@@ -9,13 +7,14 @@ function getConfigDB(base_config_id::Int)
 end
 
 function openXML(path_to_xml::String)
-    global xml_doc = parse_file(path_to_xml)
-    return nothing
+    # global xml_doc = parse_file(path_to_xml)
+    # return nothing
+    return parse_file(path_to_xml)
 end
 
-closeXML() = free(xml_doc)
+closeXML(xml_doc::XMLDocument) = free(xml_doc)
 
-function retrieveElement(xml_path::Vector{String})
+function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{String})
     current_element = root(xml_doc)
     for path_element in xml_path
         if !occursin(":",path_element)
@@ -37,45 +36,46 @@ function retrieveElement(xml_path::Vector{String})
 end
 
 function retrieveElement(path_to_xml::String,xml_path::Vector{String})
-    openXML(path_to_xml)
-    return retrieveElement(xml_path)
+    # openXML(path_to_xml)
+    # return retrieveElement(xml_path)
+    
+    return openXML(path_to_xml) |> x->retrieveElement(x, xml_path)
 end
 
-function getField(xml_path::Vector{String})
-    return retrieveElement(xml_path) |> content
+function getField(xml_doc::XMLDocument, xml_path::Vector{String})
+    return retrieveElement(xml_doc, xml_path) |> content
 end
 
 function getOutputFolder(path_to_xml)
-    openXML(path_to_xml)
-    rel_path_to_output = getField(["save", "folder"])
-    closeXML()
+    xml_doc = openXML(path_to_xml)
+    rel_path_to_output = getField(xml_doc, ["save", "folder"])
+    closeXML(xml_doc)
     return rel_path_to_output
 end
 
-function updateField(xml_path::Vector{String},new_value::Union{Int,Real,String})
-    current_element = retrieveElement(xml_path)
+function updateField(xml_doc::XMLDocument, xml_path::Vector{String},new_value::Union{Int,Real,String})
+    current_element = retrieveElement(xml_doc, xml_path)
     set_content(current_element, string(new_value))
     return nothing
 end
 
-function updateField(xml_path_and_value::Vector{Any})
-    return updateField(xml_path_and_value[1:end-1],xml_path_and_value[end])
+function updateField(xml_doc::XMLDocument, xml_path_and_value::Vector{Any})
+    return updateField(xml_doc, xml_path_and_value[1:end-1],xml_path_and_value[end])
 end
 
 function updateField(path_to_xml::String,xml_path::Vector{String},new_value::Union{Int,Real,String})
-    openXML(path_to_xml)
-    return updateField(xml_path,new_value)
+    return openXML(path_to_xml) |> x -> updateField(x, xml_path, new_value)
 end
 
-function updateField(xml_doc_temp::XMLDocument,xml_path::Vector{String},new_value::Union{Int,Real,String})
-    current_element = root(xml_doc_temp)
-    retrieveElement!(current_element,xml_path)
-    set_content(current_element, new_value)
-    return nothing
-end
+# function updateField(xml_doc::XMLDocument,xml_path::Vector{String},new_value::Union{Int,Real,String})
+#     current_element = root(xml_doc)
+#     retrieveElement!(current_element, xml_path)
+#     set_content(current_element, new_value)
+#     return nothing
+# end
 
-function multiplyField(xml_path::Vector{String}, multiplier::AbstractFloat)
-    current_element = retrieveElement(xml_path)
+function multiplyField(xml_doc::XMLDocument, xml_path::Vector{String}, multiplier::AbstractFloat)
+    current_element = retrieveElement(xml_doc, xml_path)
     val = content(current_element)
     if attribute(current_element, "type"; required=false) == "int"
         val = parse(Int, val) |> y -> round(Int, multiplier * y)
@@ -87,58 +87,64 @@ function multiplyField(xml_path::Vector{String}, multiplier::AbstractFloat)
     return nothing
 end
 
-function updateFieldsFromCSV(path_to_csv::String)
+function updateFieldsFromCSV(xml_doc::XMLDocument, path_to_csv::String)
     df = CSV.read(path_to_csv,DataFrame;header=false,silencewarnings=true,types=String)
     for i = axes(df,1)
-        df[i,:] |> Vector |> x->filter!(!ismissing,x) .|> string |> updateField
+        df[i, :] |> Vector |> x -> filter!(!ismissing, x) .|> string |> x -> updateField(xml_doc, x)
     end
 end
 
 function updateFieldsFromCSV(path_to_csv::String,path_to_xml::String)
-    openXML(path_to_xml)
-    updateFieldsFromCSV(path_to_csv)
+    return openXML(path_to_xml) |> x->updateFieldsFromCSV(x, path_to_csv)
 end
 
 function loadVariation(path_to_xml::String, variation_row::DataFrame, physicell_dir::String)
-    openXML(path_to_xml)
+    xml_doc = openXML(path_to_xml)
     for column_name in names(variation_row)
         if column_name == "variation_id"
             continue
         end
         xml_path = split(column_name,"/") .|> string
-        updateField(xml_path,variation_row[1,column_name])
+        updateField(xml_doc, xml_path, variation_row[1, column_name])
     end
     # save_file(xml_doc, path_to_xml)
     save_file(xml_doc, physicell_dir * "/config/PhysiCell_settings.xml")
-    closeXML()
+    closeXML(xml_doc)
     return nothing
 end
 
-function loadVariation(simulation::Simulation)
-    path_to_xml = "$(physicell_dir)/config/PhysiCell_settings.xml"
-    if current_base_config_id != simulation.base_config_id
-        path_to_xml_src = "$(data_dir)/base_configs/$(simulation.base_config_folder)/PhysiCell_settings.xml"
-        cp(path_to_xml_src, path_to_xml, force=true)
-        global current_base_config_id = simulation.base_config_id
-        global current_variation_id = 0
-    end
-
-    if current_variation_id == simulation.variation_id
+function loadVariation!(simulation::Union{Simulation,Monad})
+    path_to_xml = "$(physicell_dir)/config/base_config_$(simulation.base_config_id)/variation_$(simulation.variation_id).xml"
+    if isfile(path_to_xml)
         return
     end
+    mkpath(path_to_xml)
+    if isempty(simulation.base_config_folder)
+        simulation.base_config_folder = selectRow("folder_name", "base_configs", "WHERE base_config_id=$(simulation.base_config_id);")
+    end
+    # if current_base_config_id != simulation.base_config_id
+    path_to_xml_src = "$(data_dir)/base_configs/$(simulation.base_config_folder)/PhysiCell_settings.xml"
+    cp(path_to_xml_src, path_to_xml, force=true)
+    #     global current_base_config_id = simulation.base_config_id
+    #     global current_variation_id = 0
+    # end
 
-    openXML(path_to_xml)
+    # if current_variation_id == simulation.variation_id
+    #     return
+    # end
+
+    xml_doc = openXML(path_to_xml)
     variation_row = selectRow("variations", "WHERE variation_id=$(simulation.variation_id);", db=getConfigDB(simulation.base_config_id))
     for column_name in names(variation_row)
         if column_name == "variation_id"
             continue
         end
         xml_path = split(column_name,"/") .|> string
-        updateField(xml_path,variation_row[1,column_name])
+        updateField(xml_doc, xml_path,variation_row[1,column_name])
     end
     save_file(xml_doc, path_to_xml)
-    global current_variation_id = simulation.variation_id
-    closeXML()
+    # global current_variation_id = simulation.variation_id
+    closeXML(xml_doc)
     return
 end
 

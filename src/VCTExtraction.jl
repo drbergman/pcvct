@@ -16,31 +16,31 @@ end
 
 function getLabelIndex(path_to_xml::String, label::String)
     xml_path = ["cellular_information", "cell_populations", "cell_population", "custom", "simplified_data", "labels"]
-    openXML(path_to_xml)
-    labels_element = retrieveElement(xml_path)
+    xml_doc = openXML(path_to_xml)
+    labels_element = retrieveElement(xml_doc, xml_path)
     for label_element in child_elements(labels_element)
         if content(label_element) == label
             label_ind_start = attribute(label_element, "index"; required=true) |> x -> parse(Int, x)
             label_ind_width = attribute(label_element, "size"; required=true) |> x -> parse(Int, x)
-            closeXML()
+            closeXML(xml_doc)
             return label_ind_start .+ (1:label_ind_width)
         end
     end
-    closeXML()
+    closeXML(xml_doc)
 end
 
 function getSubstrateID(path_to_xml::String, name::String)
     xml_path = ["microenvironment","domain","variables"]
-    openXML(path_to_xml)
-    variables_element = retrieveElement(xml_path)
+    xml_doc = openXML(path_to_xml)
+    variables_element = retrieveElement(xml_doc, xml_path)
     for variable_element in child_elements(variables_element)
         if attribute(variable_element, "name"; required=true)==name
             substrate_id = attribute(variable_element, "ID"; required=true) |> x->parse(Int,x)
-            closeXML()
+            closeXML(xml_doc)
             return substrate_id
         end
     end
-    closeXML()
+    closeXML(xml_doc)
 end
 
 function selectSimulations(; patient_id::Int, variation_id::Int, cohort_id::Int)
@@ -51,9 +51,9 @@ end
 
 function extractTime(path_to_output_file::String)
     xml_path = ["metadata", "current_time"]
-    openXML(path_to_output_file)
-    t = getField(xml_path) |> x -> parse(Float64, x)
-    closeXML()
+    xml_doc = openXML(path_to_output_file)
+    t = getField(xml_doc, xml_path) |> x -> parse(Float64, x)
+    closeXML(xml_doc)
     return t
 end
 

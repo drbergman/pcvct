@@ -25,48 +25,48 @@ function initializeVCT(path_to_physicell::String, path_to_data::String)
     initializeDatabase(data_dir * "/vct.db")
 end
 
-function runSimulation!(simulation::Simulation)
-    println("\n\n\n----------RUNNING SIMULATION----------\n\n\n")
+function runSimulation!(simulation::Simulation; setup=true)
+    println("------------------------------\n----------SETTING UP SIMULATION----------\n------------------------------")
     path_to_simulation_folder = "$(data_dir)/simulations/$(simulation.id)/output"
-    if isfile("$(path_to_simulation_folder)/initial_mesh0.mat")
+    if isfile("$(path_to_simulation_folder)/final.xml")
         ran = false
         return ran
     end
     mkpath(path_to_simulation_folder)
-    
-    copyBaseConfig!(simulation)
-    loadVariation(simulation)
-    copyIC!(simulation)
-    copyCustomCode!(simulation)
-    
-    cd(physicell_dir)
 
-    try
-        run(`./project ./config/PhysiCell_settings.xml $(path_to_simulation_folder)`)
-    catch e
-        ran = false
-        deleteSimulation(simulation.id)
-        return ran
+    if setup
+        println("setting up...")
+        # copyBaseConfig!(simulation)
+        loadVariation!(simulation)
+        copyIC!(simulation)
+        copyCustomCode!(simulation)
     end
 
+    println("setting up command...")
+    cmd = `$(physicell_dir)/project $(physicell_dir)/config/base_config_$(simulation.base_config_id)/variation_$(simulation.variation_id).xml $(path_to_simulation_folder)`
+    
+    println("command set up")
+    println("\n\n\n----------RUNNING SIMULATION----------\n\n\n")
+    println("\t$(cmd)")
+    run(cmd, wait=true)
     ran = true
     return ran
 end
 
 function copyBaseConfig!(simulation::Simulation)
-    if simulation.base_config_id == current_base_config_id
-        return 0
-    end
+    # if simulation.base_config_id == current_base_config_id
+    #     return 0
+    # end
     if isempty(simulation.base_config_folder)
         simulation.base_config_folder = selectRow("folder_name", "base_configs", "WHERE base_config_id=$(simulation.base_config_id);")
     end
     path_to_folder = "$(data_dir)/base_configs/$(simulation.base_config_folder)/" # source dir needs to end in / or else the dir is copied into target, not the source files
-    global current_base_config_id = simulation.base_config_id
-    global current_variation_id = 0
+    # global current_base_config_id = simulation.base_config_id
+    # global current_variation_id = 0
     return run(`cp -r $(path_to_folder) $(physicell_dir)/config`) # julia's cp function works differently and I'm not sure how to make it do this
 end
 
-function copyIC!(simulation::Simulation)
+function copyIC!(simulation::Union{Simulation,Monad,Sampling})
     if simulation.ic_id==-1 || simulation.ic_id == current_ic_id
         return 0
     end
@@ -78,7 +78,7 @@ function copyIC!(simulation::Simulation)
     return run(`cp -r $(path_to_folder) $(physicell_dir)/config`) 
 end
 
-function copyCustomCode!(simulation::Simulation)
+function copyCustomCode!(simulation::Union{Simulation,Monad,Sampling})
     if simulation.custom_code_id == current_custom_code_id
         return 0
     end
@@ -148,29 +148,50 @@ function resetDatabase()
     for base_configs_folder in (readdir("$(data_dir)/base_configs/", sort=false, join=true) |> filter(x->isdir(x)))
         rm("$(base_configs_folder)/variations.db", force=true)
     end
+    
+    base_config_ids = DBInterface.execute(db, "SELECT base_config_id FROM base_configs;") |> DataFrame |> x->x.base_config_id
+    for base_config_id in base_config_ids
+        rm("$(physicell_dir)/config/base_config_$(base_config_id)", force=true, recursive=true)
+    end
 
     if db.file == ":memory:"
         initializeDatabase()
     else
-        run(`rm -f $(data_dir)/vct.db`)
-        initializeDatabase("$(data_dir)/vct.db")
+        rm("$(db.file)", force=true)
+        initializeDatabase("$(db.file)")
     end
     return nothing
 end
 
-function runMonad!(monad::Monad; use_previous_sims::Bool=false)
+function runMonad!(monad::Monad; use_previous_sims::Bool=false, setup=true)
 
+    # println("starting monad")
     mkpath("$(data_dir)/monads/$(monad.id)")
     n_new_simulations = monad.min_length
     if use_previous_sims
         n_new_simulations -= length(monad.simulation_ids)
     end
 
-    for i in 1:n_new_simulations
-        simulation = Simulation(monad)
-        runSimulation!(simulation)
-        push!(monad.simulation_ids,simulation.id)
+    if n_new_simulations <= 0
+        return 0
     end
+
+    if setup
+        # copyBaseConfig!(simulation)
+        copyIC!(monad)
+        copyCustomCode!(monad)
+    end
+    loadVariation!(monad)
+    
+    # @async begqin
+        for i in 1:n_new_simulations
+            simulation = Simulation(monad)
+            # Threads.@spawn runSimulation!(simulation, setup=false)
+            runSimulation!(simulation, setup=false)
+            # println("simuation ran = $(fetch(ran))")
+            push!(monad.simulation_ids, simulation.id)
+        end
+    # end
 
     recordSimulationIDs(monad)
 
@@ -186,12 +207,13 @@ function recordSimulationIDs(monad::Monad)
 end
 
 function runSampling!(sampling::Sampling; use_previous_sims::Bool=false)
+    # println("starting sampling")
     mkpath("$(data_dir)/samplings/$(sampling.id)")
     total_sims_ran = 0
 
     for variation_id in sampling.variation_ids
         monad = Monad(sampling, variation_id) # instantiate a monad with the variation_id and the simulation ids already found
-        total_sims_ran += runMonad!(monad, use_previous_sims=use_previous_sims) # run the monad and add the number of new simulations to the total; because we already searched for previous sims using monads, don't try again
+        total_sims_ran += runMonad!(monad, use_previous_sims=use_previous_sims) # run the monad and add the number of new simulations to the total
     end
 
     recordMonadIDs(sampling) # record the monad ids in the sampling
@@ -341,9 +363,9 @@ function addVariationColumns(base_config_id::Int, xml_paths::Vector{Vector{Strin
         new_column_names = varied_column_names[is_new_column]
 
         path_to_xml = "$(data_dir)/base_configs/$(folder_name)/PhysiCell_settings.xml"
-        openXML(path_to_xml)
-        default_values_for_new = [getField(xml_path) for xml_path in xml_paths[is_new_column]]
-        closeXML()
+        xml_doc = openXML(path_to_xml)
+        default_values_for_new = [getField(xml_doc, xml_path) for xml_path in xml_paths[is_new_column]]
+        closeXML(xml_doc)
         for (i, new_column_name) in enumerate(new_column_names)
             if variable_types[i] == Bool
                 sqlite_data_type = "TEXT"
