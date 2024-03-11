@@ -1,8 +1,6 @@
 db = SQLite.DB()
 
-# current_base_config_id = -1
 current_ic_id = -1
-current_custom_code_id = -1
 
 function initializeDatabase(path_to_database::String)
     println(path_to_database)
@@ -18,7 +16,6 @@ end
 function createSchema()
 
     data_dir_contents = readdir(data_dir, sort=false)
-    println(data_dir_contents)
     if !("custom_codes" in data_dir_contents)
         error("No $(data_dir)/custom_codes found. This is where to put the folders for custom_modules, main.cpp, and Makefile.")
     end

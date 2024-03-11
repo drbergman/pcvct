@@ -98,7 +98,7 @@ function updateFieldsFromCSV(path_to_csv::String,path_to_xml::String)
     return openXML(path_to_xml) |> x->updateFieldsFromCSV(x, path_to_csv)
 end
 
-function loadVariation(path_to_xml::String, variation_row::DataFrame, physicell_dir::String)
+function loadConfiguration(path_to_xml::String, variation_row::DataFrame, physicell_dir::String)
     xml_doc = openXML(path_to_xml)
     for column_name in names(variation_row)
         if column_name == "variation_id"
@@ -113,7 +113,7 @@ function loadVariation(path_to_xml::String, variation_row::DataFrame, physicell_
     return nothing
 end
 
-function loadVariation!(simulation::Union{Simulation,Monad})
+function loadConfiguration!(simulation::Union{Simulation,Monad})
     path_to_xml = "$(physicell_dir)/config/base_config_$(simulation.base_config_id)/variation_$(simulation.variation_id).xml"
     if isfile(path_to_xml)
         return
@@ -122,16 +122,8 @@ function loadVariation!(simulation::Union{Simulation,Monad})
     if isempty(simulation.base_config_folder)
         simulation.base_config_folder = selectRow("folder_name", "base_configs", "WHERE base_config_id=$(simulation.base_config_id);")
     end
-    # if current_base_config_id != simulation.base_config_id
     path_to_xml_src = "$(data_dir)/base_configs/$(simulation.base_config_folder)/PhysiCell_settings.xml"
     cp(path_to_xml_src, path_to_xml, force=true)
-    #     global current_base_config_id = simulation.base_config_id
-    #     global current_variation_id = 0
-    # end
-
-    # if current_variation_id == simulation.variation_id
-    #     return
-    # end
 
     xml_doc = openXML(path_to_xml)
     variation_row = selectRow("variations", "WHERE variation_id=$(simulation.variation_id);", db=getConfigDB(simulation.base_config_id))
@@ -143,7 +135,6 @@ function loadVariation!(simulation::Union{Simulation,Monad})
         updateField(xml_doc, xml_path,variation_row[1,column_name])
     end
     save_file(xml_doc, path_to_xml)
-    # global current_variation_id = simulation.variation_id
     closeXML(xml_doc)
     return
 end

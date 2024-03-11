@@ -1,9 +1,7 @@
 using MAT
 
 function loadVCT(path_to_data)
-    # global data_dir = path_to_data
     global db, _ = initializeDatabase(path_to_data * "/vct.db")
-    # global db, _ = initializeVCT("",path_to_data) # don't bother with setting the physicell directory with this (hacky, I know)
 end
 
 ############# Helper functions #############

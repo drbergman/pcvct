@@ -25,7 +25,11 @@ function initializeVCT(path_to_physicell::String, path_to_data::String)
     initializeDatabase(data_dir * "/vct.db")
 end
 
-function runSimulation!(simulation::Simulation; setup=true)
+function getSimulationCmd(simulation::Simulation; setup=true)
+    return `$(physicell_dir)/project $(physicell_dir)/config/base_config_$(simulation.base_config_id)/variation_$(simulation.variation_id).xml $(path_to_simulation_folder)`
+end
+
+function runSimulation(simulation::Simulation; setup=true)
     println("------------------------------\n----------SETTING UP SIMULATION----------\n------------------------------")
     path_to_simulation_folder = "$(data_dir)/simulations/$(simulation.id)/output"
     if isfile("$(path_to_simulation_folder)/final.xml")
@@ -35,51 +39,45 @@ function runSimulation!(simulation::Simulation; setup=true)
     mkpath(path_to_simulation_folder)
 
     if setup
-        println("setting up...")
-        # copyBaseConfig!(simulation)
-        loadVariation!(simulation)
-        copyIC!(simulation)
-        copyCustomCode!(simulation)
+        loadConfiguration!(simulation)
+        # loadIC!(simulation)
+        loadCustomCode!(simulation)
     end
 
-    println("setting up command...")
-    cmd = `$(physicell_dir)/project $(physicell_dir)/config/base_config_$(simulation.base_config_id)/variation_$(simulation.variation_id).xml $(path_to_simulation_folder)`
+    executable_str = "$(physicell_dir)/project_ccid_$(simulation.custom_code_id)" # path to executable
+    config_str =  "$(physicell_dir)/config/base_config_$(simulation.base_config_id)/variation_$(simulation.variation_id).xml" # path to config file
+    output_str = "-o $(path_to_simulation_folder)" # path to output folder
+    flags = ["-o", path_to_simulation_folder]
+    if simulation.ic_id != -1
+        # simulation.ic_folder = selectRow("folder_name", "ics", "WHERE ic_id=$(simulation.ic_id);")
+        append!(flags, ["-i", "$(data_dir)/ics/$(simulation.ic_folder)/cells.csv"]) # if ic file included (id != -1), then include this in the command
+    end
+    if false
+        # for now, no rules file specified as flagged argument
+        append!(flags, ["-r", path_to_rules_file])
+    end
+    cmd = `$executable_str $config_str $flags`
     
-    println("command set up")
-    println("\n\n\n----------RUNNING SIMULATION----------\n\n\n")
-    println("\t$(cmd)")
+    println("\n----------RUNNING SIMULATION----------\n\n$cmd\n")
     run(cmd, wait=true)
     ran = true
     return ran
 end
 
-function copyBaseConfig!(simulation::Simulation)
-    # if simulation.base_config_id == current_base_config_id
-    #     return 0
-    # end
-    if isempty(simulation.base_config_folder)
-        simulation.base_config_folder = selectRow("folder_name", "base_configs", "WHERE base_config_id=$(simulation.base_config_id);")
-    end
-    path_to_folder = "$(data_dir)/base_configs/$(simulation.base_config_folder)/" # source dir needs to end in / or else the dir is copied into target, not the source files
-    # global current_base_config_id = simulation.base_config_id
-    # global current_variation_id = 0
-    return run(`cp -r $(path_to_folder) $(physicell_dir)/config`) # julia's cp function works differently and I'm not sure how to make it do this
-end
+# function loadIC!(simulation::Union{Simulation,Monad,Sampling})
+#     if simulation.ic_id==-1 || simulation.ic_id == current_ic_id
+#         return 0
+#     end
+#     if isempty(simulation.ic_folder)
+#         simulation.ic_folder = selectRow("folder_name", "ics", "WHERE ic_id=$(simulation.ic_id);")
+#     end
+#     path_to_folder = "$(data_dir)/ics/$(simulation.ic_folder)/" # source dir needs to end in / or else the dir is copied into target, not the source files
+#     global current_ic_id = simulation.ic_id
+#     return run(`cp -r $(path_to_folder) $(physicell_dir)/config`) 
+# end
 
-function copyIC!(simulation::Union{Simulation,Monad,Sampling})
-    if simulation.ic_id==-1 || simulation.ic_id == current_ic_id
-        return 0
-    end
-    if isempty(simulation.ic_folder)
-        simulation.ic_folder = selectRow("folder_name", "ics", "WHERE ic_id=$(simulation.ic_id);")
-    end
-    path_to_folder = "$(data_dir)/ics/$(simulation.ic_folder)/" # source dir needs to end in / or else the dir is copied into target, not the source files
-    global current_ic_id = simulation.ic_id
-    return run(`cp -r $(path_to_folder) $(physicell_dir)/config`) 
-end
-
-function copyCustomCode!(simulation::Union{Simulation,Monad,Sampling})
-    if simulation.custom_code_id == current_custom_code_id
+function loadCustomCode!(simulation::Union{Simulation,Monad,Sampling})
+    if isfile("$(physicell_dir)/project_ccid_$(simulation.custom_code_id)")
         return 0
     end
     if isempty(simulation.custom_code_folder)
@@ -89,9 +87,8 @@ function copyCustomCode!(simulation::Union{Simulation,Monad,Sampling})
     run(`cp -r $(path_to_folder)custom_modules/ $(physicell_dir)/custom_modules`)
     run(`cp $(path_to_folder)main.cpp $(physicell_dir)/main.cpp`)
     run(`cp $(path_to_folder)Makefile $(physicell_dir)/Makefile`)
-    global current_custom_code_id = simulation.custom_code_id
 
-    return cd(()->run(`make CC=$(PHYSICELL_CPP)`), physicell_dir)
+    return cd(()->run(`make CC=$(PHYSICELL_CPP) PROGRAM_NAME=project_ccid_$(simulation.custom_code_id)`), physicell_dir)
 end
 
 function deleteSimulation(simulation_ids::Vector{Int})
@@ -154,6 +151,11 @@ function resetDatabase()
         rm("$(physicell_dir)/config/base_config_$(base_config_id)", force=true, recursive=true)
     end
 
+    custom_code_ids = DBInterface.execute(db, "SELECT custom_code_id FROM custom_codes;") |> DataFrame |> x->x.custom_code_id
+    for custom_code_id in custom_code_ids
+        rm("$(physicell_dir)/project_ccid_$(custom_code_id)", force=true)
+    end
+
     if db.file == ":memory:"
         initializeDatabase()
     else
@@ -163,9 +165,7 @@ function resetDatabase()
     return nothing
 end
 
-function runMonad!(monad::Monad; use_previous_sims::Bool=false, setup=true)
-
-    # println("starting monad")
+function runMonad!(monad::Monad; use_previous_sims::Bool=false, setup::Bool=true)
     mkpath("$(data_dir)/monads/$(monad.id)")
     n_new_simulations = monad.min_length
     if use_previous_sims
@@ -173,29 +173,25 @@ function runMonad!(monad::Monad; use_previous_sims::Bool=false, setup=true)
     end
 
     if n_new_simulations <= 0
-        return 0
+        return Task[]
     end
 
     if setup
-        # copyBaseConfig!(simulation)
-        copyIC!(monad)
-        copyCustomCode!(monad)
+        # loadIC!(monad)
+        loadCustomCode!(monad)
     end
-    loadVariation!(monad)
-    
-    # @async begqin
-        for i in 1:n_new_simulations
-            simulation = Simulation(monad)
-            # Threads.@spawn runSimulation!(simulation, setup=false)
-            runSimulation!(simulation, setup=false)
-            # println("simuation ran = $(fetch(ran))")
-            push!(monad.simulation_ids, simulation.id)
-        end
-    # end
+    loadConfiguration!(monad)
+
+    simulation_tasks = Task[]
+    for i in 1:n_new_simulations
+        simulation = Simulation(monad)
+        push!(simulation_tasks, @task runSimulation(simulation, setup=false))
+        push!(monad.simulation_ids, simulation.id)
+    end
 
     recordSimulationIDs(monad)
 
-    return max(0,n_new_simulations)
+    return simulation_tasks
 end
 
 function recordSimulationIDs(monad::Monad)
@@ -207,13 +203,20 @@ function recordSimulationIDs(monad::Monad)
 end
 
 function runSampling!(sampling::Sampling; use_previous_sims::Bool=false)
-    # println("starting sampling")
     mkpath("$(data_dir)/samplings/$(sampling.id)")
     total_sims_ran = 0
 
+    loadCustomCode!(sampling)
+
+    simulation_tasks = []
     for variation_id in sampling.variation_ids
         monad = Monad(sampling, variation_id) # instantiate a monad with the variation_id and the simulation ids already found
-        total_sims_ran += runMonad!(monad, use_previous_sims=use_previous_sims) # run the monad and add the number of new simulations to the total
+        append!(simulation_tasks, runMonad!(monad, use_previous_sims=use_previous_sims, setup=false)) # run the monad and add the number of new simulations to the total
+    end
+
+    Threads.@threads :static for simulation_task in simulation_tasks
+        schedule(simulation_task)
+        fetch(simulation_task)
     end
 
     recordMonadIDs(sampling) # record the monad ids in the sampling
@@ -277,7 +280,7 @@ function runVirtualClinicalTrial(patient_ids::Union{Int,Vector{Int}}, variation_
             for variation_id in variation_ids[i]
                 monad = Monad(monad_id, num_replicates, Int[], patient_id, variation_id, cohort_id)
                 variation_row = selectRow(variation_table_name,"WHERE variation_id=$(variation_id);")
-                loadVariation(path_to_xml, variation_row, physicell_dir)
+                loadConfiguration(path_to_xml, variation_row, physicell_dir)
                 # append!(simulation_ids, runReplicates(patient_id, variation_id, cohort_id, num_replicates; use_previous_sims=use_previous_sims))
                 append!(simulation_ids, runMonad!(monad; use_previous_sims=use_previous_sims))
             end
