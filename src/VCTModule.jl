@@ -22,7 +22,7 @@ function initializeVCT(path_to_physicell::String, path_to_data::String)
     println("----------INITIALIZING----------")
     global physicell_dir = abspath(path_to_physicell)
     global data_dir = abspath(path_to_data)
-    initializeDatabase(data_dir * "/vct.db")
+    initializeDatabase("$(data_dir)/vct.db")
 end
 
 function getSimulationCmd(simulation::Simulation; setup=true)

@@ -46,7 +46,7 @@ function createSchema()
     ")
         
     if "ics" in data_dir_contents
-        ics_folders = readdir("ics", sort=false) |> filter(x->isdir("ics/$(x)"))
+        ics_folders = readdir("$(data_dir)/ics", sort=false) |> filter(x->isdir("$(data_dir)/ics/$(x)"))
         if !isempty(ics_folders)
             for ics_folder in ics_folders
                 DBInterface.execute(db, "INSERT OR IGNORE INTO ics (folder_name) VALUES ('$(ics_folder)');")
