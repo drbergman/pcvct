@@ -91,7 +91,7 @@ function loadTimeTimeSeries(path_to_output_folders::Vector{String})
 end
 
 function loadTimeTimeSeries(simulation_id::Union{Int,Vector{Int}})
-    return loadTimeTimeSeries([data_dir*"/simulations/$d/output/" for d in simulation_id])
+    return loadTimeTimeSeries([data_dir*"/outputs/simulations/$d/output/" for d in simulation_id])
 end
 
 function loadTimeTimeSeries(patient_id::Int, variation_id::Int, cohort_id::Int)
@@ -108,7 +108,7 @@ function loadCellCountTimeSeries(path_to_output_folders::Vector{String})
 end
 
 function loadCellCountTimeSeries(simulation_id::Union{Int,Vector{Int}})
-    return loadCellCountTimeSeries([data_dir*"/simulations/$d/output/" for d in simulation_id])
+    return loadCellCountTimeSeries([data_dir*"/outputs/simulations/$d/output/" for d in simulation_id])
 end
 
 function loadCellCountTimeSeries(patient_id::Int, variation_id::Int, cohort_id::Int)
@@ -123,14 +123,14 @@ end
 
 function loadCellDataTimeSeries(label::String)
     simulation_ids = DBInterface.execute(db, "SELECT simulation_id FROM simulations;") |> DataFrame |> x->x.simulation_id
-    paths_to_output_folder = (data_dir * "/simulations/") .* (string.(simulation_ids) .* "/output/")
+    paths_to_output_folder = (data_dir * "/outputs/simulations/") .* (string.(simulation_ids) .* "/output/")
     all_cell_data = [loadCellDataTimeSeries(path_to_output_folder, label) for path_to_output_folder in paths_to_output_folder]
     return DataFrame("simulation_id" => simulation_ids, label => all_cell_data)
 end
 
 function loadCellDataTimeSeries(trial_id::Int, label::String)
     simulation_ids = selectTrialSimulations(trial_id)
-    return DataFrame("simulation_id" => simulation_ids, label => [loadCellDataTimeSeries(data_dir * "/simulations/" * string(simulation_id) * "/output/", label) for simulation_id in simulation_ids])
+    return DataFrame("simulation_id" => simulation_ids, label => [loadCellDataTimeSeries(data_dir * "/outputs/simulations/" * string(simulation_id) * "/output/", label) for simulation_id in simulation_ids])
 end
 
 function loadCellTypeCountTimeSeries(path_to_output_folder::String, cell_type_id::Union{Int,Vector{Int}})
@@ -144,7 +144,7 @@ function loadCellTypeCountTimeSeries(path_to_output_folders::Vector{String}, cel
 end
 
 function loadCellTypeCountTimeSeries(simulation_id::Union{Int,Vector{Int}}, cell_type_id::Union{Int,Vector{Int}})
-    return loadCellTypeCountTimeSeries([data_dir*"/simulations/$d/output/" for d in simulation_id], cell_type_id)
+    return loadCellTypeCountTimeSeries([data_dir*"/outputs/simulations/$d/output/" for d in simulation_id], cell_type_id)
 end
 
 function loadCellTypeCountTimeSeries(patient_id::Int, variation_id::Int, cohort_id::Int, cell_type_id::Union{Int,Vector{Int}})
@@ -169,5 +169,3 @@ end
 function loadSubstrateDensityTimeSeries(path_to_output_folders::Union{String,Vector{String}}, substrate_name::String)
     return loadSubstrateDensityTimeSeries(path_to_output_folders, [substrate_name])
 end
-
-# end

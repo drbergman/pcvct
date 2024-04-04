@@ -1,6 +1,6 @@
 module VCTModule
 
-export initializeVCT, resetDatabase, selectTrialSimulations, getDB
+export initializeVCT, resetDatabase, selectTrialSimulations
 
 using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables
 include("VCTClasses.jl")
@@ -14,9 +14,9 @@ include("VCTExtraction.jl")
 #   2. Even if we did run multiple at once, it would need to be from the same executable file, so all the global variables would be the same for all
 #   3. The cost of checking the global scope is absolutely minimal compared to the simulations I'm running, so who cares about
 
-physicell_dir = abspath("PhysiCell")
-data_dir = abspath("data")
-PHYSICELL_CPP = "/opt/homebrew/bin/g++-13"
+physicell_dir::String = abspath("PhysiCell")
+data_dir::String = abspath("data")
+PHYSICELL_CPP::String = "/opt/homebrew/bin/g++-13"
 
 function initializeVCT(path_to_physicell::String, path_to_data::String)
     println("----------INITIALIZING----------")
@@ -31,7 +31,7 @@ end
 
 function runSimulation(simulation::Simulation; setup=true)
     println("------------------------------\n----------SETTING UP SIMULATION----------\n------------------------------")
-    path_to_simulation_folder = "$(data_dir)/simulations/$(simulation.id)/output"
+    path_to_simulation_folder = "$(data_dir)/outputs/simulations/$(simulation.id)/output"
     if isfile("$(path_to_simulation_folder)/final.xml")
         ran = false
         return ran
@@ -40,20 +40,18 @@ function runSimulation(simulation::Simulation; setup=true)
 
     if setup
         loadConfiguration!(simulation)
-        # loadIC!(simulation)
         loadCustomCode!(simulation)
     end
 
-    executable_str = "$(physicell_dir)/project_ccid_$(simulation.custom_code_id)" # path to executable
-    config_str =  "$(physicell_dir)/config/base_config_$(simulation.base_config_id)/variation_$(simulation.variation_id).xml" # path to config file
-    output_str = "-o $(path_to_simulation_folder)" # path to output folder
+    executable_str = "$(data_dir)/inputs/custom_codes/$(simulation.custom_code_folder)/project" # path to executable
+    config_str =  "$(data_dir)/inputs/base_configs/$(simulation.base_config_folder)/variations/variation_$(simulation.variation_id).xml" # path to config file
     flags = ["-o", path_to_simulation_folder]
     if simulation.ic_id != -1
-        # simulation.ic_folder = selectRow("folder_name", "ics", "WHERE ic_id=$(simulation.ic_id);")
-        append!(flags, ["-i", "$(data_dir)/ics/$(simulation.ic_folder)/cells.csv"]) # if ic file included (id != -1), then include this in the command
+        append!(flags, ["-i", "$(data_dir)/inputs/ics/$(simulation.ic_folder)/cells.csv"]) # if ic file included (id != -1), then include this in the command
     end
-    if false
+    if simulation.rulesets_variation_id != -1
         # for now, no rules file specified as flagged argument
+        path_to_rules_file = "$(data_dir)/inputs/base_configs/$(simulation.base_config_folder)/rulesets_collections/$(simulation.rulesets_collection_folder)/rulesets_variation_$(simulation.rulesets_variation_id).xml"
         append!(flags, ["-r", path_to_rules_file])
     end
     cmd = `$executable_str $config_str $flags`
@@ -77,24 +75,27 @@ end
 # end
 
 function loadCustomCode!(simulation::Union{Simulation,Monad,Sampling})
-    if isfile("$(physicell_dir)/project_ccid_$(simulation.custom_code_id)")
-        return 0
+    if isfile("$(data_dir)/inputs/custom_codes/$(simulation.custom_code_folder)/project")
+        return
     end
     if isempty(simulation.custom_code_folder)
         simulation.custom_code_folder = selectRow("folder_name", "custom_codes", "WHERE custom_code_id=$(simulation.custom_code_id);")
     end
-    path_to_folder = "$(data_dir)/custom_codes/$(simulation.custom_code_folder)/" # source dir needs to end in / or else the dir is copied into target, not the source files
-    run(`cp -r $(path_to_folder)custom_modules/ $(physicell_dir)/custom_modules`)
-    run(`cp $(path_to_folder)main.cpp $(physicell_dir)/main.cpp`)
-    run(`cp $(path_to_folder)Makefile $(physicell_dir)/Makefile`)
+    path_to_folder = "$(data_dir)/inputs/custom_codes/$(simulation.custom_code_folder)" # source dir needs to end in / or else the dir is copied into target, not the source files
+    run(`cp -r $(path_to_folder)/custom_modules/ $(physicell_dir)/custom_modules`)
+    run(`cp $(path_to_folder)/main.cpp $(physicell_dir)/main.cpp`)
+    run(`cp $(path_to_folder)/Makefile $(physicell_dir)/Makefile`)
 
-    return cd(()->run(`make CC=$(PHYSICELL_CPP) PROGRAM_NAME=project_ccid_$(simulation.custom_code_id)`), physicell_dir)
+    cd(()->run(`make CC=$(PHYSICELL_CPP) PROGRAM_NAME=project_ccid_$(simulation.custom_code_id)`), physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory
+
+    mv("$(physicell_dir)/project_ccid_$(simulation.custom_code_id)", "$(data_dir)/inputs/custom_codes/$(simulation.custom_code_folder)/project")
+    return 
 end
 
 function deleteSimulation(simulation_ids::Vector{Int})
     DBInterface.execute(db,"DELETE FROM simulations WHERE simulation_id IN ($(join(simulation_ids,",")));")
     for simulation_id in simulation_ids
-        rm("$(data_dir)/simulations/$(simulation_id)", force=true, recursive=true)
+        rm("$(data_dir)/outputs/simulations/$(simulation_id)", force=true, recursive=true)
     end
 
     if !(DBInterface.execute(db, "SELECT name FROM sqlite_master WHERE type='table' AND name='trials';") |> isempty)
@@ -115,45 +116,49 @@ end
 
 deleteSimulation(simulation_id::Int) = deleteSimulation([simulation_id])
 
-function trialRowToIds(r::String)
-    if !contains(r,":")
-        return parse(Int,r)
-    end
-    # otherwise has a colon and need to expand
-    s = split(r,":") .|> String .|> x->parse(Int,x)
-    return collect(s[1]:s[2])
-end
+# function trialRowToIds(r::String)
+#     if !contains(r,":")
+#         return parse(Int,r)
+#     end
+#     # otherwise has a colon and need to expand
+#     s = split(r,":") .|> String .|> x->parse(Int,x)
+#     return collect(s[1]:s[2])
+# end
 
-function deleteTrial(trial_ids::Vector{Int})
-    DBInterface.execute(getDB(),"DELETE FROM trials WHERE trial_id IN ($(join(trial_ids,",")));")
-    for trial_id in trial_ids
-        selectTrialSimulations(trial_id) |> deleteSimulation
-        run(`rm -rf $(data_dir)/trials/$(trial_id)`)
-    end
-    return nothing
-end
+# function deleteTrial(trial_ids::Vector{Int})
+#     DBInterface.execute(getDB(),"DELETE FROM trials WHERE trial_id IN ($(join(trial_ids,",")));")
+#     for trial_id in trial_ids
+#         selectTrialSimulations(trial_id) |> deleteSimulation
+#         run(`rm -rf $(data_dir)/outputs/trials/$(trial_id)`)
+#     end
+#     return nothing
+# end
 
-deleteTrial(trial_id::Int) = deleteTrial([trial_id])
+# deleteTrial(trial_id::Int) = deleteTrial([trial_id])
 
 function resetDatabase()
 
-    rm("$(data_dir)/simulations", force=true, recursive=true)
-    rm("$(data_dir)/monads", force=true, recursive=true)
-    rm("$(data_dir)/samplings", force=true, recursive=true)
-    rm("$(data_dir)/trials", force=true, recursive=true)
+    rm("$(data_dir)/outputs/simulations", force=true, recursive=true)
+    rm("$(data_dir)/outputs/monads", force=true, recursive=true)
+    rm("$(data_dir)/outputs/samplings", force=true, recursive=true)
+    rm("$(data_dir)/outputs/trials", force=true, recursive=true)
 
-    for base_configs_folder in (readdir("$(data_dir)/base_configs/", sort=false, join=true) |> filter(x->isdir(x)))
-        rm("$(base_configs_folder)/variations.db", force=true)
+    for base_config_folder in (readdir("$(data_dir)/inputs/base_configs/", sort=false, join=true) |> filter(x->isdir(x)))
+        resetConfigFolder(base_config_folder)
     end
     
-    base_config_ids = DBInterface.execute(db, "SELECT base_config_id FROM base_configs;") |> DataFrame |> x->x.base_config_id
-    for base_config_id in base_config_ids
-        rm("$(physicell_dir)/config/base_config_$(base_config_id)", force=true, recursive=true)
+    base_config_folders = DBInterface.execute(db, "SELECT folder_name FROM base_configs;") |> DataFrame |> x->x.folder_name
+    for base_config_folder in base_config_folders
+        resetConfigFolder("$(data_dir)/inputs/base_configs/$(base_config_folder)")
     end
 
-    custom_code_ids = DBInterface.execute(db, "SELECT custom_code_id FROM custom_codes;") |> DataFrame |> x->x.custom_code_id
-    for custom_code_id in custom_code_ids
-        rm("$(physicell_dir)/project_ccid_$(custom_code_id)", force=true)
+    for custom_code_folder in (readdir("$(data_dir)/inputs/custom_codes/", sort=false, join=true) |> filter(x->isdir(x)))
+        rm("$(custom_code_folder)/project", force=true)
+    end
+
+    custom_code_folders = DBInterface.execute(db, "SELECT folder_name FROM custom_codes;") |> DataFrame |> x->x.folder_name
+    for custom_code_folder in custom_code_folders
+        rm("$(data_dir)/inputs/custom_codes/$(custom_code_folder)/project", force=true)
     end
 
     if db.file == ":memory:"
@@ -165,8 +170,38 @@ function resetDatabase()
     return nothing
 end
 
+function resetConfigFolder(base_config_folder::String)
+    rm("$(base_config_folder)/variations.db", force=true)
+    rm("$(base_config_folder)/variations", force=true, recursive=true)
+
+    rm("$(base_config_folder)/rulesets_collections.db", force=true)
+
+    for rulesets_collection_folder in (readdir("$(base_config_folder)/rulesets_collections/", sort=false, join=true) |> filter(x->isdir(x)))
+        resetRulesetsCollectionFolder(rulesets_collection_folder)
+    end
+
+    # first check that the rulesets_collections table exists
+    if DBInterface.execute(getRulesetsCollectionsDB(base_config_folder), "SELECT name FROM sqlite_master WHERE type='table' AND name='rulesets_collections';") |> isempty
+        return
+    end
+    rulesets_collection_folders = DBInterface.execute(getRulesetsCollectionsDB(base_config_folder), "SELECT folder_name FROM rulesets_collections;") |> DataFrame |> x->x.folder_name
+    for rulesets_collection_folder in rulesets_collection_folders
+        resetRulesetsCollectionFolder("$(base_config_folder)/rulesets_collections/$(rulesets_collection_folder)")
+    end
+    return nothing
+end
+
+function resetRulesetsCollectionFolder(rulesets_collection_folder::String)
+    rm("$(rulesets_collection_folder)/rulesets_variations.db", force=true)
+    for rulesets_variation in (readdir("$(rulesets_collection_folder)/", sort=false, join=true) |> filter(x->occursin(r"rulesets_variation_\d+.xml", x)))
+        rm(rulesets_variation, force=true)
+    end
+    rm("$(rulesets_collection_folder)/rulesets_variation_*", force=true)
+    return nothing
+end
+
 function runMonad!(monad::Monad; use_previous_sims::Bool=false, setup::Bool=true)
-    mkpath("$(data_dir)/monads/$(monad.id)")
+    mkpath("$(data_dir)/outputs/monads/$(monad.id)")
     n_new_simulations = monad.min_length
     if use_previous_sims
         n_new_simulations -= length(monad.simulation_ids)
@@ -177,7 +212,6 @@ function runMonad!(monad::Monad; use_previous_sims::Bool=false, setup::Bool=true
     end
 
     if setup
-        # loadIC!(monad)
         loadCustomCode!(monad)
     end
     loadConfiguration!(monad)
@@ -195,7 +229,7 @@ function runMonad!(monad::Monad; use_previous_sims::Bool=false, setup::Bool=true
 end
 
 function recordSimulationIDs(monad::Monad)
-    path_to_folder = "$(data_dir)/monads/$(monad.id)/"
+    path_to_folder = "$(data_dir)/outputs/monads/$(monad.id)/"
     mkpath(path_to_folder)
     path_to_csv = "$(path_to_folder)/simulations.csv"
     lines_table = compressSimulationIDs(monad.simulation_ids)
@@ -203,101 +237,140 @@ function recordSimulationIDs(monad::Monad)
 end
 
 function runSampling!(sampling::Sampling; use_previous_sims::Bool=false)
-    mkpath("$(data_dir)/samplings/$(sampling.id)")
-    total_sims_ran = 0
+    mkpath("$(data_dir)/outputs/samplings/$(sampling.id)")
 
     loadCustomCode!(sampling)
 
     simulation_tasks = []
-    for variation_id in sampling.variation_ids
-        monad = Monad(sampling, variation_id) # instantiate a monad with the variation_id and the simulation ids already found
+    for (variation_id, rulesets_variation_id) in zip(sampling.variation_ids, sampling.rulesets_variation_ids)
+        monad = Monad(sampling, variation_id, rulesets_variation_id) # instantiate a monad with the variation_id and the simulation ids already found
         append!(simulation_tasks, runMonad!(monad, use_previous_sims=use_previous_sims, setup=false)) # run the monad and add the number of new simulations to the total
     end
+
+    recordMonadIDs(sampling) # record the monad ids in the sampling
+    return simulation_tasks
+end
+
+function recordMonadIDs(sampling_id::Int, monad_ids::Array{Int})
+    recordMonadIDs("$(data_dir)/outputs/samplings/$(sampling_id)", monad_ids)
+end
+
+function recordMonadIDs(sampling::Sampling)
+    recordMonadIDs("$(data_dir)/outputs/samplings/$(sampling.id)", sampling.monad_ids)
+end
+
+function recordMonadIDs(path_to_folder::String, monad_ids::Array{Int})
+    path_to_size_csv = "$(path_to_folder)/size.csv"
+    size_table = [string.(size(monad_ids))...] |> Tables.table
+    CSV.write(path_to_size_csv, size_table; writeheader=false)
+
+    path_to_csv = "$(path_to_folder)/monads.csv"
+    lines_table = compressMonadIDs(monad_ids)
+    CSV.write(path_to_csv, lines_table; writeheader=false)
+end
+
+# function compressMonadIDs(monad_ids::Array{Int})
+#     lines = String[]
+#     monad_ids = vec(monad_ids)
+#     while !isempty(monad_ids)
+#         if length(monad_ids) == 1
+#             next_line = string(monad_ids[1])
+#             popfirst!(monad_ids)
+#         else
+#             I = findfirst(diff(monad_ids) .> 1)
+#             I = isnothing(I) ? length(monad_ids) : I # if none found, then all the diffs are 1 so we want to take the entire list
+#             if I > 1
+#                 next_line = "$(monad_ids[1]):$(monad_ids[I])"
+#                 monad_ids = monad_ids[I+1:end]
+#             else
+#                 next_line = string(monad_ids[1])
+#                 popfirst!(monad_ids)
+#             end
+#         end
+#         push!(lines, next_line)
+#     end
+#     return Tables.table(lines)
+# end
+
+function runTrial!(trial::Trial; use_previous_sims::Bool=false)
+    mkpath("$(data_dir)/outputs/trials/$(trial.id)")
+
+    simulation_tasks = []
+    for i in eachindex(trial.sampling_ids)
+        sampling = Sampling(trial, i) # instantiate a sampling with the variation_ids and the simulation ids already found
+        append!(simulation_tasks, runSampling!(sampling, use_previous_sims=use_previous_sims)) # run the sampling and add the number of new simulations to the total
+    end
+
+    recordSamplingIDs(trial) # record the sampling ids in the trial
+    return simulation_tasks
+end
+
+function recordSamplingIDs(trial_id::Int, sampling_ids::Array{Int})
+    recordSamplingIDs("$(data_dir)/outputs/trials/$(trial_id)", sampling_ids)
+end
+
+function recordSamplingIDs(trial::Trial)
+    recordSamplingIDs("$(data_dir)/outputs/trials/$(trial.id)", trial.sampling_ids)
+end
+
+function recordSamplingIDs(path_to_folder::String, sampling_ids::Array{Int})
+    path_to_size_csv = "$(path_to_folder)/size.csv"
+    size_table = [string.(size(sampling_ids))...] |> Tables.table
+    CSV.write(path_to_size_csv, size_table; writeheader=false)
+
+    path_to_csv = "$(path_to_folder)/samplings.csv"
+    lines_table = compressSamplingIDs(sampling_ids)
+    CSV.write(path_to_csv, lines_table; writeheader=false)
+end
+
+collectSimulationTasks(simulation::Simulation; use_previous_sims::Bool=false) = [@task runSimulation(simulation, setup=false)]
+collectSimulationTasks(monad::Monad; use_previous_sims::Bool=false) = runMonad!(monad, use_previous_sims=use_previous_sims)
+collectSimulationTasks(sampling::Sampling; use_previous_sims::Bool=false) = runSampling!(sampling, use_previous_sims=use_previous_sims)
+collectSimulationTasks(trial::Trial; use_previous_sims::Bool=false) = runTrial!(trial, use_previous_sims=use_previous_sims)
+
+function runAbstractTrial(trial::AbstractTrial; use_previous_sims::Bool=false)
+    simulation_tasks = collectSimulationTasks(trial, use_previous_sims=use_previous_sims)
 
     Threads.@threads :static for simulation_task in simulation_tasks
         schedule(simulation_task)
         fetch(simulation_task)
     end
-
-    recordMonadIDs(sampling) # record the monad ids in the sampling
-    return total_sims_ran
 end
 
-function recordMonadIDs(sampling_id::Int, monad_ids::Array{Int})
-    writeMonadIDs("$(data_dir)/samplings/$(sampling_id)", monad_ids)
-end
+# function runVirtualClinicalTrial(patient_ids::Union{Int,Vector{Int}}, variation_ids::Vector{Vector{Int}}, cohort_ids::Union{Int,Vector{Int}}, num_replicates::Int; use_previous_sims::Bool = false, description::String = String[])
+#     time_started  = now()
+#     num_patients = length(patient_ids)
+#     @assert num_patients == length(variation_ids) # make sure each patient has their own variation ids assigned
+#     simulation_ids = Int[]
+#     for i in 1:num_patients
+#         patient_id = patient_ids[i]
+#         variation_table_name = "patient_variations_$(patient_id)"
+#         for cohort_id in cohort_ids
+#             df = DBInterface.execute(db, "SELECT folder_id,path FROM folders WHERE patient_id=$(patient_id) AND cohort_id=$(cohort_id)") |> DataFrame
+#             path_to_xml = df.path[1]
+#             copyMakeFolderFiles(df.folder_id[1])
+#             path_to_xml = selectRow("path","folders","WHERE patient_id=$(patient_id) AND cohort_id=$(cohort_id)") * "config/PhysiCell_settings.xml"
+#             for variation_id in variation_ids[i]
+#                 monad = Monad(monad_id, num_replicates, Int[], patient_id, variation_id, cohort_id)
+#                 variation_row = selectRow(variation_table_name,"WHERE variation_id=$(variation_id);")
+#                 loadConfiguration(path_to_xml, variation_row, physicell_dir)
+#                 # append!(simulation_ids, runReplicates(patient_id, variation_id, cohort_id, num_replicates; use_previous_sims=use_previous_sims))
+#                 append!(simulation_ids, runMonad!(monad; use_previous_sims=use_previous_sims))
+#             end
+#         end
+#     end
+#     recordTrialInfo(simulation_ids, time_started, description)
+#     return nothing
+# end
 
-function recordMonadIDs(sampling::Sampling)
-    writeMonadIDs("$(data_dir)/samplings/$(sampling.id)", sampling.monad_ids)
-end
+# function runVirtualClinicalTrial(patient_ids::Int, variation_ids::Vector{Int}, cohort_ids::Union{Int,Vector{Int}}, num_replicates::Int; use_previous_sims::Bool=false, description::String=String[])
+#     return runVirtualClinicalTrial(patient_ids, [variation_ids], cohort_ids, num_replicates; use_previous_sims=use_previous_sims, description=description)
+# end
 
-function writeMonadIDs(path_to_folder::String, monad_ids::Array{Int})
-    path_to_csv = "$(path_to_folder)/monads.csv"
-    lines_table = compressMonadIDs(monad_ids)
-    CSV.write(path_to_csv, lines_table; writeheader=false)
-
-    path_to_size_csv = "$(path_to_folder)/size.csv"
-    size_table = [string.(size(monad_ids))...] |> Tables.table
-    CSV.write(path_to_size_csv, size_table; writeheader=false)
-end
-
-function compressMonadIDs(monad_ids::Array{Int})
-    lines = String[]
-    monad_ids = vec(monad_ids)
-    while !isempty(monad_ids)
-        if length(monad_ids) == 1
-            next_line = string(monad_ids[1])
-            popfirst!(monad_ids)
-        else
-            I = findfirst(diff(monad_ids) .> 1)
-            I = isnothing(I) ? length(monad_ids) : I # if none found, then all the diffs are 1 so we want to take the entire list
-            if I > 1
-                next_line = "$(monad_ids[1]):$(monad_ids[I])"
-                monad_ids = monad_ids[I+1:end]
-            else
-                next_line = string(monad_ids[1])
-                popfirst!(monad_ids)
-            end
-        end
-        push!(lines, next_line)
-    end
-    return Tables.table(lines)
-end
-
-function runVirtualClinicalTrial(patient_ids::Union{Int,Vector{Int}}, variation_ids::Vector{Vector{Int}}, cohort_ids::Union{Int,Vector{Int}}, num_replicates::Int; use_previous_sims::Bool = false, description::String = String[])
-    time_started  = now()
-    num_patients = length(patient_ids)
-    @assert num_patients == length(variation_ids) # make sure each patient has their own variation ids assigned
-    simulation_ids = Int[]
-    for i in 1:num_patients
-        patient_id = patient_ids[i]
-        variation_table_name = "patient_variations_$(patient_id)"
-        for cohort_id in cohort_ids
-            df = DBInterface.execute(db, "SELECT folder_id,path FROM folders WHERE patient_id=$(patient_id) AND cohort_id=$(cohort_id)") |> DataFrame
-            path_to_xml = df.path[1]
-            copyMakeFolderFiles(df.folder_id[1])
-            path_to_xml = selectRow("path","folders","WHERE patient_id=$(patient_id) AND cohort_id=$(cohort_id)") * "config/PhysiCell_settings.xml"
-            for variation_id in variation_ids[i]
-                monad = Monad(monad_id, num_replicates, Int[], patient_id, variation_id, cohort_id)
-                variation_row = selectRow(variation_table_name,"WHERE variation_id=$(variation_id);")
-                loadConfiguration(path_to_xml, variation_row, physicell_dir)
-                # append!(simulation_ids, runReplicates(patient_id, variation_id, cohort_id, num_replicates; use_previous_sims=use_previous_sims))
-                append!(simulation_ids, runMonad!(monad; use_previous_sims=use_previous_sims))
-            end
-        end
-    end
-    recordTrialInfo(simulation_ids, time_started, description)
-    return nothing
-end
-
-function runVirtualClinicalTrial(patient_ids::Int, variation_ids::Vector{Int}, cohort_ids::Union{Int,Vector{Int}}, num_replicates::Int; use_previous_sims::Bool=false, description::String=String[])
-    return runVirtualClinicalTrial(patient_ids, [variation_ids], cohort_ids, num_replicates; use_previous_sims=use_previous_sims, description=description)
-end
-
-function runVirtualClinicalTrial(patient_ids::Union{Int,Vector{Int}}, cohort_ids::Union{Int,Vector{Int}}, num_replicates::Int; use_previous_sims::Bool=false, description::String=String[])
-    variation_ids = [(DBInterface.execute(db, "SELECT variation_id FROM patient_variations_$(patient_id);") |> DataFrame |> x -> Vector(x.variation_id)) for patient_id in patient_ids]
-    return runVirtualClinicalTrial(patient_ids, variation_ids, cohort_ids, num_replicates; use_previous_sims=use_previous_sims, description=description)
-end
+# function runVirtualClinicalTrial(patient_ids::Union{Int,Vector{Int}}, cohort_ids::Union{Int,Vector{Int}}, num_replicates::Int; use_previous_sims::Bool=false, description::String=String[])
+#     variation_ids = [(DBInterface.execute(db, "SELECT variation_id FROM patient_variations_$(patient_id);") |> DataFrame |> x -> Vector(x.variation_id)) for patient_id in patient_ids]
+#     return runVirtualClinicalTrial(patient_ids, variation_ids, cohort_ids, num_replicates; use_previous_sims=use_previous_sims, description=description)
+# end
 
 # function addPatient(patient_name::String,path_to_control_folder::String)
 #     db = getDB()
@@ -354,40 +427,116 @@ end
 #     return gvax_cohort_id
 # end
 
-function addVariationColumns(base_config_id::Int, xml_paths::Vector{Vector{String}}, variable_types::Vector{DataType})
-    folder_name = DBInterface.execute(db, "SELECT folder_name FROM base_configs WHERE (base_config_id)=($(base_config_id));") |> DataFrame |> x->x.folder_name[1]
-    db_config = getConfigDB(base_config_id)
-    column_names = DBInterface.execute(db_config, "PRAGMA table_info(variations);") |> DataFrame |> x->x[!,:name]
-    filter!(x->x!="variation_id",column_names)
+# function addVariationColumns(base_config_id::Int, xml_paths::Vector{Vector{String}}, variable_types::Vector{DataType})
+#     base_config_folder = DBInterface.execute(db, "SELECT folder_name FROM base_configs WHERE (base_config_id)=($(base_config_id));") |> DataFrame |> x->x.folder_name[1]
+#     db_config = getConfigDB(base_config_id)
+#     column_names = DBInterface.execute(db_config, "PRAGMA table_info(variations);") |> DataFrame |> x->x[!,:name]
+#     filter!(x->x!="variation_id",column_names)
+#     varied_column_names = [join(xml_path,"/") for xml_path in xml_paths]
+
+#     is_new_column = [!(varied_column_name in column_names) for varied_column_name in varied_column_names]
+#     if any(is_new_column)
+#         new_column_names = varied_column_names[is_new_column]
+#         new_column_data_types = variable_types[is_new_column]
+
+#         path_to_xml = "$(data_dir)/inputs/base_configs/$(base_config_folder)/PhysiCell_settings.xml"
+#         xml_doc = openXML(path_to_xml)
+#         default_values_for_new = [getField(xml_doc, xml_path) for xml_path in xml_paths[is_new_column]]
+#         closeXML(xml_doc)
+#         # for (i, new_column_name) in enumerate(new_column_names)
+#         for (new_column_name, new_column_data_type) in zip(new_column_names, new_column_data_types)
+#             if new_column_data_type == Bool
+#                 sqlite_data_type = "TEXT"
+#             elseif new_column_data_type <: Int
+#                 sqlite_data_type = "INT"
+#             elseif new_column_data_type <: Real
+#                 sqlite_data_type = "REAL"
+#             else
+#                 sqlite_data_type = "TEXT"
+#             end
+#             DBInterface.execute(db_config, "ALTER TABLE variations ADD COLUMN '$(new_column_name)' $(sqlite_data_type);")
+#         end
+#         DBInterface.execute(db_config, "UPDATE variations SET ($(join("\"".*new_column_names.*"\"",",")))=($(join("\"".*default_values_for_new.*"\"",",")));") # set newly added columns to default values
+
+#         index_name = "variations_index"
+#         SQLite.dropindex!(db_config, index_name; ifexists=true) # remove previous index
+#         index_columns = deepcopy(column_names)
+#         append!(index_columns, new_column_names)
+#         SQLite.createindex!(db_config, "variations", index_name, index_columns; unique=true, ifnotexists=false) # add new index to make sure no variations are repeated
+#     end
+
+#     static_column_names = deepcopy(column_names)
+#     old_varied_names = varied_column_names[.!is_new_column]
+#     filter!( x->!(x in old_varied_names) , static_column_names)
+
+#     return static_column_names, varied_column_names
+# end
+
+# function addRulesetsVariationsColumns(base_config_id::Int, rulesets_collection_id::Int, xml_paths::Vector{Vector{String}})
+#     base_config_folder = DBInterface.execute(db, "SELECT folder_name FROM base_configs WHERE (base_config_id)=($(base_config_id));") |> DataFrame |> x->x.folder_name[1]
+#     rulesets_collection_folder = getRulesetsCollectionFolder(base_config_folder, rulesets_collection_id)
+#     db_rulesets_variations = getRulesetsVariationsDB(base_config_folder, rulesets_collection_folder)
+#     column_names = DBInterface.execute(db_rulesets_variations, "PRAGMA table_info(rulesets_variations);") |> DataFrame |> x->x[!,:name]
+#     filter!(x->x!="rulesets_variation_id",column_names)
+#     varied_column_names = [join(xml_path,"/") for xml_path in xml_paths]
+
+#     is_new_column = [!(varied_column_name in column_names) for varied_column_name in varied_column_names]
+#     if any(is_new_column)
+#         new_column_names = varied_column_names[is_new_column]
+
+#         path_to_xml = "$(data_dir)/inputs/base_configs/$(base_config_folder)/rulesets_collections/$(rulesets_collection_folder)/base_rulesets.xml"
+#         xml_doc = openXML(path_to_xml)
+#         default_values_for_new = [getField(xml_doc, xml_path) for xml_path in xml_paths[is_new_column]]
+#         closeXML(xml_doc)
+#         for new_column_name in new_column_names
+#             if "applies_to_dead" in new_column_name
+#                 sqlite_data_type = "INT"
+#             else
+#                 sqlite_data_type = "REAL"
+#             end
+#             DBInterface.execute(db_rulesets_variations, "ALTER TABLE rulesets_variations ADD COLUMN '$(new_column_name)' $(sqlite_data_type);")
+#         end
+#         DBInterface.execute(db_rulesets_variations, "UPDATE rulesets_variations SET ($(join("\"".*new_column_names.*"\"",",")))=($(join("\"".*default_values_for_new.*"\"",",")));") # set newly added columns to default values
+
+#         index_name = "rulesets_variations_index"
+#         SQLite.dropindex!(db_rulesets_variations, index_name; ifexists=true) # remove previous index
+#         index_columns = deepcopy(column_names)
+#         append!(index_columns, new_column_names)
+#         SQLite.createindex!(db_rulesets_variations, "rulesets_variations", index_name, index_columns; unique=true, ifnotexists=false) # add new index to make sure no variations are repeated
+#     end
+
+#     static_column_names = deepcopy(column_names)
+#     old_varied_names = varied_column_names[.!is_new_column]
+#     filter!( x->!(x in old_varied_names) , static_column_names)
+
+#     return static_column_names, varied_column_names
+# end
+
+function addColumns(base_config_id::Int, xml_paths::Vector{Vector{String}}, table_name::String, id_column_name::String, getDB::Function, getBaseXML::Function, dataTypeRules::Function)
+    base_config_folder = DBInterface.execute(db, "SELECT folder_name FROM base_configs WHERE (base_config_id)=($(base_config_id));") |> DataFrame |> x->x.folder_name[1]
+    db_columns = getDB(base_config_folder)
+    column_names = DBInterface.execute(db_columns, "PRAGMA table_info($(table_name));") |> DataFrame |> x->x[!,:name]
+    filter!(x->x!=id_column_name,column_names)
     varied_column_names = [join(xml_path,"/") for xml_path in xml_paths]
 
     is_new_column = [!(varied_column_name in column_names) for varied_column_name in varied_column_names]
     if any(is_new_column)
         new_column_names = varied_column_names[is_new_column]
-
-        path_to_xml = "$(data_dir)/base_configs/$(folder_name)/PhysiCell_settings.xml"
+        path_to_xml = getBaseXML(base_config_folder)
         xml_doc = openXML(path_to_xml)
         default_values_for_new = [getField(xml_doc, xml_path) for xml_path in xml_paths[is_new_column]]
         closeXML(xml_doc)
         for (i, new_column_name) in enumerate(new_column_names)
-            if variable_types[i] == Bool
-                sqlite_data_type = "TEXT"
-            elseif variable_types[i] <: Int
-                sqlite_data_type = "INT"
-            elseif variable_types[i] <: Real
-                sqlite_data_type = "REAL"
-            else
-                sqlite_data_type = "TEXT"
-            end
-            DBInterface.execute(db_config, "ALTER TABLE variations ADD COLUMN '$(new_column_name)' $(sqlite_data_type);")
+            sqlite_data_type = dataTypeRules(i, new_column_name)
+            DBInterface.execute(db_columns, "ALTER TABLE $(table_name) ADD COLUMN '$(new_column_name)' $(sqlite_data_type);")
         end
-        DBInterface.execute(db_config, "UPDATE variations SET ($(join("\"".*new_column_names.*"\"",",")))=($(join("\"".*default_values_for_new.*"\"",",")));")
+        DBInterface.execute(db_columns, "UPDATE $(table_name) SET ($(join("\"".*new_column_names.*"\"",",")))=($(join("\"".*default_values_for_new.*"\"",",")));") # set newly added columns to default values
 
-        index_name = "variations_index"
-        SQLite.dropindex!(db_config, index_name; ifexists=true) # remove previous index
+        index_name = "$(table_name)_index"
+        SQLite.dropindex!(db_columns, index_name; ifexists=true) # remove previous index
         index_columns = deepcopy(column_names)
         append!(index_columns, new_column_names)
-        SQLite.createindex!(db_config, "variations", index_name, index_columns; unique=true, ifnotexists=false) # add new index to make sure no variations are repeated
+        SQLite.createindex!(db_columns, table_name, index_name, index_columns; unique=true, ifnotexists=false) # add new index to make sure no variations are repeated
     end
 
     static_column_names = deepcopy(column_names)
@@ -396,6 +545,33 @@ function addVariationColumns(base_config_id::Int, xml_paths::Vector{Vector{Strin
 
     return static_column_names, varied_column_names
 end
+
+function addVariationColumns(base_config_id::Int, xml_paths::Vector{Vector{String}}, variable_types::Vector{DataType})
+    getDB = (base_config_folder) -> getConfigDB(base_config_folder)
+    getBaseXML = (base_config_folder) -> "$(data_dir)/inputs/base_configs/$(base_config_folder)/PhysiCell_settings.xml"
+    dataTypeRules = (i, _) -> begin
+        if variable_types[i] == Bool
+            "TEXT"
+        elseif variable_types[i] <: Int
+            "INT"
+        elseif variable_types[i] <: Real
+            "REAL"
+        else
+            "TEXT"
+        end
+    end
+    return addColumns(base_config_id, xml_paths, "variations", "variation_id", getDB, getBaseXML, dataTypeRules)
+end
+
+function addRulesetsVariationsColumns(base_config_id::Int, rulesets_collection_id::Int, xml_paths::Vector{Vector{String}})
+    rulesets_collection_folder = getRulesetsCollectionFolder(base_config_id, rulesets_collection_id)
+    getDB = (base_config_folder) -> getRulesetsVariationsDB(base_config_folder, rulesets_collection_folder)
+    getBaseXML = (base_config_folder) -> "$(data_dir)/inputs/base_configs/$(base_config_folder)/rulesets_collections/$(rulesets_collection_folder)/base_rulesets.xml"
+    dataTypeRules = (_, name) -> "applies_to_dead" in name ? "INT" : "REAL"
+    return addColumns(base_config_id, xml_paths, "rulesets_variations", "rulesets_variation_id", getDB, getBaseXML, dataTypeRules)
+end
+
+
 
 # function addVariationColumns(patient_id::Int, xml_paths::Vector{Vector{String}}, variable_types::Vector{DataType})
 #     db = getDB()
@@ -441,33 +617,106 @@ end
 #     return table_name, static_column_names, varied_column_names
 # end
 
-function addVariationRow(base_config_id::Int, table_features::String, values::String)
-    db_config = getConfigDB(base_config_id)
-    new_variation_id = DBInterface.execute(db_config, "INSERT OR IGNORE INTO variations ($(table_features)) VALUES($(values)) RETURNING variation_id;") |> DataFrame |> x->x.variation_id
-    new_variation_added = length(new_variation_id)==1
-    if  !new_variation_added
-        new_variation_id = selectRow("variation_id", "variations", "WHERE ($(table_features))=($(values))"; db=db_config)
+# function addVariationRow(base_config_id::Int, table_features::String, values::String)
+#     db_config = getConfigDB(base_config_id)
+#     new_variation_id = DBInterface.execute(db_config, "INSERT OR IGNORE INTO variations ($(table_features)) VALUES($(values)) RETURNING variation_id;") |> DataFrame |> x->x.variation_id
+#     new_variation_added = length(new_variation_id)==1
+#     if  !new_variation_added
+#         new_variation_id = selectRow("variation_id", "variations", "WHERE ($(table_features))=($(values))"; db=db_config)
+#     end
+#     return new_variation_id[1], new_variation_added
+# end
+
+# function addRulesetsVariationRow(base_config_id::Int, rulesets_collection_id::Int, table_features::String, values::String)
+#     db_rulesets_variations = getRulesetsVariationsDB(base_config_id, rulesets_collection_id)
+#     new_rulesets_variation_id = DBInterface.execute(db_rulesets_variations, "INSERT OR IGNORE INTO rulesets_variations ($(table_features)) VALUES($(values)) RETURNING rulesets_variation_id;") |> DataFrame |> x->x.rulesets_variation_id
+#     new_rulesets_variation_added = length(new_rulesets_variation_id)==1
+#     if  !new_rulesets_variation_added
+#         new_rulesets_variation_id = selectRow("rulesets_variation_id", "rulesets_variations", "WHERE ($(table_features))=($(values))"; db=db_rulesets_variations)
+#     end
+#     return new_rulesets_variation_id[1], new_rulesets_variation_added
+# end
+
+######
+
+function addRow(db_columns::SQLite.DB, table_name::String, id_name::String, table_features::String, values::String)
+    new_id = DBInterface.execute(db_columns, "INSERT OR IGNORE INTO $(table_name) ($(table_features)) VALUES($(values)) RETURNING $(id_name);") |> DataFrame |> x->x[!,1]
+    new_added = length(new_id)==1
+    if  !new_added
+        new_id = selectRow(id_name, table_name, "WHERE ($(table_features))=($(values))"; db=db_columns)
     end
-    return new_variation_id[1], new_variation_added
+    return new_id[1], new_added
 end
+
+function addVariationRow(base_config_id::Int, table_features::String, values::String)
+    db_columns = getConfigDB(base_config_id)
+    return addRow(db_columns, "variations", "variation_id", table_features, values)
+end
+
+function addRulesetsVariationRow(base_config_id::Int, rulesets_collection_id::Int, table_features::String, values::String)
+    db_columns = getRulesetsVariationsDB(base_config_id, rulesets_collection_id)
+    return addRow(db_columns, "rulesets_variations", "rulesets_variation_id", table_features, values)
+end
+
+######
 
 function addVariationRow(base_config_id::Int, table_features::String, static_values::String, varied_values::String)
     return addVariationRow(base_config_id, table_features, "$(static_values)$(varied_values)")
 end
 
+function addRulesetsVariationRow(base_config_id::Int, rulesets_collection_id::Int, table_features::String, static_values::String, varied_values::String)
+    return addRulesetsVariationRow(base_config_id, rulesets_collection_id, table_features, "$(static_values)$(varied_values)")
+end
+
 """
-function addGridVariationToTable(patient_id::Int, D::Vector{Vector{Vector}}; reference_variation::Int=0)
+function addGridVariation(patient_id::Int, D::Vector{Vector{Vector}}; reference_variation_id::Int=0)
 Creates a grid of parameter values defined by D to the variations tables for a specified patient.
 A reference variation id can be suppplied so that any currently unvaried values are pulled from that variation.
 D is a vector of parameter info.
 Each entry in D has two elements: D[i][1] is the xml_path based on the config file; D[i][2] is the vector of values to use for the ith parameter.
 """
 
-function addGridVariationToTable(base_config_id::Int, D::Vector{Vector{Vector}}; reference_variation::Int=0)
+# function addGridVariation(base_config_id::Int, D::Vector{Vector{Vector}}; reference_variation_id::Int=0)
+#     xml_paths = [d[1] for d in D]
+#     new_values = [d[2] for d in D]
+#     static_column_names, varied_column_names = addVariationColumns(base_config_id, xml_paths, [typeof(d[2][1]) for d in D])
+#     static_values, table_features = prepareAddNewVariations(base_config_id, static_column_names, varied_column_names; reference_variation_id = reference_variation_id)
+
+#     NDG = ndgrid(new_values...)
+#     sz_variations = size(NDG[1])
+#     variation_ids = zeros(Int, sz_variations)
+#     is_new_variation_id = falses(sz_variations)
+#     for i in eachindex(NDG[1])
+#         varied_values = [A[i] for A in NDG] .|> string |> x -> join("\"" .* x .* "\"", ",")
+#         variation_ids[i], is_new_variation_id[i] = addVariationRow(base_config_id, table_features, static_values, varied_values)
+#     end
+#     return variation_ids, is_new_variation_id
+# end
+
+# function addGridRulesetsVariation(base_config_id::Int, rulesets_collection_id::Int, D::Vector{Vector{Vector}}; reference_rulesets_variation_id::Int=0)
+#     xml_paths = [d[1] for d in D]
+#     new_values = [d[2] for d in D]
+#     static_column_names, varied_column_names = addRulesetsVariationsColumns(base_config_id, rulesets_collection_id, xml_paths)
+#     static_values, table_features = prepareAddNewRulesetsVariations(base_config_id, rulesets_collection_id, static_column_names, varied_column_names; reference_rulesets_variation_id = reference_rulesets_variation_id)
+
+#     NDG = ndgrid(new_values...)
+#     sz_variations = size(NDG[1])
+#     variation_ids = zeros(Int, sz_variations)
+#     is_new_variation_id = falses(sz_variations)
+#     for i in eachindex(NDG[1])
+#         varied_values = [A[i] for A in NDG] .|> string |> x -> join("\"" .* x .* "\"", ",")
+#         variation_ids[i], is_new_variation_id[i] = addRulesetsVariationRow(base_config_id, rulesets_collection_id, table_features, static_values, varied_values)
+#     end
+#     return variation_ids, is_new_variation_id
+# end
+
+######
+
+function addGrid(D::Vector{Vector{Vector}}, addColumns::Function, prepareAddNew::Function, addRow::Function)
     xml_paths = [d[1] for d in D]
     new_values = [d[2] for d in D]
-    static_column_names, varied_column_names = addVariationColumns(base_config_id, xml_paths, [typeof(d[2][1]) for d in D])
-    static_values, table_features = prepareAddNewVariations(base_config_id, static_column_names, varied_column_names; reference_variation = reference_variation)
+    static_column_names, varied_column_names = addColumns(xml_paths)
+    static_values, table_features = prepareAddNew(static_column_names, varied_column_names)
 
     NDG = ndgrid(new_values...)
     sz_variations = size(NDG[1])
@@ -475,16 +724,32 @@ function addGridVariationToTable(base_config_id::Int, D::Vector{Vector{Vector}};
     is_new_variation_id = falses(sz_variations)
     for i in eachindex(NDG[1])
         varied_values = [A[i] for A in NDG] .|> string |> x -> join("\"" .* x .* "\"", ",")
-        variation_ids[i], is_new_variation_id[i] = addVariationRow(base_config_id, table_features, static_values, varied_values)
+        variation_ids[i], is_new_variation_id[i] = addRow(table_features, static_values, varied_values)
     end
     return variation_ids, is_new_variation_id
 end
 
-# function addGridVariationToTable(patient_id::Int, D::Vector{Vector{Vector}}; reference_variation::Int=0)
+function addGridVariation(base_config_id::Int, D::Vector{Vector{Vector}}; reference_variation_id::Int=0)
+    addColumns = (paths) -> addVariationColumns(base_config_id, paths, [typeof(d[2][1]) for d in D])
+    prepareAddNew = (static_column_names, varied_column_names) -> prepareAddNewVariations(base_config_id, static_column_names, varied_column_names; reference_variation_id=reference_variation_id)
+    addRow = (features, static_values, varied_values) -> addVariationRow(base_config_id, features, static_values, varied_values)
+    return addGrid(D, addColumns, prepareAddNew, addRow)
+end
+
+addGridVariation(base_config_folder::String, D::Vector{Vector{Vector}}; reference_variation_id::Int=0) = addGridVariation(retrieveID("base_configs", base_config_folder), D; reference_variation_id=reference_variation_id)
+
+function addGridRulesetsVariation(base_config_id::Int, rulesets_collection_id::Int, D::Vector{Vector{Vector}}; reference_rulesets_variation_id::Int=0)
+    addColumns = (paths) -> addRulesetsVariationsColumns(base_config_id, rulesets_collection_id, paths)
+    prepareAddNew = (static_names, varied_names) -> prepareAddNewRulesetsVariations(base_config_id, rulesets_collection_id, static_names, varied_names; reference_rulesets_variation_id=reference_rulesets_variation_id)
+    addRow = (features, static_values, varied_values) -> addRulesetsVariationRow(base_config_id, rulesets_collection_id, features, static_values, varied_values)
+    return addGrid(D, addColumns, prepareAddNew, addRow)
+end
+
+# function addGridVariation(patient_id::Int, D::Vector{Vector{Vector}}; reference_variation_id::Int=0)
 #     xml_paths = [d[1] for d in D]
 #     new_values = [d[2] for d in D]
 #     table_name, static_column_names, varied_column_names = addVariationColumns(patient_id, xml_paths, [typeof(d[2][1]) for d in D])
-#     static_values, table_features = prepareAddNewVariations(table_name, static_column_names, varied_column_names; reference_variation = reference_variation)
+#     static_values, table_features = prepareAddNewVariations(table_name, static_column_names, varied_column_names; reference_variation_id = reference_variation_id)
 
 #     NDG = ndgrid(new_values...)
 #     sz_variations = size(NDG[1])
@@ -498,18 +763,18 @@ end
 # end
 
 """
-function addGridVariationToTable(patient_id::Int, xml_paths::Vector{Vector{String}}, new_values::Vector{Vector{T}} where {T<:Real}; reference_variation::Int=0)
-Does the same as addGridVariationToTable(patient_id::Int, D::Vector{Vector{Vector}}; reference_variation::Int=0) but first assembles D from xml_paths and new_values.
+function addGridVariation(patient_id::Int, xml_paths::Vector{Vector{String}}, new_values::Vector{Vector{T}} where {T<:Real}; reference_variation_id::Int=0)
+Does the same as addGridVariation(patient_id::Int, D::Vector{Vector{Vector}}; reference_variation_id::Int=0) but first assembles D from xml_paths and new_values.
 """
 
-# function addGridVariationToTable(patient_id::Int, xml_paths::Vector{Vector{String}}, new_values::Vector{Vector{T}} where {T<:Real}; reference_variation::Int=0)
+# function addGridVariation(patient_id::Int, xml_paths::Vector{Vector{String}}, new_values::Vector{Vector{T}} where {T<:Real}; reference_variation_id::Int=0)
 #     D = [[xml_paths[i], new_values[i]] for i in eachindex(xml_paths)]
-#     return addGridVariationToTable(patient_id, D; reference_variation=reference_variation)
+#     return addGridVariation(patient_id, D; reference_variation_id=reference_variation_id)
 # end
 
-# function addSampleVariationToTable(patient_id::Int, xml_paths::Vector{Vector{String}}, parameter_matrix::Matrix{T} where T; reference_variation=0)
+# function addSampleVariationToTable(patient_id::Int, xml_paths::Vector{Vector{String}}, parameter_matrix::Matrix{T} where T; reference_variation_id=0)
 #     table_name, static_column_names, varied_column_names = addVariationColumns(patient_id, xml_paths, [typeof(parameter_matrix[1,i]) for i in axes(parameter_matrix,2)])
-#     static_values, table_features = prepareAddNewVariations(table_name, static_column_names, varied_column_names; reference_variation = reference_variation)
+#     static_values, table_features = prepareAddNewVariations(table_name, static_column_names, varied_column_names; reference_variation_id = reference_variation_id)
     
 #     sz_variations = size(parameter_matrix,1)
 #     variation_ids = zeros(Int, sz_variations)
@@ -521,8 +786,32 @@ Does the same as addGridVariationToTable(patient_id::Int, D::Vector{Vector{Vecto
 #     return variation_ids, is_new_variation_id
 # end
 
-function prepareAddNewVariations(base_config_id::Int, static_column_names::Vector{String}, varied_column_names::Vector{String}; reference_variation::Int=0)
-    static_values = selectRow(static_column_names, "variations", "WHERE variation_id=$(reference_variation)"; db=getConfigDB(base_config_id)) |> x -> join("\"" .* string.(x) .* "\"", ",")
+# function prepareAddNewVariations(base_config_id::Int, static_column_names::Vector{String}, varied_column_names::Vector{String}; reference_variation_id::Int=0)
+#     static_values = selectRow(static_column_names, "variations", "WHERE variation_id=$(reference_variation_id)"; db=getConfigDB(base_config_id)) |> x -> join("\"" .* string.(x) .* "\"", ",")
+#     table_features = join("\"" .* static_column_names .* "\"", ",")
+#     if !isempty(static_column_names)
+#         static_values *= ","
+#         table_features *= ","
+#     end
+#     table_features *= join("\"" .* varied_column_names .* "\"", ",")
+#     return static_values, table_features
+# end
+
+# function prepareAddNewRulesetsVariations(base_config_id::Int, rulesets_collection_id::Int, static_column_names::Vector{String}, varied_column_names::Vector{String}; reference_rulesets_variation_id::Int=0)
+#     static_values = selectRow(static_column_names, "rulesets_variations", "WHERE rulesets_variation_id=$(reference_rulesets_variation_id)"; db=getRulesetsVariationsDB(base_config_id, rulesets_collection_id)) |> x -> join("\"" .* string.(x) .* "\"", ",")
+#     table_features = join("\"" .* static_column_names .* "\"", ",")
+#     if !isempty(static_column_names)
+#         static_values *= ","
+#         table_features *= ","
+#     end
+#     table_features *= join("\"" .* varied_column_names .* "\"", ",")
+#     return static_values, table_features
+# end
+
+####
+
+function prepareAddNew(db_columns::SQLite.DB, static_column_names::Vector{String}, varied_column_names::Vector{String}, table_name::String, id_name::String, reference_id::Int)
+    static_values = selectRow(static_column_names, table_name, "WHERE $(id_name)=$(reference_id)"; db=db_columns) |> x -> join("\"" .* string.(x) .* "\"", ",")
     table_features = join("\"" .* static_column_names .* "\"", ",")
     if !isempty(static_column_names)
         static_values *= ","
@@ -530,6 +819,16 @@ function prepareAddNewVariations(base_config_id::Int, static_column_names::Vecto
     end
     table_features *= join("\"" .* varied_column_names .* "\"", ",")
     return static_values, table_features
+end
+
+function prepareAddNewVariations(base_config_id::Int, static_column_names::Vector{String}, varied_column_names::Vector{String}; reference_variation_id::Int=0)
+    db_columns = getConfigDB(base_config_id)
+    return prepareAddNew(db_columns, static_column_names, varied_column_names, "variations", "variation_id", reference_variation_id)
+end
+
+function prepareAddNewRulesetsVariations(base_config_id::Int, rulesets_collection_id::Int, static_column_names::Vector{String}, varied_column_names::Vector{String}; reference_rulesets_variation_id::Int=0)
+    db_columns = getRulesetsVariationsDB(base_config_id, rulesets_collection_id)
+    return prepareAddNew(db_columns, static_column_names, varied_column_names, "rulesets_variations", "rulesets_variation_id", reference_rulesets_variation_id)
 end
 
 # function recordTrialInfo(simulation_ids::Vector{Int}, time_started::DateTime, description::String)
@@ -582,6 +881,8 @@ function compressMonadIDs(monad_ids::Array{Int})
     return compressIDs(monad_ids)
 end
 
+compressSamplingIDs(sampling_ids::Array{Int}) = compressIDs(sampling_ids)
+
 # function selectTrialSimulations(trial_id::Int)
 #     path_to_trial = data_dir * "/trials/" * string(trial_id) * "/"
 #     df = CSV.read(path_to_trial*"simulations.csv",DataFrame; header=false,silencewarnings=true,types=String,delim=",")
@@ -616,7 +917,8 @@ function selectConstituents(path_to_csv::String)
     return ids
 end
 
-getMondadSimulations(monad_id::Int) = selectConstituents("$(data_dir)/monads/$(monad_id)/simulations.csv")
-getSamplingMonads(sampling_id::Int) = selectConstituents("$(data_dir)/samplings/$(sampling_id)/monads.csv")
+getMondadSimulations(monad_id::Int) = selectConstituents("$(data_dir)/outputs/monads/$(monad_id)/simulations.csv")
+getSamplingMonads(sampling_id::Int) = selectConstituents("$(data_dir)/outputs/samplings/$(sampling_id)/monads.csv")
+getTrialSamplings(trial_id::Int) = selectConstituents("$(data_dir)/outputs/trials/$(trial_id)/samplings.csv")
 
 end
