@@ -1,6 +1,6 @@
 module VCTModule
 
-export initializeVCT, resetDatabase, selectTrialSimulations
+export initializeVCT, resetDatabase, selectTrialSimulations, runAbstractTrial
 
 using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables
 include("VCTClasses.jl")
@@ -35,7 +35,8 @@ function runSimulation(simulation::Simulation; setup=true)
     path_to_simulation_output = "$(path_to_simulation_folder)/output"
     if isfile("$(path_to_simulation_output)/final.xml")
         ran = false
-        return ran
+        success = true
+        return ran, success
     end
     mkpath(path_to_simulation_output)
 
@@ -55,17 +56,21 @@ function runSimulation(simulation::Simulation; setup=true)
         path_to_rules_file = "$(data_dir)/inputs/base_configs/$(simulation.base_config_folder)/rulesets_collections/$(simulation.rulesets_collection_folder)/rulesets_variation_$(simulation.rulesets_variation_id).xml"
         append!(flags, ["-r", path_to_rules_file])
     end
-    cmd = `$executable_str $config_str $flags > $(path_to_simulation_folder)/stdout.log 2> $(path_to_simulation_folder)/stderr.log`
-    
-    println("\n----------RUNNING SIMULATION----------\n\n$cmd\n")
-    run(cmd, wait=true)
-    
-    # check if stderr.log is empty, if it is, delete it
-    if filesize("$(path_to_simulation_folder)/stderr.log") == 0
-        rm("$(path_to_simulation_folder)/stderr.log", force=true)
+    cmd = `$executable_str $config_str $flags`
+    println("\n----------RUNNING SIMULATION: $(simulation.id)----------\n\n")
+    try
+        run(pipeline(cmd, stdout="$(path_to_simulation_folder)/output.log", stderr="$(path_to_simulation_folder)/output.err"), wait=true)
+    catch
+        success = false
+    else
+        rm("$(path_to_simulation_folder)/output.err", force=true)
+        success = true
     end
     ran = true
-    return ran
+    # cmd = `$executable_str $config_str $flags > $(path_to_simulation_folder)/stdout.log 2> $(path_to_simulation_folder)/stderr.log`
+    
+    # run(cmd, wait=true)
+    return ran, success
 end
 
 function loadCustomCode!(simulation::Union{Simulation,Monad,Sampling})
@@ -281,11 +286,16 @@ collectSimulationTasks(trial::Trial; use_previous_sims::Bool=false) = runTrial!(
 
 function runAbstractTrial(trial::AbstractTrial; use_previous_sims::Bool=false)
     simulation_tasks = collectSimulationTasks(trial, use_previous_sims=use_previous_sims)
+    n_ran = 0
+    n_success = 0
 
     Threads.@threads :static for simulation_task in simulation_tasks
         schedule(simulation_task)
-        fetch(simulation_task)
+        ran, success = fetch(simulation_task)
+        n_ran += ran
+        n_success += success
     end
+    return n_ran, n_success
 end
 
 function addColumns(base_config_id::Int, xml_paths::Vector{Vector{String}}, table_name::String, id_column_name::String, getDB::Function, getBaseXML::Function, dataTypeRules::Function)
