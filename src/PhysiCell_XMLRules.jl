@@ -8,7 +8,7 @@ struct Behavior
     max_response::String
     function Behavior(name::String, response::Symbol, max_response::String)
         if response != :increases && response != :decreases
-            throw("The response must be either :increases or :decreases.")
+            throw("The response must be either :increases or :decreases. Got $response.")
         end
         new(name, response, max_response)
     end
@@ -38,14 +38,14 @@ end
 function getElement(parent_element::XMLElement, element_name::String; require_exist::Bool=false)
     ce = find_element(parent_element, element_name)
     if isnothing(ce) && require_exist
-        throw("Element not found") # improve this to name the parent element and the element name
+        throw("Element '$element_name' not found in parent element '$parent_element'")
     end
     return ce
 end
 
 function createElement(parent_element::XMLElement, element_name::String; require_new::Bool=true)
     if require_new && !isnothing(getElement(parent_element, element_name; require_exist=false))
-        throw("Element already exists.") # improve this to name the parent element and the new element name
+        throw("Element '$element_name' already exists in parent element '$parent_element'")
     end
     return new_child(parent_element, element_name)
 end
@@ -66,7 +66,7 @@ function getElementByAttribute(parent_element::XMLElement, element_name::String,
         end
     end
     if require_exist
-        throw("Element not found")
+        throw("Element '$element_name' not found in parent element '$parent_element' with attribute '$attribute_name' = '$attribute_value'")
     end
     return nothing
 end
@@ -129,7 +129,6 @@ function addRule(xml_root::XMLElement, rule::Rule; require_max_response_unchange
     else
         previous_max_response = parse(Float64, max_response)
         if previous_max_response == rule.behavior.max_response
-            nothing
         elseif require_max_response_unchanged
             throw("In adding the new rule, the max_response is being changed")
         else
@@ -161,14 +160,14 @@ end
 
 function addRules(xml_root::XMLElement, data_frame::DataFrame)
     for row in eachrow(data_frame)
-        cell_type = row[1]
-        signal_name = row[2]
-        response = row[3]
-        behavior_name = row[4]
-        max_response = row[5]
-        half_max = row[6]
-        hill_power = row[7]
-        applies_to_dead = row[8]
+        cell_type = row[:cell_type]
+        signal_name = row[:signal]
+        response = row[:response]
+        behavior_name = row[:behavior]
+        max_response = row[:max_response]
+        half_max = row[:half_max]
+        hill_power = row[:hill_power]
+        applies_to_dead = row[:applies_to_dead]
         behavior = Behavior(behavior_name, response, max_response)
         signal = Signal(signal_name, half_max, hill_power, applies_to_dead)
         rule = Rule(cell_type, behavior, signal)
@@ -178,6 +177,8 @@ end
 
 function addRules(xml_root::XMLElement, path_to_csv::String)
     df = CSV.read(path_to_csv, DataFrame; header=false, types=String)
+    # set column names of df by vector
+    rename!(df, [:cell_type, :signal, :response, :behavior, :max_response, :half_max, :hill_power, :applies_to_dead])
     return addRules(xml_root, df)
 end
 
@@ -191,6 +192,7 @@ function writeRules(path_to_xml::String, path_to_csv::String)
     xml_doc = XMLDocument()
     writeRules(xml_doc, path_to_csv)
     save_file(xml_doc, path_to_xml)
+    return
 end
 
 end
