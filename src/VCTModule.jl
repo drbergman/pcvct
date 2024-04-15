@@ -509,4 +509,10 @@ getMondadSimulations(monad_id::Int) = selectConstituents("$(data_dir)/outputs/mo
 getSamplingMonads(sampling_id::Int) = selectConstituents("$(data_dir)/outputs/samplings/$(sampling_id)/monads.csv")
 getTrialSamplings(trial_id::Int) = selectConstituents("$(data_dir)/outputs/trials/$(trial_id)/samplings.csv")
 
+function getTrialSimulations(trial_id::Int)
+    sampling_ids = getTrialSamplings(trial_id)
+    monad_ids = vcat([getSamplingMonads(sampling_id) for sampling_id in sampling_ids]...)
+    return vcat([getMondadSimulations(monad_id) for monad_id in monad_ids]...)
+end
+
 end
