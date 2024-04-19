@@ -39,19 +39,28 @@ function createSchema()
         DBInterface.execute(db, "INSERT OR IGNORE INTO custom_codes (folder_name) VALUES ('$(custom_codes_folder)');")
     end
     
-    # initialize and populate ics table
-    SQLite.execute(db, "CREATE TABLE IF NOT EXISTS ics (
-        ic_id INTEGER PRIMARY KEY,
+    # initialize and populate ic_cells table
+    SQLite.execute(db, "CREATE TABLE IF NOT EXISTS ic_cells (
+        ic_cell_id INTEGER PRIMARY KEY,
         folder_name UNIQUE,
         description TEXT
         )
     ")
         
-    if "ics" in data_dir_contents
-        ics_folders = readdir("$(data_dir)/inputs/ics", sort=false) |> filter(x->isdir("$(data_dir)/inputs/ics/$(x)"))
-        if !isempty(ics_folders)
-            for ics_folder in ics_folders
-                DBInterface.execute(db, "INSERT OR IGNORE INTO ics (folder_name) VALUES ('$(ics_folder)');")
+    if "ics" in data_dir_contents && "cells" in readdir("$(data_dir)/inputs/ics", sort=false)
+        ic_cell_folders = readdir("$(data_dir)/inputs/ics/cells", sort=false) |> filter(x->isdir("$(data_dir)/inputs/ics/cells/$(x)"))
+        if !isempty(ic_cell_folders)
+            for ic_cell_folder in ic_cell_folders
+                if !isfile("$(data_dir)/inputs/ics/cells/$(ic_cell_folder)/cells.csv")
+                    continue
+                end
+                if isfile("$(data_dir)/inputs/ics/cells/$(ic_cell_folder)/metadata.xml")
+                    metadata = parse_file("$(data_dir)/inputs/ics/cells/$(ic_cell_folder)/metadata.xml")
+                    description = content(find_element(metadata, "description"))
+                else
+                    description = ""
+                end
+                DBInterface.execute(db, "INSERT OR IGNORE INTO ic_cells (folder_name, description) VALUES ('$(ic_cell_folder)', '$description');")
             end
         end
     end
@@ -98,15 +107,15 @@ function createSchema()
     SQLite.execute(db, "CREATE TABLE IF NOT EXISTS simulations (
         simulation_id INTEGER PRIMARY KEY,
         custom_code_id INTEGER,
-        ic_id INTEGER,
+        ic_cell_id INTEGER,
         base_config_id INTEGER,
         rulesets_collection_id INTEGER,
         variation_id INTEGER,
         rulesets_variation_id INTEGER,
         FOREIGN KEY (custom_code_id)
             REFERENCES custom_codes (custom_code_id),
-        FOREIGN KEY (ic_id)
-            REFERENCES ics (ic_id),
+        FOREIGN KEY (ic_cell_id)
+            REFERENCES ics_cells (ic_cell_id),
         FOREIGN KEY (base_config_id)
             REFERENCES base_configs (base_config_id)
         )    
@@ -116,18 +125,18 @@ function createSchema()
     SQLite.execute(db, "CREATE TABLE IF NOT EXISTS monads (
         monad_id INTEGER PRIMARY KEY,
         custom_code_id INTEGER,
-        ic_id INTEGER,
+        ic_cell_id INTEGER,
         base_config_id INTEGER,
         rulesets_collection_id INTEGER,
         variation_id INTEGER,
         rulesets_variation_id INTEGER,
         FOREIGN KEY (custom_code_id)
             REFERENCES custom_codes (custom_code_id),
-        FOREIGN KEY (ic_id)
-            REFERENCES ics (ic_id),
+        FOREIGN KEY (ic_cell_id)
+            REFERENCES ics_cells (ic_cell_id),
         FOREIGN KEY (base_config_id)
             REFERENCES base_configs (base_config_id),
-        UNIQUE (custom_code_id,ic_id,base_config_id,rulesets_collection_id,variation_id,rulesets_variation_id)
+        UNIQUE (custom_code_id,ic_cell_id,base_config_id,rulesets_collection_id,variation_id,rulesets_variation_id)
         )    
     ")
 
@@ -135,13 +144,13 @@ function createSchema()
     SQLite.execute(db, "CREATE TABLE IF NOT EXISTS samplings (
         sampling_id INTEGER PRIMARY KEY,
         custom_code_id INTEGER,
-        ic_id INTEGER,
+        ic_cell_id INTEGER,
         base_config_id INTEGER,
         rulesets_collection_id INTEGER,
         FOREIGN KEY (custom_code_id)
             REFERENCES custom_codes (custom_code_id),
-        FOREIGN KEY (ic_id)
-            REFERENCES ics (ic_id),
+        FOREIGN KEY (ic_cell_id)
+            REFERENCES ics_cells (ic_cell_id),
         FOREIGN KEY (base_config_id)
             REFERENCES base_configs (base_config_id)
         )    
@@ -235,17 +244,17 @@ end
 getOptionalFolder(table_name::String, id_name::String, id::Int; db::SQLite.DB=db) = id == -1 ? "" : getFolder(table_name, id_name, id; db=db)
 
 getBaseConfigFolder(base_config_id::Int) = getFolder("base_configs", "base_config_id", base_config_id)
-getICFolder(ic_id::Int) = getOptionalFolder("ics", "ic_id", ic_id)
+getICCellFolder(ic_cell_id::Int) = getOptionalFolder("ic_cells", "ic_cell_id", ic_cell_id)
 getRulesetsCollectionFolder(base_config_folder::String, rulesets_collection_id::Int) = getOptionalFolder("rulesets_collections", "rulesets_collection_id", rulesets_collection_id; db=getRulesetsCollectionsDB(base_config_folder))
 getRulesetsCollectionFolder(base_config_id::Int, rulesets_collection_id::Int) = getRulesetsCollectionFolder(getBaseConfigFolder(base_config_id), rulesets_collection_id)
 getCustomCodesFolder(custom_code_id::Int) = getFolder("custom_codes", "custom_code_id", custom_code_id)
 
-function retrievePathInfo(base_config_id::Int, rulesets_collection_id::Int, ic_id::Int, custom_code_id::Int)
+function retrievePathInfo(base_config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, custom_code_id::Int)
     base_config_folder = getBaseConfigFolder(base_config_id)
-    ic_folder = getICFolder(ic_id)
+    ic_cell_folder = getICCellFolder(ic_cell_id)
     rulesets_collection_folder = getRulesetsCollectionFolder(base_config_folder, rulesets_collection_id)
     custom_code_folder = getCustomCodesFolder(custom_code_id)
-    return base_config_folder, rulesets_collection_folder, ic_folder, custom_code_folder
+    return base_config_folder, rulesets_collection_folder, ic_cell_folder, custom_code_folder
 end
 
 function retrieveID(table_name::String, folder_name::String; db::SQLite.DB=db)

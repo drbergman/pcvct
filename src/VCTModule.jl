@@ -48,8 +48,8 @@ function runSimulation(simulation::Simulation; setup=true)
     executable_str = "$(data_dir)/inputs/custom_codes/$(simulation.custom_code_folder)/project" # path to executable
     config_str =  "$(data_dir)/inputs/base_configs/$(simulation.base_config_folder)/variations/variation_$(simulation.variation_id).xml" # path to config file
     flags = ["-o", path_to_simulation_output]
-    if simulation.ic_id != -1
-        append!(flags, ["-i", "$(data_dir)/inputs/ics/$(simulation.ic_folder)/cells.csv"]) # if ic file included (id != -1), then include this in the command
+    if simulation.ic_cell_id != -1
+        append!(flags, ["-i", "$(data_dir)/inputs/ics/cells/$(simulation.ic_cell_folder)/cells.csv"]) # if ic file included (id != -1), then include this in the command
     end
     if simulation.rulesets_variation_id != -1
         # for now, no rules file specified as flagged argument
