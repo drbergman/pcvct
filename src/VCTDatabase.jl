@@ -115,7 +115,7 @@ function createSchema()
         FOREIGN KEY (custom_code_id)
             REFERENCES custom_codes (custom_code_id),
         FOREIGN KEY (ic_cell_id)
-            REFERENCES ics_cells (ic_cell_id),
+            REFERENCES ic_cells (ic_cell_id),
         FOREIGN KEY (base_config_id)
             REFERENCES base_configs (base_config_id)
         )    
@@ -133,7 +133,7 @@ function createSchema()
         FOREIGN KEY (custom_code_id)
             REFERENCES custom_codes (custom_code_id),
         FOREIGN KEY (ic_cell_id)
-            REFERENCES ics_cells (ic_cell_id),
+            REFERENCES ic_cells (ic_cell_id),
         FOREIGN KEY (base_config_id)
             REFERENCES base_configs (base_config_id),
         UNIQUE (custom_code_id,ic_cell_id,base_config_id,rulesets_collection_id,variation_id,rulesets_variation_id)
@@ -150,7 +150,7 @@ function createSchema()
         FOREIGN KEY (custom_code_id)
             REFERENCES custom_codes (custom_code_id),
         FOREIGN KEY (ic_cell_id)
-            REFERENCES ics_cells (ic_cell_id),
+            REFERENCES ic_cells (ic_cell_id),
         FOREIGN KEY (base_config_id)
             REFERENCES base_configs (base_config_id)
         )    

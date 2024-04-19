@@ -141,7 +141,7 @@ end
 function Sampling(monad_min_length::Int, base_config_folder::String, rulesets_collection_folder::String, ic_cell_folder::String, custom_code_folder::String, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int})
     base_config_id = retrieveID("base_configs", base_config_folder)
     rulesets_collection_id = retrieveID("rulesets_collections", rulesets_collection_folder, db=getRulesetsCollectionsDB(base_config_folder))
-    ic_cell_id = retrieveID("ics_cells", ic_cell_folder)
+    ic_cell_id = retrieveID("ic_cells", ic_cell_folder)
     custom_code_id = retrieveID("custom_codes", custom_code_folder)
     return Sampling(monad_min_length, base_config_id, rulesets_collection_id, ic_cell_id, custom_code_id, base_config_folder, rulesets_collection_folder, ic_cell_folder, custom_code_folder, variation_ids, rulesets_variation_ids)
 end
@@ -236,7 +236,7 @@ end
 function Trial(monad_min_length::Int, base_config_folders::Vector{String}, rulesets_collection_folders::Vector{String}, ic_cells_folders::Vector{String}, custom_code_folders::Vector{String}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}})
     base_config_ids = [retrieveID("base_configs", folder) for folder in base_config_folders] |> x -> reshape(x, size(base_config_folders))
     rulesets_collection_ids = [retrieveID("rulesets_collections", rulesets_collection_folder, db=getRulesetsCollectionsDB(base_config_folder)) for (base_config_folder, rulesets_collection_folder) in zip(base_config_folders, rulesets_collection_folders)] |> x -> reshape(x, size(base_config_folders))
-    ic_cells_ids = [retrieveID("ics_cells", folder) for folder in ic_cells_folders] |> x -> reshape(x, size(base_config_folders))
+    ic_cells_ids = [retrieveID("ic_cells", folder) for folder in ic_cells_folders] |> x -> reshape(x, size(base_config_folders))
     custom_code_ids = [retrieveID("custom_codes", folder) for folder in custom_code_folders] |> x -> reshape(x, size(base_config_folders))
     return Trial(monad_min_length, base_config_ids, rulesets_collection_ids, ic_cells_ids, custom_code_ids, base_config_folders, rulesets_collection_folders, ic_cells_folders, custom_code_folders, variation_ids, rulesets_variation_ids)
 end
