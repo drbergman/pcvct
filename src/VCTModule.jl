@@ -150,6 +150,9 @@ function resetDatabase()
 end
 
 function resetConfigFolder(base_config_folder::String)
+    if !isdir(base_config_folder)
+        return
+    end
     rm("$(base_config_folder)/variations.db", force=true)
     rm("$(base_config_folder)/variations", force=true, recursive=true)
 
