@@ -25,10 +25,6 @@ function initializeVCT(path_to_physicell::String, path_to_data::String)
     initializeDatabase("$(data_dir)/vct.db")
 end
 
-function getSimulationCmd(simulation::Simulation; setup=true)
-    return `$(physicell_dir)/project $(physicell_dir)/config/base_config_$(simulation.base_config_id)/variation_$(simulation.variation_id).xml $(path_to_simulation_folder)`
-end
-
 function runSimulation(simulation::Simulation; setup=true)
     println("------------------------------\n----------SETTING UP SIMULATION----------\n------------------------------")
     path_to_simulation_folder = "$(data_dir)/outputs/simulations/$(simulation.id)"
@@ -45,15 +41,20 @@ function runSimulation(simulation::Simulation; setup=true)
         loadCustomCode!(simulation)
     end
 
-    executable_str = "$(data_dir)/inputs/custom_codes/$(simulation.custom_code_folder)/project" # path to executable
-    config_str =  "$(data_dir)/inputs/base_configs/$(simulation.base_config_folder)/variations/variation_$(simulation.variation_id).xml" # path to config file
+    executable_str = "$(data_dir)/inputs/custom_codes/$(simulation.folder_names.custom_code_folder)/project" # path to executable
+    config_str =  "$(data_dir)/inputs/base_configs/$(simulation.folder_names.base_config_folder)/variations/variation_$(simulation.folder_ids.variation_id).xml" # path to config file
     flags = ["-o", path_to_simulation_output]
-    if simulation.ic_cell_id != -1
-        append!(flags, ["-i", "$(data_dir)/inputs/ics/cells/$(simulation.ic_cell_folder)/cells.csv"]) # if ic file included (id != -1), then include this in the command
+    if simulation.folder_ids.ic_cell_id != -1
+        append!(flags, ["-i", "$(data_dir)/inputs/ics/cells/$(simulation.folder_names.ic_cell_folder)/cells.csv"]) # if ic file included (id != -1), then include this in the command
+    end
+    if simulation.folder_ids.ic_substrate_id != -1
+        append!(flags, ["-s", "$(data_dir)/inputs/ics/substrates/$(simulation.folder_names.ic_substrate_folder)/substrates.csv"]) # if ic file included (id != -1), then include this in the command
+    end
+    if simulation.folder_ids.ic_ecm_id != -1
+        append!(flags, ["-e", "$(data_dir)/inputs/ics/ecms/$(simulation.folder_names.ic_ecm_folder)/ecm.csv"]) # if ic file included (id != -1), then include this in the command
     end
     if simulation.rulesets_variation_id != -1
-        # for now, no rules file specified as flagged argument
-        path_to_rules_file = "$(data_dir)/inputs/base_configs/$(simulation.base_config_folder)/rulesets_collections/$(simulation.rulesets_collection_folder)/rulesets_variation_$(simulation.rulesets_variation_id).xml"
+        path_to_rules_file = "$(data_dir)/inputs/base_configs/$(simulation.folder_names.base_config_folder)/rulesets_collections/$(simulation.rulesets_collection_folder)/rulesets_variation_$(simulation.rulesets_variation_id).xml"
         append!(flags, ["-r", path_to_rules_file])
     end
     cmd = `$executable_str $config_str $flags`
@@ -74,20 +75,24 @@ function runSimulation(simulation::Simulation; setup=true)
 end
 
 function loadCustomCode!(simulation::Union{Simulation,Monad,Sampling})
-    if isfile("$(data_dir)/inputs/custom_codes/$(simulation.custom_code_folder)/project")
+    if isfile("$(data_dir)/inputs/custom_codes/$(simulation.folder_names.custom_code_folder)/project")
         return
     end
-    if isempty(simulation.custom_code_folder)
-        simulation.custom_code_folder = selectRow("folder_name", "custom_codes", "WHERE custom_code_id=$(simulation.custom_code_id);")
+    if isempty(simulation.folder_names.custom_code_folder)
+        simulation.folder_names.custom_code_folder = selectRow("folder_name", "custom_codes", "WHERE custom_code_id=$(simulation.folder_ids.custom_code_id);")
     end
-    path_to_folder = "$(data_dir)/inputs/custom_codes/$(simulation.custom_code_folder)" # source dir needs to end in / or else the dir is copied into target, not the source files
+    path_to_folder = "$(data_dir)/inputs/custom_codes/$(simulation.folder_names.custom_code_folder)" # source dir needs to end in / or else the dir is copied into target, not the source files
     run(`cp -r $(path_to_folder)/custom_modules/ $(physicell_dir)/custom_modules`)
     run(`cp $(path_to_folder)/main.cpp $(physicell_dir)/main.cpp`)
     run(`cp $(path_to_folder)/Makefile $(physicell_dir)/Makefile`)
 
-    cd(()->run(`make -j 20 CC=$(PHYSICELL_CPP) PROGRAM_NAME=project_ccid_$(simulation.custom_code_id)`), physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory
-
-    mv("$(physicell_dir)/project_ccid_$(simulation.custom_code_id)", "$(data_dir)/inputs/custom_codes/$(simulation.custom_code_folder)/project")
+    macro_flags = String[]
+    if simulation.folder_ids.ic_ecm_id != -1
+        append!(macro_flags, ["-D","ADDON_PHYSIECM"])
+    end
+    cd(() -> run(`make -j 20 $(macro_flags) CC=$(PHYSICELL_CPP) PROGRAM_NAME=project_ccid_$(simulation.folder_ids.custom_code_id)`), physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory; make sure the macro ADDON_PHYSIECM is defined (should work even if multiply defined, e.g., by Makefile)
+    
+    mv("$(physicell_dir)/project_ccid_$(simulation.folder_ids.custom_code_id)", "$(data_dir)/inputs/custom_codes/$(simulation.folder_names.custom_code_folder)/project")
     return 
 end
 
@@ -332,7 +337,7 @@ function addColumns(base_config_id::Int, xml_paths::Vector{Vector{String}}, tabl
 
     static_column_names = deepcopy(column_names)
     old_varied_names = varied_column_names[.!is_new_column]
-    filter!( x->!(x in old_varied_names) , static_column_names)
+    filter!(x -> !(x in old_varied_names), static_column_names)
 
     return static_column_names, varied_column_names
 end
@@ -510,14 +515,14 @@ function selectConstituents(path_to_csv::String)
     return ids
 end
 
-getMondadSimulations(monad_id::Int) = selectConstituents("$(data_dir)/outputs/monads/$(monad_id)/simulations.csv")
+getMonadSimulations(monad_id::Int) = selectConstituents("$(data_dir)/outputs/monads/$(monad_id)/simulations.csv")
 getSamplingMonads(sampling_id::Int) = selectConstituents("$(data_dir)/outputs/samplings/$(sampling_id)/monads.csv")
 getTrialSamplings(trial_id::Int) = selectConstituents("$(data_dir)/outputs/trials/$(trial_id)/samplings.csv")
 
 function getTrialSimulations(trial_id::Int)
     sampling_ids = getTrialSamplings(trial_id)
     monad_ids = vcat([getSamplingMonads(sampling_id) for sampling_id in sampling_ids]...)
-    return vcat([getMondadSimulations(monad_id) for monad_id in monad_ids]...)
+    return vcat([getMonadSimulations(monad_id) for monad_id in monad_ids]...)
 end
 
 end

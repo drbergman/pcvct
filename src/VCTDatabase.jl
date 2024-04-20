@@ -22,14 +22,14 @@ function createSchema()
     if !("base_configs" in data_dir_contents)
         error("No $(data_dir)/inputs/base_configs found. This is where to put the folders for config files and rules files.")
     end
-    
+
     # initialize and populate custom_codes table
-    SQLite.execute(db, "CREATE TABLE IF NOT EXISTS custom_codes (
+    custom_codes_schema = """
         custom_code_id INTEGER PRIMARY KEY,
         folder_name UNIQUE,
         description TEXT
-        )
-    ")
+    """
+    createPCVCTTable("custom_codes", custom_codes_schema)
         
     custom_codes_folders = readdir("$(data_dir)/inputs/custom_codes", sort=false) |> filter(x->isdir("$(data_dir)/inputs/custom_codes/$(x)"))
     if isempty(custom_codes_folders)
@@ -40,12 +40,12 @@ function createSchema()
     end
     
     # initialize and populate ic_cells table
-    SQLite.execute(db, "CREATE TABLE IF NOT EXISTS ic_cells (
+    ic_cells_schema = """
         ic_cell_id INTEGER PRIMARY KEY,
         folder_name UNIQUE,
         description TEXT
-        )
-    ")
+    """
+    createPCVCTTable("ic_cells", ic_cells_schema)
         
     if "ics" in data_dir_contents && "cells" in readdir("$(data_dir)/inputs/ics", sort=false)
         ic_cell_folders = readdir("$(data_dir)/inputs/ics/cells", sort=false) |> filter(x->isdir("$(data_dir)/inputs/ics/cells/$(x)"))
@@ -66,12 +66,12 @@ function createSchema()
     end
         
     # initialize and populate base_configs table
-    SQLite.execute(db, "CREATE TABLE IF NOT EXISTS base_configs (
+    base_configs_schema = """
         base_config_id INTEGER PRIMARY KEY,
         folder_name UNIQUE,
         description TEXT
-        )
-    ")
+    """
+    createPCVCTTable("base_configs", base_configs_schema)
         
     base_config_folders = readdir("$(data_dir)/inputs/base_configs", sort=false) |> filter(x->isdir("$(data_dir)/inputs/base_configs/$(x)"))
     if isempty(base_config_folders)
@@ -96,15 +96,15 @@ function createSchema()
 
             # make the db with rulesets variations for the collection
             db_rulesets_variations = "$(data_dir)/inputs/base_configs/$(base_config_folders)/rulesets_collections/$(rulesets_collection)/rulesets_variations.db" |> SQLite.DB
-            SQLite.execute(db_rulesets_variations, "CREATE TABLE IF NOT EXISTS rulesets_variations (
+            rulesets_variations_schema = """
                 rulesets_variation_id INTEGER PRIMARY KEY
-            );")
-            # createRulesetsVariationsDB(rulesets_scheme, base_config_folders)
+            """
+            createPCVCTTable("rulesets_variations", rulesets_variations_schema; db=db_rulesets_variations)
         end
     end
             
     # initialize simulations table
-    SQLite.execute(db, "CREATE TABLE IF NOT EXISTS simulations (
+    simulations_schema = """
         simulation_id INTEGER PRIMARY KEY,
         custom_code_id INTEGER,
         ic_cell_id INTEGER,
@@ -118,11 +118,11 @@ function createSchema()
             REFERENCES ic_cells (ic_cell_id),
         FOREIGN KEY (base_config_id)
             REFERENCES base_configs (base_config_id)
-        )    
-    ")
+    """
+    createPCVCTTable("simulations", simulations_schema)
 
     # initialize monads table
-    SQLite.execute(db, "CREATE TABLE IF NOT EXISTS monads (
+    monads_schema = """
         monad_id INTEGER PRIMARY KEY,
         custom_code_id INTEGER,
         ic_cell_id INTEGER,
@@ -137,11 +137,11 @@ function createSchema()
         FOREIGN KEY (base_config_id)
             REFERENCES base_configs (base_config_id),
         UNIQUE (custom_code_id,ic_cell_id,base_config_id,rulesets_collection_id,variation_id,rulesets_variation_id)
-        )    
-    ")
+    """
+    createPCVCTTable("monads", monads_schema)
 
     # initialize samplings table
-    SQLite.execute(db, "CREATE TABLE IF NOT EXISTS samplings (
+    samplings_schema = """
         sampling_id INTEGER PRIMARY KEY,
         custom_code_id INTEGER,
         ic_cell_id INTEGER,
@@ -153,13 +153,39 @@ function createSchema()
             REFERENCES ic_cells (ic_cell_id),
         FOREIGN KEY (base_config_id)
             REFERENCES base_configs (base_config_id)
-        )    
-    ")
+    """
+    createPCVCTTable("samplings", samplings_schema)
 
-    SQLite.execute(db, "CREATE TABLE IF NOT EXISTS trials (
+    # initialize trials table
+    trials_schema = """
         trial_id INTEGER PRIMARY KEY,
         datetime TEXT,
         description TEXT
+    """
+    createPCVCTTable("trials", trials_schema)
+    return
+end
+
+function createPCVCTTable(table_name::String, schema::String; db::SQLite.DB=db)
+
+    # check that table_name ends in "s"
+    if last(table_name) != 's'
+        s = "Table name must end in 's'."
+        s *= "\n\tThis helps to normalize what the id names are for these entries."
+        s *= "\n\tYour table $(table_name) does not end in 's'."
+        s *= "\n\tSee retrieveID(table_name::String, folder_name::String; db::SQLite.DB=db)."
+        error(s)
+    end
+    # check that schema has PRIMARY KEY named as table_name without the s followed by _id
+    if !occursin("$(table_name[1:end-1])_id INTEGER PRIMARY KEY", schema)
+        s = "Schema must have PRIMARY KEY named as $(table_name[1:end-1])_id."
+        s *= "\n\tThis helps to normalize what the id names are for these entries."
+        s *= "\n\tYour schema $(schema) does not have \"$(table_name[1:end-1])_id INTEGER PRIMARY KEY\"."
+        s *= "\n\tSee retrieveID(table_name::String, folder_name::String; db::SQLite.DB=db)."
+        error(s)
+    end
+    SQLite.execute(db, "CREATE TABLE IF NOT EXISTS $(table_name) (
+        $(schema)
         )
     ")
     return
@@ -245,19 +271,33 @@ getOptionalFolder(table_name::String, id_name::String, id::Int; db::SQLite.DB=db
 
 getBaseConfigFolder(base_config_id::Int) = getFolder("base_configs", "base_config_id", base_config_id)
 getICCellFolder(ic_cell_id::Int) = getOptionalFolder("ic_cells", "ic_cell_id", ic_cell_id)
+getICSubstrateFolder(ic_substrate_id::Int) = getOptionalFolder("ic_substrates", "ic_substrate_id", ic_substrate_id)
+getICECMFolder(ic_ecm_id::Int) = getOptionalFolder("ic_ecms", "ic_ecm_id", ic_ecm_id)
 getRulesetsCollectionFolder(base_config_folder::String, rulesets_collection_id::Int) = getOptionalFolder("rulesets_collections", "rulesets_collection_id", rulesets_collection_id; db=getRulesetsCollectionsDB(base_config_folder))
 getRulesetsCollectionFolder(base_config_id::Int, rulesets_collection_id::Int) = getRulesetsCollectionFolder(getBaseConfigFolder(base_config_id), rulesets_collection_id)
 getCustomCodesFolder(custom_code_id::Int) = getFolder("custom_codes", "custom_code_id", custom_code_id)
 
-function retrievePathInfo(base_config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, custom_code_id::Int)
+function retrievePathInfo(base_config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, ic_substrate_id::Int, ic_ecm_id::Int, custom_code_id::Int)
     base_config_folder = getBaseConfigFolder(base_config_id)
     ic_cell_folder = getICCellFolder(ic_cell_id)
+    ic_substrate_folder = getICSubstrateFolder(ic_substrate_id)
+    ic_ecm_folder = getICECMFolder(ic_ecm_id)
     rulesets_collection_folder = getRulesetsCollectionFolder(base_config_folder, rulesets_collection_id)
     custom_code_folder = getCustomCodesFolder(custom_code_id)
-    return base_config_folder, rulesets_collection_folder, ic_cell_folder, custom_code_folder
+    return base_config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder
 end
 
 function retrieveID(table_name::String, folder_name::String; db::SQLite.DB=db)
     primary_key_string = "$(rstrip(table_name,'s'))_id"
     return DBInterface.execute(db, "SELECT $(primary_key_string) FROM $(table_name) WHERE folder_name='$(folder_name)'") |> DataFrame |> x -> x[1,primary_key_string]
+end
+
+function retrieveID(folder_names::AbstractSamplingFolders)
+    base_config_id = retrieveID("base_configs", folder_names.base_config_folder)
+    rulesets_collection_id = retrieveID("rulesets_collections", folder_names.rulesets_collection_folder, db=getRulesetsCollectionsDB(folder_names.base_config_folder))
+    ic_cell_id = retrieveID("ic_cells", folder_names.ic_cell_folder)
+    ic_substrate_id = retrieveID("ic_substrates", folder_names.ic_substrate_folder)
+    ic_ecm_id = retrieveID("ic_ecms", folder_names.ic_ecm_folder)
+    custom_code_id = retrieveID("custom_codes", folder_names.custom_code_folder)
+    return base_config_id, rulesets_collection_id, ic_cell_id, ic_substrate_id, ic_ecm_id, custom_code_id
 end
