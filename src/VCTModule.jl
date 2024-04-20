@@ -85,7 +85,7 @@ function loadCustomCode!(simulation::Union{Simulation,Monad,Sampling})
     run(`cp $(path_to_folder)/main.cpp $(physicell_dir)/main.cpp`)
     run(`cp $(path_to_folder)/Makefile $(physicell_dir)/Makefile`)
 
-    cd(()->run(`make CC=$(PHYSICELL_CPP) PROGRAM_NAME=project_ccid_$(simulation.custom_code_id)`), physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory
+    cd(()->run(`make -j 20 CC=$(PHYSICELL_CPP) PROGRAM_NAME=project_ccid_$(simulation.custom_code_id)`), physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory
 
     mv("$(physicell_dir)/project_ccid_$(simulation.custom_code_id)", "$(data_dir)/inputs/custom_codes/$(simulation.custom_code_folder)/project")
     return 
@@ -288,6 +288,8 @@ collectSimulationTasks(sampling::Sampling; use_previous_sims::Bool=false) = runS
 collectSimulationTasks(trial::Trial; use_previous_sims::Bool=false) = runTrial!(trial, use_previous_sims=use_previous_sims)
 
 function runAbstractTrial(trial::AbstractTrial; use_previous_sims::Bool=false)
+    cd(()->run(`make clean`), physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory
+
     simulation_tasks = collectSimulationTasks(trial, use_previous_sims=use_previous_sims)
     n_ran = 0
     n_success = 0
