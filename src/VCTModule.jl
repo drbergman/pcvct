@@ -18,7 +18,26 @@ physicell_dir::String = abspath("PhysiCell")
 data_dir::String = abspath("data")
 PHYSICELL_CPP::String = "/opt/homebrew/bin/g++-13"
 
+function pcvctLogo()
+    return """
+    ▐▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▌
+    ▐                                                                     ▌
+    ▐   ███████████    █████████  █████   █████   █████████  ███████████  ▌
+    ▐  ░░███░░░░░███  ███░░░░░███░░███   ░░███   ███░░░░░███░█░░░███░░░█  ▌
+    ▐   ░███    ░███ ███     ░░░  ░███    ░███  ███     ░░░ ░   ░███  ░   ▌
+    ▐   ░██████████ ░███          ░███    ░███ ░███             ░███      ▌
+    ▐   ░███░░░░░░  ░███          ░░███   ███  ░███             ░███      ▌
+    ▐   ░███        ░░███     ███  ░░░█████░   ░░███     ███    ░███      ▌
+    ▐   █████        ░░█████████     ░░███      ░░█████████     █████     ▌
+    ▐  ░░░░░          ░░░░░░░░░       ░░░        ░░░░░░░░░     ░░░░░      ▌
+    ▐                                                                     ▌
+    ▐▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▌
+      """
+end
+
 function initializeVCT(path_to_physicell::String, path_to_data::String)
+    # print big logo of PCVCT here
+    println(pcvctLogo())
     println("----------INITIALIZING----------")
     global physicell_dir = abspath(path_to_physicell)
     global data_dir = abspath(path_to_data)
