@@ -16,7 +16,7 @@ function getRulesetsVariationsDB(base_config_folder::String, rulesets_collection
     return "$(data_dir)/inputs/base_configs/$(base_config_folder)/rulesets_collections/$(rulesets_collection_folder)/rulesets_variations.db" |> SQLite.DB
 end
 
-getRulesetsVariationsDB(simulation::Simulation) = getRulesetsVariationsDB(simulation.folder_names.base_config_folder, simulation.folder_names.rulesets_collection_folder)
+getRulesetsVariationsDB(M::AbstractMonad) = getRulesetsVariationsDB(M.folder_names.base_config_folder, M.folder_names.rulesets_collection_folder)
 getRulesetsVariationsDB(base_config_id::Int, rulesets_collection_id::Int) = getRulesetsVariationsDB(getBaseConfigFolder(base_config_id), getRulesetsCollectionFolder(base_config_id, rulesets_collection_id))
 
 function openXML(path_to_xml::String)
@@ -99,20 +99,20 @@ function updateFieldsFromCSV(path_to_csv::String,path_to_xml::String)
     return openXML(path_to_xml) |> x->updateFieldsFromCSV(x, path_to_csv)
 end
 
-function loadConfiguration!(simulation::Union{Simulation,Monad})
-    path_to_xml = "$(data_dir)/inputs/base_configs/$(simulation.folder_names.base_config_folder)/variations/variation_$(simulation.variation_id).xml"
+function loadConfiguration!(M::AbstractMonad)
+    path_to_xml = "$(data_dir)/inputs/base_configs/$(M.folder_names.base_config_folder)/variations/variation_$(M.variation_id).xml"
     if isfile(path_to_xml)
         return
     end
     mkpath(dirname(path_to_xml))
-    if isempty(simulation.folder_names.base_config_folder)
-        simulation.folder_names.base_config_folder = selectRow("folder_name", "base_configs", "WHERE base_config_id=$(simulation.folder_ids.base_config_id);")
+    if isempty(M.folder_names.base_config_folder)
+        M.folder_names.base_config_folder = selectRow("folder_name", "base_configs", "WHERE base_config_id=$(M.folder_ids.base_config_id);")
     end
-    path_to_xml_src = "$(data_dir)/inputs/base_configs/$(simulation.folder_names.base_config_folder)/PhysiCell_settings.xml"
+    path_to_xml_src = "$(data_dir)/inputs/base_configs/$(M.folder_names.base_config_folder)/PhysiCell_settings.xml"
     cp(path_to_xml_src, path_to_xml, force=true)
 
     xml_doc = openXML(path_to_xml)
-    variation_row = selectRow("variations", "WHERE variation_id=$(simulation.variation_id);", db=getConfigDB(simulation.folder_ids.base_config_id))
+    variation_row = selectRow("variations", "WHERE variation_id=$(M.variation_id);", db=getConfigDB(M.folder_ids.base_config_id))
     for column_name in names(variation_row)
         if column_name == "variation_id"
             continue
@@ -123,23 +123,23 @@ function loadConfiguration!(simulation::Union{Simulation,Monad})
     save_file(xml_doc, path_to_xml)
     closeXML(xml_doc)
 
-    if simulation.rulesets_variation_id != -1
-        loadRulesets(simulation)
+    if M.rulesets_variation_id != -1
+        loadRulesets(M)
     end
     return
 end
 
-function loadRulesets(simulation::Union{Simulation,Monad})
-    path_to_rulesets_xml = "$(data_dir)/inputs/base_configs/$(simulation.folder_names.base_config_folder)/rulesets_collections/$(simulation.folder_names.rulesets_collection_folder)/rulesets_variation_$(simulation.rulesets_variation_id).xml"
+function loadRulesets(M::AbstractMonad)
+    path_to_rulesets_xml = "$(data_dir)/inputs/base_configs/$(M.folder_names.base_config_folder)/rulesets_collections/$(M.folder_names.rulesets_collection_folder)/rulesets_variation_$(M.rulesets_variation_id).xml"
     if isfile(path_to_rulesets_xml)
         return
     end
     mkpath(dirname(path_to_rulesets_xml))
 
     # create xml file using LightXML
-    xml_doc = parse_file("$(data_dir)/inputs/base_configs/$(simulation.folder_names.base_config_folder)/rulesets_collections/$(simulation.folder_names.rulesets_collection_folder)/base_rulesets.xml")
-    if simulation.rulesets_variation_id != 0 # only update if not using hte base variation for the ruleset
-        variation_row = selectRow("rulesets_variations", "WHERE rulesets_variation_id=$(simulation.rulesets_variation_id);", db=getRulesetsVariationsDB(simulation))
+    xml_doc = parse_file("$(data_dir)/inputs/base_configs/$(M.folder_names.base_config_folder)/rulesets_collections/$(M.folder_names.rulesets_collection_folder)/base_rulesets.xml")
+    if M.rulesets_variation_id != 0 # only update if not using hte base variation for the ruleset
+        variation_row = selectRow("rulesets_variations", "WHERE rulesets_variation_id=$(M.rulesets_variation_id);", db=getRulesetsVariationsDB(M))
         for column_name in names(variation_row)
             if column_name == "rulesets_variation_id"
                 continue

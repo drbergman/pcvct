@@ -1,5 +1,6 @@
 abstract type AbstractTrial end
 abstract type AbstractSampling <: AbstractTrial end
+abstract type AbstractMonad <: AbstractSampling end
 
 ##########################################
 ########   AbstractSamplingIDs   #########
@@ -40,7 +41,7 @@ end
 #############   Simulation   #############
 ##########################################
 
-struct Simulation <: AbstractSampling
+struct Simulation <: AbstractMonad
     id::Int # integer uniquely identifying this simulation
 
     folder_ids::AbstractSamplingIDs # contains the ids of the folders that define this simulation
@@ -78,7 +79,7 @@ end
 ###############   Monad   ################
 ##########################################
 
-struct Monad <: AbstractSampling
+struct Monad <: AbstractMonad
     # a monad is a group of simulation replicates, i.e. identical up to randomness
     id::Int # integer uniquely identifying this monad
     min_length::Int # (minimum) number of simulations belonging to this monad

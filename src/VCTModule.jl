@@ -16,7 +16,7 @@ include("VCTExtraction.jl")
 
 physicell_dir::String = abspath("PhysiCell")
 data_dir::String = abspath("data")
-PHYSICELL_CPP::String = "/opt/homebrew/bin/g++-13"
+PHYSICELL_CPP::String = haskey(ENV, "PHYSICELL_CPP") ? ENV["PHYSICELL_CPP"] : "/opt/homebrew/bin/g++-13"
 
 function pcvctLogo()
     return """
@@ -57,7 +57,7 @@ function runSimulation(simulation::Simulation; setup=true)
 
     if setup
         loadConfiguration!(simulation)
-        loadCustomCode!(simulation)
+        loadCustomCode(simulation)
     end
 
     executable_str = "$(data_dir)/inputs/custom_codes/$(simulation.folder_names.custom_code_folder)/project" # path to executable
@@ -93,24 +93,22 @@ function runSimulation(simulation::Simulation; setup=true)
     return ran, success
 end
 
-function loadCustomCode!(simulation::Union{Simulation,Monad,Sampling})
-    if isfile("$(data_dir)/inputs/custom_codes/$(simulation.folder_names.custom_code_folder)/project")
+function loadCustomCode(S::AbstractSampling)
+    if isfile("$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)/project")
         return
     end
-    if isempty(simulation.folder_names.custom_code_folder)
-        simulation.folder_names.custom_code_folder = selectRow("folder_name", "custom_codes", "WHERE custom_code_id=$(simulation.folder_ids.custom_code_id);")
-    end
-    path_to_folder = "$(data_dir)/inputs/custom_codes/$(simulation.folder_names.custom_code_folder)" # source dir needs to end in / or else the dir is copied into target, not the source files
+    path_to_folder = "$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)" # source dir needs to end in / or else the dir is copied into target, not the source files
     run(`cp -r $(path_to_folder)/custom_modules/ $(physicell_dir)/custom_modules`)
     run(`cp $(path_to_folder)/main.cpp $(physicell_dir)/main.cpp`)
     run(`cp $(path_to_folder)/Makefile $(physicell_dir)/Makefile`)
 
-    macro_flags = String[]
-    if simulation.folder_ids.ic_ecm_id != -1
-        append!(macro_flags, ["-D","ADDON_PHYSIECM"])
-    end
+    # macro_flags = String[]
+    # if S.folder_ids.ic_ecm_id != -1
+    #     append!(macro_flags, ["-D","ADDON_PHYSIECM"])
+    # end
 
-    cmd = `make -j 20 $(macro_flags) CC=$(PHYSICELL_CPP) PROGRAM_NAME=project_ccid_$(simulation.folder_ids.custom_code_id)`
+    # cmd = `make -j 20 $(macro_flags) CC=$(PHYSICELL_CPP) PROGRAM_NAME=project_ccid_$(S.folder_ids.custom_code_id)`
+    cmd = `make -j 20 CC=$(PHYSICELL_CPP) PROGRAM_NAME=project_ccid_$(S.folder_ids.custom_code_id)`
     cd(() -> run(pipeline(cmd, stdout="$(path_to_folder)/compilation.log", stderr="$(path_to_folder)/compilation.err")), physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory; make sure the macro ADDON_PHYSIECM is defined (should work even if multiply defined, e.g., by Makefile)
     
     # check if the error file is empty, if it is, delete it
@@ -118,7 +116,7 @@ function loadCustomCode!(simulation::Union{Simulation,Monad,Sampling})
         rm("$(path_to_folder)/compilation.err", force=true)
     end
 
-    mv("$(physicell_dir)/project_ccid_$(simulation.folder_ids.custom_code_id)", "$(data_dir)/inputs/custom_codes/$(simulation.folder_names.custom_code_folder)/project")
+    mv("$(physicell_dir)/project_ccid_$(S.folder_ids.custom_code_id)", "$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)/project")
     return 
 end
 
@@ -227,7 +225,7 @@ function runMonad!(monad::Monad; use_previous_sims::Bool=false, setup::Bool=true
     end
 
     if setup
-        loadCustomCode!(monad)
+        loadCustomCode(monad)
     end
     loadConfiguration!(monad)
 
@@ -254,7 +252,7 @@ end
 function runSampling!(sampling::Sampling; use_previous_sims::Bool=false)
     mkpath("$(data_dir)/outputs/samplings/$(sampling.id)")
 
-    loadCustomCode!(sampling)
+    loadCustomCode(sampling)
 
     simulation_tasks = []
     for (variation_id, rulesets_variation_id) in zip(sampling.variation_ids, sampling.rulesets_variation_ids)
@@ -320,10 +318,10 @@ collectSimulationTasks(monad::Monad; use_previous_sims::Bool=false) = runMonad!(
 collectSimulationTasks(sampling::Sampling; use_previous_sims::Bool=false) = runSampling!(sampling, use_previous_sims=use_previous_sims)
 collectSimulationTasks(trial::Trial; use_previous_sims::Bool=false) = runTrial!(trial, use_previous_sims=use_previous_sims)
 
-function runAbstractTrial(trial::AbstractTrial; use_previous_sims::Bool=false)
+function runAbstractTrial(T::AbstractTrial; use_previous_sims::Bool=false)
     cd(()->run(`make clean`), physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory
 
-    simulation_tasks = collectSimulationTasks(trial, use_previous_sims=use_previous_sims)
+    simulation_tasks = collectSimulationTasks(T, use_previous_sims=use_previous_sims)
     n_ran = 0
     n_success = 0
 
