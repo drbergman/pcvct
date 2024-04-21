@@ -102,13 +102,8 @@ function loadCustomCode(S::AbstractSampling)
     run(`cp $(path_to_folder)/main.cpp $(physicell_dir)/main.cpp`)
     run(`cp $(path_to_folder)/Makefile $(physicell_dir)/Makefile`)
 
-    # macro_flags = String[]
-    # if S.folder_ids.ic_ecm_id != -1
-    #     append!(macro_flags, ["-D","ADDON_PHYSIECM"])
-    # end
-
-    # cmd = `make -j 20 $(macro_flags) CC=$(PHYSICELL_CPP) PROGRAM_NAME=project_ccid_$(S.folder_ids.custom_code_id)`
-    cmd = `make -j 20 CC=$(PHYSICELL_CPP) PROGRAM_NAME=project_ccid_$(S.folder_ids.custom_code_id)`
+    cflags = getCompilerFlags(S)
+    cmd = `make -j 20 CC=$(PHYSICELL_CPP) PROGRAM_NAME=project_ccid_$(S.folder_ids.custom_code_id) CFLAGS=$(cflags)`
     cd(() -> run(pipeline(cmd, stdout="$(path_to_folder)/compilation.log", stderr="$(path_to_folder)/compilation.err")), physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory; make sure the macro ADDON_PHYSIECM is defined (should work even if multiply defined, e.g., by Makefile)
     
     # check if the error file is empty, if it is, delete it
@@ -118,6 +113,36 @@ function loadCustomCode(S::AbstractSampling)
 
     mv("$(physicell_dir)/project_ccid_$(S.folder_ids.custom_code_id)", "$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)/project")
     return 
+end
+
+function getCompilerFlags(T::AbstractTrial)
+    cflags = "-march=native -O3 -fomit-frame-pointer -fopenmp -m64 -std=c++11"
+    add_mfpmath = false
+    if Sys.iswindows()
+        add_mfpmath = true
+    elseif Sys.isapple()
+        if uname_s == strip(read(`uname -s`, String))
+            cc_path = strip(read(`which $(PHYSICELL_CPP)`, String))
+            var = strip(read(`file $cc_path`, String))
+            add_mfpmath = split(var)[end] != "arm64"
+        end
+    end
+    if add_mfpmath
+        cflags *= " -mfpmath=both"
+    end
+
+    macro_flags = getMacroFlags(T)
+    if !isempty(macro_flags)
+        for macro_flag in macro_flags
+            cflags *= " -D $(macro_flag)"
+        end
+    end
+
+    return cflags 
+end
+
+function getMacroFlags(T::AbstractTrial)
+    return []
 end
 
 function deleteSimulation(simulation_ids::Vector{Int})
