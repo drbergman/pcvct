@@ -94,7 +94,7 @@ end
 Base.size(monad::Monad) = size(monad.simulation_ids)
 
 function Simulation(monad::Monad)
-    return Simulation(monad.folder_ids, monad.folder_ids, monad.variation_id, monad.rulesets_variation_id)
+    return Simulation(monad.folder_ids, monad.folder_names, monad.variation_id, monad.rulesets_variation_id)
 end
 
 function Monad(min_length::Int, folder_ids::AbstractSamplingIDs)
@@ -109,9 +109,9 @@ function Monad(min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::A
 end
 
 function Monad(min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_id::Int, rulesets_variation_id::Int)
-    monad_ids = DBInterface.execute(db, "INSERT INTO monads (base_config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id,variation_id,rulesets_variation_id) VALUES($(folder_ids.base_config_id),$(folder_ids.rulesets_collection_id),$(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),$(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id),$(variation_id),$(rulesets_variation_id)) RETURNING monad_id;") |> DataFrame |> x -> x.monad_id
+    monad_ids = DBInterface.execute(db, "INSERT OR IGNORE INTO monads (base_config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id,variation_id,rulesets_variation_id) VALUES($(folder_ids.base_config_id),$(folder_ids.rulesets_collection_id),$(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),$(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id),$(variation_id),$(rulesets_variation_id)) RETURNING monad_id;") |> DataFrame |> x -> x.monad_id
     if isempty(monad_ids) # if monad insert command was ignored, then the monad already exists
-        monad_id = DBInterface.execute(db, "SELECT monad_id FROM monads WHERE (base_config_id,rulesets_collection_id,ic_cell_id,custom_code_id,variation_id,rulesets_variation_id)=($(folder_ids.base_config_id),$(folder_ids.rulesets_collection_id),$(folder_ids.ic_cell_id),$(folder_ids.custom_code_id),$(variation_id),$(rulesets_variation_id));") |> DataFrame |> x -> x.monad_id[1] # get the monad_id
+        monad_id = DBInterface.execute(db, "SELECT monad_id FROM monads WHERE (base_config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id,variation_id,rulesets_variation_id)=($(folder_ids.base_config_id),$(folder_ids.rulesets_collection_id),$(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),$(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id),$(variation_id),$(rulesets_variation_id));") |> DataFrame |> x -> x.monad_id[1] # get the monad_id
     else # if monad insert command was successful, then the monad is new
         monad_id = monad_ids[1] # get the monad_id
     end

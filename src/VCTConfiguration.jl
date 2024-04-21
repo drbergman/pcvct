@@ -16,7 +16,7 @@ function getRulesetsVariationsDB(base_config_folder::String, rulesets_collection
     return "$(data_dir)/inputs/base_configs/$(base_config_folder)/rulesets_collections/$(rulesets_collection_folder)/rulesets_variations.db" |> SQLite.DB
 end
 
-getRulesetsVariationsDB(simulation::Simulation) = getRulesetsVariationsDB(simulation.folder_names.base_config_folder, simulation.rulesets_collection_folder)
+getRulesetsVariationsDB(simulation::Simulation) = getRulesetsVariationsDB(simulation.folder_names.base_config_folder, simulation.folder_names.rulesets_collection_folder)
 getRulesetsVariationsDB(base_config_id::Int, rulesets_collection_id::Int) = getRulesetsVariationsDB(getBaseConfigFolder(base_config_id), getRulesetsCollectionFolder(base_config_id, rulesets_collection_id))
 
 function openXML(path_to_xml::String)
@@ -100,7 +100,7 @@ function updateFieldsFromCSV(path_to_csv::String,path_to_xml::String)
 end
 
 function loadConfiguration!(simulation::Union{Simulation,Monad})
-    path_to_xml = "$(data_dir)/inputs/base_configs/$(simulation.folder_names.base_config_folder)/variations/variation_$(simulation.folder_ids.variation_id).xml"
+    path_to_xml = "$(data_dir)/inputs/base_configs/$(simulation.folder_names.base_config_folder)/variations/variation_$(simulation.variation_id).xml"
     if isfile(path_to_xml)
         return
     end
@@ -112,7 +112,7 @@ function loadConfiguration!(simulation::Union{Simulation,Monad})
     cp(path_to_xml_src, path_to_xml, force=true)
 
     xml_doc = openXML(path_to_xml)
-    variation_row = selectRow("variations", "WHERE variation_id=$(simulation.folder_ids.variation_id);", db=getConfigDB(simulation.folder_ids.base_config_id))
+    variation_row = selectRow("variations", "WHERE variation_id=$(simulation.variation_id);", db=getConfigDB(simulation.folder_ids.base_config_id))
     for column_name in names(variation_row)
         if column_name == "variation_id"
             continue
@@ -130,14 +130,14 @@ function loadConfiguration!(simulation::Union{Simulation,Monad})
 end
 
 function loadRulesets(simulation::Union{Simulation,Monad})
-    path_to_rulesets_xml = "$(data_dir)/inputs/base_configs/$(simulation.folder_names.base_config_folder)/rulesets_collections/$(simulation.rulesets_collection_folder)/rulesets_variation_$(simulation.rulesets_variation_id).xml"
+    path_to_rulesets_xml = "$(data_dir)/inputs/base_configs/$(simulation.folder_names.base_config_folder)/rulesets_collections/$(simulation.folder_names.rulesets_collection_folder)/rulesets_variation_$(simulation.rulesets_variation_id).xml"
     if isfile(path_to_rulesets_xml)
         return
     end
     mkpath(dirname(path_to_rulesets_xml))
 
     # create xml file using LightXML
-    xml_doc = parse_file("$(data_dir)/inputs/base_configs/$(simulation.folder_names.base_config_folder)/rulesets_collections/$(simulation.rulesets_collection_folder)/base_rulesets.xml")
+    xml_doc = parse_file("$(data_dir)/inputs/base_configs/$(simulation.folder_names.base_config_folder)/rulesets_collections/$(simulation.folder_names.rulesets_collection_folder)/base_rulesets.xml")
     if simulation.rulesets_variation_id != 0 # only update if not using hte base variation for the ruleset
         variation_row = selectRow("rulesets_variations", "WHERE rulesets_variation_id=$(simulation.rulesets_variation_id);", db=getRulesetsVariationsDB(simulation))
         for column_name in names(variation_row)

@@ -42,7 +42,7 @@ function runSimulation(simulation::Simulation; setup=true)
     end
 
     executable_str = "$(data_dir)/inputs/custom_codes/$(simulation.folder_names.custom_code_folder)/project" # path to executable
-    config_str =  "$(data_dir)/inputs/base_configs/$(simulation.folder_names.base_config_folder)/variations/variation_$(simulation.folder_ids.variation_id).xml" # path to config file
+    config_str =  "$(data_dir)/inputs/base_configs/$(simulation.folder_names.base_config_folder)/variations/variation_$(simulation.variation_id).xml" # path to config file
     flags = ["-o", path_to_simulation_output]
     if simulation.folder_ids.ic_cell_id != -1
         append!(flags, ["-i", "$(data_dir)/inputs/ics/cells/$(simulation.folder_names.ic_cell_folder)/cells.csv"]) # if ic file included (id != -1), then include this in the command
@@ -54,7 +54,7 @@ function runSimulation(simulation::Simulation; setup=true)
         append!(flags, ["-e", "$(data_dir)/inputs/ics/ecms/$(simulation.folder_names.ic_ecm_folder)/ecm.csv"]) # if ic file included (id != -1), then include this in the command
     end
     if simulation.rulesets_variation_id != -1
-        path_to_rules_file = "$(data_dir)/inputs/base_configs/$(simulation.folder_names.base_config_folder)/rulesets_collections/$(simulation.rulesets_collection_folder)/rulesets_variation_$(simulation.rulesets_variation_id).xml"
+        path_to_rules_file = "$(data_dir)/inputs/base_configs/$(simulation.folder_names.base_config_folder)/rulesets_collections/$(simulation.folder_names.rulesets_collection_folder)/rulesets_variation_$(simulation.rulesets_variation_id).xml"
         append!(flags, ["-r", path_to_rules_file])
     end
     cmd = `$executable_str $config_str $flags`
