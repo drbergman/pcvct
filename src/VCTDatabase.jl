@@ -39,32 +39,11 @@ function createSchema()
         DBInterface.execute(db, "INSERT OR IGNORE INTO custom_codes (folder_name) VALUES ('$(custom_codes_folder)');")
     end
     
-    # initialize and populate ic_cells table
-    ic_cells_schema = """
-        ic_cell_id INTEGER PRIMARY KEY,
-        folder_name UNIQUE,
-        description TEXT
-    """
-    createPCVCTTable("ic_cells", ic_cells_schema)
-        
-    if "ics" in data_dir_contents && "cells" in readdir("$(data_dir)/inputs/ics", sort=false)
-        ic_cell_folders = readdir("$(data_dir)/inputs/ics/cells", sort=false) |> filter(x->isdir("$(data_dir)/inputs/ics/cells/$(x)"))
-        if !isempty(ic_cell_folders)
-            for ic_cell_folder in ic_cell_folders
-                if !isfile("$(data_dir)/inputs/ics/cells/$(ic_cell_folder)/cells.csv")
-                    continue
-                end
-                if isfile("$(data_dir)/inputs/ics/cells/$(ic_cell_folder)/metadata.xml")
-                    metadata = parse_file("$(data_dir)/inputs/ics/cells/$(ic_cell_folder)/metadata.xml")
-                    description = content(find_element(metadata, "description"))
-                else
-                    description = ""
-                end
-                DBInterface.execute(db, "INSERT OR IGNORE INTO ic_cells (folder_name, description) VALUES ('$(ic_cell_folder)', '$description');")
-            end
-        end
-    end
-        
+    # initialize and populate ics tables
+    createICTable("cells", data_dir_contents=data_dir_contents)
+    createICTable("substrates", data_dir_contents=data_dir_contents)
+    createICTable("ecms", data_dir_contents=data_dir_contents)
+
     # initialize and populate base_configs table
     base_configs_schema = """
         base_config_id INTEGER PRIMARY KEY,
@@ -108,6 +87,8 @@ function createSchema()
         simulation_id INTEGER PRIMARY KEY,
         custom_code_id INTEGER,
         ic_cell_id INTEGER,
+        ic_substrate_id INTEGER,
+        ic_ecm_id INTEGER,
         base_config_id INTEGER,
         rulesets_collection_id INTEGER,
         variation_id INTEGER,
@@ -116,6 +97,10 @@ function createSchema()
             REFERENCES custom_codes (custom_code_id),
         FOREIGN KEY (ic_cell_id)
             REFERENCES ic_cells (ic_cell_id),
+        FOREIGN KEY (ic_substrate_id)
+            REFERENCES ic_substrates (ic_substrate_id),
+        FOREIGN KEY (ic_ecm_id)
+            REFERENCES ic_ecms (ic_ecm_id),
         FOREIGN KEY (base_config_id)
             REFERENCES base_configs (base_config_id)
     """
@@ -126,6 +111,8 @@ function createSchema()
         monad_id INTEGER PRIMARY KEY,
         custom_code_id INTEGER,
         ic_cell_id INTEGER,
+        ic_substrate_id INTEGER,
+        ic_ecm_id INTEGER,
         base_config_id INTEGER,
         rulesets_collection_id INTEGER,
         variation_id INTEGER,
@@ -134,6 +121,10 @@ function createSchema()
             REFERENCES custom_codes (custom_code_id),
         FOREIGN KEY (ic_cell_id)
             REFERENCES ic_cells (ic_cell_id),
+        FOREIGN KEY (ic_substrate_id)
+            REFERENCES ic_substrates (ic_substrate_id),
+        FOREIGN KEY (ic_ecm_id)
+            REFERENCES ic_ecms (ic_ecm_id),
         FOREIGN KEY (base_config_id)
             REFERENCES base_configs (base_config_id),
         UNIQUE (custom_code_id,ic_cell_id,base_config_id,rulesets_collection_id,variation_id,rulesets_variation_id)
@@ -145,12 +136,18 @@ function createSchema()
         sampling_id INTEGER PRIMARY KEY,
         custom_code_id INTEGER,
         ic_cell_id INTEGER,
+        ic_substrate_id INTEGER,
+        ic_ecm_id INTEGER,
         base_config_id INTEGER,
         rulesets_collection_id INTEGER,
         FOREIGN KEY (custom_code_id)
             REFERENCES custom_codes (custom_code_id),
         FOREIGN KEY (ic_cell_id)
             REFERENCES ic_cells (ic_cell_id),
+        FOREIGN KEY (ic_substrate_id)
+            REFERENCES ic_substrates (ic_substrate_id),
+        FOREIGN KEY (ic_ecm_id)
+            REFERENCES ic_ecms (ic_ecm_id),
         FOREIGN KEY (base_config_id)
             REFERENCES base_configs (base_config_id)
     """
@@ -164,6 +161,46 @@ function createSchema()
     """
     createPCVCTTable("trials", trials_schema)
     return
+end
+
+function createICTable(ic_name::String; data_dir_contents=String[])
+    table_name = "ic_$(ic_name)"
+    schema = """
+        $(table_name[1:end-1])_id INTEGER PRIMARY KEY,
+        folder_name UNIQUE,
+        description TEXT
+    """
+    createPCVCTTable(table_name, schema)
+    if "ics" in data_dir_contents && ic_name in readdir("$(data_dir)/inputs/ics", sort=false)
+        ic_folders = readdir("$(data_dir)/inputs/ics/$(ic_name)", sort=false) |> filter(x->isdir("$(data_dir)/inputs/ics/$(ic_name)/$(x)"))
+        if !isempty(ic_folders)
+            for ic_folder in ic_folders
+                if !isfile("$(data_dir)/inputs/ics/$(ic_name)/$(ic_folder)/$(icFilename(ic_name))")
+                    continue
+                end
+                if isfile("$(data_dir)/inputs/ics/$(ic_name)/$(ic_folder)/metadata.xml")
+                    metadata = parse_file("$(data_dir)/inputs/ics/$(ic_name)/$(ic_folder)/metadata.xml")
+                    description = content(find_element(metadata, "description"))
+                else
+                    description = ""
+                end
+                DBInterface.execute(db, "INSERT OR IGNORE INTO $(table_name) (folder_name, description) VALUES ('$(ic_folder)', '$description');")
+            end
+        end
+    end
+    return
+end
+
+function icFilename(table_name::String)
+    if table_name == "cells"
+        return "cells.csv"
+    elseif table_name == "substrates"
+        return "substrates.csv"
+    elseif table_name == "ecms"
+        return "ecm.csv"
+    else
+        error("table_name must be 'cells', 'substrates', or 'ecms'.")
+    end
 end
 
 function createPCVCTTable(table_name::String, schema::String; db::SQLite.DB=db)
@@ -288,6 +325,9 @@ function retrievePathInfo(base_config_id::Int, rulesets_collection_id::Int, ic_c
 end
 
 function retrieveID(table_name::String, folder_name::String; db::SQLite.DB=db)
+    if folder_name == ""
+        return -1
+    end
     primary_key_string = "$(rstrip(table_name,'s'))_id"
     return DBInterface.execute(db, "SELECT $(primary_key_string) FROM $(table_name) WHERE folder_name='$(folder_name)'") |> DataFrame |> x -> x[1,primary_key_string]
 end
