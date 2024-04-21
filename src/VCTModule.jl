@@ -109,7 +109,9 @@ function loadCustomCode!(simulation::Union{Simulation,Monad,Sampling})
     if simulation.folder_ids.ic_ecm_id != -1
         append!(macro_flags, ["-D","ADDON_PHYSIECM"])
     end
-    cd(() -> run(`make -j 20 $(macro_flags) CC=$(PHYSICELL_CPP) PROGRAM_NAME=project_ccid_$(simulation.folder_ids.custom_code_id)`), physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory; make sure the macro ADDON_PHYSIECM is defined (should work even if multiply defined, e.g., by Makefile)
+
+    cmd = `make -j 20 $(macro_flags) CC=$(PHYSICELL_CPP) PROGRAM_NAME=project_ccid_$(simulation.folder_ids.custom_code_id)`
+    cd(() -> run(pipeline(cmd, stdout="$(path_to_folder)/compilation.log", stderr="$(path_to_folder)/compilation.err")), physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory; make sure the macro ADDON_PHYSIECM is defined (should work even if multiply defined, e.g., by Makefile)
     
     mv("$(physicell_dir)/project_ccid_$(simulation.folder_ids.custom_code_id)", "$(data_dir)/inputs/custom_codes/$(simulation.folder_names.custom_code_folder)/project")
     return 
