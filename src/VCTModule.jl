@@ -116,12 +116,12 @@ function loadCustomCode(S::AbstractSampling)
 end
 
 function getCompilerFlags(T::AbstractTrial)
-    cflags = "-march=native -O3 -fomit-frame-pointer -fopenmp -m64 -std=c++11"
+    cflags = "-march=native -O3 -fomit-frame-pointer -fopenmp -m64 -std=c++11 -D ADDON_PHYSIECM" # for now, force PHYSIECM to be defined, eventually will set this for the whole trial
     add_mfpmath = false
     if Sys.iswindows()
         add_mfpmath = true
     elseif Sys.isapple()
-        if uname_s == strip(read(`uname -s`, String))
+        if strip(read(`uname -s`, String)) == "Darwin"
             cc_path = strip(read(`which $(PHYSICELL_CPP)`, String))
             var = strip(read(`file $cc_path`, String))
             add_mfpmath = split(var)[end] != "arm64"
