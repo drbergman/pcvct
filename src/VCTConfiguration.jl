@@ -25,33 +25,41 @@ end
 
 closeXML(xml_doc::XMLDocument) = free(xml_doc)
 
-function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{String})
+function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{String}; required::Bool=true)
     current_element = root(xml_doc)
     for path_element in xml_path
         if !occursin(":",path_element)
             current_element = find_element(current_element, path_element)
+            if isnothing(current_element)
+                required ? error("Element not found") : return nothing
+            end
             continue
         end
         # Deal with checking attributes
         path_element_name, attribute_check = split(path_element,":",limit=2)
         attribute_name, attribute_value = split(attribute_check,":") # if I need to add a check for multiple attributes, we can do that later
         candidate_elements = get_elements_by_tagname(current_element, path_element_name)
+        found = false
         for ce in candidate_elements
             if attribute(ce,attribute_name)==attribute_value
+                found = true
                 current_element = ce
                 break
             end
+        end
+        if !found
+            required ? error("Element not found") : return nothing
         end
     end
     return current_element
 end
 
-function retrieveElement(path_to_xml::String,xml_path::Vector{String})
-    return openXML(path_to_xml) |> x->retrieveElement(x, xml_path)
+function retrieveElement(path_to_xml::String,xml_path::Vector{String}; required::Bool=true)
+    return openXML(path_to_xml) |> x->retrieveElement(x, xml_path; required=required)
 end
 
-function getField(xml_doc::XMLDocument, xml_path::Vector{String})
-    return retrieveElement(xml_doc, xml_path) |> content
+function getField(xml_doc::XMLDocument, xml_path::Vector{String}; required::Bool=true)
+    return retrieveElement(xml_doc, xml_path; required=required) |> content
 end
 
 function getOutputFolder(path_to_xml)
@@ -62,7 +70,7 @@ function getOutputFolder(path_to_xml)
 end
 
 function updateField(xml_doc::XMLDocument, xml_path::Vector{String},new_value::Union{Int,Real,String})
-    current_element = retrieveElement(xml_doc, xml_path)
+    current_element = retrieveElement(xml_doc, xml_path; required=true)
     set_content(current_element, string(new_value))
     return nothing
 end
@@ -76,7 +84,7 @@ function updateField(path_to_xml::String,xml_path::Vector{String},new_value::Uni
 end
 
 function multiplyField(xml_doc::XMLDocument, xml_path::Vector{String}, multiplier::AbstractFloat)
-    current_element = retrieveElement(xml_doc, xml_path)
+    current_element = retrieveElement(xml_doc, xml_path; required=true)
     val = content(current_element)
     if attribute(current_element, "type"; required=false) == "int"
         val = parse(Int, val) |> y -> round(Int, multiplier * y)
@@ -99,15 +107,12 @@ function updateFieldsFromCSV(path_to_csv::String,path_to_xml::String)
     return openXML(path_to_xml) |> x->updateFieldsFromCSV(x, path_to_csv)
 end
 
-function loadConfiguration!(M::AbstractMonad)
+function loadConfiguration(base_config_id::Int, base_config_folder::String, variation_id::Int)
     path_to_xml = "$(data_dir)/inputs/base_configs/$(M.folder_names.base_config_folder)/variations/variation_$(M.variation_id).xml"
     if isfile(path_to_xml)
         return
     end
     mkpath(dirname(path_to_xml))
-    if isempty(M.folder_names.base_config_folder)
-        M.folder_names.base_config_folder = selectRow("folder_name", "base_configs", "WHERE base_config_id=$(M.folder_ids.base_config_id);")
-    end
     path_to_xml_src = "$(data_dir)/inputs/base_configs/$(M.folder_names.base_config_folder)/PhysiCell_settings.xml"
     cp(path_to_xml_src, path_to_xml, force=true)
 
@@ -127,6 +132,15 @@ function loadConfiguration!(M::AbstractMonad)
         loadRulesets(M)
     end
     return
+end
+
+loadConfiguration(M::AbstractMonad) = loadConfiguration(M.base_config_id, M.folder_names.base_config_folder, M.variation_id)
+
+function loadConfiguration(sampling::Sampling)
+    for index in eachindex(sampling.variation_ids)
+        monad = Monad(sampling, index) # instantiate a monad with the variation_id and the simulation ids already found
+        loadConfiguration(monad)
+    end
 end
 
 function loadRulesets(M::AbstractMonad)

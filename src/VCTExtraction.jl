@@ -15,7 +15,7 @@ end
 function getLabelIndex(path_to_xml::String, label::String)
     xml_path = ["cellular_information", "cell_populations", "cell_population", "custom", "simplified_data", "labels"]
     xml_doc = openXML(path_to_xml)
-    labels_element = retrieveElement(xml_doc, xml_path)
+    labels_element = retrieveElement(xml_doc, xml_path; required=true)
     for label_element in child_elements(labels_element)
         if content(label_element) == label
             label_ind_start = attribute(label_element, "index"; required=true) |> x -> parse(Int, x)
@@ -30,7 +30,7 @@ end
 function getSubstrateID(path_to_xml::String, name::String)
     xml_path = ["microenvironment","domain","variables"]
     xml_doc = openXML(path_to_xml)
-    variables_element = retrieveElement(xml_doc, xml_path)
+    variables_element = retrieveElement(xml_doc, xml_path; required=true)
     for variable_element in child_elements(variables_element)
         if attribute(variable_element, "name"; required=true)==name
             substrate_id = attribute(variable_element, "ID"; required=true) |> x->parse(Int,x)

@@ -56,7 +56,7 @@ function runSimulation(simulation::Simulation; setup=true)
     mkpath(path_to_simulation_output)
 
     if setup
-        loadConfiguration!(simulation)
+        loadConfiguration(simulation)
         loadCustomCode(simulation)
     end
 
@@ -102,7 +102,7 @@ function loadCustomCode(S::AbstractSampling)
     run(`cp $(path_to_folder)/main.cpp $(physicell_dir)/main.cpp`)
     run(`cp $(path_to_folder)/Makefile $(physicell_dir)/Makefile`)
 
-    cflags = getCompilerFlags(S)
+    cflags = getCompilerFlags(S; write_macros_file=true)
     cmd = `make -j 20 CC=$(PHYSICELL_CPP) PROGRAM_NAME=project_ccid_$(S.folder_ids.custom_code_id) CFLAGS=$(cflags)`
     cd(() -> run(pipeline(cmd, stdout="$(path_to_folder)/compilation.log", stderr="$(path_to_folder)/compilation.err")), physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory; make sure the macro ADDON_PHYSIECM is defined (should work even if multiply defined, e.g., by Makefile)
     
@@ -115,8 +115,9 @@ function loadCustomCode(S::AbstractSampling)
     return 
 end
 
-function getCompilerFlags(T::AbstractTrial)
-    cflags = "-march=native -O3 -fomit-frame-pointer -fopenmp -m64 -std=c++11 -D ADDON_PHYSIECM" # for now, force PHYSIECM to be defined, eventually will set this for the whole trial
+function getCompilerFlags(S::AbstractSampling; write_macros_file::Bool=false)
+    # cflags = "-march=native -O3 -fomit-frame-pointer -fopenmp -m64 -std=c++11 -D ADDON_PHYSIECM" # for now, force PHYSIECM to be defined, eventually will set this for the whole trial
+    cflags = "-march=native -O3 -fomit-frame-pointer -fopenmp -m64 -std=c++11"
     add_mfpmath = false
     if Sys.iswindows()
         add_mfpmath = true
@@ -131,8 +132,18 @@ function getCompilerFlags(T::AbstractTrial)
         cflags *= " -mfpmath=both"
     end
 
-    macro_flags = getMacroFlags(T)
+    macro_flags = getMacroFlags(S) # this will get all macros already in the macros file
     if !isempty(macro_flags)
+        if write_macros_file # not clear if this function will always be called by loadCustomCode, so we need to check if we need to write the macros file
+            # write the macros file with one line per macro in macro_flags
+            path_to_macros = "$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)/macros.txt"
+            open(path_to_macros, "w") do f
+                for macro_flag in macro_flags
+                    println(f, macro_flag)
+                end
+            end
+        end
+
         for macro_flag in macro_flags
             cflags *= " -D $(macro_flag)"
         end
@@ -141,8 +152,76 @@ function getCompilerFlags(T::AbstractTrial)
     return cflags 
 end
 
-function getMacroFlags(T::AbstractTrial)
-    return []
+function getMacroFlags(S::AbstractSampling)
+    if isnothing(S.addon_macros)
+        return readMacrosFile(S)
+    end
+    initializeMacros!(S)
+    if S.addon_macros.initialized
+        return [string(m) for m in S.addon_macros.macros]
+    end
+
+    return 
+end
+
+function initializeMacros!(S::AbstractSampling)
+    if isnothing(S.addon_macros) || S.addon_macros.initialized
+        return
+    end
+    # else get the macros neeeded
+    S.addon_macros = AddonMacros()
+    checkPhysiECMMacro!(S)
+    S.addon_macros.initialized = true
+    return
+end
+
+function checkPhysiECMMacro!(S::AbstractSampling)
+    if "ADDON_PHYSIECM" in readMacrosFile(S)
+        # if the custom codes folder for the sampling already has the macro, then we don't need to do anything
+        push!(S.addon_macros.macros, "ADDON_PHYSIECM")
+        return true
+    end
+    if S.folder_ids.ic_ecm_id != -1
+        # if this sampling is providing an ic file for ecm, then we need to add the macro
+        push!(S.addon_macros.macros, "ADDON_PHYSIECM")
+        return true
+    end
+    # check if ecm_setup element has enabled="true" in config files
+    loadConfiguration(S)
+    return checkPhysiECMInConfig!(S)
+end
+
+function checkPhysiECMInConfig!(M::AbstractMonad)
+    path_to_xml = "$(data_dir)/inputs/base_configs/$(S.folder_names.base_config_folder)/variations/variation_$(M.variation_id).xml"
+    xml_path = ["microenvironment_setup", "ecm_setup"]
+    ecm_setup_element = retrieveElement(path_to_xml, xml_path; required=false)
+    if !isnothing(ecm_setup_element) && attribute(ecm_setup_element, "enabled") == "true" # note: attribute returns nothing if the attribute does not exist
+        # if the base config file says that the ecm is enabled, then we need to add the macro
+        push!(S.addon_macros.macros, "ADDON_PHYSIECM")
+        return true
+    end
+    return false
+end
+
+function checkPhysiECMInConfig!(sampling::Sampling)
+    # otherwise, no previous sampling saying to use the macro, no ic file for ecm, and the base config file does not have ecm enabled,
+    # now just check that the variation is not enabling the ecm
+    for index in eachindex(sampling.variation_ids)
+        monad = Monad(sampling, index) # instantiate a monad with the variation_id and the simulation ids already found
+        if checkPhysiECMInConfig!(monad)
+            push!(S.addon_macros.macros, "ADDON_PHYSIECM")
+            return true
+        end
+    end
+    return false
+end
+
+function readMacrosFile(S::AbstractSampling)
+    path_to_macros = "$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)/macros.txt"
+    if !isfile(path_to_macros)
+        return []
+    end
+    return readlines(path_to_macros)
 end
 
 function deleteSimulation(simulation_ids::Vector{Int})
@@ -252,7 +331,7 @@ function runMonad!(monad::Monad; use_previous_sims::Bool=false, setup::Bool=true
     if setup
         loadCustomCode(monad)
     end
-    loadConfiguration!(monad)
+    loadConfiguration(monad)
 
     simulation_tasks = Task[]
     for i in 1:n_new_simulations
@@ -280,8 +359,8 @@ function runSampling!(sampling::Sampling; use_previous_sims::Bool=false)
     loadCustomCode(sampling)
 
     simulation_tasks = []
-    for (variation_id, rulesets_variation_id) in zip(sampling.variation_ids, sampling.rulesets_variation_ids)
-        monad = Monad(sampling, variation_id, rulesets_variation_id) # instantiate a monad with the variation_id and the simulation ids already found
+    for index in eachindex(sampling.variation_ids)
+        monad = Monad(sampling, index) # instantiate a monad with the variation_id and the simulation ids already found
         append!(simulation_tasks, runMonad!(monad, use_previous_sims=use_previous_sims, setup=false)) # run the monad and add the number of new simulations to the total
     end
 
