@@ -174,6 +174,13 @@ function getMacroFlags(S::AbstractSampling)
     return readMacrosFile(S)
 end
 
+function getMacroFlags(trial::Trial)
+    for i in eachindex(trial.sampling_ids)
+        sampling = Sampling(trial, i) # instantiate a sampling with the variation_ids and the simulation ids already found
+        initializeMacros(sampling)
+    end
+end
+
 function initializeMacros(S::AbstractSampling)
     # else get the macros neeeded
     checkPhysiECMMacro(S)
@@ -436,7 +443,9 @@ collectSimulationTasks(sampling::Sampling; use_previous_sims::Bool=false) = runS
 collectSimulationTasks(trial::Trial; use_previous_sims::Bool=false) = runTrial!(trial, use_previous_sims=use_previous_sims)
 
 function runAbstractTrial(T::AbstractTrial; use_previous_sims::Bool=false)
-    cd(()->run(`make clean`), physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory
+    cd(()->run(`make clean`), physicell_dir)
+
+    getMacroFlags(T)
 
     simulation_tasks = collectSimulationTasks(T, use_previous_sims=use_previous_sims)
     n_ran = 0
