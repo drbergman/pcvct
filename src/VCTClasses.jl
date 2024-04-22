@@ -41,10 +41,10 @@ end
 ############   AddonMacros   #############
 ##########################################
 
-@kwdef struct AddonMacros
-    initialized::Bool = false # whether the addon macros have been determined
-    macros::Vector{Symbol} = [] # the addon macros
-end
+# @kwdef mutable struct AddonMacros
+#     initialized::Bool = false # whether the addon macros have been determined
+#     macros::Vector{Symbol} = [] # the addon macros
+# end
 
 ##########################################
 #############   Simulation   #############
@@ -59,23 +59,23 @@ struct Simulation <: AbstractMonad
     variation_id::Int # integer identifying which variation on the base config file to use (variations.db)
     rulesets_variation_id::Int # integer identifying which variation on the ruleset file to use (rulesets_variations.db)
 
-    addon_macros::Union{AddonMacros,Nothing} = AddonMacros() # addon macros for this simulation
+    # addon_macros::Union{AddonMacros,Nothing} # addon macros for this simulation
 end
 
-function Simulation(folder_ids::AbstractSamplingIDs, variation_id::Int, rulesets_variation_id::Int; addon_macros::Union{AddonMacros,Nothing}=AddonMacros())
+function Simulation(folder_ids::AbstractSamplingIDs, variation_id::Int, rulesets_variation_id::Int) # ; addon_macros::Union{AddonMacros,Nothing}=AddonMacros())
     folder_names = AbstractSamplingFolders(folder_ids)
-    return Simulation(folder_ids, folder_names, variation_id, rulesets_variation_id; addon_macros=addon_macros)
+    return Simulation(folder_ids, folder_names, variation_id, rulesets_variation_id) # ; addon_macros=addon_macros)
 end
 
-function Simulation(base_config_id::Int, rulesets_collection_id::Int, ic_substrate_id::Int, ic_ecm_id::Int, custom_code_id::Int, variation_id::Int, rulesets_variation_id::Int; addon_macros::Union{AddonMacros,Nothing}=AddonMacros())
+function Simulation(base_config_id::Int, rulesets_collection_id::Int, ic_substrate_id::Int, ic_ecm_id::Int, custom_code_id::Int, variation_id::Int, rulesets_variation_id::Int) # ; addon_macros::Union{AddonMacros,Nothing}=AddonMacros())
     folder_ids = AbstractSamplingIDs(base_config_id, rulesets_collection_id, ic_cell_id, ic_substrate_id, ic_ecm_id, custom_code_id)
     folder_names  = AbstractSamplingFolders(folder_ids)
-    return Simulation(folder_ids, folder_names, variation_id, rulesets_variation_id; addon_macros=addon_macros)
+    return Simulation(folder_ids, folder_names, variation_id, rulesets_variation_id) # ; addon_macros=addon_macros)
 end
 
-function Simulation(folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_id::Int, rulesets_variation_id::Int; addon_macros::Union{AddonMacros,Nothing}=AddonMacros())
+function Simulation(folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_id::Int, rulesets_variation_id::Int) # ; addon_macros::Union{AddonMacros,Nothing}=AddonMacros())
     simulation_id = DBInterface.execute(db, "INSERT INTO simulations (base_config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id,variation_id,rulesets_variation_id) VALUES($(folder_ids.base_config_id),$(folder_ids.rulesets_collection_id),$(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),$(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id),$(variation_id),$(rulesets_variation_id)) RETURNING simulation_id;") |> DataFrame |> x -> x.simulation_id[1]
-    return Simulation(simulation_id, folder_ids, folder_names, variation_id, rulesets_variation_id, addon_macros)
+    return Simulation(simulation_id, folder_ids, folder_names, variation_id, rulesets_variation_id) # , addon_macros)
 end
 
 ##########################################
@@ -94,16 +94,16 @@ struct Monad <: AbstractMonad
     variation_id::Int # integer identifying which variation on the base config file to use (variations_$(base_config_id).db)
     rulesets_variation_id::Int # integer identifying which variation on the ruleset file to use (rulesets_variations_$(ruleset_id).db)
 
-    addon_macros::Union{AddonMacros,Nothing} = AddonMacros() # addon macros for this simulation
+    # addon_macros::Union{AddonMacros,Nothing} # addon macros for this simulation
 end
 
 Base.size(monad::Monad) = size(monad.simulation_ids)
 
 function Simulation(monad::Monad)
-    return Simulation(monad.folder_ids, monad.folder_names, monad.variation_id, monad.rulesets_variation_id; addon_macros=nothing)
+    return Simulation(monad.folder_ids, monad.folder_names, monad.variation_id, monad.rulesets_variation_id) # ; addon_macros=nothing)
 end
 
-function Monad(min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_id::Int, rulesets_variation_id::Int; addon_macros::Union{AddonMacros,Nothing}=AddonMacros())
+function Monad(min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_id::Int, rulesets_variation_id::Int) # ; addon_macros::Union{AddonMacros,Nothing}=AddonMacros())
     monad_ids = DBInterface.execute(db, "INSERT OR IGNORE INTO monads (base_config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id,variation_id,rulesets_variation_id) VALUES($(folder_ids.base_config_id),$(folder_ids.rulesets_collection_id),$(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),$(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id),$(variation_id),$(rulesets_variation_id)) RETURNING monad_id;") |> DataFrame |> x -> x.monad_id
     if isempty(monad_ids) # if monad insert command was ignored, then the monad already exists
         monad_id = DBInterface.execute(db, "SELECT monad_id FROM monads WHERE (base_config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id,variation_id,rulesets_variation_id)=($(folder_ids.base_config_id),$(folder_ids.rulesets_collection_id),$(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),$(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id),$(variation_id),$(rulesets_variation_id));") |> DataFrame |> x -> x.monad_id[1] # get the monad_id
@@ -111,7 +111,7 @@ function Monad(min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::A
         monad_id = monad_ids[1] # get the monad_id
     end
     simulation_ids = getMonadSimulations(monad_id) # get the simulation ids belonging to this monad
-    return Monad(monad_id, min_length, simulation_ids, folder_ids, folder_names, variation_id, rulesets_variation_id, addon_macros) # return the monad
+    return Monad(monad_id, min_length, simulation_ids, folder_ids, folder_names, variation_id, rulesets_variation_id) # , addon_macros) # return the monad
 end
 
 ##########################################
@@ -130,51 +130,52 @@ struct Sampling <: AbstractSampling
     variation_ids::Array{Int} # variation_id associated with each monad
     rulesets_variation_ids::Array{Int} # rulesets_variation_id associated with each monad
 
-    addon_macros::Union{AddonMacros,Nothing} = AddonMacros() # addon macros for this simulation
+    # addon_macros::AddonMacros # addon macros for this simulation
 
-    function Sampling(id, monad_min_length, monad_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids, addon_macros)
+    function Sampling(id, monad_min_length, monad_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids) # , addon_macros)
         n_monads = length(monad_ids)
         n_variations = length(variation_ids)
         n_rulesets_variations = length(rulesets_variation_ids)
         if n_monads != n_variations || n_monads != n_rulesets_variations # the negation of this is n_monads == n_variations && n_monads == n_rulesets_variations, which obviously means they're all the same
             throw(ArgumentError("Number of monads, variations, and rulesets variations must be the same"))
         end
-        return new(id, monad_min_length, monad_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids, addon_macros)
+        return new(id, monad_min_length, monad_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids) # , addon_macros)
     end
 end
 
 Base.size(sampling::Sampling) = size(sampling.monad_ids)
 
 function Monad(sampling::Sampling, index::Int)
-    return Monad(sampling.monad_min_length, sampling.folder_ids, sampling.folder_names, sampling.variation_ids[index], sampling.rulesets_variation_ids[index]; addon_macros=nothing)
+    return Monad(sampling.monad_min_length, sampling.folder_ids, sampling.folder_names, sampling.variation_ids[index], sampling.rulesets_variation_ids[index]) # ; addon_macros=nothing)
 end
 
-function Sampling(monad_min_length::Int, base_config_id::Int, rulesets_collection_id::Int, ic_substrate_id::Int, ic_ecm_id::Int, custom_code_id::Int, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int}; addon_macros::Union{AddonMacros,Nothing}=AddonMacros())
+function Sampling(monad_min_length::Int, base_config_id::Int, rulesets_collection_id::Int, ic_substrate_id::Int, ic_ecm_id::Int, custom_code_id::Int, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int}) # ; addon_macros::AddonMacros=AddonMacros())
     folder_ids = AbstractSamplingIDs(base_config_id, rulesets_collection_id, ic_cell_id, ic_substrate_id, ic_ecm_id, custom_code_id)
-    return Sampling(monad_min_length, folder_ids, variation_ids, rulesets_variation_ids; addon_macros=addon_macros)
+    return Sampling(monad_min_length, folder_ids, variation_ids, rulesets_variation_ids) # ; addon_macros=addon_macros)
 end
 
-function Sampling(monad_min_length::Int, folder_ids::AbstractSamplingIDs, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int}; addon_macros::Union{AddonMacros,Nothing}=AddonMacros())
+function Sampling(monad_min_length::Int, folder_ids::AbstractSamplingIDs, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int}; 
+    )
     folder_names = AbstractSamplingFolders(folder_ids)
-    return Sampling(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids; addon_macros=addon_macros)
+    return Sampling(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids) # ; addon_macros=addon_macros)
 end
 
-function Sampling(monad_min_length::Int, base_config_folder::String, rulesets_collection_folder::String, ic_cell_folder::String, ic_substrate_folder::String, ic_ecm_folder::String, custom_code_folder::String, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int}; addon_macros::Union{AddonMacros,Nothing}=AddonMacros())
+function Sampling(monad_min_length::Int, base_config_folder::String, rulesets_collection_folder::String, ic_cell_folder::String, ic_substrate_folder::String, ic_ecm_folder::String, custom_code_folder::String, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int}) # ; addon_macros::AddonMacros=AddonMacros())
     folder_names = AbstractSamplingFolders(base_config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder)
-    return Sampling(monad_min_length, folder_names, variation_ids, rulesets_variation_ids; addon_macros=addon_macros)
+    return Sampling(monad_min_length, folder_names, variation_ids, rulesets_variation_ids) # ; addon_macros=addon_macros)
 end
 
-function Sampling(monad_min_length::Int, folder_names::AbstractSamplingFolders, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int}; addon_macros::Union{AddonMacros,Nothing}=AddonMacros())  
+function Sampling(monad_min_length::Int, folder_names::AbstractSamplingFolders, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int}) # ; addon_macros::AddonMacros=AddonMacros())  
     folder_ids = AbstractSamplingIDs(folder_names)
-    return Sampling(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids; addon_macros=addon_macros)
+    return Sampling(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids) # ; addon_macros=addon_macros)
 end
 
-function Sampling(id::Int, monad_min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int}; addon_macros::Union{AddonMacros,Nothing}=AddonMacros())
+function Sampling(id::Int, monad_min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int}) # ; addon_macros::AddonMacros=AddonMacros())
     monad_ids = createMonadIDs(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
-    return Sampling(id, monad_min_length, monad_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids, addon_macros)
+    return Sampling(id, monad_min_length, monad_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids) # , addon_macros)
 end
 
-function Sampling(monad_min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int}; addon_macros::Union{AddonMacros,Nothing}=AddonMacros())
+function Sampling(monad_min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int}) # ; addon_macros::AddonMacros=AddonMacros())
     monad_ids = createMonadIDs(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
     
     id = -1
@@ -192,7 +193,7 @@ function Sampling(monad_min_length::Int, folder_ids::AbstractSamplingIDs, folder
     if id==-1 # if no previous sampling was found matching these parameters
         id = DBInterface.execute(db, "INSERT INTO samplings (base_config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id) VALUES($(folder_ids.base_config_id),$(folder_ids.rulesets_collection_id),$(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),$(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id)) RETURNING sampling_id;") |> DataFrame |> x -> x.sampling_id[1] # get the sampling_id
     end
-    return Sampling(id, monad_min_length, monad_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids, addon_macros)
+    return Sampling(id, monad_min_length, monad_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids) # , addon_macros)
 end
 
 function createMonadIDs(monad_min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_ids::Vector{Int}, rulesets_variation_ids::Vector{Int})
@@ -222,9 +223,9 @@ struct Trial <: AbstractTrial
     variation_ids::Vector{Vector{Int}} # variation_id associated with each monad for each sampling
     rulesets_variation_ids::Vector{Vector{Int}} # rulesets_variation_id associated with each monad for each sampling
 
-    addon_macros::Vector{AddonMacros} # addon macros for each sampling
+    # addon_macros::Vector{AddonMacros} # addon macros for each sampling
 
-    function Trial(id::Int, monad_min_length::Int, sampling_ids::Vector{Int}, folder_ids::Vector{AbstractSamplingIDs}, folder_names::Vector{AbstractSamplingFolders}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}}, addon_macros::Vector{AddonMacros})
+    function Trial(id::Int, monad_min_length::Int, sampling_ids::Vector{Int}, folder_ids::Vector{AbstractSamplingIDs}, folder_names::Vector{AbstractSamplingFolders}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}}) # , addon_macros::Vector{AddonMacros})
         n_samplings = length(sampling_ids)
         n_folder_ids = length(folder_ids)
         n_folder_names = length(folder_names)
@@ -234,41 +235,41 @@ struct Trial <: AbstractTrial
             throw(ArgumentError("Number of samplings, folder ids, folder names, variations, and rulesets variations must be the same"))
         end
 
-        return new(id, monad_min_length, sampling_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids, addon_macros)
+        return new(id, monad_min_length, sampling_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids) # , addon_macros)
     end
 end
 
 Base.size(trial::Trial) = size(trial.sampling_ids)
 
 function Sampling(trial::Trial, index::Int)
-    return Sampling(trial.sampling_ids[index], trial.monad_min_length, trial.folder_ids[index], trial.folder_names[index], trial.variation_ids[index], trial.rulesets_variation_ids[index]; addon_macros=trial.addon_macros[index])
+    return Sampling(trial.sampling_ids[index], trial.monad_min_length, trial.folder_ids[index], trial.folder_names[index], trial.variation_ids[index], trial.rulesets_variation_ids[index]) # ; addon_macros=trial.addon_macros[index])
 end
 
-function Trial(monad_min_length::Int, base_config_ids::Vector{Int}, rulesets_collection_ids::Vector{Int}, ic_cell_ids::Vector{Int}, ic_substrate_ids::Vector{Int}, ic_ecm_ids::Vector{Int}, custom_code_ids::Vector{Int}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}}; addon_macros::Vector{AddonMacros}=fill(AddonMacros(), length(base_config_ids)))
+function Trial(monad_min_length::Int, base_config_ids::Vector{Int}, rulesets_collection_ids::Vector{Int}, ic_cell_ids::Vector{Int}, ic_substrate_ids::Vector{Int}, ic_ecm_ids::Vector{Int}, custom_code_ids::Vector{Int}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}}) # ; addon_macros::Vector{AddonMacros}=fill(AddonMacros(), length(base_config_ids)))
     folder_ids = [AbstractSamplingIDs(base_config_id, rulesets_collection_id, ic_cell_id, ic_substrate_id, ic_ecm_id, custom_code_id) for (base_config_id, rulesets_collection_id, ic_cell_id, ic_substrate_id, ic_ecm_id, custom_code_id) in zip(base_config_ids, rulesets_collection_ids, ic_cell_ids, ic_substrate_ids, ic_ecm_ids, custom_code_ids)]
-    return Trial(monad_min_length, folder_ids, variation_ids, rulesets_variation_ids; addon_macros=addon_macros)
+    return Trial(monad_min_length, folder_ids, variation_ids, rulesets_variation_ids) # ; addon_macros=addon_macros)
 end
 
-function Trial(monad_min_length::Int, folder_ids::Vector{AbstractSamplingIDs}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}}; addon_macros::Vector{AddonMacros}=fill(AddonMacros(), length(folder_ids)))
+function Trial(monad_min_length::Int, folder_ids::Vector{AbstractSamplingIDs}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}}) # ; addon_macros::Vector{AddonMacros}=fill(AddonMacros(), length(folder_ids)))
     folder_names = [AbstractSamplingFolders(folder_id) for folder_id in folder_ids]
-    return Trial(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids; addon_macros=addon_macros)
+    return Trial(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids) # ; addon_macros=addon_macros)
 end
 
-function Trial(monad_min_length::Int, base_config_folders::Vector{String}, rulesets_collection_folders::Vector{String}, ic_cell_folders::Vector{String}, ic_substrate_folders::Vector{String}, ic_ecm_folders::Vector{String}, custom_code_folders::Vector{String}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}}; addon_macros::Vector{AddonMacros}=fill(AddonMacros(), length(base_config_folders)))
+function Trial(monad_min_length::Int, base_config_folders::Vector{String}, rulesets_collection_folders::Vector{String}, ic_cell_folders::Vector{String}, ic_substrate_folders::Vector{String}, ic_ecm_folders::Vector{String}, custom_code_folders::Vector{String}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}}) # ; addon_macros::Vector{AddonMacros}=fill(AddonMacros(), length(base_config_folders)))
     folder_names = [AbstractSamplingFolders(base_config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder) for (base_config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder) in zip(base_config_folders, rulesets_collection_folders, ic_cell_folders, ic_substrate_folders, ic_ecm_folders, custom_code_folders)]
-    return Trial(monad_min_length, folder_names, variation_ids, rulesets_variation_ids; addon_macros=addon_macros)
+    return Trial(monad_min_length, folder_names, variation_ids, rulesets_variation_ids) # ; addon_macros=addon_macros)
 end
 
-function Trial(id::Int, monad_min_length::Int, folder_names::Vector{AbstractSamplingFolders}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}}; addon_macros::Vector{AddonMacros}=fill(AddonMacros(), length(folder_names)))
+function Trial(id::Int, monad_min_length::Int, folder_names::Vector{AbstractSamplingFolders}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}}) # ; addon_macros::Vector{AddonMacros}=fill(AddonMacros(), length(folder_names)))
     folder_ids = [AbstractSamplingIDs(folder_name) for folder_name in folder_names]
-    return Trial(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids; addon_macros=addon_macros)
+    return Trial(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids) # ; addon_macros=addon_macros)
 end
 
-function Trial(monad_min_length::Int, folder_ids, folder_names, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}}; addon_macros::Vector{AddonMacros}=fill(AddonMacros(), length(folder_ids)))
+function Trial(monad_min_length::Int, folder_ids, folder_names, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}}) # ; addon_macros::Vector{AddonMacros}=fill(AddonMacros(), length(folder_ids)))
     sampling_ids = createSamplingIDs(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
     id = getTrialId(sampling_ids)
 
-    return Trial(id, monad_min_length, sampling_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids, addon_macros)
+    return Trial(id, monad_min_length, sampling_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids) # , addon_macros)
 end
 
 function createSamplingIDs(monad_min_length::Int, folder_ids::Vector{AbstractSamplingIDs}, folder_names::Vector{AbstractSamplingFolders}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}})
@@ -309,12 +310,11 @@ function Trial(samplings::Vector{Sampling})
     folder_names = [sampling.folder_names for sampling in samplings]
     variation_ids = [sampling.variation_ids for sampling in samplings]
     rulesets_variation_ids = [sampling.rulesets_variation_ids for sampling in samplings]
-    addon_macros = [sampling.addon_macros for sampling in samplings]
-    addon_macros = [isnothing(a) ? AddonMacros() : a for a in addon_macros] # if the addon_macros is nothing, then replace it with an empty AddonMacros
-    return Trial(monad_min_length, sampling_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids; addon_macros=addon_macros)
+    # addon_macros = [sampling.addon_macros for sampling in samplings]
+    return Trial(monad_min_length, sampling_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids) # ; addon_macros=addon_macros)
 end
 
-function Trial(monad_min_length::Int, sampling_ids::Vector{Int}, folder_ids::Vector{AbstractSamplingIDs}, folder_names::Vector{AbstractSamplingFolders}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}}; addon_macros::Vector{AddonMacros}=fill(AddonMacros(), length(sampling_ids)))
+function Trial(monad_min_length::Int, sampling_ids::Vector{Int}, folder_ids::Vector{AbstractSamplingIDs}, folder_names::Vector{AbstractSamplingFolders}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}}) # ; addon_macros::Vector{AddonMacros}=fill(AddonMacros(), length(sampling_ids)))
     id = getTrialId(sampling_ids)
-    return Trial(id, monad_min_length, sampling_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids, addon_macros)
+    return Trial(id, monad_min_length, sampling_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids) # , addon_macros)
 end

@@ -107,7 +107,7 @@ function updateFieldsFromCSV(path_to_csv::String,path_to_xml::String)
     return openXML(path_to_xml) |> x->updateFieldsFromCSV(x, path_to_csv)
 end
 
-function loadConfiguration(base_config_id::Int, base_config_folder::String, variation_id::Int)
+function loadConfiguration(M::AbstractMonad)
     path_to_xml = "$(data_dir)/inputs/base_configs/$(M.folder_names.base_config_folder)/variations/variation_$(M.variation_id).xml"
     if isfile(path_to_xml)
         return
@@ -133,8 +133,6 @@ function loadConfiguration(base_config_id::Int, base_config_folder::String, vari
     end
     return
 end
-
-loadConfiguration(M::AbstractMonad) = loadConfiguration(M.base_config_id, M.folder_names.base_config_folder, M.variation_id)
 
 function loadConfiguration(sampling::Sampling)
     for index in eachindex(sampling.variation_ids)

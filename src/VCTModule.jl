@@ -20,6 +20,7 @@ PHYSICELL_CPP::String = haskey(ENV, "PHYSICELL_CPP") ? ENV["PHYSICELL_CPP"] : "/
 
 function pcvctLogo()
     return """
+    \n
     ▐▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▌
     ▐                                                                     ▌
     ▐   ███████████    █████████  █████   █████   █████████  ███████████  ▌
@@ -32,6 +33,7 @@ function pcvctLogo()
     ▐  ░░░░░          ░░░░░░░░░       ░░░        ░░░░░░░░░     ░░░░░      ▌
     ▐                                                                     ▌
     ▐▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▌
+    \n
       """
 end
 
@@ -94,15 +96,24 @@ function runSimulation(simulation::Simulation; setup=true)
 end
 
 function loadCustomCode(S::AbstractSampling)
-    if isfile("$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)/project")
+    cflags, recompile, clean = getCompilerFlags(S)
+    println("\n\n\nCompiling custom code for $(S.folder_names.custom_code_folder) with flags: $cflags")
+    println("\tRecompile: $recompile")
+    println("\tClean: $clean\n\n\n")
+
+    if !recompile
         return
     end
+
+    if clean
+        cd(()->run(`make clean`), physicell_dir)
+    end
+
     path_to_folder = "$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)" # source dir needs to end in / or else the dir is copied into target, not the source files
     run(`cp -r $(path_to_folder)/custom_modules/ $(physicell_dir)/custom_modules`)
     run(`cp $(path_to_folder)/main.cpp $(physicell_dir)/main.cpp`)
     run(`cp $(path_to_folder)/Makefile $(physicell_dir)/Makefile`)
 
-    cflags = getCompilerFlags(S; write_macros_file=true)
     cmd = `make -j 20 CC=$(PHYSICELL_CPP) PROGRAM_NAME=project_ccid_$(S.folder_ids.custom_code_id) CFLAGS=$(cflags)`
     cd(() -> run(pipeline(cmd, stdout="$(path_to_folder)/compilation.log", stderr="$(path_to_folder)/compilation.err")), physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory; make sure the macro ADDON_PHYSIECM is defined (should work even if multiply defined, e.g., by Makefile)
     
@@ -111,11 +122,13 @@ function loadCustomCode(S::AbstractSampling)
         rm("$(path_to_folder)/compilation.err", force=true)
     end
 
-    mv("$(physicell_dir)/project_ccid_$(S.folder_ids.custom_code_id)", "$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)/project")
+    mv("$(physicell_dir)/project_ccid_$(S.folder_ids.custom_code_id)", "$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)/project", force=true)
     return 
 end
 
-function getCompilerFlags(S::AbstractSampling; write_macros_file::Bool=false)
+function getCompilerFlags(S::AbstractSampling)
+    recompile = false # only recompile if need is found
+    clean = false # only clean if need is found
     # cflags = "-march=native -O3 -fomit-frame-pointer -fopenmp -m64 -std=c++11 -D ADDON_PHYSIECM" # for now, force PHYSIECM to be defined, eventually will set this for the whole trial
     cflags = "-march=native -O3 -fomit-frame-pointer -fopenmp -m64 -std=c++11"
     add_mfpmath = false
@@ -132,84 +145,83 @@ function getCompilerFlags(S::AbstractSampling; write_macros_file::Bool=false)
         cflags *= " -mfpmath=both"
     end
 
-    macro_flags = getMacroFlags(S) # this will get all macros already in the macros file
-    if !isempty(macro_flags)
-        if write_macros_file # not clear if this function will always be called by loadCustomCode, so we need to check if we need to write the macros file
-            # write the macros file with one line per macro in macro_flags
-            path_to_macros = "$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)/macros.txt"
-            open(path_to_macros, "w") do f
-                for macro_flag in macro_flags
-                    println(f, macro_flag)
-                end
-            end
-        end
+    current_macros = readMacrosFile(S) # this will get all macros already in the macros file
+    updated_macros = getMacroFlags(S) # this will get all macros already in the macros file
 
-        for macro_flag in macro_flags
-            cflags *= " -D $(macro_flag)"
-        end
+    println("Current Macros: ", current_macros)
+    println("Updated Macros: ", updated_macros)
+    println("\n\n\n")
+
+    if length(updated_macros) != length(current_macros)
+        recompile = true
+        clean = true
     end
 
-    return cflags 
+    for macro_flag in updated_macros
+        cflags *= " -D $(macro_flag)"
+    end
+
+    if !recompile && !isfile("$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)/project")
+        recompile = true
+    end
+
+    return cflags, recompile, clean
 end
 
 function getMacroFlags(S::AbstractSampling)
-    if isnothing(S.addon_macros)
-        return readMacrosFile(S)
-    end
-    initializeMacros!(S)
-    if S.addon_macros.initialized
-        return [string(m) for m in S.addon_macros.macros]
-    end
-
-    return 
+    current_macros = readMacrosFile(S)
+    initializeMacros(S)
+    return readMacrosFile(S)
 end
 
-function initializeMacros!(S::AbstractSampling)
-    if isnothing(S.addon_macros) || S.addon_macros.initialized
-        return
-    end
+function initializeMacros(S::AbstractSampling)
     # else get the macros neeeded
-    S.addon_macros = AddonMacros()
-    checkPhysiECMMacro!(S)
-    S.addon_macros.initialized = true
+    checkPhysiECMMacro(S)
+
+    # check others...
     return
 end
 
-function checkPhysiECMMacro!(S::AbstractSampling)
+function addMacro(S::AbstractSampling, macro_name::String)
+    path_to_macros = "$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)/macros.txt"
+    open(path_to_macros, "a") do f
+        println(f, macro_name)
+    end
+    return
+end
+
+function checkPhysiECMMacro(S::AbstractSampling)
     if "ADDON_PHYSIECM" in readMacrosFile(S)
         # if the custom codes folder for the sampling already has the macro, then we don't need to do anything
-        push!(S.addon_macros.macros, "ADDON_PHYSIECM")
-        return true
+        return
     end
     if S.folder_ids.ic_ecm_id != -1
         # if this sampling is providing an ic file for ecm, then we need to add the macro
-        push!(S.addon_macros.macros, "ADDON_PHYSIECM")
-        return true
+        return addMacro(S, "ADDON_PHYSIECM")
     end
     # check if ecm_setup element has enabled="true" in config files
     loadConfiguration(S)
-    return checkPhysiECMInConfig!(S)
+    return checkPhysiECMInConfig(S)
 end
 
-function checkPhysiECMInConfig!(M::AbstractMonad)
-    path_to_xml = "$(data_dir)/inputs/base_configs/$(S.folder_names.base_config_folder)/variations/variation_$(M.variation_id).xml"
+function checkPhysiECMInConfig(M::AbstractMonad)
+    path_to_xml = "$(data_dir)/inputs/base_configs/$(M.folder_names.base_config_folder)/variations/variation_$(M.variation_id).xml"
     xml_path = ["microenvironment_setup", "ecm_setup"]
     ecm_setup_element = retrieveElement(path_to_xml, xml_path; required=false)
     if !isnothing(ecm_setup_element) && attribute(ecm_setup_element, "enabled") == "true" # note: attribute returns nothing if the attribute does not exist
         # if the base config file says that the ecm is enabled, then we need to add the macro
-        push!(S.addon_macros.macros, "ADDON_PHYSIECM")
+        addMacro(M, "ADDON_PHYSIECM")
         return true
     end
     return false
 end
 
-function checkPhysiECMInConfig!(sampling::Sampling)
+function checkPhysiECMInConfig(sampling::Sampling)
     # otherwise, no previous sampling saying to use the macro, no ic file for ecm, and the base config file does not have ecm enabled,
     # now just check that the variation is not enabling the ecm
     for index in eachindex(sampling.variation_ids)
         monad = Monad(sampling, index) # instantiate a monad with the variation_id and the simulation ids already found
-        if checkPhysiECMInConfig!(monad)
-            push!(S.addon_macros.macros, "ADDON_PHYSIECM")
+        if checkPhysiECMInConfig(monad)
             return true
         end
     end
@@ -268,6 +280,7 @@ function resetDatabase()
         rm("$(custom_code_folder)/project", force=true)
         rm("$(custom_code_folder)/compilation.log", force=true)
         rm("$(custom_code_folder)/compilation.err", force=true)
+        rm("$(custom_code_folder)/macros.txt", force=true)
     end
 
     custom_code_folders = DBInterface.execute(db, "SELECT folder_name FROM custom_codes;") |> DataFrame |> x->x.folder_name
