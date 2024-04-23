@@ -329,12 +329,13 @@ function Trial(monad_min_length::Int, sampling_ids::Vector{Int}, folder_ids::Vec
 end
 
 function Trial(trial_id::Int; full_initialization::Bool=false)
-    sampling_ids = getTrialSamplings(trial_id)
-    if isempty(sampling_ids)
+    df = DBInterface.execute(db, "SELECT * FROM trials WHERE trial_id=$trial_id;") |> DataFrame
+    if isempty(df) || isempty(getTrialSamplings(trial_id))
         error("No samplings found for trial_id=$trial_id. This trial did not run.")
     end
     if full_initialization
         error("Full initialization of Trials from trial_id not yet implemented")
+        sampling_ids = getTrialSamplings(trial_id)
         monad_min_length = minimum([getSamplingMonads(sampling_id) for sampling_id in sampling_ids])
         sampling_df = DBInterface.execute(db, "SELECT * FROM samplings WHERE sampling_id IN ($(join(sampling_ids,",")))") |> DataFrame
         folder_ids = [getSamplingFolderIDs(sampling_id) for sampling_id in sampling_ids]
@@ -342,7 +343,7 @@ function Trial(trial_id::Int; full_initialization::Bool=false)
         variation_ids = [getSamplingVariationIDs(sampling_id) for sampling_id in sampling_ids]
         rulesets_variation_ids = [getSamplingRulesetsVariationIDs(sampling_id) for sampling_id in sampling_ids]
     else
-        monad_min_length = -1
+        monad_min_length = 0
         folder_ids = AbstractSamplingIDs[]
         folder_names = AbstractSamplingFolders[]
         variation_ids = Vector{Int}[]
