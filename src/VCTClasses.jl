@@ -327,3 +327,26 @@ function Trial(monad_min_length::Int, sampling_ids::Vector{Int}, folder_ids::Vec
     id = getTrialId(sampling_ids)
     return Trial(id, monad_min_length, sampling_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids) # , addon_macros)
 end
+
+function Trial(trial_id::Int; full_initialization::Bool=false)
+    sampling_ids = getTrialSamplings(trial_id)
+    if isempty(sampling_ids)
+        error("No samplings found for trial_id=$trial_id. This trial did not run.")
+    end
+    if full_initialization
+        error("Full initialization of Trials from trial_id not yet implemented")
+        monad_min_length = minimum([getSamplingMonads(sampling_id) for sampling_id in sampling_ids])
+        sampling_df = DBInterface.execute(db, "SELECT * FROM samplings WHERE sampling_id IN ($(join(sampling_ids,",")))") |> DataFrame
+        folder_ids = [getSamplingFolderIDs(sampling_id) for sampling_id in sampling_ids]
+        folder_names = [getSamplingFolderNames(sampling_id) for sampling_id in sampling_ids]
+        variation_ids = [getSamplingVariationIDs(sampling_id) for sampling_id in sampling_ids]
+        rulesets_variation_ids = [getSamplingRulesetsVariationIDs(sampling_id) for sampling_id in sampling_ids]
+    else
+        monad_min_length = -1
+        folder_ids = AbstractSamplingIDs[]
+        folder_names = AbstractSamplingFolders[]
+        variation_ids = Vector{Int}[]
+        rulesets_variation_ids = Vector{Int}[]
+    end
+    return Trial(trial_id, monad_min_length, sampling_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids) # , addon_macros)
+end

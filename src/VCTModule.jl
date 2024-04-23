@@ -704,8 +704,17 @@ getTrialSamplings(trial_id::Int) = selectConstituents("$(data_dir)/outputs/trial
 
 function getTrialSimulations(trial_id::Int)
     sampling_ids = getTrialSamplings(trial_id)
-    monad_ids = vcat([getSamplingMonads(sampling_id) for sampling_id in sampling_ids]...)
+    return vcat([getSamplingSimulations(sampling_id) for sampling_id in sampling_ids]...)
+end
+
+function getSamplingSimulations(sampling_id::Int)
+    monad_ids = getSamplingMonads(sampling_id)
     return vcat([getMonadSimulations(monad_id) for monad_id in monad_ids]...)
 end
+
+getSimulations(trial::Trial) = getTrialSimulations(trial.id)
+getSimulations(sampling::Sampling) = getSamplingSimulations(sampling.id)
+getSimulations(monad::Monad) = getMonadSimulations(monad.id)
+getSimulations(simulation::Simulation) = [simulation.id]
 
 end

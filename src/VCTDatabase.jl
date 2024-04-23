@@ -289,8 +289,13 @@ end
 
 ########### Printing Database Functions ###########
 
-function printSimulationsTable()
-    df = DBInterface.execute(db, "SELECT * FROM simulations;") |> DataFrame
+function printSimulationsTable(T::Union{Nothing,AbstractTrial}=nothing)
+    if isnothing(T)
+        query = "SELECT * FROM simulations;"
+    else
+        query = "SELECT * FROM simulations WHERE simulation_id IN ($(join(getSimulations(T),","));"
+    end
+    df = DBInterface.execute(db, query) |> DataFrame
     df[!,"custom_code_folder"] .= [getCustomCodesFolder(id) for id in df.custom_code_id]
     df[!,"ic_cell_folder"] .= [getICCellFolder(id) for id in df.ic_cell_id]
     df[!,"ic_substrate_folder"] .= [getICSubstrateFolder(id) for id in df.ic_substrate_id]
