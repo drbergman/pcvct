@@ -127,7 +127,7 @@ function createSchema()
             REFERENCES ic_ecms (ic_ecm_id),
         FOREIGN KEY (base_config_id)
             REFERENCES base_configs (base_config_id),
-        UNIQUE (custom_code_id,ic_cell_id,base_config_id,rulesets_collection_id,variation_id,rulesets_variation_id)
+        UNIQUE (custom_code_id,ic_cell_id,ic_substrate_id,ic_ecm_id,base_config_id,rulesets_collection_id,variation_id,rulesets_variation_id)
     """
     createPCVCTTable("monads", monads_schema)
 
