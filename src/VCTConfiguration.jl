@@ -170,7 +170,7 @@ function motilityPath(cell_definition::String, field_name::String)
 end
 
 ################## Variation Dimension Functions ##################
-struct ElementaryVariation{T} where T
+struct ElementaryVariation{T}
     xml_path::Vector{String}
     values::Vector{T}
 end
