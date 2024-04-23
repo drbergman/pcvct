@@ -169,10 +169,21 @@ function motilityPath(cell_definition::String, field_name::String)
     return ["cell_definitions", "cell_definition:name:$(cell_definition)", "phenotype", "motility", field_name]
 end
 
+################## Variation Dimension Functions ##################
+struct ElementaryVariation{T} where T
+    xml_path::Vector{String}
+    values::Vector{T}
+end
+
 function addMotilityVariationDimension!(D::Vector{Vector{Vector}}, cell_definition::String, field_name::String, values::Vector{T} where T)
     xml_path = motilityPath(cell_definition, field_name)
     new_var = [xml_path, values]
     push!(D, new_var)
+end
+
+function addMotilityVariationDimension!(EV::Vector{ElementaryVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
+    xml_path = motilityPath(cell_definition, field_name)
+    push!(EV, ElementaryVariation(xml_path, values))
 end
 
 function customDataPath(cell_definition::String, field_name::String)
@@ -189,10 +200,20 @@ function addCustomDataVariationDimension!(D::Vector{Vector{Vector}}, cell_defini
     push!(D, new_var)
 end
 
+function addCustomDataVariationDimension!(EV::Vector{ElementaryVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
+    xml_path = customDataPath(cell_definition, field_name)
+    push!(EV, ElementaryVariation(xml_path, values))
+end
+
 function addCustomDataVariationDimension!(D::Vector{Vector{Vector}}, cell_definition::String, field_names::Vector{String}, values::Vector{Vector})
-    for x in zip(field_names,values)
-        field_name, value = x
+    for (field_name, value) in zip(field_names,values)
         addCustomDataVariationDimension!(D, cell_definition, field_name, value)
+    end
+end
+
+function addCustomDataVariationDimension!(EV::Vector{ElementaryVariation}, cell_definition::String, field_names::Vector{String}, values::Vector{Vector})
+    for (field_name, value) in zip(field_names,values)
+        addCustomDataVariationDimension!(EV, cell_definition, field_name, value)
     end
 end
 
