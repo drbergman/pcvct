@@ -344,6 +344,7 @@ function Trial(trial_id::Int; full_initialization::Bool=false)
         rulesets_variation_ids = [getSamplingRulesetsVariationIDs(sampling_id) for sampling_id in sampling_ids]
     else
         monad_min_length = 0
+        sampling_ids = Int[]
         folder_ids = AbstractSamplingIDs[]
         folder_names = AbstractSamplingFolders[]
         variation_ids = Vector{Int}[]
