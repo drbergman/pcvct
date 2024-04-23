@@ -129,7 +129,6 @@ end
 function getCompilerFlags(S::AbstractSampling)
     recompile = false # only recompile if need is found
     clean = false # only clean if need is found
-    # cflags = "-march=native -O3 -fomit-frame-pointer -fopenmp -m64 -std=c++11 -D ADDON_PHYSIECM" # for now, force PHYSIECM to be defined, eventually will set this for the whole trial
     cflags = "-march=native -O3 -fomit-frame-pointer -fopenmp -m64 -std=c++11"
     add_mfpmath = false
     if Sys.iswindows()
@@ -573,6 +572,23 @@ function addGrid(D::Vector{Vector{Vector}}, addColumns::Function, prepareAddNew:
     return variation_ids, is_new_variation_id
 end
 
+function addGrid(EV::Vector{ElementaryVariation}, addColumns::Function, prepareAddNew::Function, addRow::Function)
+    xml_paths = [ev.xml_path for ev in EV]
+    new_values = [ev.values for ev in EV]
+    static_column_names, varied_column_names = addColumns(xml_paths)
+    static_values, table_features = prepareAddNew(static_column_names, varied_column_names)
+
+    NDG = ndgrid(new_values...)
+    sz_variations = size(NDG[1])
+    variation_ids = zeros(Int, sz_variations)
+    is_new_variation_id = falses(sz_variations)
+    for i in eachindex(NDG[1])
+        varied_values = [A[i] for A in NDG] .|> string |> x -> join("\"" .* x .* "\"", ",")
+        variation_ids[i], is_new_variation_id[i] = addRow(table_features, static_values, varied_values)
+    end
+    return variation_ids, is_new_variation_id
+end
+
 function addGridVariation(base_config_id::Int, D::Vector{Vector{Vector}}; reference_variation_id::Int=0)
     addColumns = (paths) -> addVariationColumns(base_config_id, paths, [typeof(d[2][1]) for d in D])
     prepareAddNew = (static_column_names, varied_column_names) -> prepareAddNewVariations(base_config_id, static_column_names, varied_column_names; reference_variation_id=reference_variation_id)
@@ -580,13 +596,28 @@ function addGridVariation(base_config_id::Int, D::Vector{Vector{Vector}}; refere
     return addGrid(D, addColumns, prepareAddNew, addRow)
 end
 
+function addGridVariation(base_config_id::Int, EV::Vector{ElementaryVariation}; reference_variation_id::Int=0)
+    addColumns = (paths) -> addVariationColumns(base_config_id, paths, [typeof(ev.values[1]) for ev in EV])
+    prepareAddNew = (static_column_names, varied_column_names) -> prepareAddNewVariations(base_config_id, static_column_names, varied_column_names; reference_variation_id=reference_variation_id)
+    addRow = (features, static_values, varied_values) -> addVariationRow(base_config_id, features, static_values, varied_values)
+    return addGrid(EV, addColumns, prepareAddNew, addRow)
+end
+
 addGridVariation(base_config_folder::String, D::Vector{Vector{Vector}}; reference_variation_id::Int=0) = addGridVariation(retrieveID("base_configs", base_config_folder), D; reference_variation_id=reference_variation_id)
+addGridVariation(base_config_folder::String, EV::Vector{ElementaryVariation}; reference_variation_id::Int=0) = addGridVariation(retrieveID("base_configs", base_config_folder), EV; reference_variation_id=reference_variation_id)
 
 function addGridRulesetsVariation(base_config_id::Int, rulesets_collection_id::Int, D::Vector{Vector{Vector}}; reference_rulesets_variation_id::Int=0)
     addColumns = (paths) -> addRulesetsVariationsColumns(base_config_id, rulesets_collection_id, paths)
     prepareAddNew = (static_names, varied_names) -> prepareAddNewRulesetsVariations(base_config_id, rulesets_collection_id, static_names, varied_names; reference_rulesets_variation_id=reference_rulesets_variation_id)
     addRow = (features, static_values, varied_values) -> addRulesetsVariationRow(base_config_id, rulesets_collection_id, features, static_values, varied_values)
     return addGrid(D, addColumns, prepareAddNew, addRow)
+end
+
+function addGridRulesetsVariation(base_config_id::Int, rulesets_collection_id::Int, EV::Vector{ElementaryVariation}; reference_rulesets_variation_id::Int=0)
+    addColumns = (paths) -> addRulesetsVariationsColumns(base_config_id, rulesets_collection_id, paths)
+    prepareAddNew = (static_names, varied_names) -> prepareAddNewRulesetsVariations(base_config_id, rulesets_collection_id, static_names, varied_names; reference_rulesets_variation_id=reference_rulesets_variation_id)
+    addRow = (features, static_values, varied_values) -> addRulesetsVariationRow(base_config_id, rulesets_collection_id, features, static_values, varied_values)
+    return addGrid(EV, addColumns, prepareAddNew, addRow)
 end
 
 """
