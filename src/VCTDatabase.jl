@@ -228,61 +228,6 @@ function createPCVCTTable(table_name::String, schema::String; db::SQLite.DB=db)
     return
 end
 
-# function createRulesetsVariationsDB(rulesets_scheme::String, base_config_folder::String)
-#     db_rulesets_variations = "$(data_dir)/inputs/base_configs/$(base_config_folder)/rulesets_schema/$(rulesets_scheme)/rulesets_variations.db" |> SQLite.DB
-#     SQLite.execute(db_rulesets_variations, "CREATE TABLE IF NOT EXISTS rulesets_variations (
-#         rulesets_variations INTEGER PRIMARY KEY
-#     );")
-
-#     scheme_xml_path = "$(data_dir)/inputs/base_configs/$(base_config_folder)/rulesets_schema/$(rulesets_scheme)/scheme.xml"
-#     if !isfile(scheme_xml_path)
-#         scheme_xml = XMLDocument()
-#         return
-#     end
-#     scheme_xml = parse_file(scheme_xml_path)
-#     hypothesis_rulesets = root(scheme_xml)
-#     for hypothesis_ruleset in child_elements(hypothesis_rulesets)
-#         prepareHypothesisRuleset(hypothesis_ruleset, db_rulesets_variations)
-#     end
-#     return
-# end
-
-# function prepareHypothesisRuleset(hypothesis_ruleset::XMLElement, db_rulesets_variations::SQLite.DB)
-#     cell_definition = find_element(hypothesis_ruleset, "cell_definition")
-#     for behavior in child_elements(hypothesis_ruleset)
-#         prepareBehavior(behavior, cell_definition, db_rulesets_variations)
-#     end
-#     return
-# end
-
-# function prepareBehavior(behavior::XMLElement, cell_definition::XMLElement, db_rulesets_variations::SQLite.DB)
-#     behavior_name = content(behavior["name"])
-#     decreasing_signals = find_element(behavior, "decreasing_signals")
-#     if !isnothing(decreasing_signals)
-#         prepareSignals(behavior_name, decreasing_signals, cell_definition, db_rulesets_variations, "decreasing_signals")
-#     end
-#     increasing_signals = find_element(behavior, "increasing_signals")
-#     if !isnothing(increasing_signals)
-#         prepareSignals(behavior_name, increasing_signals, cell_definition, db_rulesets_variations, "increasing_signals")
-#     end
-#     return
-# end
-
-# function prepareSignals(behavior_name::String, signals::XMLElement, cell_definition::XMLElement, db_rulesets_variations::SQLite.DB, signals_table::String)
-#     behavior_base_column_name = "hypothesis_ruleset:name:$(cell_definition)/behavior:name:$(behavior_name)/$(signals_table)"
-#     data_types = ["REAL", "REAL", "INTEGER"]
-#     for signal in child_elements(signals)
-#         signal_name = content(signal["name"])
-#         column_names = "$(behavior_base_column_name)/signal:name:$(signal_name)" .* ["half_max", "hill_power", "applies_to_dead"]
-#         for (column_name, data_type) in zip(column_names, data_types)
-#             SQLite.execute(db_rulesets_variations, "ALTER TABLE $(signals_table) ADD COLUMN IF NOT EXISTS '$(column_name)' $(data_type);")
-#         end
-#     end
-#     max_response_column_name = "$(behavior_base_column_name)/max_response"
-#     SQLite.execute(db_rulesets_variations, "ALTER TABLE $(signals_table) ADD COLUMN IF NOT EXISTS '$(max_response_column_name)' REAL;")
-#     return
-# end
-
 function selectRow(table_name::String, condition_stmt::String; db::SQLite.DB=db)
     s = "SELECT * FROM $(table_name) " * condition_stmt * ";"
     df = DBInterface.execute(db, s) |> DataFrame
@@ -340,4 +285,17 @@ function retrieveID(folder_names::AbstractSamplingFolders)
     ic_ecm_id = retrieveID("ic_ecms", folder_names.ic_ecm_folder)
     custom_code_id = retrieveID("custom_codes", folder_names.custom_code_folder)
     return base_config_id, rulesets_collection_id, ic_cell_id, ic_substrate_id, ic_ecm_id, custom_code_id
+end
+
+########### Printing Database Functions ###########
+
+function printSimulationsTable()
+    df = DBInterface.execute(db, "SELECT * FROM simulations;") |> DataFrame
+    df[!,"custom_code_folder"] .= [getCustomCodesFolder(id) for id in df.custom_code_id]
+    df[!,"ic_cell_folder"] .= [getICCellFolder(id) for id in df.ic_cell_id]
+    df[!,"ic_substrate_folder"] .= [getICSubstrateFolder(id) for id in df.ic_substrate_id]
+    df[!,"ic_ecm_folder"] .= [getICECMFolder(id) for id in df.ic_ecm_id]
+    df[!,"base_config_folder"] .= [getBaseConfigFolder(id) for id in df.base_config_id]
+    df[!,"rulesets_collection_folder"] .= [getRulesetsCollectionFolder(base_config_id, rulesets_collection_id) for (base_config_id, rulesets_collection_id) in zip(df.base_config_id, df.rulesets_collection_id)]
+    println(df[!,["simulation_id","custom_code_folder","ic_cell_folder","ic_substrate_folder","ic_ecm_folder","base_config_folder","rulesets_collection_folder","variation_id","rulesets_variation_id"]])
 end
