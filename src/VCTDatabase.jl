@@ -1,3 +1,5 @@
+export printSimulationsTable, printVariationsTable
+
 db::SQLite.DB = SQLite.DB()
 
 function initializeDatabase(path_to_database::String)
@@ -13,7 +15,6 @@ function initializeDatabase()
 end
 
 function createSchema()
-
     # make sure necessary directories are present
     data_dir_contents = readdir("$(data_dir)/inputs/", sort=false)
     if !("custom_codes" in data_dir_contents)
@@ -246,7 +247,7 @@ function selectRow(column_name::String, table_name::String, condition_stmt::Stri
 end
 
 function getFolder(table_name::String, id_name::String, id::Int; db::SQLite.DB=db)
-    return DBInterface.execute(db, "SELECT folder_name FROM $(table_name) WHERE $(id_name)=$(id)") |> DataFrame |> x -> x.folder_name[1]
+    return DBInterface.execute(db, "SELECT folder_name FROM $(table_name) WHERE $(id_name)=$(id);") |> DataFrame |> x -> x.folder_name[1]
 end
 
 getOptionalFolder(table_name::String, id_name::String, id::Int; db::SQLite.DB=db) = id == -1 ? "" : getFolder(table_name, id_name, id; db=db)
@@ -287,20 +288,107 @@ function retrieveID(folder_names::AbstractSamplingFolders)
     return base_config_id, rulesets_collection_id, ic_cell_id, ic_substrate_id, ic_ecm_id, custom_code_id
 end
 
+########### Summarizing Database Functions ###########
+getVariations(M::AbstractMonad) = [M.variation_id]
+getVariations(sampling::Sampling) = sampling.variation_ids
+
+getAbstractTrial(trial_tuple::Tuple{DataType, Int}) = trial_tuple[1](trial_tuple[2])
+
+function getSimulationsTable(simulation_ids::Vector{Int}; remove_constants::Bool = true)
+    query = "SELECT * FROM simulations WHERE simulation_id IN ($(join(simulation_ids,",")));"
+    df = DBInterface.execute(db, query) |> DataFrame
+    col_names = names(df)
+    filter!(n -> length(unique(df[!,n])) > 1, col_names)
+    select!(df, col_names)
+    addFolderColumns!(df)
+    var_df = DataFrame(simulation_id=Int[], ID=Int[])
+    for simulation_id in simulation_ids
+        df_sim = getVariationsTable((Simulation, simulation_id))
+        df_sim[!,:simulation_id] = [simulation_id]
+        var_df = outerjoin(var_df, df_sim, on = names(var_df))
+    end
+    df = outerjoin(df, var_df, on=[:simulation_id, :variation_id => :ID])
+    filter!(n -> !(n in ["simulation_id"]), col_names) # drop simulation_id 
+    select!(df, Not(col_names))
+    if remove_constants
+        col_names = names(df)
+        filter!(n -> length(unique(df[!,n])) > 1, col_names)
+        select!(df, col_names)
+    end
+    return df
+end
+
+function getVariationsTable(config_db::SQLite.DB, variation_ids::Vector{Int})
+    query = "SELECT * FROM variations WHERE variation_id IN ($(join(variation_ids,",")));"
+    df = DBInterface.execute(config_db, query) |> DataFrame
+    rename!(simpleVariationNames, df)
+    return df
+end
+
+getVariationsTable(S::AbstractSampling) = getVariationsTable(getConfigDB(S), getVariations(S))
+
+function getVariationsTable(sampling_tuple::Tuple{DataType, Int})
+    @assert sampling_tuple[1] <: AbstractSampling "Need a subtype of AbstractSampling in getVariationsTable.\n\t$(sampling_tuple[1]) is not a subtype of AbstractSampling."
+    return getAbstractTrial(sampling_tuple) |> getVariationsTable
+end
+
 ########### Printing Database Functions ###########
 
-function printSimulationsTable(T::Union{Nothing,AbstractTrial}=nothing)
-    if isnothing(T)
+function printSimulationsTable(trial_tuple::Union{Tuple{DataType,Int},Nothing}=nothing)
+    if isnothing(trial_tuple) || typeof(trial_tuple[1])==Nothing
         query = "SELECT * FROM simulations;"
     else
-        query = "SELECT * FROM simulations WHERE simulation_id IN ($(join(getSimulations(T),","));"
+        query = "SELECT * FROM simulations WHERE simulation_id IN ($(join(getSimulations(trial_tuple),",")));"
     end
     df = DBInterface.execute(db, query) |> DataFrame
-    df[!,"custom_code_folder"] .= [getCustomCodesFolder(id) for id in df.custom_code_id]
-    df[!,"ic_cell_folder"] .= [getICCellFolder(id) for id in df.ic_cell_id]
-    df[!,"ic_substrate_folder"] .= [getICSubstrateFolder(id) for id in df.ic_substrate_id]
-    df[!,"ic_ecm_folder"] .= [getICECMFolder(id) for id in df.ic_ecm_id]
-    df[!,"base_config_folder"] .= [getBaseConfigFolder(id) for id in df.base_config_id]
-    df[!,"rulesets_collection_folder"] .= [getRulesetsCollectionFolder(base_config_id, rulesets_collection_id) for (base_config_id, rulesets_collection_id) in zip(df.base_config_id, df.rulesets_collection_id)]
+    addFolderColumns!(df)
     println(df[!,["simulation_id","custom_code_folder","ic_cell_folder","ic_substrate_folder","ic_ecm_folder","base_config_folder","rulesets_collection_folder","variation_id","rulesets_variation_id"]])
+end
+
+function addFolderColumns!(df::DataFrame)
+    required_col_names = ["custom_code", "base_config"]
+    for col_name in required_col_names
+        if !("$(col_name)_id" in names(df))
+            continue
+        end
+        D = Dict{Int, String}()
+        unique_ids = unique(df[!,"$(col_name)_id"])
+        for id in unique_ids
+            D[id] = getFolder("$(col_name)s", "$(col_name)_id", id)
+        end
+        df[!,"$(col_name)_folder"] .= [D[id] for id in df[!,"$(col_name)_id"]]
+    end
+    optional_col_names = ["ic_cell", "ic_substrate", "ic_ecm"]
+    for col_name in optional_col_names
+        if !("$(col_name)_id" in names(df))
+            continue
+        end
+        D = Dict{Int, String}()
+        unique_ids = unique(df[!,"$(col_name)_id"])
+        for id in unique_ids
+            D[id] = getOptionalFolder("$(col_name)s", "$(col_name)_id", id)
+        end
+        df[!,"$(col_name)_folder"] .= [D[id] for id in df[!,"$(col_name)_id"]]
+    end
+
+    if "base_config_id" in names(df) && "rulesets_collection_id" in names(df)
+        D = Dict{Tuple{Int,Int},String}()
+        unique_tuples = unique(df[!, ["base_config_id", "rulesets_collection_id"]])
+        for row in eachrow(unique_tuples)
+            base_config_id = row.base_config_id
+            rulesets_collection_id = row.rulesets_collection_id
+            D[(base_config_id, rulesets_collection_id)] = getRulesetsCollectionFolder(base_config_id, rulesets_collection_id)
+        end
+        df[!, "rulesets_collection_folder"] .= [D[(row.base_config_id, row.rulesets_collection_id)] for row in eachrow(df)]
+    end
+    return df
+end
+
+printSimulationsTable(T::Union{Nothing,AbstractTrial}=nothing) = isnothing(T) ? printSimulationsTable() : printSimulationsTable((typeof(T),T.trial_id))
+
+printVariationsTable(S::AbstractSampling) = getVariationsTable(S) |> println
+
+function printVariationsTable(sampling_tuple::Tuple{DataType, Int}) 
+    df = getVariationsTable(sampling_tuple)
+    println(df)
 end

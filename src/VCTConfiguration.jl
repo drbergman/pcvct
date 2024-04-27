@@ -1,15 +1,17 @@
+export ElementaryVariation, addCustomDataVariationDimension!
+
 function getConfigDB(base_config_folder::String)
     return "$(data_dir)/inputs/base_configs/$(base_config_folder)/variations.db" |> SQLite.DB
 end
 
 getConfigDB(base_config_id::Int) = getBaseConfigFolder(base_config_id) |> getConfigDB
-getConfigDB(simulation::AbstractSampling) = getConfigDB(simulation.folder_names.base_config_folder)
+getConfigDB(S::AbstractSampling) = getConfigDB(S.folder_names.base_config_folder)
 
 function getRulesetsCollectionsDB(base_config_folder::String)
     return (isabspath(base_config_folder) ? "$(base_config_folder)/rulesets_collections.db" : "$(data_dir)/inputs/base_configs/$(base_config_folder)/rulesets_collections.db") |> SQLite.DB
 end
 
-getRulesetsCollectionsDB(simulation::AbstractSampling) = getRulesetsCollectionsDB(simulation.folder_names.base_config_folder)
+getRulesetsCollectionsDB(S::AbstractSampling) = getRulesetsCollectionsDB(S.folder_names.base_config_folder)
 getRulesetsCollectionsDB(base_config_id::Int) = getRulesetsCollectionsDB(getBaseConfigFolder(base_config_id))
 
 function getRulesetsVariationsDB(base_config_folder::String, rulesets_collection_folder::String)
@@ -31,7 +33,8 @@ function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{String}; require
         if !occursin(":",path_element)
             current_element = find_element(current_element, path_element)
             if isnothing(current_element)
-                required ? error("Element not found") : return nothing
+                error_msg = "Element not found: $(join(xml_path, " -> "))"
+                required ? error(error_msg) : return nothing
             end
             continue
         end
@@ -227,4 +230,27 @@ end
 
 function initialConditionPath()
     return ["initial_conditions","cell_positions","filename"]
+end
+
+function simpleVariationNames(name::String)
+    if name == "variation_id"
+        return "ID"
+    elseif name == "overall/max_time"
+        return "Max Time"
+    elseif name == "save/full_data/interval"
+        return "Full Save Interval"
+    elseif name == "save/SVG/interval"
+        return "SVG Save Interval"
+    elseif startswith(name, "cell_definitions")
+        return getCellParameter(name)
+    else
+        return name
+    end
+end
+
+function getCellParameter(column_name::String)
+    xml_path = split(column_name, "/") .|> string
+    cell_def = split(xml_path[2], ":")[3]
+    par_name = xml_path[end]
+    return replace("$(cell_def): $(par_name)", '_' => ' ')
 end

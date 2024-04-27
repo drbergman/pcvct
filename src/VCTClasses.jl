@@ -1,3 +1,5 @@
+export Sampling, Trial, getTrial
+
 abstract type AbstractTrial end
 abstract type AbstractSampling <: AbstractTrial end
 abstract type AbstractMonad <: AbstractSampling end
@@ -78,6 +80,20 @@ function Simulation(folder_ids::AbstractSamplingIDs, folder_names::AbstractSampl
     return Simulation(simulation_id, folder_ids, folder_names, variation_id, rulesets_variation_id) # , addon_macros)
 end
 
+function getSimulation(simulation_id::Int)
+    df = DBInterface.execute(db, "SELECT * FROM simulations WHERE simulation_id=$simulation_id;") |> DataFrame
+    if isempty(df)
+        error("No simulations found for simulation_id=$simulation_id. This simulation did not run.")
+    end
+    folder_ids = AbstractSamplingIDs(df.base_config_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1], df.custom_code_id[1])
+    folder_names = AbstractSamplingFolders(folder_ids)
+    variation_id = df.variation_id[1]
+    rulesets_variation_id = df.rulesets_variation_id[1]
+    return Simulation(simulation_id, folder_ids, folder_names, variation_id, rulesets_variation_id)
+end
+
+Simulation(simulation_id::Int) = getSimulation(simulation_id)
+
 ##########################################
 ###############   Monad   ################
 ##########################################
@@ -93,8 +109,6 @@ struct Monad <: AbstractMonad
 
     variation_id::Int # integer identifying which variation on the base config file to use (variations_$(base_config_id).db)
     rulesets_variation_id::Int # integer identifying which variation on the ruleset file to use (rulesets_variations_$(ruleset_id).db)
-
-    # addon_macros::Union{AddonMacros,Nothing} # addon macros for this simulation
 end
 
 Base.size(monad::Monad) = size(monad.simulation_ids)
@@ -122,6 +136,22 @@ function Monad(min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::A
     simulation_ids = getMonadSimulations(monad_id) # get the simulation ids belonging to this monad
     return Monad(monad_id, min_length, simulation_ids, folder_ids, folder_names, variation_id, rulesets_variation_id) # , addon_macros) # return the monad
 end
+
+function getMonad(monad_id::Int)
+    df = DBInterface.execute(db, "SELECT * FROM monads WHERE monad_id=$monad_id;") |> DataFrame
+    simulation_ids = getMonadSimulations(monad_id)
+    if isempty(df) || isempty(simulation_ids)
+        error("No monads found for monad_id=$monad_id. This monad did not run.")
+    end
+    min_length = 0
+    folder_ids = AbstractSamplingIDs(df.base_config_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1], df.custom_code_id[1])
+    folder_names = AbstractSamplingFolders(folder_ids)
+    variation_id = df.variation_id[1]
+    rulesets_variation_id = df.rulesets_variation_id[1]
+    return Monad(monad_id, min_length, simulation_ids, folder_ids, folder_names, variation_id, rulesets_variation_id) # , addon_macros)
+end
+
+Monad(monad_id::Int) = getMonad(monad_id)
 
 ##########################################
 ##############   Sampling   ##############
@@ -215,6 +245,24 @@ function createMonadIDs(monad_min_length::Int, folder_ids::AbstractSamplingIDs, 
     end
     return monad_ids
 end
+
+function getSampling(sampling_id::Int)
+    df = DBInterface.execute(db, "SELECT * FROM samplings WHERE sampling_id=$sampling_id;") |> DataFrame
+    monad_ids = getSamplingMonads(sampling_id)
+    if isempty(df) || isempty(monad_ids)
+        error("No samplings found for sampling_id=$sampling_id. This sampling did not run.")
+    end
+    monad_min_length = 0 # not running more simulations for this Sampling this way
+    folder_ids = AbstractSamplingIDs(df.base_config_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1], df.custom_code_id[1])
+    folder_names = AbstractSamplingFolders(folder_ids)
+    monad_df = DBInterface.execute(db, "SELECT * FROM monads WHERE monad_id IN ($(join(monad_ids,",")))") |> DataFrame
+    variation_ids = monad_df.variation_id
+    rulesets_variation_ids = monad_df.rulesets_variation_id
+    # I do not know if these will be in the proper order...
+    return Sampling(sampling_id, monad_min_length, monad_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids) # , addon_macros)
+end
+
+Sampling(sampling_id::Int) = getSampling(sampling_id)
 
 ##########################################
 ###############   Trial   ################
@@ -328,7 +376,7 @@ function Trial(monad_min_length::Int, sampling_ids::Vector{Int}, folder_ids::Vec
     return Trial(id, monad_min_length, sampling_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids) # , addon_macros)
 end
 
-function Trial(trial_id::Int; full_initialization::Bool=false)
+function getTrial(trial_id::Int; full_initialization::Bool=false)
     df = DBInterface.execute(db, "SELECT * FROM trials WHERE trial_id=$trial_id;") |> DataFrame
     if isempty(df) || isempty(getTrialSamplings(trial_id))
         error("No samplings found for trial_id=$trial_id. This trial did not run.")
@@ -352,3 +400,5 @@ function Trial(trial_id::Int; full_initialization::Bool=false)
     end
     return Trial(trial_id, monad_min_length, sampling_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids) # , addon_macros)
 end
+
+Trial(trial_id::Int) = getTrial(trial_id; full_initialization=false)

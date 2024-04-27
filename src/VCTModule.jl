@@ -1,12 +1,16 @@
 module VCTModule
 
-export initializeVCT, resetDatabase, selectTrialSimulations, runAbstractTrial
+# each file (includes below) has their own export statements
+export initializeVCT, resetDatabase, addGridVariation, addGridRulesetsVariation, runAbstractTrial, getTrialSamplings, getSimulations
 
 using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables
+using MAT, Statistics # files for VCTLoader.jl
+
 include("VCTClasses.jl")
-include("VCTDatabase.jl")
+include("VCTDatabase.jl") 
 include("VCTConfiguration.jl")
 include("VCTExtraction.jl")
+include("VCTLoader.jl")
 
 
 # I considered doing this with a structure of parameters, but I don't think that will work well here:
@@ -47,7 +51,6 @@ function initializeVCT(path_to_physicell::String, path_to_data::String)
 end
 
 function runSimulation(simulation::Simulation; setup=true)
-    println("------------------------------\n----------SETTING UP SIMULATION----------\n------------------------------")
     path_to_simulation_folder = "$(data_dir)/outputs/simulations/$(simulation.id)"
     path_to_simulation_output = "$(path_to_simulation_folder)/output"
     if isfile("$(path_to_simulation_output)/final.xml")
@@ -79,7 +82,7 @@ function runSimulation(simulation::Simulation; setup=true)
         append!(flags, ["-r", path_to_rules_file])
     end
     cmd = `$executable_str $config_str $flags`
-    println("\n----------RUNNING SIMULATION: $(simulation.id)----------\n\n")
+    println("\tRunning simulation: $(simulation.id)...")
     try
         run(pipeline(cmd, stdout="$(path_to_simulation_folder)/output.log", stderr="$(path_to_simulation_folder)/output.err"), wait=true)
     catch
@@ -89,24 +92,19 @@ function runSimulation(simulation::Simulation; setup=true)
         success = true
     end
     ran = true
-    # cmd = `$executable_str $config_str $flags > $(path_to_simulation_folder)/stdout.log 2> $(path_to_simulation_folder)/stderr.log`
     
-    # run(cmd, wait=true)
     return ran, success
 end
 
 function loadCustomCode(S::AbstractSampling)
     cflags, recompile, clean = getCompilerFlags(S)
-    println("\n\n\nCompiling custom code for $(S.folder_names.custom_code_folder) with flags: $cflags")
-    println("\tRecompile: $recompile")
-    println("\tClean: $clean\n\n\n")
 
     if !recompile
         return
     end
 
     if clean
-        cd(()->run(`make clean`), physicell_dir)
+        cd(()->run(pipeline(`make clean`, stdout=devnull)), physicell_dir)
     end
 
     path_to_folder = "$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)" # source dir needs to end in / or else the dir is copied into target, not the source files
@@ -115,6 +113,9 @@ function loadCustomCode(S::AbstractSampling)
     run(`cp $(path_to_folder)/Makefile $(physicell_dir)/Makefile`)
 
     cmd = `make -j 20 CC=$(PHYSICELL_CPP) PROGRAM_NAME=project_ccid_$(S.folder_ids.custom_code_id) CFLAGS=$(cflags)`
+
+    println("Compiling custom code for $(S.folder_names.custom_code_folder) with flags: $cflags")
+
     cd(() -> run(pipeline(cmd, stdout="$(path_to_folder)/compilation.log", stderr="$(path_to_folder)/compilation.err")), physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory; make sure the macro ADDON_PHYSIECM is defined (should work even if multiply defined, e.g., by Makefile)
     
     # check if the error file is empty, if it is, delete it
@@ -146,10 +147,6 @@ function getCompilerFlags(S::AbstractSampling)
 
     current_macros = readMacrosFile(S) # this will get all macros already in the macros file
     updated_macros = getMacroFlags(S) # this will get all macros already in the macros file
-
-    println("Current Macros: ", current_macros)
-    println("Updated Macros: ", updated_macros)
-    println("\n\n\n")
 
     if length(updated_macros) != length(current_macros)
         recompile = true
@@ -396,9 +393,9 @@ function recordMonadIDs(sampling::Sampling)
 end
 
 function recordMonadIDs(path_to_folder::String, monad_ids::Array{Int})
-    path_to_size_csv = "$(path_to_folder)/size.csv"
-    size_table = [string.(size(monad_ids))...] |> Tables.table
-    CSV.write(path_to_size_csv, size_table; writeheader=false)
+    # path_to_size_csv = "$(path_to_folder)/size.csv"
+    # size_table = [string.(size(monad_ids))...] |> Tables.table
+    # CSV.write(path_to_size_csv, size_table; writeheader=false)
 
     path_to_csv = "$(path_to_folder)/monads.csv"
     lines_table = compressMonadIDs(monad_ids)
@@ -427,9 +424,9 @@ function recordSamplingIDs(trial::Trial)
 end
 
 function recordSamplingIDs(path_to_folder::String, sampling_ids::Array{Int})
-    path_to_size_csv = "$(path_to_folder)/size.csv"
-    size_table = [string.(size(sampling_ids))...] |> Tables.table
-    CSV.write(path_to_size_csv, size_table; writeheader=false)
+    # path_to_size_csv = "$(path_to_folder)/size.csv"
+    # size_table = [string.(size(sampling_ids))...] |> Tables.table
+    # CSV.write(path_to_size_csv, size_table; writeheader=false)
 
     path_to_csv = "$(path_to_folder)/samplings.csv"
     lines_table = compressSamplingIDs(sampling_ids)
@@ -442,7 +439,8 @@ collectSimulationTasks(sampling::Sampling; use_previous_sims::Bool=false) = runS
 collectSimulationTasks(trial::Trial; use_previous_sims::Bool=false) = runTrial!(trial, use_previous_sims=use_previous_sims)
 
 function runAbstractTrial(T::AbstractTrial; use_previous_sims::Bool=false)
-    cd(()->run(`make clean`), physicell_dir)
+    cd(()->run(pipeline(`make clean`, stdout=devnull)), physicell_dir)
+
 
     getMacroFlags(T)
 
@@ -701,6 +699,7 @@ end
 getMonadSimulations(monad_id::Int) = selectConstituents("$(data_dir)/outputs/monads/$(monad_id)/simulations.csv")
 getSamplingMonads(sampling_id::Int) = selectConstituents("$(data_dir)/outputs/samplings/$(sampling_id)/monads.csv")
 getTrialSamplings(trial_id::Int) = selectConstituents("$(data_dir)/outputs/trials/$(trial_id)/samplings.csv")
+getTrialSamplings(trial::Trial) = getTrialSamplings(trial.id)
 
 function getTrialSimulations(trial_id::Int)
     sampling_ids = getTrialSamplings(trial_id)
@@ -716,5 +715,23 @@ getSimulations(trial::Trial) = getTrialSimulations(trial.id)
 getSimulations(sampling::Sampling) = getSamplingSimulations(sampling.id)
 getSimulations(monad::Monad) = getMonadSimulations(monad.id)
 getSimulations(simulation::Simulation) = [simulation.id]
+
+function getSimulations(trial_tuple::Tuple{DataType,Int}) 
+    error_string = "To use a tuple to get simulation IDs, the first element must be a subtype of AbstractTrial,"
+    error_string *= "\n\ti.e. in the set {Simulation, Monad, Sampling, Trial}"
+    error_string *= "\n\tInstead, the first element was $(trial_tuple[1])"
+    @assert trial_tuple[1] <: AbstractTrial error_string
+    if trial_tuple[1] == Simulation
+        return [trial_tuple[2]]
+    elseif trial_tuple[1] == Monad
+        return getMonadSimulations(trial_tuple[2])
+    elseif trial_tuple[1] == Sampling
+        return getSamplingSimulations(trial_tuple[2])
+    elseif trial_tuple[1] == Trial
+        return getTrialSimulations(trial_tuple[2])
+    else
+        error(error_string)
+    end
+end
 
 end
