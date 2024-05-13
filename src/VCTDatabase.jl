@@ -57,25 +57,25 @@ function createSchema()
     if isempty(base_config_folders)
         error("No folders in $(data_dir)/inputs/base_configs found. Add PhysiCell_settings.xml and rules files here.")
     end
-    for base_config_folders in base_config_folders
-        DBInterface.execute(db, "INSERT OR IGNORE INTO base_configs (folder_name) VALUES ('$(base_config_folders)');")
-        db_variations = "$(data_dir)/inputs/base_configs/$(base_config_folders)/variations.db" |> SQLite.DB
+    for base_config_folder in base_config_folders
+        DBInterface.execute(db, "INSERT OR IGNORE INTO base_configs (folder_name) VALUES ('$(base_config_folder)');")
+        db_variations = "$(data_dir)/inputs/base_configs/$(base_config_folder)/variations.db" |> SQLite.DB
         DBInterface.execute(db_variations, "CREATE TABLE IF NOT EXISTS variations (
             variation_id INTEGER PRIMARY KEY
         );")
         DBInterface.execute(db_variations, "INSERT OR IGNORE INTO variations (variation_id) VALUES(0);")
 
-        db_rulesets_collections = "$(data_dir)/inputs/base_configs/$(base_config_folders)/rulesets_collections.db" |> SQLite.DB
+        db_rulesets_collections = "$(data_dir)/inputs/base_configs/$(base_config_folder)/rulesets_collections.db" |> SQLite.DB
         DBInterface.execute(db_rulesets_collections, "CREATE TABLE IF NOT EXISTS rulesets_collections (
             rulesets_collection_id INTEGER PRIMARY KEY,
             folder_name UNIQUE,
             description TEXT
         );")
-        for rulesets_collection in readdir("$(data_dir)/inputs/base_configs/$(base_config_folders)/rulesets_collections", sort=false) |> filter(x->isdir("$(data_dir)/inputs/base_configs/$(base_config_folders)/rulesets_collections/$(x)"))
+        for rulesets_collection in readdir("$(data_dir)/inputs/base_configs/$(base_config_folder)/rulesets_collections", sort=false) |> filter(x->isdir("$(data_dir)/inputs/base_configs/$(base_config_folder)/rulesets_collections/$(x)"))
             DBInterface.execute(db_rulesets_collections, "INSERT OR IGNORE INTO rulesets_collections (folder_name) VALUES('$rulesets_collection');")
 
             # make the db with rulesets variations for the collection
-            db_rulesets_variations = "$(data_dir)/inputs/base_configs/$(base_config_folders)/rulesets_collections/$(rulesets_collection)/rulesets_variations.db" |> SQLite.DB
+            db_rulesets_variations = "$(data_dir)/inputs/base_configs/$(base_config_folder)/rulesets_collections/$(rulesets_collection)/rulesets_variations.db" |> SQLite.DB
             rulesets_variations_schema = """
                 rulesets_variation_id INTEGER PRIMARY KEY
             """

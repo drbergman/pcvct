@@ -51,7 +51,9 @@ function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{String}; require
             end
         end
         if !found
-            required ? error("Element not found") : return nothing
+            error_msg = "Element not found: $(join(xml_path, "//"))"
+            error_msg *= "\n\tFailed at: $(path_element)"
+            required ? error(error_msg) : return nothing
         end
     end
     return current_element
@@ -130,10 +132,6 @@ function loadConfiguration(M::AbstractMonad)
     end
     save_file(xml_doc, path_to_xml)
     closeXML(xml_doc)
-
-    if M.rulesets_variation_id != -1
-        loadRulesets(M)
-    end
     return
 end
 
@@ -145,6 +143,9 @@ function loadConfiguration(sampling::Sampling)
 end
 
 function loadRulesets(M::AbstractMonad)
+    if M.rulesets_variation_id == -1
+        return
+    end
     path_to_rulesets_xml = "$(data_dir)/inputs/base_configs/$(M.folder_names.base_config_folder)/rulesets_collections/$(M.folder_names.rulesets_collection_folder)/rulesets_variation_$(M.rulesets_variation_id).xml"
     if isfile(path_to_rulesets_xml)
         return
@@ -168,9 +169,21 @@ function loadRulesets(M::AbstractMonad)
     return
 end
 
-function motilityPath(cell_definition::String, field_name::String)
-    return ["cell_definitions", "cell_definition:name:$(cell_definition)", "phenotype", "motility", field_name]
+function cellDefinitionPath(cell_definition::String)
+    return ["cell_definitions", "cell_definition:name:$(cell_definition)"]
 end
+
+function phenotypePath(cell_definition::String)
+    return [cellDefinitionPath(cell_definition); "phenotype"]
+end
+
+cyclePath(cell_definition::String) = [phenotypePath(cell_definition); "cycle"]
+deathPath(cell_definition::String) = [phenotypePath(cell_definition); "death"]
+apoptosisPath(cell_definition::String) = [deathPath(cell_definition); "model:code:100"]
+necrosisPath(cell_definition::String) = [deathPath(cell_definition); "model:code:101"]
+
+motilityPath(cell_definition::String) = [phenotypePath(cell_definition); "motility"]
+motilityPath(cell_definition::String, field_name::String) = [motilityPath(cell_definition); field_name]
 
 ################## Variation Dimension Functions ##################
 struct ElementaryVariation{T}

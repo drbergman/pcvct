@@ -12,12 +12,6 @@ include("VCTConfiguration.jl")
 include("VCTExtraction.jl")
 include("VCTLoader.jl")
 
-
-# I considered doing this with a structure of parameters, but I don't think that will work well here:
-#   1. the main purpose would be to make this thread safe, but one machine will not run multiple sims at once most likely
-#   2. Even if we did run multiple at once, it would need to be from the same executable file, so all the global variables would be the same for all
-#   3. The cost of checking the global scope is absolutely minimal compared to the simulations I'm running, so who cares about
-
 physicell_dir::String = abspath("PhysiCell")
 data_dir::String = abspath("data")
 PHYSICELL_CPP::String = haskey(ENV, "PHYSICELL_CPP") ? ENV["PHYSICELL_CPP"] : "/opt/homebrew/bin/g++-13"
@@ -50,7 +44,7 @@ function initializeVCT(path_to_physicell::String, path_to_data::String)
     initializeDatabase("$(data_dir)/vct.db")
 end
 
-function runSimulation(simulation::Simulation; setup=true)
+function runSimulation(simulation::Simulation; do_full_setup::Bool=true, force_recompile::Bool=false)
     path_to_simulation_folder = "$(data_dir)/outputs/simulations/$(simulation.id)"
     path_to_simulation_output = "$(path_to_simulation_folder)/output"
     if isfile("$(path_to_simulation_output)/final.xml")
@@ -60,9 +54,10 @@ function runSimulation(simulation::Simulation; setup=true)
     end
     mkpath(path_to_simulation_output)
 
-    if setup
+    if do_full_setup
         loadConfiguration(simulation)
-        loadCustomCode(simulation)
+        loadRulesets(simulation)
+        loadCustomCode(simulation; force_recompile=force_recompile)
     end
 
     executable_str = "$(data_dir)/inputs/custom_codes/$(simulation.folder_names.custom_code_folder)/project" # path to executable
@@ -96,8 +91,10 @@ function runSimulation(simulation::Simulation; setup=true)
     return ran, success
 end
 
-function loadCustomCode(S::AbstractSampling)
+function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
     cflags, recompile, clean = getCompilerFlags(S)
+
+    recompile |= force_recompile # if force_recompile is true, then recompile no matter what
 
     if !recompile
         return
@@ -122,6 +119,11 @@ function loadCustomCode(S::AbstractSampling)
     if filesize("$(path_to_folder)/compilation.err") == 0
         rm("$(path_to_folder)/compilation.err", force=true)
     end
+
+    rm("$(physicell_dir)/custom_modules/custom.cpp", force=true)
+    rm("$(physicell_dir)/custom_modules/custom.h", force=true)
+    rm("$(physicell_dir)/main.cpp", force=true)
+    run(`cp $(physicell_dir)/sample_projects/Makefile-default $(physicell_dir)/Makefile`)
 
     mv("$(physicell_dir)/project_ccid_$(S.folder_ids.custom_code_id)", "$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)/project", force=true)
     return 
@@ -239,29 +241,124 @@ function readMacrosFile(S::AbstractSampling)
     return readlines(path_to_macros)
 end
 
-function deleteSimulation(simulation_ids::Vector{Int})
+function deleteSimulation(simulation_ids::Vector{Int}; delete_supers::Bool=true)
+    sim_df = DBInterface.execute(db, "SELECT * FROM simulations WHERE simulation_id IN ($(join(simulation_ids,",")));") |> DataFrame
     DBInterface.execute(db,"DELETE FROM simulations WHERE simulation_id IN ($(join(simulation_ids,",")));")
-    for simulation_id in simulation_ids
-        rm("$(data_dir)/outputs/simulations/$(simulation_id)", force=true, recursive=true)
-    end
-
-    if !(DBInterface.execute(db, "SELECT name FROM sqlite_master WHERE type='table' AND name='trials';") |> isempty)
-        trial_ids = DBInterface.execute(db, "SELECT trial_id FROM trials;") |> DataFrame |> x -> x.trial_id
-        for trial_id in trial_ids
-            trial_simulation_ids = selectTrialSimulations(trial_id)
-            filter!(x -> !(x in simulation_ids), trial_simulation_ids)
-            if isempty(trial_simulation_ids)
-                deleteTrial([trial_id])
-            else
-                recordTrialSimulationIDs(trial_id, trial_simulation_ids)
-            end
+    # for simulation_id in simulation_ids
+    for row in eachrow(sim_df)
+        rm("$(data_dir)/outputs/simulations/$(row.simulation_id)", force=true, recursive=true)
+        base_config_folder = getBaseConfigFolder(row.base_config_id)
+        query_str = "SELECT COUNT(*) FROM simulations WHERE base_config_id = $(row.base_config_id) AND variation_id = $(row.variation_id);"
+        result_df = DBInterface.execute(db, query_str) |> DataFrame
+        if result_df.var"COUNT(*)"[1] == 0
+            rm("$(data_dir)/inputs/base_configs/$(base_config_folder)/variations/variation_$(row.variation_id).xml", force=true)
+        end
+        rulesets_collection_folder = getRulesetsCollectionFolder(base_config_folder, row.rulesets_collection_id)
+        query_str = "SELECT COUNT(*) FROM simulations WHERE base_config_id = $(row.base_config_id) AND rulesets_collection_id = $(row.rulesets_collection_id) AND rulesets_variation_id = $(row.rulesets_variation_id);"
+        result_df = DBInterface.execute(db, query_str) |> DataFrame
+        if result_df.var"COUNT(*)"[1] == 0
+            rm("$(data_dir)/inputs/base_configs/$(base_config_folder)/rulesets_collections/$(rulesets_collection_folder)/rulesets_variation_$(row.rulesets_variation_id).xml", force=true)
         end
     end
 
+    if !delete_supers
+        return nothing
+    end
+
+    monad_ids = DBInterface.execute(db, "SELECT monad_id FROM monads;") |> DataFrame |> x -> x.monad_id
+    for monad_id in monad_ids
+        monad_simulation_ids = getMonadSimulations(monad_id)
+        if !any(x -> x in simulation_ids, monad_simulation_ids) # if none of the monad simulation ids are among those to be deleted, then nothing to do here
+            continue
+        end
+        filter!(x -> !(x in simulation_ids), monad_simulation_ids)
+        if isempty(monad_simulation_ids)
+            deleteMonad([monad_id]; delete_subs=false, delete_supers=true)
+        else
+            recordSimulationIDs(monad_id, monad_simulation_ids)
+        end
+    end
     return nothing
 end
 
-deleteSimulation(simulation_id::Int) = deleteSimulation([simulation_id])
+deleteSimulation(simulation_id::Int; delete_supers::Bool=true) = deleteSimulation([simulation_id]; delete_supers=delete_supers)
+
+function deleteMonad(monad_ids::Vector{Int}; delete_subs::Bool=true, delete_supers::Bool=true)
+    DBInterface.execute(db,"DELETE FROM monads WHERE monad_id IN ($(join(monad_ids,",")));")
+    for monad_id in monad_ids
+        if delete_subs
+            simulation_ids = getMonadSimulations(monad_id)
+            deleteSimulation(simulation_ids; delete_supers=false)
+        end
+        rm("$(data_dir)/outputs/monads/$(monad_id)", force=true, recursive=true)
+    end
+
+    if !delete_supers
+        return nothing
+    end
+    sampling_ids = DBInterface.execute(db, "SELECT sampling_id FROM samplings;") |> DataFrame |> x -> x.sampling_id
+    for sampling_id in sampling_ids
+        sampling_monad_ids = getSamplingMonads(sampling_id)
+        if !any(x -> x in monad_ids, sampling_monad_ids) # if none of the sampling monad ids are among those to be deleted, then nothing to do here
+            continue
+        end
+        filter!(x -> !(x in monad_ids), sampling_monad_ids)
+        if isempty(sampling_monad_ids)
+            deleteSampling([sampling_id]; delete_subs=false, delete_supers=true)
+        else
+            recordMonadIDs(sampling_id, sampling_monad_ids)
+        end
+    end
+    return nothing
+end
+
+deleteMonad(monad_id::Int; delete_subs::Bool=true, delete_supers::Bool=true) = deleteMonad([monad_id]; delete_subs=delete_subs, delete_supers=delete_supers)
+
+function deleteSampling(sampling_ids::Vector{Int}; delete_subs::Bool=true, delete_supers::Bool=true)
+    DBInterface.execute(db,"DELETE FROM samplings WHERE sampling_id IN ($(join(sampling_ids,",")));")
+    for sampling_id in sampling_ids
+        if delete_subs
+            monad_ids = getSamplingMonads(sampling_id)
+            deleteMonad(monad_ids; delete_subs=true, delete_supers=false)
+        end
+        rm("$(data_dir)/outputs/samplings/$(sampling_id)", force=true, recursive=true)
+    end
+
+    if !delete_supers
+        return nothing
+    end
+
+    trial_ids = DBInterface.execute(db, "SELECT trial_id FROM trials;") |> DataFrame |> x -> x.trial_id
+    for trial_id in trial_ids
+        trial_sampling_ids = getTrialSamplings(trial_id)
+        if !any(x -> x in sampling_ids, trial_sampling_ids) # if none of the trial sampling ids are among those to be deleted, then nothing to do here
+            continue
+        end
+        filter!(x -> !(x in sampling_ids), trial_sampling_ids)
+        if isempty(trial_sampling_ids)
+            deleteTrial([trial_id]; delete_subs=false)
+        else
+            recordSamplingIDs(trial_id, trial_sampling_ids)
+        end
+    end
+    return nothing
+end
+
+deleteSampling(sampling_id::Int; delete_subs::Bool=true, delete_supers::Bool=true) = deleteSampling([sampling_id]; delete_subs=delete_subs, delete_supers=delete_supers)
+
+function deleteTrial(trial_ids::Vector{Int}; delete_subs::Bool=true)
+    DBInterface.execute(db,"DELETE FROM trials WHERE trial_id IN ($(join(trial_ids,",")));")
+    for trial_id in trial_ids
+        if delete_subs
+            sampling_ids = getTrialSamplings(trial_id)
+            deleteSampling(sampling_ids; delete_subs=true, delete_supers=false)
+        end
+        rm("$(data_dir)/outputs/trials/$(trial_id)", force=true, recursive=true)
+    end
+    return nothing
+end
+
+deleteTrial(trial_id::Int; delete_subs::Bool=true) = deleteTrial([trial_id]; delete_subs=delete_subs)
 
 function resetDatabase()
 
@@ -333,7 +430,7 @@ function resetRulesetsCollectionFolder(rulesets_collection_folder::String)
     return nothing
 end
 
-function runMonad!(monad::Monad; use_previous_sims::Bool=false, setup::Bool=true)
+function runMonad(monad::Monad; use_previous_sims::Bool=false, do_full_setup::Bool=true, force_recompile::Bool=false)
     mkpath("$(data_dir)/outputs/monads/$(monad.id)")
     n_new_simulations = monad.min_length
     if use_previous_sims
@@ -344,15 +441,16 @@ function runMonad!(monad::Monad; use_previous_sims::Bool=false, setup::Bool=true
         return Task[]
     end
 
-    if setup
-        loadCustomCode(monad)
+    if do_full_setup
+        loadCustomCode(monad; force_recompile=force_recompile)
     end
     loadConfiguration(monad)
+    loadRulesets(monad)
 
     simulation_tasks = Task[]
     for i in 1:n_new_simulations
         simulation = Simulation(monad)
-        push!(simulation_tasks, @task runSimulation(simulation, setup=false))
+        push!(simulation_tasks, @task runSimulation(simulation; do_full_setup=false, force_recompile=false))
         push!(monad.simulation_ids, simulation.id)
     end
 
@@ -361,23 +459,25 @@ function runMonad!(monad::Monad; use_previous_sims::Bool=false, setup::Bool=true
     return simulation_tasks
 end
 
-function recordSimulationIDs(monad::Monad)
-    path_to_folder = "$(data_dir)/outputs/monads/$(monad.id)/"
+recordSimulationIDs(monad::Monad) = recordSimulationIDs(monad.id, monad.simulation_ids)
+
+function recordSimulationIDs(monad_id::Int, simulation_ids::Array{Int})
+    path_to_folder = "$(data_dir)/outputs/monads/$(monad_id)/"
     mkpath(path_to_folder)
     path_to_csv = "$(path_to_folder)/simulations.csv"
-    lines_table = compressSimulationIDs(monad.simulation_ids)
+    lines_table = compressSimulationIDs(simulation_ids)
     CSV.write(path_to_csv, lines_table; writeheader=false)
 end
 
-function runSampling!(sampling::Sampling; use_previous_sims::Bool=false)
+function runSampling(sampling::Sampling; use_previous_sims::Bool=false, force_recompile::Bool=false)
     mkpath("$(data_dir)/outputs/samplings/$(sampling.id)")
 
-    loadCustomCode(sampling)
+    loadCustomCode(sampling; force_recompile=force_recompile)
 
     simulation_tasks = []
     for index in eachindex(sampling.variation_ids)
         monad = Monad(sampling, index) # instantiate a monad with the variation_id and the simulation ids already found
-        append!(simulation_tasks, runMonad!(monad, use_previous_sims=use_previous_sims, setup=false)) # run the monad and add the number of new simulations to the total
+        append!(simulation_tasks, runMonad(monad, use_previous_sims=use_previous_sims, do_full_setup=false, force_recompile=false)) # run the monad and add the number of new simulations to the total
     end
 
     recordMonadIDs(sampling) # record the monad ids in the sampling
@@ -385,30 +485,22 @@ function runSampling!(sampling::Sampling; use_previous_sims::Bool=false)
 end
 
 function recordMonadIDs(sampling_id::Int, monad_ids::Array{Int})
-    recordMonadIDs("$(data_dir)/outputs/samplings/$(sampling_id)", monad_ids)
-end
-
-function recordMonadIDs(sampling::Sampling)
-    recordMonadIDs("$(data_dir)/outputs/samplings/$(sampling.id)", sampling.monad_ids)
-end
-
-function recordMonadIDs(path_to_folder::String, monad_ids::Array{Int})
-    # path_to_size_csv = "$(path_to_folder)/size.csv"
-    # size_table = [string.(size(monad_ids))...] |> Tables.table
-    # CSV.write(path_to_size_csv, size_table; writeheader=false)
-
+    path_to_folder = "$(data_dir)/outputs/samplings/$(sampling_id)/"
+    mkpath(path_to_folder)
     path_to_csv = "$(path_to_folder)/monads.csv"
     lines_table = compressMonadIDs(monad_ids)
     CSV.write(path_to_csv, lines_table; writeheader=false)
 end
 
-function runTrial!(trial::Trial; use_previous_sims::Bool=false)
+recordMonadIDs(sampling::Sampling) = recordMonadIDs(sampling.id, sampling.monad_ids)
+
+function runTrial(trial::Trial; use_previous_sims::Bool=false, force_recompile::Bool=true)
     mkpath("$(data_dir)/outputs/trials/$(trial.id)")
 
     simulation_tasks = []
     for i in eachindex(trial.sampling_ids)
         sampling = Sampling(trial, i) # instantiate a sampling with the variation_ids and the simulation ids already found
-        append!(simulation_tasks, runSampling!(sampling, use_previous_sims=use_previous_sims)) # run the sampling and add the number of new simulations to the total
+        append!(simulation_tasks, runSampling(sampling; use_previous_sims=use_previous_sims, force_recompile=force_recompile)) # run the sampling and add the number of new simulations to the total
     end
 
     recordSamplingIDs(trial) # record the sampling ids in the trial
@@ -433,18 +525,17 @@ function recordSamplingIDs(path_to_folder::String, sampling_ids::Array{Int})
     CSV.write(path_to_csv, lines_table; writeheader=false)
 end
 
-collectSimulationTasks(simulation::Simulation; use_previous_sims::Bool=false) = [@task runSimulation(simulation, setup=false)]
-collectSimulationTasks(monad::Monad; use_previous_sims::Bool=false) = runMonad!(monad, use_previous_sims=use_previous_sims)
-collectSimulationTasks(sampling::Sampling; use_previous_sims::Bool=false) = runSampling!(sampling, use_previous_sims=use_previous_sims)
-collectSimulationTasks(trial::Trial; use_previous_sims::Bool=false) = runTrial!(trial, use_previous_sims=use_previous_sims)
+collectSimulationTasks(simulation::Simulation; use_previous_sims::Bool=false, force_recompile::Bool=false) = [@task runSimulation(simulation; do_full_setup=true, force_recompile=force_recompile)]
+collectSimulationTasks(monad::Monad; use_previous_sims::Bool=false, force_recompile::Bool=false) = runMonad(monad; use_previous_sims=use_previous_sims, do_full_setup=true, force_recompile=force_recompile)
+collectSimulationTasks(sampling::Sampling; use_previous_sims::Bool=false, force_recompile::Bool=false) = runSampling(sampling; use_previous_sims=use_previous_sims, force_recompile=force_recompile)
+collectSimulationTasks(trial::Trial; use_previous_sims::Bool=false, force_recompile::Bool=false) = runTrial(trial; use_previous_sims=use_previous_sims, force_recompile=force_recompile)
 
-function runAbstractTrial(T::AbstractTrial; use_previous_sims::Bool=false)
+function runAbstractTrial(T::AbstractTrial; use_previous_sims::Bool=false, force_recompile::Bool=true)
     cd(()->run(pipeline(`make clean`, stdout=devnull)), physicell_dir)
-
 
     getMacroFlags(T)
 
-    simulation_tasks = collectSimulationTasks(T, use_previous_sims=use_previous_sims)
+    simulation_tasks = collectSimulationTasks(T; use_previous_sims=use_previous_sims, force_recompile=force_recompile)
     n_ran = 0
     n_success = 0
 
