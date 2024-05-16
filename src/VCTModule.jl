@@ -747,7 +747,7 @@ function compressIDs(ids::Vector{Int})
             next_line = string(ids[1]) # just add it to the list
             popfirst!(ids) # and remove it from the list of ids
         else # if there's more than one id left
-            I = findfirst(diff(ids) .> 1) # find the first index where the difference between consecutive ids is greater than 1
+            I = findfirst(diff(ids) .!= 1) # find the first index where the difference between consecutive ids is greater than 1
             I = isnothing(I) ? length(ids) : I # if none found, then all the diffs are 1 so we want to take the entire list
             if I > 1 # if compressing multiple ids
                 next_line = "$(ids[1]):$(ids[I])" # add the first and last id separated by a colon
