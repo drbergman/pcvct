@@ -1,25 +1,7 @@
 export ElementaryVariation, addCustomDataVariationDimension!
 
-function getConfigDB(base_config_folder::String)
-    return "$(data_dir)/inputs/base_configs/$(base_config_folder)/variations.db" |> SQLite.DB
-end
 
-getConfigDB(base_config_id::Int) = getBaseConfigFolder(base_config_id) |> getConfigDB
-getConfigDB(S::AbstractSampling) = getConfigDB(S.folder_names.base_config_folder)
-
-function getRulesetsCollectionsDB(base_config_folder::String)
-    return (isabspath(base_config_folder) ? "$(base_config_folder)/rulesets_collections.db" : "$(data_dir)/inputs/base_configs/$(base_config_folder)/rulesets_collections.db") |> SQLite.DB
-end
-
-getRulesetsCollectionsDB(S::AbstractSampling) = getRulesetsCollectionsDB(S.folder_names.base_config_folder)
-getRulesetsCollectionsDB(base_config_id::Int) = getRulesetsCollectionsDB(getBaseConfigFolder(base_config_id))
-
-function getRulesetsVariationsDB(base_config_folder::String, rulesets_collection_folder::String)
-    return "$(data_dir)/inputs/base_configs/$(base_config_folder)/rulesets_collections/$(rulesets_collection_folder)/rulesets_variations.db" |> SQLite.DB
-end
-
-getRulesetsVariationsDB(M::AbstractMonad) = getRulesetsVariationsDB(M.folder_names.base_config_folder, M.folder_names.rulesets_collection_folder)
-getRulesetsVariationsDB(base_config_id::Int, rulesets_collection_id::Int) = getRulesetsVariationsDB(getBaseConfigFolder(base_config_id), getRulesetsCollectionFolder(base_config_id, rulesets_collection_id))
+################## XML Functions ##################
 
 function openXML(path_to_xml::String)
     return parse_file(path_to_xml)
@@ -112,17 +94,19 @@ function updateFieldsFromCSV(path_to_csv::String,path_to_xml::String)
     return openXML(path_to_xml) |> x->updateFieldsFromCSV(x, path_to_csv)
 end
 
+################## Configuration Functions ##################
+
 function loadConfiguration(M::AbstractMonad)
-    path_to_xml = "$(data_dir)/inputs/base_configs/$(M.folder_names.base_config_folder)/variations/variation_$(M.variation_id).xml"
+    path_to_xml = "$(data_dir)/inputs/configs/$(M.folder_names.config_folder)/variations/variation_$(M.variation_id).xml"
     if isfile(path_to_xml)
         return
     end
     mkpath(dirname(path_to_xml))
-    path_to_xml_src = "$(data_dir)/inputs/base_configs/$(M.folder_names.base_config_folder)/PhysiCell_settings.xml"
+    path_to_xml_src = "$(data_dir)/inputs/configs/$(M.folder_names.config_folder)/PhysiCell_settings.xml"
     cp(path_to_xml_src, path_to_xml, force=true)
 
     xml_doc = openXML(path_to_xml)
-    variation_row = selectRow("variations", "WHERE variation_id=$(M.variation_id);", db=getConfigDB(M.folder_ids.base_config_id))
+    variation_row = selectRow("variations", "WHERE variation_id=$(M.variation_id);", db=getConfigDB(M.folder_ids.config_id))
     for column_name in names(variation_row)
         if column_name == "variation_id"
             continue
@@ -146,14 +130,15 @@ function loadRulesets(M::AbstractMonad)
     if M.rulesets_variation_id == -1
         return
     end
-    path_to_rulesets_xml = "$(data_dir)/inputs/base_configs/$(M.folder_names.base_config_folder)/rulesets_collections/$(M.folder_names.rulesets_collection_folder)/rulesets_variation_$(M.rulesets_variation_id).xml"
+    path_to_rulesets_collections_folder = "$(data_dir)/inputs/rulesets_collections/$(M.folder_names.rulesets_collection_folder)"
+    path_to_rulesets_xml = "$(path_to_rulesets_collections_folder)/rulesets_collections_variations/rulesets_variation_$(M.rulesets_variation_id).xml"
     if isfile(path_to_rulesets_xml)
         return
     end
     mkpath(dirname(path_to_rulesets_xml))
 
     # create xml file using LightXML
-    xml_doc = parse_file("$(data_dir)/inputs/base_configs/$(M.folder_names.base_config_folder)/rulesets_collections/$(M.folder_names.rulesets_collection_folder)/base_rulesets.xml")
+    xml_doc = parse_file("$(path_to_rulesets_collections_folder)/base_rulesets.xml")
     if M.rulesets_variation_id != 0 # only update if not using hte base variation for the ruleset
         variation_row = selectRow("rulesets_variations", "WHERE rulesets_variation_id=$(M.rulesets_variation_id);", db=getRulesetsVariationsDB(M))
         for column_name in names(variation_row)
@@ -168,6 +153,8 @@ function loadRulesets(M::AbstractMonad)
     closeXML(xml_doc)
     return
 end
+
+################## XML Path Helper Functions ##################
 
 function cellDefinitionPath(cell_definition::String)
     return ["cell_definitions", "cell_definition:name:$(cell_definition)"]
@@ -186,6 +173,7 @@ motilityPath(cell_definition::String) = [phenotypePath(cell_definition); "motili
 motilityPath(cell_definition::String, field_name::String) = [motilityPath(cell_definition); field_name]
 
 ################## Variation Dimension Functions ##################
+
 struct ElementaryVariation{T}
     xml_path::Vector{String}
     values::Vector{T}

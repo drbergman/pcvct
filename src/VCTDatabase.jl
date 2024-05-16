@@ -2,6 +2,8 @@ export printSimulationsTable, printVariationsTable
 
 db::SQLite.DB = SQLite.DB()
 
+################## Database Initialization Functions ##################
+
 function initializeDatabase(path_to_database::String)
     println(path_to_database)
     println("loading up the global db variable")
@@ -20,8 +22,8 @@ function createSchema()
     if !("custom_codes" in data_dir_contents)
         error("No $(data_dir)/inputs/custom_codes found. This is where to put the folders for custom_modules, main.cpp, and Makefile.")
     end
-    if !("base_configs" in data_dir_contents)
-        error("No $(data_dir)/inputs/base_configs found. This is where to put the folders for config files and rules files.")
+    if !("configs" in data_dir_contents)
+        error("No $(data_dir)/inputs/configs found. This is where to put the folders for config files and rules files.")
     end
 
     # initialize and populate custom_codes table
@@ -45,21 +47,21 @@ function createSchema()
     createICTable("substrates", data_dir_contents=data_dir_contents)
     createICTable("ecms", data_dir_contents=data_dir_contents)
 
-    # initialize and populate base_configs table
-    base_configs_schema = """
-        base_config_id INTEGER PRIMARY KEY,
+    # initialize and populate configs table
+    configs_schema = """
+        config_id INTEGER PRIMARY KEY,
         folder_name UNIQUE,
         description TEXT
     """
-    createPCVCTTable("base_configs", base_configs_schema)
+    createPCVCTTable("configs", configs_schema)
         
-    base_config_folders = readdir("$(data_dir)/inputs/base_configs", sort=false) |> filter(x->isdir("$(data_dir)/inputs/base_configs/$(x)"))
-    if isempty(base_config_folders)
-        error("No folders in $(data_dir)/inputs/base_configs found. Add PhysiCell_settings.xml and rules files here.")
+    config_folders = readdir("$(data_dir)/inputs/configs", sort=false) |> filter(x->isdir("$(data_dir)/inputs/configs/$(x)"))
+    if isempty(config_folders)
+        error("No folders in $(data_dir)/inputs/configs found. Add PhysiCell_settings.xml and rules files here.")
     end
-    for base_config_folder in base_config_folders
-        DBInterface.execute(db, "INSERT OR IGNORE INTO base_configs (folder_name) VALUES ('$(base_config_folder)');")
-        db_variations = "$(data_dir)/inputs/base_configs/$(base_config_folder)/variations.db" |> SQLite.DB
+    for config_folder in config_folders
+        DBInterface.execute(db, "INSERT OR IGNORE INTO configs (folder_name) VALUES ('$(config_folder)');")
+        db_variations = "$(data_dir)/inputs/configs/$(config_folder)/variations.db" |> SQLite.DB
         createPCVCTTable("variations", "variation_id INTEGER PRIMARY KEY"; db=db_variations)
         DBInterface.execute(db_variations, "INSERT OR IGNORE INTO variations (variation_id) VALUES(0);")
     end
@@ -88,7 +90,7 @@ function createSchema()
         ic_cell_id INTEGER,
         ic_substrate_id INTEGER,
         ic_ecm_id INTEGER,
-        base_config_id INTEGER,
+        config_id INTEGER,
         rulesets_collection_id INTEGER,
         variation_id INTEGER,
         rulesets_variation_id INTEGER,
@@ -100,8 +102,10 @@ function createSchema()
             REFERENCES ic_substrates (ic_substrate_id),
         FOREIGN KEY (ic_ecm_id)
             REFERENCES ic_ecms (ic_ecm_id),
-        FOREIGN KEY (base_config_id)
-            REFERENCES base_configs (base_config_id)
+        FOREIGN KEY (config_id)
+            REFERENCES configs (config_id)
+        FOREIGN KEY (rulesets_collection_id)
+            REFERENCES rulesets_collections (rulesets_collection_id)
     """
     createPCVCTTable("simulations", simulations_schema)
 
@@ -112,7 +116,7 @@ function createSchema()
         ic_cell_id INTEGER,
         ic_substrate_id INTEGER,
         ic_ecm_id INTEGER,
-        base_config_id INTEGER,
+        config_id INTEGER,
         rulesets_collection_id INTEGER,
         variation_id INTEGER,
         rulesets_variation_id INTEGER,
@@ -124,9 +128,11 @@ function createSchema()
             REFERENCES ic_substrates (ic_substrate_id),
         FOREIGN KEY (ic_ecm_id)
             REFERENCES ic_ecms (ic_ecm_id),
-        FOREIGN KEY (base_config_id)
-            REFERENCES base_configs (base_config_id),
-        UNIQUE (custom_code_id,ic_cell_id,ic_substrate_id,ic_ecm_id,base_config_id,rulesets_collection_id,variation_id,rulesets_variation_id)
+        FOREIGN KEY (config_id)
+            REFERENCES configs (config_id),
+        FOREIGN KEY (rulesets_collection_id)
+            REFERENCES rulesets_collections (rulesets_collection_id),
+        UNIQUE (custom_code_id,ic_cell_id,ic_substrate_id,ic_ecm_id,config_id,rulesets_collection_id,variation_id,rulesets_variation_id)
     """
     createPCVCTTable("monads", monads_schema)
 
@@ -137,7 +143,7 @@ function createSchema()
         ic_cell_id INTEGER,
         ic_substrate_id INTEGER,
         ic_ecm_id INTEGER,
-        base_config_id INTEGER,
+        config_id INTEGER,
         rulesets_collection_id INTEGER,
         FOREIGN KEY (custom_code_id)
             REFERENCES custom_codes (custom_code_id),
@@ -147,8 +153,10 @@ function createSchema()
             REFERENCES ic_substrates (ic_substrate_id),
         FOREIGN KEY (ic_ecm_id)
             REFERENCES ic_ecms (ic_ecm_id),
-        FOREIGN KEY (base_config_id)
-            REFERENCES base_configs (base_config_id)
+        FOREIGN KEY (config_id)
+            REFERENCES configs (config_id),
+        FOREIGN KEY (rulesets_collection_id)
+            REFERENCES rulesets_collections (rulesets_collection_id)
     """
     createPCVCTTable("samplings", samplings_schema)
 
@@ -227,6 +235,31 @@ function createPCVCTTable(table_name::String, schema::String; db::SQLite.DB=db)
     return
 end
 
+################## DB Interface Functions ##################
+
+function getConfigDB(config_folder::String)
+    return "$(data_dir)/inputs/configs/$(config_folder)/variations.db" |> SQLite.DB
+end
+
+getConfigDB(config_id::Int) = getConfigFolder(config_id) |> getConfigDB
+getConfigDB(S::AbstractSampling) = getConfigDB(S.folder_names.config_folder)
+
+# function getRulesetsCollectionsDB(config_folder::String)
+#     return (isabspath(config_folder) ? "$(config_folder)/rulesets_collections.db" : "$(data_dir)/inputs/configs/$(config_folder)/rulesets_collections.db") |> SQLite.DB
+# end
+
+# getRulesetsCollectionsDB(S::AbstractSampling) = getRulesetsCollectionsDB(S.folder_names.config_folder)
+# getRulesetsCollectionsDB(config_id::Int) = getRulesetsCollectionsDB(getConfigFolder(config_id))
+
+function getRulesetsVariationsDB(rulesets_collection_folder::String)
+    return "$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)/rulesets_variations.db" |> SQLite.DB
+end
+
+getRulesetsVariationsDB(M::AbstractMonad) = getRulesetsVariationsDB(M.folder_names.rulesets_collection_folder)
+getRulesetsVariationsDB(rulesets_collection_id::Int) = getRulesetsVariationsDB(getRulesetsCollectionFolder(rulesets_collection_id))
+
+########### Retrieving Database Information Functions ###########
+
 function selectRow(table_name::String, condition_stmt::String; db::SQLite.DB=db)
     s = "SELECT * FROM $(table_name) " * condition_stmt * ";"
     df = DBInterface.execute(db, s) |> DataFrame
@@ -250,22 +283,21 @@ end
 
 getOptionalFolder(table_name::String, id_name::String, id::Int; db::SQLite.DB=db) = id == -1 ? "" : getFolder(table_name, id_name, id; db=db)
 
-getBaseConfigFolder(base_config_id::Int) = getFolder("base_configs", "base_config_id", base_config_id)
+getConfigFolder(config_id::Int) = getFolder("configs", "config_id", config_id)
 getICCellFolder(ic_cell_id::Int) = getOptionalFolder("ic_cells", "ic_cell_id", ic_cell_id)
 getICSubstrateFolder(ic_substrate_id::Int) = getOptionalFolder("ic_substrates", "ic_substrate_id", ic_substrate_id)
 getICECMFolder(ic_ecm_id::Int) = getOptionalFolder("ic_ecms", "ic_ecm_id", ic_ecm_id)
-getRulesetsCollectionFolder(base_config_folder::String, rulesets_collection_id::Int) = getOptionalFolder("rulesets_collections", "rulesets_collection_id", rulesets_collection_id; db=getRulesetsCollectionsDB(base_config_folder))
-getRulesetsCollectionFolder(base_config_id::Int, rulesets_collection_id::Int) = getRulesetsCollectionFolder(getBaseConfigFolder(base_config_id), rulesets_collection_id)
+getRulesetsCollectionFolder(rulesets_collection_id::Int) = getOptionalFolder("rulesets_collections", "rulesets_collection_id", rulesets_collection_id)
 getCustomCodesFolder(custom_code_id::Int) = getFolder("custom_codes", "custom_code_id", custom_code_id)
 
-function retrievePathInfo(base_config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, ic_substrate_id::Int, ic_ecm_id::Int, custom_code_id::Int)
-    base_config_folder = getBaseConfigFolder(base_config_id)
+function retrievePathInfo(config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, ic_substrate_id::Int, ic_ecm_id::Int, custom_code_id::Int)
+    config_folder = getConfigFolder(config_id)
     ic_cell_folder = getICCellFolder(ic_cell_id)
     ic_substrate_folder = getICSubstrateFolder(ic_substrate_id)
     ic_ecm_folder = getICECMFolder(ic_ecm_id)
-    rulesets_collection_folder = getRulesetsCollectionFolder(base_config_folder, rulesets_collection_id)
+    rulesets_collection_folder = getRulesetsCollectionFolder(rulesets_collection_id)
     custom_code_folder = getCustomCodesFolder(custom_code_id)
-    return base_config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder
+    return config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder
 end
 
 function retrieveID(table_name::String, folder_name::String; db::SQLite.DB=db)
@@ -277,16 +309,17 @@ function retrieveID(table_name::String, folder_name::String; db::SQLite.DB=db)
 end
 
 function retrieveID(folder_names::AbstractSamplingFolders)
-    base_config_id = retrieveID("base_configs", folder_names.base_config_folder)
-    rulesets_collection_id = retrieveID("rulesets_collections", folder_names.rulesets_collection_folder, db=getRulesetsCollectionsDB(folder_names.base_config_folder))
+    config_id = retrieveID("configs", folder_names.config_folder)
+    rulesets_collection_id = retrieveID("rulesets_collections", folder_names.rulesets_collection_folder)
     ic_cell_id = retrieveID("ic_cells", folder_names.ic_cell_folder)
     ic_substrate_id = retrieveID("ic_substrates", folder_names.ic_substrate_folder)
     ic_ecm_id = retrieveID("ic_ecms", folder_names.ic_ecm_folder)
     custom_code_id = retrieveID("custom_codes", folder_names.custom_code_folder)
-    return base_config_id, rulesets_collection_id, ic_cell_id, ic_substrate_id, ic_ecm_id, custom_code_id
+    return config_id, rulesets_collection_id, ic_cell_id, ic_substrate_id, ic_ecm_id, custom_code_id
 end
 
 ########### Summarizing Database Functions ###########
+
 getVariations(M::AbstractMonad) = [M.variation_id]
 getVariations(sampling::Sampling) = sampling.variation_ids
 
@@ -350,44 +383,22 @@ end
 function printSimulationsTableFromQuery(query::String)
     df = DBInterface.execute(db, query) |> DataFrame
     addFolderColumns!(df)
-    println(df[!,["simulation_id","custom_code_folder","ic_cell_folder","ic_substrate_folder","ic_ecm_folder","base_config_folder","rulesets_collection_folder","variation_id","rulesets_variation_id"]])
+    println(df[!,["simulation_id","custom_code_folder","ic_cell_folder","ic_substrate_folder","ic_ecm_folder","config_folder","rulesets_collection_folder","variation_id","rulesets_variation_id"]])
 end
     
 function addFolderColumns!(df::DataFrame)
-    required_col_names = ["custom_code", "base_config"]
-    for col_name in required_col_names
+    col_names = ["custom_code", "config", "rulesets_collection_folder", "ic_cell", "ic_substrate", "ic_ecm"]
+    get_function = [getFolder, getFolder, getOptionalFolder, getOptionalFolder, getOptionalFolder, getOptionalFolder]
+    for (col_name, get_function) in zip(col_names, get_function)
         if !("$(col_name)_id" in names(df))
             continue
         end
-        D = Dict{Int, String}()
         unique_ids = unique(df[!,"$(col_name)_id"])
+        D = Dict{Int, String}()
         for id in unique_ids
-            D[id] = getFolder("$(col_name)s", "$(col_name)_id", id)
+            D[id] = get_function("$(col_name)s", "$(col_name)_id", id)
         end
         df[!,"$(col_name)_folder"] .= [D[id] for id in df[!,"$(col_name)_id"]]
-    end
-    optional_col_names = ["ic_cell", "ic_substrate", "ic_ecm"]
-    for col_name in optional_col_names
-        if !("$(col_name)_id" in names(df))
-            continue
-        end
-        D = Dict{Int, String}()
-        unique_ids = unique(df[!,"$(col_name)_id"])
-        for id in unique_ids
-            D[id] = getOptionalFolder("$(col_name)s", "$(col_name)_id", id)
-        end
-        df[!,"$(col_name)_folder"] .= [D[id] for id in df[!,"$(col_name)_id"]]
-    end
-
-    if "base_config_id" in names(df) && "rulesets_collection_id" in names(df)
-        D = Dict{Tuple{Int,Int},String}()
-        unique_tuples = unique(df[!, ["base_config_id", "rulesets_collection_id"]])
-        for row in eachrow(unique_tuples)
-            base_config_id = row.base_config_id
-            rulesets_collection_id = row.rulesets_collection_id
-            D[(base_config_id, rulesets_collection_id)] = getRulesetsCollectionFolder(base_config_id, rulesets_collection_id)
-        end
-        df[!, "rulesets_collection_folder"] .= [D[(row.base_config_id, row.rulesets_collection_id)] for row in eachrow(df)]
     end
     return df
 end

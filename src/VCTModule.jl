@@ -16,6 +16,8 @@ physicell_dir::String = abspath("PhysiCell")
 data_dir::String = abspath("data")
 PHYSICELL_CPP::String = haskey(ENV, "PHYSICELL_CPP") ? ENV["PHYSICELL_CPP"] : "/opt/homebrew/bin/g++-13"
 
+################## Initialization Functions ##################
+
 function pcvctLogo()
     return """
     \n
@@ -44,52 +46,7 @@ function initializeVCT(path_to_physicell::String, path_to_data::String)
     initializeDatabase("$(data_dir)/vct.db")
 end
 
-function runSimulation(simulation::Simulation; do_full_setup::Bool=true, force_recompile::Bool=false)
-    path_to_simulation_folder = "$(data_dir)/outputs/simulations/$(simulation.id)"
-    path_to_simulation_output = "$(path_to_simulation_folder)/output"
-    if isfile("$(path_to_simulation_output)/final.xml")
-        ran = false
-        success = true
-        return ran, success
-    end
-    mkpath(path_to_simulation_output)
-
-    if do_full_setup
-        loadConfiguration(simulation)
-        loadRulesets(simulation)
-        loadCustomCode(simulation; force_recompile=force_recompile)
-    end
-
-    executable_str = "$(data_dir)/inputs/custom_codes/$(simulation.folder_names.custom_code_folder)/project" # path to executable
-    config_str =  "$(data_dir)/inputs/base_configs/$(simulation.folder_names.base_config_folder)/variations/variation_$(simulation.variation_id).xml" # path to config file
-    flags = ["-o", path_to_simulation_output]
-    if simulation.folder_ids.ic_cell_id != -1
-        append!(flags, ["-i", "$(data_dir)/inputs/ics/cells/$(simulation.folder_names.ic_cell_folder)/cells.csv"]) # if ic file included (id != -1), then include this in the command
-    end
-    if simulation.folder_ids.ic_substrate_id != -1
-        append!(flags, ["-s", "$(data_dir)/inputs/ics/substrates/$(simulation.folder_names.ic_substrate_folder)/substrates.csv"]) # if ic file included (id != -1), then include this in the command
-    end
-    if simulation.folder_ids.ic_ecm_id != -1
-        append!(flags, ["-e", "$(data_dir)/inputs/ics/ecms/$(simulation.folder_names.ic_ecm_folder)/ecm.csv"]) # if ic file included (id != -1), then include this in the command
-    end
-    if simulation.rulesets_variation_id != -1
-        path_to_rules_file = "$(data_dir)/inputs/base_configs/$(simulation.folder_names.base_config_folder)/rulesets_collections/$(simulation.folder_names.rulesets_collection_folder)/rulesets_variation_$(simulation.rulesets_variation_id).xml"
-        append!(flags, ["-r", path_to_rules_file])
-    end
-    cmd = `$executable_str $config_str $flags`
-    println("\tRunning simulation: $(simulation.id)...")
-    try
-        run(pipeline(cmd, stdout="$(path_to_simulation_folder)/output.log", stderr="$(path_to_simulation_folder)/output.err"), wait=true)
-    catch
-        success = false
-    else
-        rm("$(path_to_simulation_folder)/output.err", force=true)
-        success = true
-    end
-    ran = true
-    
-    return ran, success
-end
+################## Compilation Functions ##################
 
 function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
     cflags, recompile, clean = getCompilerFlags(S)
@@ -210,7 +167,7 @@ function checkPhysiECMMacro(S::AbstractSampling)
 end
 
 function checkPhysiECMInConfig(M::AbstractMonad)
-    path_to_xml = "$(data_dir)/inputs/base_configs/$(M.folder_names.base_config_folder)/variations/variation_$(M.variation_id).xml"
+    path_to_xml = "$(data_dir)/inputs/configs/$(M.folder_names.config_folder)/variations/variation_$(M.variation_id).xml"
     xml_path = ["microenvironment_setup", "ecm_setup"]
     ecm_setup_element = retrieveElement(path_to_xml, xml_path; required=false)
     if !isnothing(ecm_setup_element) && attribute(ecm_setup_element, "enabled") == "true" # note: attribute returns nothing if the attribute does not exist
@@ -241,23 +198,25 @@ function readMacrosFile(S::AbstractSampling)
     return readlines(path_to_macros)
 end
 
+################## Deletion Functions ##################
+
 function deleteSimulation(simulation_ids::Vector{Int}; delete_supers::Bool=true)
     sim_df = DBInterface.execute(db, "SELECT * FROM simulations WHERE simulation_id IN ($(join(simulation_ids,",")));") |> DataFrame
     DBInterface.execute(db,"DELETE FROM simulations WHERE simulation_id IN ($(join(simulation_ids,",")));")
     # for simulation_id in simulation_ids
     for row in eachrow(sim_df)
         rm("$(data_dir)/outputs/simulations/$(row.simulation_id)", force=true, recursive=true)
-        base_config_folder = getBaseConfigFolder(row.base_config_id)
-        query_str = "SELECT COUNT(*) FROM simulations WHERE base_config_id = $(row.base_config_id) AND variation_id = $(row.variation_id);"
+        config_folder = getConfigFolder(row.config_id)
+        query_str = "SELECT COUNT(*) FROM simulations WHERE config_id = $(row.config_id) AND variation_id = $(row.variation_id);"
         result_df = DBInterface.execute(db, query_str) |> DataFrame
         if result_df.var"COUNT(*)"[1] == 0
-            rm("$(data_dir)/inputs/base_configs/$(base_config_folder)/variations/variation_$(row.variation_id).xml", force=true)
+            rm("$(data_dir)/inputs/configs/$(config_folder)/variations/variation_$(row.variation_id).xml", force=true)
         end
-        rulesets_collection_folder = getRulesetsCollectionFolder(base_config_folder, row.rulesets_collection_id)
-        query_str = "SELECT COUNT(*) FROM simulations WHERE base_config_id = $(row.base_config_id) AND rulesets_collection_id = $(row.rulesets_collection_id) AND rulesets_variation_id = $(row.rulesets_variation_id);"
+        rulesets_collection_folder = getRulesetsCollectionFolder(row.rulesets_collection_id)
+        query_str = "SELECT COUNT(*) FROM simulations WHERE rulesets_collection_id = $(row.rulesets_collection_id) AND rulesets_variation_id = $(row.rulesets_variation_id);"
         result_df = DBInterface.execute(db, query_str) |> DataFrame
         if result_df.var"COUNT(*)"[1] == 0
-            rm("$(data_dir)/inputs/base_configs/$(base_config_folder)/rulesets_collections/$(rulesets_collection_folder)/rulesets_variation_$(row.rulesets_variation_id).xml", force=true)
+            rm("$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)/rulesets_collections_variations/rulesets_variation_$(row.rulesets_variation_id).xml", force=true)
         end
     end
 
@@ -361,19 +320,27 @@ end
 deleteTrial(trial_id::Int; delete_subs::Bool=true) = deleteTrial([trial_id]; delete_subs=delete_subs)
 
 function resetDatabase()
-
     rm("$(data_dir)/outputs/simulations", force=true, recursive=true)
     rm("$(data_dir)/outputs/monads", force=true, recursive=true)
     rm("$(data_dir)/outputs/samplings", force=true, recursive=true)
     rm("$(data_dir)/outputs/trials", force=true, recursive=true)
 
-    for base_config_folder in (readdir("$(data_dir)/inputs/base_configs/", sort=false, join=true) |> filter(x->isdir(x)))
-        resetConfigFolder(base_config_folder)
+    for config_folder in (readdir("$(data_dir)/inputs/configs/", sort=false, join=true) |> filter(x->isdir(x)))
+        resetConfigFolder(config_folder)
     end
     
-    base_config_folders = DBInterface.execute(db, "SELECT folder_name FROM base_configs;") |> DataFrame |> x->x.folder_name
-    for base_config_folder in base_config_folders
-        resetConfigFolder("$(data_dir)/inputs/base_configs/$(base_config_folder)")
+    config_folders = DBInterface.execute(db, "SELECT folder_name FROM configs;") |> DataFrame |> x->x.folder_name
+    for config_folder in config_folders
+        resetConfigFolder("$(data_dir)/inputs/configs/$(config_folder)")
+    end
+
+    for path_to_rulesets_collection_folder in (readdir("$(data_dir)/inputs/rulesets_collections/", sort=false, join=true) |> filter(x->isdir(x)))
+        resetRulesetsCollectionFolder(path_to_rulesets_collection_folder)
+    end
+
+    rulesets_collection_folders = DBInterface.execute(db, "SELECT folder_name FROM rulesets_collections;") |> DataFrame |> x->x.folder_name
+    for rulesets_collection_folder in rulesets_collection_folders
+        resetRulesetsCollectionFolder("$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)")
     end
 
     for custom_code_folder in (readdir("$(data_dir)/inputs/custom_codes/", sort=false, join=true) |> filter(x->isdir(x)))
@@ -397,37 +364,73 @@ function resetDatabase()
     return nothing
 end
 
-function resetConfigFolder(base_config_folder::String)
-    if !isdir(base_config_folder)
+function resetConfigFolder(path_to_config_folder::String)
+    if !isdir(path_to_config_folder)
         return
     end
-    rm("$(base_config_folder)/variations.db", force=true)
-    rm("$(base_config_folder)/variations", force=true, recursive=true)
+    rm("$(path_to_config_folder)/variations.db", force=true)
+    rm("$(path_to_config_folder)/variations", force=true, recursive=true)
 
-    rm("$(base_config_folder)/rulesets_collections.db", force=true)
-
-    for rulesets_collection_folder in (readdir("$(base_config_folder)/rulesets_collections/", sort=false, join=true) |> filter(x->isdir(x)))
-        resetRulesetsCollectionFolder(rulesets_collection_folder)
-    end
-
-    # first check that the rulesets_collections table exists
-    if DBInterface.execute(getRulesetsCollectionsDB(base_config_folder), "SELECT name FROM sqlite_master WHERE type='table' AND name='rulesets_collections';") |> isempty
-        return
-    end
-    rulesets_collection_folders = DBInterface.execute(getRulesetsCollectionsDB(base_config_folder), "SELECT folder_name FROM rulesets_collections;") |> DataFrame |> x->x.folder_name
-    for rulesets_collection_folder in rulesets_collection_folders
-        resetRulesetsCollectionFolder("$(base_config_folder)/rulesets_collections/$(rulesets_collection_folder)")
-    end
-    return nothing
+    rm("$(path_to_config_folder)/rulesets_collections.db", force=true)
 end
 
-function resetRulesetsCollectionFolder(rulesets_collection_folder::String)
-    rm("$(rulesets_collection_folder)/rulesets_variations.db", force=true)
-    for rulesets_variation in (readdir("$(rulesets_collection_folder)/", sort=false, join=true) |> filter(x->occursin(r"rulesets_variation_\d+.xml", x)))
-        rm(rulesets_variation, force=true)
+function resetRulesetsCollectionFolder(path_to_rulesets_collection_folder::String)
+    if !isdir(path_to_rulesets_collection_folder)
+        return
     end
-    rm("$(rulesets_collection_folder)/rulesets_variation_*", force=true)
-    return nothing
+    rm("$(path_to_rulesets_collection_folder)/rulesets_variations.db", force=true)
+    rm("$(path_to_rulesets_collection_folder)/rulesets_variations", force=true)
+
+    rm("$(path_to_rulesets_collection_folder)/rulesets_variations.db", force=true)
+end
+
+################## Running Functions ##################
+
+function runSimulation(simulation::Simulation; do_full_setup::Bool=true, force_recompile::Bool=false)
+    path_to_simulation_folder = "$(data_dir)/outputs/simulations/$(simulation.id)"
+    path_to_simulation_output = "$(path_to_simulation_folder)/output"
+    if isfile("$(path_to_simulation_output)/final.xml")
+        ran = false
+        success = true
+        return ran, success
+    end
+    mkpath(path_to_simulation_output)
+
+    if do_full_setup
+        loadConfiguration(simulation)
+        loadRulesets(simulation)
+        loadCustomCode(simulation; force_recompile=force_recompile)
+    end
+
+    executable_str = "$(data_dir)/inputs/custom_codes/$(simulation.folder_names.custom_code_folder)/project" # path to executable
+    config_str =  "$(data_dir)/inputs/configs/$(simulation.folder_names.config_folder)/variations/variation_$(simulation.variation_id).xml" # path to config file
+    flags = ["-o", path_to_simulation_output]
+    if simulation.folder_ids.ic_cell_id != -1
+        append!(flags, ["-i", "$(data_dir)/inputs/ics/cells/$(simulation.folder_names.ic_cell_folder)/cells.csv"]) # if ic file included (id != -1), then include this in the command
+    end
+    if simulation.folder_ids.ic_substrate_id != -1
+        append!(flags, ["-s", "$(data_dir)/inputs/ics/substrates/$(simulation.folder_names.ic_substrate_folder)/substrates.csv"]) # if ic file included (id != -1), then include this in the command
+    end
+    if simulation.folder_ids.ic_ecm_id != -1
+        append!(flags, ["-e", "$(data_dir)/inputs/ics/ecms/$(simulation.folder_names.ic_ecm_folder)/ecm.csv"]) # if ic file included (id != -1), then include this in the command
+    end
+    if simulation.rulesets_variation_id != -1
+        path_to_rules_file = "$(data_dir)/inputs/rulesets_collections/$(simulation.folder_names.rulesets_collection_folder)/rulesets_collections_variations/rulesets_variation_$(simulation.rulesets_variation_id).xml"
+        append!(flags, ["-r", path_to_rules_file])
+    end
+    cmd = `$executable_str $config_str $flags`
+    println("\tRunning simulation: $(simulation.id)...")
+    try
+        run(pipeline(cmd, stdout="$(path_to_simulation_folder)/output.log", stderr="$(path_to_simulation_folder)/output.err"), wait=true)
+    catch
+        success = false
+    else
+        rm("$(path_to_simulation_folder)/output.err", force=true)
+        success = true
+    end
+    ran = true
+    
+    return ran, success
 end
 
 function runMonad(monad::Monad; use_previous_sims::Bool=false, do_full_setup::Bool=true, force_recompile::Bool=false)
@@ -459,16 +462,6 @@ function runMonad(monad::Monad; use_previous_sims::Bool=false, do_full_setup::Bo
     return simulation_tasks
 end
 
-recordSimulationIDs(monad::Monad) = recordSimulationIDs(monad.id, monad.simulation_ids)
-
-function recordSimulationIDs(monad_id::Int, simulation_ids::Array{Int})
-    path_to_folder = "$(data_dir)/outputs/monads/$(monad_id)/"
-    mkpath(path_to_folder)
-    path_to_csv = "$(path_to_folder)/simulations.csv"
-    lines_table = compressSimulationIDs(simulation_ids)
-    CSV.write(path_to_csv, lines_table; writeheader=false)
-end
-
 function runSampling(sampling::Sampling; use_previous_sims::Bool=false, force_recompile::Bool=false)
     mkpath("$(data_dir)/outputs/samplings/$(sampling.id)")
 
@@ -484,16 +477,6 @@ function runSampling(sampling::Sampling; use_previous_sims::Bool=false, force_re
     return simulation_tasks
 end
 
-function recordMonadIDs(sampling_id::Int, monad_ids::Array{Int})
-    path_to_folder = "$(data_dir)/outputs/samplings/$(sampling_id)/"
-    mkpath(path_to_folder)
-    path_to_csv = "$(path_to_folder)/monads.csv"
-    lines_table = compressMonadIDs(monad_ids)
-    CSV.write(path_to_csv, lines_table; writeheader=false)
-end
-
-recordMonadIDs(sampling::Sampling) = recordMonadIDs(sampling.id, sampling.monad_ids)
-
 function runTrial(trial::Trial; use_previous_sims::Bool=false, force_recompile::Bool=true)
     mkpath("$(data_dir)/outputs/trials/$(trial.id)")
 
@@ -505,24 +488,6 @@ function runTrial(trial::Trial; use_previous_sims::Bool=false, force_recompile::
 
     recordSamplingIDs(trial) # record the sampling ids in the trial
     return simulation_tasks
-end
-
-function recordSamplingIDs(trial_id::Int, sampling_ids::Array{Int})
-    recordSamplingIDs("$(data_dir)/outputs/trials/$(trial_id)", sampling_ids)
-end
-
-function recordSamplingIDs(trial::Trial)
-    recordSamplingIDs("$(data_dir)/outputs/trials/$(trial.id)", trial.sampling_ids)
-end
-
-function recordSamplingIDs(path_to_folder::String, sampling_ids::Array{Int})
-    # path_to_size_csv = "$(path_to_folder)/size.csv"
-    # size_table = [string.(size(sampling_ids))...] |> Tables.table
-    # CSV.write(path_to_size_csv, size_table; writeheader=false)
-
-    path_to_csv = "$(path_to_folder)/samplings.csv"
-    lines_table = compressSamplingIDs(sampling_ids)
-    CSV.write(path_to_csv, lines_table; writeheader=false)
 end
 
 collectSimulationTasks(simulation::Simulation; use_previous_sims::Bool=false, force_recompile::Bool=false) = [@task runSimulation(simulation; do_full_setup=true, force_recompile=force_recompile)]
@@ -548,9 +513,45 @@ function runAbstractTrial(T::AbstractTrial; use_previous_sims::Bool=false, force
     return n_ran, n_success
 end
 
-function addColumns(base_config_id::Int, xml_paths::Vector{Vector{String}}, table_name::String, id_column_name::String, getDB::Function, getBaseXML::Function, dataTypeRules::Function)
-    base_config_folder = DBInterface.execute(db, "SELECT folder_name FROM base_configs WHERE (base_config_id)=($(base_config_id));") |> DataFrame |> x->x.folder_name[1]
-    db_columns = getDB(base_config_folder)
+################## Recording Functions ##################
+
+function recordSimulationIDs(monad_id::Int, simulation_ids::Array{Int})
+    path_to_folder = "$(data_dir)/outputs/monads/$(monad_id)/"
+    mkpath(path_to_folder)
+    path_to_csv = "$(path_to_folder)/simulations.csv"
+    lines_table = compressSimulationIDs(simulation_ids)
+    CSV.write(path_to_csv, lines_table; writeheader=false)
+end
+
+recordSimulationIDs(monad::Monad) = recordSimulationIDs(monad.id, monad.simulation_ids)
+
+function recordMonadIDs(sampling_id::Int, monad_ids::Array{Int})
+    path_to_folder = "$(data_dir)/outputs/samplings/$(sampling_id)/"
+    mkpath(path_to_folder)
+    path_to_csv = "$(path_to_folder)/monads.csv"
+    lines_table = compressMonadIDs(monad_ids)
+    CSV.write(path_to_csv, lines_table; writeheader=false)
+end
+
+recordMonadIDs(sampling::Sampling) = recordMonadIDs(sampling.id, sampling.monad_ids)
+
+function recordSamplingIDs(trial_id::Int, sampling_ids::Array{Int})
+    recordSamplingIDs("$(data_dir)/outputs/trials/$(trial_id)", sampling_ids)
+end
+
+function recordSamplingIDs(trial::Trial)
+    recordSamplingIDs("$(data_dir)/outputs/trials/$(trial.id)", trial.sampling_ids)
+end
+
+function recordSamplingIDs(path_to_folder::String, sampling_ids::Array{Int})
+    path_to_csv = "$(path_to_folder)/samplings.csv"
+    lines_table = compressSamplingIDs(sampling_ids)
+    CSV.write(path_to_csv, lines_table; writeheader=false)
+end
+
+################## Variations Functions ##################
+
+function addColumns(xml_paths::Vector{Vector{String}}, table_name::String, id_column_name::String, db_columns::SQLite.DB, path_to_xml::String, dataTypeRules::Function)
     column_names = DBInterface.execute(db_columns, "PRAGMA table_info($(table_name));") |> DataFrame |> x->x[!,:name]
     filter!(x->x!=id_column_name,column_names)
     varied_column_names = [join(xml_path,"/") for xml_path in xml_paths]
@@ -558,7 +559,6 @@ function addColumns(base_config_id::Int, xml_paths::Vector{Vector{String}}, tabl
     is_new_column = [!(varied_column_name in column_names) for varied_column_name in varied_column_names]
     if any(is_new_column)
         new_column_names = varied_column_names[is_new_column]
-        path_to_xml = getBaseXML(base_config_folder)
         xml_doc = openXML(path_to_xml)
         default_values_for_new = [getField(xml_doc, xml_path) for xml_path in xml_paths[is_new_column]]
         closeXML(xml_doc)
@@ -582,9 +582,10 @@ function addColumns(base_config_id::Int, xml_paths::Vector{Vector{String}}, tabl
     return static_column_names, varied_column_names
 end
 
-function addVariationColumns(base_config_id::Int, xml_paths::Vector{Vector{String}}, variable_types::Vector{DataType})
-    getDB = (base_config_folder) -> getConfigDB(base_config_folder)
-    getBaseXML = (base_config_folder) -> "$(data_dir)/inputs/base_configs/$(base_config_folder)/PhysiCell_settings.xml"
+function addVariationColumns(config_id::Int, xml_paths::Vector{Vector{String}}, variable_types::Vector{DataType})
+    config_folder = getConfigFolder(config_id)
+    db_columns = getConfigDB(config_folder)
+    path_to_xml = "$(data_dir)/inputs/configs/$(config_folder)/PhysiCell_settings.xml"
     dataTypeRules = (i, _) -> begin
         if variable_types[i] == Bool
             "TEXT"
@@ -596,15 +597,15 @@ function addVariationColumns(base_config_id::Int, xml_paths::Vector{Vector{Strin
             "TEXT"
         end
     end
-    return addColumns(base_config_id, xml_paths, "variations", "variation_id", getDB, getBaseXML, dataTypeRules)
+    return addColumns(xml_paths, "variations", "variation_id", db_columns, path_to_xml, dataTypeRules)
 end
 
-function addRulesetsVariationsColumns(base_config_id::Int, rulesets_collection_id::Int, xml_paths::Vector{Vector{String}})
-    rulesets_collection_folder = getRulesetsCollectionFolder(base_config_id, rulesets_collection_id)
-    getDB = (base_config_folder) -> getRulesetsVariationsDB(base_config_folder, rulesets_collection_folder)
-    getBaseXML = (base_config_folder) -> "$(data_dir)/inputs/base_configs/$(base_config_folder)/rulesets_collections/$(rulesets_collection_folder)/base_rulesets.xml"
+function addRulesetsVariationsColumns(rulesets_collection_id::Int, xml_paths::Vector{Vector{String}})
+    rulesets_collection_folder = getRulesetsCollectionFolder(rulesets_collection_id)
+    db_columns = getRulesetsVariationsDB(rulesets_collection_folder)
+    path_to_xml = "$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)/base_rulesets.xml"
     dataTypeRules = (_, name) -> "applies_to_dead" in name ? "INT" : "REAL"
-    return addColumns(base_config_id, xml_paths, "rulesets_variations", "rulesets_variation_id", getDB, getBaseXML, dataTypeRules)
+    return addColumns(xml_paths, "rulesets_variations", "rulesets_variation_id", db_columns, path_to_xml, dataTypeRules)
 end
 
 function addRow(db_columns::SQLite.DB, table_name::String, id_name::String, table_features::String, values::String)
@@ -616,24 +617,22 @@ function addRow(db_columns::SQLite.DB, table_name::String, id_name::String, tabl
     return new_id[1], new_added
 end
 
-function addVariationRow(base_config_id::Int, table_features::String, values::String)
-    db_columns = getConfigDB(base_config_id)
+function addVariationRow(config_id::Int, table_features::String, values::String)
+    db_columns = getConfigDB(config_id)
     return addRow(db_columns, "variations", "variation_id", table_features, values)
 end
 
-function addRulesetsVariationRow(base_config_id::Int, rulesets_collection_id::Int, table_features::String, values::String)
-    db_columns = getRulesetsVariationsDB(base_config_id, rulesets_collection_id)
+function addVariationRow(config_id::Int, table_features::String, static_values::String, varied_values::String)
+    return addVariationRow(config_id, table_features, "$(static_values)$(varied_values)")
+end
+
+function addRulesetsVariationRow(rulesets_collection_id::Int, table_features::String, values::String)
+    db_columns = getRulesetsVariationsDB(rulesets_collection_id)
     return addRow(db_columns, "rulesets_variations", "rulesets_variation_id", table_features, values)
 end
 
-######
-
-function addVariationRow(base_config_id::Int, table_features::String, static_values::String, varied_values::String)
-    return addVariationRow(base_config_id, table_features, "$(static_values)$(varied_values)")
-end
-
-function addRulesetsVariationRow(base_config_id::Int, rulesets_collection_id::Int, table_features::String, static_values::String, varied_values::String)
-    return addRulesetsVariationRow(base_config_id, rulesets_collection_id, table_features, "$(static_values)$(varied_values)")
+function addRulesetsVariationRow(rulesets_collection_id::Int, table_features::String, static_values::String, varied_values::String)
+    return addRulesetsVariationRow(rulesets_collection_id, table_features, "$(static_values)$(varied_values)")
 end
 
 """
@@ -644,69 +643,62 @@ D is a vector of parameter info.
 Each entry in D has two elements: D[i][1] is the xml_path based on the config file; D[i][2] is the vector of values to use for the ith parameter.
 """
 
-function addGrid(D::Vector{Vector{Vector}}, addColumns::Function, prepareAddNew::Function, addRow::Function)
+function addGrid(xml_paths::Vector{Vector{String}}, new_values::Vector{Vector{T} where T}, addColumnsByPaths::Function, prepareAddNew::Function, addRow::Function)
+    static_column_names, varied_column_names = addColumnsByPaths(xml_paths)
+    static_values, table_features = prepareAddNew(static_column_names, varied_column_names)
+
+    NDG = ndgrid(new_values...)
+    sz_variations = size(NDG[1])
+    variation_ids = zeros(Int, sz_variations)
+    is_new_variation_id = falses(sz_variations)
+    for i in eachindex(NDG[1])
+        varied_values = [A[i] for A in NDG] .|> string |> x -> join("\"" .* x .* "\"", ",")
+        variation_ids[i], is_new_variation_id[i] = addRow(table_features, static_values, varied_values)
+    end
+    return variation_ids, is_new_variation_id
+end
+
+function addGrid(D::Vector{Vector{Vector}}, addColumnsByPaths::Function, prepareAddNew::Function, addRow::Function)
     xml_paths = [d[1] for d in D]
     new_values = [d[2] for d in D]
-    static_column_names, varied_column_names = addColumns(xml_paths)
-    static_values, table_features = prepareAddNew(static_column_names, varied_column_names)
-
-    NDG = ndgrid(new_values...)
-    sz_variations = size(NDG[1])
-    variation_ids = zeros(Int, sz_variations)
-    is_new_variation_id = falses(sz_variations)
-    for i in eachindex(NDG[1])
-        varied_values = [A[i] for A in NDG] .|> string |> x -> join("\"" .* x .* "\"", ",")
-        variation_ids[i], is_new_variation_id[i] = addRow(table_features, static_values, varied_values)
-    end
-    return variation_ids, is_new_variation_id
+    return addGrid(xml_paths, new_values, addColumnsByPaths, prepareAddNew, addRow)
 end
 
-function addGrid(EV::Vector{ElementaryVariation}, addColumns::Function, prepareAddNew::Function, addRow::Function)
+function addGrid(EV::Vector{ElementaryVariation}, addColumnsByPaths::Function, prepareAddNew::Function, addRow::Function)
     xml_paths = [ev.xml_path for ev in EV]
     new_values = [ev.values for ev in EV]
-    static_column_names, varied_column_names = addColumns(xml_paths)
-    static_values, table_features = prepareAddNew(static_column_names, varied_column_names)
-
-    NDG = ndgrid(new_values...)
-    sz_variations = size(NDG[1])
-    variation_ids = zeros(Int, sz_variations)
-    is_new_variation_id = falses(sz_variations)
-    for i in eachindex(NDG[1])
-        varied_values = [A[i] for A in NDG] .|> string |> x -> join("\"" .* x .* "\"", ",")
-        variation_ids[i], is_new_variation_id[i] = addRow(table_features, static_values, varied_values)
-    end
-    return variation_ids, is_new_variation_id
+    return addGrid(xml_paths, new_values, addColumnsByPaths, prepareAddNew, addRow)
 end
 
-function addGridVariation(base_config_id::Int, D::Vector{Vector{Vector}}; reference_variation_id::Int=0)
-    addColumns = (paths) -> addVariationColumns(base_config_id, paths, [typeof(d[2][1]) for d in D])
-    prepareAddNew = (static_column_names, varied_column_names) -> prepareAddNewVariations(base_config_id, static_column_names, varied_column_names; reference_variation_id=reference_variation_id)
-    addRow = (features, static_values, varied_values) -> addVariationRow(base_config_id, features, static_values, varied_values)
-    return addGrid(D, addColumns, prepareAddNew, addRow)
+function addGridVariation(config_id::Int, D::Vector{Vector{Vector}}; reference_variation_id::Int=0)
+    addColumnsByPaths = (paths) -> addVariationColumns(config_id, paths, [typeof(d[2][1]) for d in D])
+    prepareAddNew = (static_column_names, varied_column_names) -> prepareAddNewVariations(config_id, static_column_names, varied_column_names; reference_variation_id=reference_variation_id)
+    addRow = (features, static_values, varied_values) -> addVariationRow(config_id, features, static_values, varied_values)
+    return addGrid(D, addColumnsByPaths, prepareAddNew, addRow)
 end
 
-function addGridVariation(base_config_id::Int, EV::Vector{ElementaryVariation}; reference_variation_id::Int=0)
-    addColumns = (paths) -> addVariationColumns(base_config_id, paths, [typeof(ev.values[1]) for ev in EV])
-    prepareAddNew = (static_column_names, varied_column_names) -> prepareAddNewVariations(base_config_id, static_column_names, varied_column_names; reference_variation_id=reference_variation_id)
-    addRow = (features, static_values, varied_values) -> addVariationRow(base_config_id, features, static_values, varied_values)
-    return addGrid(EV, addColumns, prepareAddNew, addRow)
+function addGridVariation(config_id::Int, EV::Vector{ElementaryVariation}; reference_variation_id::Int=0)
+    addColumnsByPaths = (paths) -> addVariationColumns(config_id, paths, [typeof(ev.values[1]) for ev in EV])
+    prepareAddNew = (static_column_names, varied_column_names) -> prepareAddNewVariations(config_id, static_column_names, varied_column_names; reference_variation_id=reference_variation_id)
+    addRow = (features, static_values, varied_values) -> addVariationRow(config_id, features, static_values, varied_values)
+    return addGrid(EV, addColumnsByPaths, prepareAddNew, addRow)
 end
 
-addGridVariation(base_config_folder::String, D::Vector{Vector{Vector}}; reference_variation_id::Int=0) = addGridVariation(retrieveID("base_configs", base_config_folder), D; reference_variation_id=reference_variation_id)
-addGridVariation(base_config_folder::String, EV::Vector{ElementaryVariation}; reference_variation_id::Int=0) = addGridVariation(retrieveID("base_configs", base_config_folder), EV; reference_variation_id=reference_variation_id)
+addGridVariation(config_folder::String, D::Vector{Vector{Vector}}; reference_variation_id::Int=0) = addGridVariation(retrieveID("configs", config_folder), D; reference_variation_id=reference_variation_id)
+addGridVariation(config_folder::String, EV::Vector{ElementaryVariation}; reference_variation_id::Int=0) = addGridVariation(retrieveID("configs", config_folder), EV; reference_variation_id=reference_variation_id)
 
-function addGridRulesetsVariation(base_config_id::Int, rulesets_collection_id::Int, D::Vector{Vector{Vector}}; reference_rulesets_variation_id::Int=0)
-    addColumns = (paths) -> addRulesetsVariationsColumns(base_config_id, rulesets_collection_id, paths)
-    prepareAddNew = (static_names, varied_names) -> prepareAddNewRulesetsVariations(base_config_id, rulesets_collection_id, static_names, varied_names; reference_rulesets_variation_id=reference_rulesets_variation_id)
-    addRow = (features, static_values, varied_values) -> addRulesetsVariationRow(base_config_id, rulesets_collection_id, features, static_values, varied_values)
-    return addGrid(D, addColumns, prepareAddNew, addRow)
+function addGridRulesetsVariation(rulesets_collection_id::Int, D::Vector{Vector{Vector}}; reference_rulesets_variation_id::Int=0)
+    addColumnsByPaths = (paths) -> addRulesetsVariationsColumns(rulesets_collection_id, paths)
+    prepareAddNew = (static_names, varied_names) -> prepareAddNewRulesetsVariations(rulesets_collection_id, static_names, varied_names; reference_rulesets_variation_id=reference_rulesets_variation_id)
+    addRow = (features, static_values, varied_values) -> addRulesetsVariationRow(rulesets_collection_id, features, static_values, varied_values)
+    return addGrid(D, addColumnsByPaths, prepareAddNew, addRow)
 end
 
-function addGridRulesetsVariation(base_config_id::Int, rulesets_collection_id::Int, EV::Vector{ElementaryVariation}; reference_rulesets_variation_id::Int=0)
-    addColumns = (paths) -> addRulesetsVariationsColumns(base_config_id, rulesets_collection_id, paths)
-    prepareAddNew = (static_names, varied_names) -> prepareAddNewRulesetsVariations(base_config_id, rulesets_collection_id, static_names, varied_names; reference_rulesets_variation_id=reference_rulesets_variation_id)
-    addRow = (features, static_values, varied_values) -> addRulesetsVariationRow(base_config_id, rulesets_collection_id, features, static_values, varied_values)
-    return addGrid(EV, addColumns, prepareAddNew, addRow)
+function addGridRulesetsVariation(rulesets_collection_id::Int, EV::Vector{ElementaryVariation}; reference_rulesets_variation_id::Int=0)
+    addColumnsByPaths = (paths) -> addRulesetsVariationsColumns(rulesets_collection_id, paths)
+    prepareAddNew = (static_names, varied_names) -> prepareAddNewRulesetsVariations(rulesets_collection_id, static_names, varied_names; reference_rulesets_variation_id=reference_rulesets_variation_id)
+    addRow = (features, static_values, varied_values) -> addRulesetsVariationRow(rulesets_collection_id, features, static_values, varied_values)
+    return addGrid(EV, addColumnsByPaths, prepareAddNew, addRow)
 end
 
 """
@@ -725,20 +717,17 @@ function prepareAddNew(db_columns::SQLite.DB, static_column_names::Vector{String
     return static_values, table_features
 end
 
-function prepareAddNewVariations(base_config_id::Int, static_column_names::Vector{String}, varied_column_names::Vector{String}; reference_variation_id::Int=0)
-    db_columns = getConfigDB(base_config_id)
+function prepareAddNewVariations(config_id::Int, static_column_names::Vector{String}, varied_column_names::Vector{String}; reference_variation_id::Int=0)
+    db_columns = getConfigDB(config_id)
     return prepareAddNew(db_columns, static_column_names, varied_column_names, "variations", "variation_id", reference_variation_id)
 end
 
-function prepareAddNewRulesetsVariations(base_config_id::Int, rulesets_collection_id::Int, static_column_names::Vector{String}, varied_column_names::Vector{String}; reference_rulesets_variation_id::Int=0)
-    db_columns = getRulesetsVariationsDB(base_config_id, rulesets_collection_id)
+function prepareAddNewRulesetsVariations(rulesets_collection_id::Int, static_column_names::Vector{String}, varied_column_names::Vector{String}; reference_rulesets_variation_id::Int=0)
+    db_columns = getRulesetsVariationsDB(rulesets_collection_id)
     return prepareAddNew(db_columns, static_column_names, varied_column_names, "rulesets_variations", "rulesets_variation_id", reference_rulesets_variation_id)
 end
 
-function compressSimulationIDs(simulation_ids::Vector{Int})
-    sort!(simulation_ids)
-    return compressIDs(simulation_ids)
-end
+################## Compression Functions ##################
 
 function compressIDs(ids::Vector{Int})
     lines = String[]
@@ -762,12 +751,11 @@ function compressIDs(ids::Vector{Int})
     return Tables.table(lines)
 end
 
-function compressMonadIDs(monad_ids::Array{Int})
-    monad_ids = vec(monad_ids)
-    return compressIDs(monad_ids)
-end
+compressSimulationIDs(simulation_ids::Array{Int}) = simulation_ids |> vec |> sort |> compressIDs
+compressMonadIDs(monad_ids::Array{Int}) = monad_ids |> vec |> sort |> compressIDs
+compressSamplingIDs(sampling_ids::Array{Int}) = sampling_ids |> vec |> sort |> compressIDs
 
-compressSamplingIDs(sampling_ids::Array{Int}) = compressIDs(sampling_ids)
+################## Selection Functions ##################
 
 function selectConstituents(path_to_csv::String)
     if !isfile(path_to_csv)
