@@ -635,15 +635,10 @@ function addRulesetsVariationRow(rulesets_collection_id::Int, table_features::St
     return addRulesetsVariationRow(rulesets_collection_id, table_features, "$(static_values)$(varied_values)")
 end
 
-"""
-function addGridVariation(patient_id::Int, D::Vector{Vector{Vector}}; reference_variation_id::Int=0)
-Creates a grid of parameter values defined by D to the variations tables for a specified patient.
-A reference variation id can be suppplied so that any currently unvaried values are pulled from that variation.
-D is a vector of parameter info.
-Each entry in D has two elements: D[i][1] is the xml_path based on the config file; D[i][2] is the vector of values to use for the ith parameter.
-"""
+function addGrid(EV::Vector{ElementaryVariation}, addColumnsByPaths::Function, prepareAddNew::Function, addRow::Function)
+    xml_paths = [ev.xml_path for ev in EV]
+    new_values = [ev.values for ev in EV]
 
-function addGrid(xml_paths::Vector{Vector{String}}, new_values::Vector{Vector{T} where T}, addColumnsByPaths::Function, prepareAddNew::Function, addRow::Function)
     static_column_names, varied_column_names = addColumnsByPaths(xml_paths)
     static_values, table_features = prepareAddNew(static_column_names, varied_column_names)
 
@@ -658,24 +653,13 @@ function addGrid(xml_paths::Vector{Vector{String}}, new_values::Vector{Vector{T}
     return variation_ids, is_new_variation_id
 end
 
-function addGrid(D::Vector{Vector{Vector}}, addColumnsByPaths::Function, prepareAddNew::Function, addRow::Function)
-    xml_paths = [d[1] for d in D]
-    new_values = [d[2] for d in D]
-    return addGrid(xml_paths, new_values, addColumnsByPaths, prepareAddNew, addRow)
-end
+"""
+    function addGridVariation(config_folder::String, EV::Vector{ElementaryVariation}; reference_variation_id::Int=0)
 
-function addGrid(EV::Vector{ElementaryVariation}, addColumnsByPaths::Function, prepareAddNew::Function, addRow::Function)
-    xml_paths = [ev.xml_path for ev in EV]
-    new_values = [ev.values for ev in EV]
-    return addGrid(xml_paths, new_values, addColumnsByPaths, prepareAddNew, addRow)
-end
-
-function addGridVariation(config_id::Int, D::Vector{Vector{Vector}}; reference_variation_id::Int=0)
-    addColumnsByPaths = (paths) -> addVariationColumns(config_id, paths, [typeof(d[2][1]) for d in D])
-    prepareAddNew = (static_column_names, varied_column_names) -> prepareAddNewVariations(config_id, static_column_names, varied_column_names; reference_variation_id=reference_variation_id)
-    addRow = (features, static_values, varied_values) -> addVariationRow(config_id, features, static_values, varied_values)
-    return addGrid(D, addColumnsByPaths, prepareAddNew, addRow)
-end
+Adds a grid of parameter values defined by `EV` (a vector of `ElementaryVariation` objects) to the Variations table for a specified configuration.
+A reference variation id can be supplied so that any currently unvaried values are pulled from that variation.
+Each `ElementaryVariation` in `EV` represents a single parameter's variation across its range of values.
+"""
 
 function addGridVariation(config_id::Int, EV::Vector{ElementaryVariation}; reference_variation_id::Int=0)
     addColumnsByPaths = (paths) -> addVariationColumns(config_id, paths, [typeof(ev.values[1]) for ev in EV])
@@ -684,15 +668,7 @@ function addGridVariation(config_id::Int, EV::Vector{ElementaryVariation}; refer
     return addGrid(EV, addColumnsByPaths, prepareAddNew, addRow)
 end
 
-addGridVariation(config_folder::String, D::Vector{Vector{Vector}}; reference_variation_id::Int=0) = addGridVariation(retrieveID("configs", config_folder), D; reference_variation_id=reference_variation_id)
 addGridVariation(config_folder::String, EV::Vector{ElementaryVariation}; reference_variation_id::Int=0) = addGridVariation(retrieveID("configs", config_folder), EV; reference_variation_id=reference_variation_id)
-
-function addGridRulesetsVariation(rulesets_collection_id::Int, D::Vector{Vector{Vector}}; reference_rulesets_variation_id::Int=0)
-    addColumnsByPaths = (paths) -> addRulesetsVariationsColumns(rulesets_collection_id, paths)
-    prepareAddNew = (static_names, varied_names) -> prepareAddNewRulesetsVariations(rulesets_collection_id, static_names, varied_names; reference_rulesets_variation_id=reference_rulesets_variation_id)
-    addRow = (features, static_values, varied_values) -> addRulesetsVariationRow(rulesets_collection_id, features, static_values, varied_values)
-    return addGrid(D, addColumnsByPaths, prepareAddNew, addRow)
-end
 
 function addGridRulesetsVariation(rulesets_collection_id::Int, EV::Vector{ElementaryVariation}; reference_rulesets_variation_id::Int=0)
     addColumnsByPaths = (paths) -> addRulesetsVariationsColumns(rulesets_collection_id, paths)
@@ -700,11 +676,6 @@ function addGridRulesetsVariation(rulesets_collection_id::Int, EV::Vector{Elemen
     addRow = (features, static_values, varied_values) -> addRulesetsVariationRow(rulesets_collection_id, features, static_values, varied_values)
     return addGrid(EV, addColumnsByPaths, prepareAddNew, addRow)
 end
-
-"""
-function addGridVariation(patient_id::Int, xml_paths::Vector{Vector{String}}, new_values::Vector{Vector{T}} where {T<:Real}; reference_variation_id::Int=0)
-Does the same as addGridVariation(patient_id::Int, D::Vector{Vector{Vector}}; reference_variation_id::Int=0) but first assembles D from xml_paths and new_values.
-"""
 
 function prepareAddNew(db_columns::SQLite.DB, static_column_names::Vector{String}, varied_column_names::Vector{String}, table_name::String, id_name::String, reference_id::Int)
     static_values = selectRow(static_column_names, table_name, "WHERE $(id_name)=$(reference_id)"; db=db_columns) |> x -> join("\"" .* string.(x) .* "\"", ",")
