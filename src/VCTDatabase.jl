@@ -60,26 +60,24 @@ function createSchema()
     for base_config_folder in base_config_folders
         DBInterface.execute(db, "INSERT OR IGNORE INTO base_configs (folder_name) VALUES ('$(base_config_folder)');")
         db_variations = "$(data_dir)/inputs/base_configs/$(base_config_folder)/variations.db" |> SQLite.DB
-        DBInterface.execute(db_variations, "CREATE TABLE IF NOT EXISTS variations (
-            variation_id INTEGER PRIMARY KEY
-        );")
+        createPCVCTTable("variations", "variation_id INTEGER PRIMARY KEY"; db=db_variations)
         DBInterface.execute(db_variations, "INSERT OR IGNORE INTO variations (variation_id) VALUES(0);")
+    end
 
-        db_rulesets_collections = "$(data_dir)/inputs/base_configs/$(base_config_folder)/rulesets_collections.db" |> SQLite.DB
-        DBInterface.execute(db_rulesets_collections, "CREATE TABLE IF NOT EXISTS rulesets_collections (
-            rulesets_collection_id INTEGER PRIMARY KEY,
-            folder_name UNIQUE,
-            description TEXT
-        );")
-        for rulesets_collection in readdir("$(data_dir)/inputs/base_configs/$(base_config_folder)/rulesets_collections", sort=false) |> filter(x->isdir("$(data_dir)/inputs/base_configs/$(base_config_folder)/rulesets_collections/$(x)"))
-            DBInterface.execute(db_rulesets_collections, "INSERT OR IGNORE INTO rulesets_collections (folder_name) VALUES('$rulesets_collection');")
+    # initialize and populate rulesets_collections table
+    rulesets_collections_schema = """
+        rulesets_collection_id INTEGER PRIMARY KEY,
+        folder_name UNIQUE,
+        description TEXT
+    """
+    createPCVCTTable("rulesets_collections", rulesets_collections_schema)
 
-            # make the db with rulesets variations for the collection
-            db_rulesets_variations = "$(data_dir)/inputs/base_configs/$(base_config_folder)/rulesets_collections/$(rulesets_collection)/rulesets_variations.db" |> SQLite.DB
-            rulesets_variations_schema = """
-                rulesets_variation_id INTEGER PRIMARY KEY
-            """
-            createPCVCTTable("rulesets_variations", rulesets_variations_schema; db=db_rulesets_variations)
+    if "rulesets_collections" in data_dir_contents
+        rulesets_collections_folders = readdir("$(data_dir)/inputs/rulesets_collections", sort=false) |> filter(x -> isdir("$(data_dir)/inputs/rulesets_collections/$(x)"))
+        for rulesets_collection_folder in rulesets_collections_folders
+            DBInterface.execute(db, "INSERT OR IGNORE INTO rulesets_collections (folder_name) VALUES ('$(rulesets_collection_folder)');")
+            db_rulesets_variations = "$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)/rulesets_variations.db" |> SQLite.DB
+            createPCVCTTable("rulesets_variations", "rulesets_variation_id INTEGER PRIMARY KEY"; db=db_rulesets_variations)
         end
     end
             
