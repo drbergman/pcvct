@@ -332,17 +332,27 @@ end
 
 ########### Printing Database Functions ###########
 
-function printSimulationsTable(trial_tuple::Union{Tuple{DataType,Int},Nothing}=nothing)
-    if isnothing(trial_tuple) || typeof(trial_tuple[1])==Nothing
-        query = "SELECT * FROM simulations;"
-    else
-        query = "SELECT * FROM simulations WHERE simulation_id IN ($(join(getSimulations(trial_tuple),",")));"
-    end
+function printSimulationsTable()
+    query = "SELECT * FROM simulations;"
+    printSimulationsTableFromQuery(query)
+end
+
+function printSimulationsTable(trial_tuple::Tuple{DataType, Int})
+    query = "SELECT * FROM simulations WHERE simulation_id IN ($(join(getSimulations(trial_tuple),",")));"
+    printSimulationsTableFromQuery(query)
+end
+
+function printSimulationsTable(T::AbstractTrial)
+    query = "SELECT * FROM simulations WHERE simulation_id IN ($(join(getSimulations(T),",")));"
+    printSimulationsTableFromQuery(query)
+end
+
+function printSimulationsTableFromQuery(query::String)
     df = DBInterface.execute(db, query) |> DataFrame
     addFolderColumns!(df)
     println(df[!,["simulation_id","custom_code_folder","ic_cell_folder","ic_substrate_folder","ic_ecm_folder","base_config_folder","rulesets_collection_folder","variation_id","rulesets_variation_id"]])
 end
-
+    
 function addFolderColumns!(df::DataFrame)
     required_col_names = ["custom_code", "base_config"]
     for col_name in required_col_names
@@ -382,11 +392,5 @@ function addFolderColumns!(df::DataFrame)
     return df
 end
 
-printSimulationsTable(T::Union{Nothing,AbstractTrial}=nothing) = isnothing(T) ? printSimulationsTable() : printSimulationsTable((typeof(T),T.trial_id))
-
 printVariationsTable(S::AbstractSampling) = getVariationsTable(S) |> println
-
-function printVariationsTable(sampling_tuple::Tuple{DataType, Int}) 
-    df = getVariationsTable(sampling_tuple)
-    println(df)
-end
+printVariationsTable(sampling_tuple::Tuple{DataType, Int}) = getVariationsTable(sampling_tuple) |> println
