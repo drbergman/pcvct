@@ -387,7 +387,7 @@ function printSimulationsTableFromQuery(query::String)
 end
     
 function addFolderColumns!(df::DataFrame)
-    col_names = ["custom_code", "config", "rulesets_collection_folder", "ic_cell", "ic_substrate", "ic_ecm"]
+    col_names = ["custom_code", "config", "rulesets_collection", "ic_cell", "ic_substrate", "ic_ecm"]
     get_function = [getFolder, getFolder, getOptionalFolder, getOptionalFolder, getOptionalFolder, getOptionalFolder]
     for (col_name, get_function) in zip(col_names, get_function)
         if !("$(col_name)_id" in names(df))
