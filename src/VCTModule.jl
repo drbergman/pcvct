@@ -635,7 +635,7 @@ function addRulesetsVariationRow(rulesets_collection_id::Int, table_features::St
     return addRulesetsVariationRow(rulesets_collection_id, table_features, "$(static_values)$(varied_values)")
 end
 
-function addGrid(EV::Vector{ElementaryVariation}, addColumnsByPaths::Function, prepareAddNew::Function, addRow::Function)
+function addGrid(EV::Vector{<:ElementaryVariation}, addColumnsByPaths::Function, prepareAddNew::Function, addRow::Function)
     xml_paths = [ev.xml_path for ev in EV]
     new_values = [ev.values for ev in EV]
 
@@ -654,28 +654,38 @@ function addGrid(EV::Vector{ElementaryVariation}, addColumnsByPaths::Function, p
 end
 
 """
-    function addGridVariation(config_folder::String, EV::Vector{ElementaryVariation}; reference_variation_id::Int=0)
+    function addGridVariation(config_folder::String, EV::Vector{<:ElementaryVariation}; reference_variation_id::Int=0)
 
 Adds a grid of parameter values defined by `EV` (a vector of `ElementaryVariation` objects) to the Variations table for a specified configuration.
 A reference variation id can be supplied so that any currently unvaried values are pulled from that variation.
 Each `ElementaryVariation` in `EV` represents a single parameter's variation across its range of values.
 """
 
-function addGridVariation(config_id::Int, EV::Vector{ElementaryVariation}; reference_variation_id::Int=0)
+function addGridVariation(config_id::Int, EV::Vector{<:ElementaryVariation}; reference_variation_id::Int=0)
     addColumnsByPaths = (paths) -> addVariationColumns(config_id, paths, [typeof(ev.values[1]) for ev in EV])
     prepareAddNew = (static_column_names, varied_column_names) -> prepareAddNewVariations(config_id, static_column_names, varied_column_names; reference_variation_id=reference_variation_id)
     addRow = (features, static_values, varied_values) -> addVariationRow(config_id, features, static_values, varied_values)
     return addGrid(EV, addColumnsByPaths, prepareAddNew, addRow)
 end
 
-addGridVariation(config_folder::String, EV::Vector{ElementaryVariation}; reference_variation_id::Int=0) = addGridVariation(retrieveID("configs", config_folder), EV; reference_variation_id=reference_variation_id)
+addGridVariation(config_folder::String, EV::Vector{<:ElementaryVariation}; reference_variation_id::Int=0) = addGridVariation(retrieveID("configs", config_folder), EV; reference_variation_id=reference_variation_id)
 
-function addGridRulesetsVariation(rulesets_collection_id::Int, EV::Vector{ElementaryVariation}; reference_rulesets_variation_id::Int=0)
+# allow for passing in a single ElementaryVariation object
+addGridVariation(config_id::Int, EV::ElementaryVariation; reference_variation_id::Int=0) = addGridVariation(config_id, [EV]; reference_variation_id=reference_variation_id)
+addGridVariation(config_folder::String, EV::ElementaryVariation; reference_variation_id::Int=0) = addGridVariation(config_folder, [EV]; reference_variation_id=reference_variation_id)
+
+function addGridRulesetsVariation(rulesets_collection_id::Int, EV::Vector{<:ElementaryVariation}; reference_rulesets_variation_id::Int=0)
     addColumnsByPaths = (paths) -> addRulesetsVariationsColumns(rulesets_collection_id, paths)
     prepareAddNew = (static_names, varied_names) -> prepareAddNewRulesetsVariations(rulesets_collection_id, static_names, varied_names; reference_rulesets_variation_id=reference_rulesets_variation_id)
     addRow = (features, static_values, varied_values) -> addRulesetsVariationRow(rulesets_collection_id, features, static_values, varied_values)
     return addGrid(EV, addColumnsByPaths, prepareAddNew, addRow)
 end
+
+addGridRulesetsVariation(rulesets_collection_folder::String, EV::Vector{<:ElementaryVariation}; reference_rulesets_variation_id::Int=0) = addGridRulesetsVariation(retrieveID("rulesets_collections", rulesets_collection_folder), EV; reference_rulesets_variation_id=reference_rulesets_variation_id)
+
+# allow for passing in a single ElementaryVariation object
+addGridRulesetsVariation(rulesets_collection_id::Int, EV::ElementaryVariation; reference_rulesets_variation_id::Int=0) = addGridRulesetsVariation(rulesets_collection_id, [EV]; reference_rulesets_variation_id=reference_rulesets_variation_id)
+addGridRulesetsVariation(rulesets_collection_folder::String, EV::ElementaryVariation; reference_rulesets_variation_id::Int=0) = addGridRulesetsVariation(rulesets_collection_folder, [EV]; reference_rulesets_variation_id=reference_rulesets_variation_id)
 
 function prepareAddNew(db_columns::SQLite.DB, static_column_names::Vector{String}, varied_column_names::Vector{String}, table_name::String, id_name::String, reference_id::Int)
     static_values = selectRow(static_column_names, table_name, "WHERE $(id_name)=$(reference_id)"; db=db_columns) |> x -> join("\"" .* string.(x) .* "\"", ",")
