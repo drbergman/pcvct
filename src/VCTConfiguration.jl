@@ -106,7 +106,8 @@ function loadConfiguration(M::AbstractMonad)
     cp(path_to_xml_src, path_to_xml, force=true)
 
     xml_doc = openXML(path_to_xml)
-    variation_row = selectRow("variations", "WHERE variation_id=$(M.variation_id);", db=getConfigDB(M.folder_ids.config_id))
+    query = constructSelectQuery("variations", "WHERE variation_id=$(M.variation_id);")
+    variation_row = queryToDataFrame(query; db=getConfigDB(M.folder_names.config_folder), is_row=true)
     for column_name in names(variation_row)
         if column_name == "variation_id"
             continue
@@ -140,7 +141,8 @@ function loadRulesets(M::AbstractMonad)
     # create xml file using LightXML
     xml_doc = parse_file("$(path_to_rulesets_collections_folder)/base_rulesets.xml")
     if M.rulesets_variation_id != 0 # only update if not using hte base variation for the ruleset
-        variation_row = selectRow("rulesets_variations", "WHERE rulesets_variation_id=$(M.rulesets_variation_id);", db=getRulesetsVariationsDB(M))
+        query = constructSelectQuery("rulesets_variations", "WHERE rulesets_variation_id=$(M.rulesets_variation_id);")
+        variation_row = queryToDataFrame(query; db=getRulesetsVariationsDB(M), is_row=true)
         for column_name in names(variation_row)
             if column_name == "rulesets_variation_id"
                 continue
@@ -219,7 +221,7 @@ end
 
 function simpleVariationNames(name::String)
     if name == "variation_id"
-        return "ID"
+        return "VarID"
     elseif name == "overall/max_time"
         return "Max Time"
     elseif name == "save/full_data/interval"

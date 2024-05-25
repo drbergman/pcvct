@@ -156,8 +156,8 @@ function computeMeanSpeed(folder::String)
     return [meanSpeed(p) for p in values(pos) if length(p.time) > 1]
 end
 
-function computeMeanSpeed(trial_tuple::Tuple{DataType,Int})
-    simulation_ids = getSimulations(trial_tuple)
+function computeMeanSpeed(class_id::VCTClassID)
+    simulation_ids = getSimulations(class_id)
     return [simulation_id => computeMeanSpeed(simulation_id) for simulation_id in simulation_ids] |> Dict
 end
 

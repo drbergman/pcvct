@@ -8,6 +8,7 @@ function initializeDatabase(path_to_database::String)
     println(path_to_database)
     println("loading up the global db variable")
     global db = SQLite.DB(path_to_database)
+    println("VCT database located at $(path_to_database) loaded.")
     return createSchema()
 end
 
@@ -244,13 +245,6 @@ end
 getConfigDB(config_id::Int) = getConfigFolder(config_id) |> getConfigDB
 getConfigDB(S::AbstractSampling) = getConfigDB(S.folder_names.config_folder)
 
-# function getRulesetsCollectionsDB(config_folder::String)
-#     return (isabspath(config_folder) ? "$(config_folder)/rulesets_collections.db" : "$(data_dir)/inputs/configs/$(config_folder)/rulesets_collections.db") |> SQLite.DB
-# end
-
-# getRulesetsCollectionsDB(S::AbstractSampling) = getRulesetsCollectionsDB(S.folder_names.config_folder)
-# getRulesetsCollectionsDB(config_id::Int) = getRulesetsCollectionsDB(getConfigFolder(config_id))
-
 function getRulesetsVariationsDB(rulesets_collection_folder::String)
     return "$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)/rulesets_variations.db" |> SQLite.DB
 end
@@ -260,25 +254,21 @@ getRulesetsVariationsDB(rulesets_collection_id::Int) = getRulesetsVariationsDB(g
 
 ########### Retrieving Database Information Functions ###########
 
-function selectRow(table_name::String, condition_stmt::String; db::SQLite.DB=db)
-    s = "SELECT * FROM $(table_name) " * condition_stmt * ";"
-    df = DBInterface.execute(db, s) |> DataFrame
-    @assert size(df,1)==1 "Did not find exactly one row matching the query:\n\tDatabase file: $(db)\n\tQuery: $(s)\nResult: $(df)"
+vctDBQuery(query::String; db::SQLite.DB=db) = DBInterface.execute(db, query)
+
+function queryToDataFrame(query::String; db::SQLite.DB=db, is_row::Bool=false) 
+    df = vctDBQuery(query; db=db) |> DataFrame
+    if is_row
+        @assert size(df,1)==1 "Did not find exactly one row matching the query:\n\tDatabase file: $(db)\n\tQuery: $(query)\nResult: $(df)"
+    end
     return df
 end
 
-function selectRow(column_names::Vector{String}, table_name::String, condition_stmt::String; db::SQLite.DB=db)
-    df = selectRow(table_name, condition_stmt; db=db)
-    return [df[1,column_name] for column_name in column_names]
-end
-
-function selectRow(column_name::String, table_name::String, condition_stmt::String; db::SQLite.DB=db)
-    df = selectRow(table_name, condition_stmt; db=db)
-    return df[1,column_name]
-end
+constructSelectQuery(table_name::String, condition_stmt::String; selection::String = "*") = "SELECT $(selection) FROM $(table_name) $(condition_stmt);"
 
 function getFolder(table_name::String, id_name::String, id::Int; db::SQLite.DB=db)
-    return DBInterface.execute(db, "SELECT folder_name FROM $(table_name) WHERE $(id_name)=$(id);") |> DataFrame |> x -> x.folder_name[1]
+    query = constructSelectQuery(table_name, "WHERE $(id_name)=$(id);"; selection="folder_name")
+    return queryToDataFrame(query; is_row=true) |> x -> x.folder_name[1]
 end
 
 getOptionalFolder(table_name::String, id_name::String, id::Int; db::SQLite.DB=db) = id == -1 ? "" : getFolder(table_name, id_name, id; db=db)
@@ -305,7 +295,7 @@ function retrieveID(table_name::String, folder_name::String; db::SQLite.DB=db)
         return -1
     end
     primary_key_string = "$(rstrip(table_name,'s'))_id"
-    return DBInterface.execute(db, "SELECT $(primary_key_string) FROM $(table_name) WHERE folder_name='$(folder_name)'") |> DataFrame |> x -> x[1,primary_key_string]
+    return constructSelectQuery(table_name, "WHERE folder_name='$(folder_name)'"; selection=primary_key_string) |> queryToDataFrame |> x -> x[1,primary_key_string]
 end
 
 function retrieveID(folder_names::AbstractSamplingFolders)
@@ -320,72 +310,37 @@ end
 
 ########### Summarizing Database Functions ###########
 
-getVariations(M::AbstractMonad) = [M.variation_id]
-getVariations(sampling::Sampling) = sampling.variation_ids
+getVariationIDs(M::AbstractMonad) = [M.variation_id]
+getVariationIDs(sampling::Sampling) = sampling.variation_ids
 
-getAbstractTrial(trial_tuple::Tuple{DataType, Int}) = trial_tuple[1](trial_tuple[2])
+getAbstractTrial(class_id::VCTClassID) = class_id.id |> getVCTClassIDType(class_id)
 
-function getSimulationsTable(simulation_ids::Vector{Int}; remove_constants::Bool = true)
-    query = "SELECT * FROM simulations WHERE simulation_id IN ($(join(simulation_ids,",")));"
-    df = DBInterface.execute(db, query) |> DataFrame
-    col_names = names(df)
-    filter!(n -> length(unique(df[!,n])) > 1, col_names)
-    select!(df, col_names)
-    addFolderColumns!(df)
-    var_df = DataFrame(simulation_id=Int[], ID=Int[])
-    for simulation_id in simulation_ids
-        df_sim = getVariationsTable((Simulation, simulation_id))
-        df_sim[!,:simulation_id] = [simulation_id]
-        var_df = outerjoin(var_df, df_sim, on = names(var_df))
-    end
-    df = outerjoin(df, var_df, on=[:simulation_id, :variation_id => :ID])
-    filter!(n -> !(n in ["simulation_id"]), col_names) # drop simulation_id 
-    select!(df, Not(col_names))
-    if remove_constants
+function getVariationsTable(config_db::SQLite.DB, variation_ids::Vector{Int}; remove_constants::Bool = false)
+    query = constructSelectQuery("variations", "WHERE variation_id IN ($(join(variation_ids,",")));")
+    df = queryToDataFrame(query, db=config_db)
+    if remove_constants && size(df, 1) > 1
         col_names = names(df)
         filter!(n -> length(unique(df[!,n])) > 1, col_names)
         select!(df, col_names)
     end
-    return df
-end
-
-function getVariationsTable(config_db::SQLite.DB, variation_ids::Vector{Int})
-    query = "SELECT * FROM variations WHERE variation_id IN ($(join(variation_ids,",")));"
-    df = DBInterface.execute(config_db, query) |> DataFrame
     rename!(simpleVariationNames, df)
     return df
 end
 
-getVariationsTable(S::AbstractSampling) = getVariationsTable(getConfigDB(S), getVariations(S))
+getVariationsTable(S::AbstractSampling; remove_constants::Bool = false) = getVariationsTable(getConfigDB(S), getVariationIDs(S); remove_constants = remove_constants)
+getVariationsTable(class_id::VCTClassID{<:AbstractSampling}; remove_constants::Bool = false) = getAbstractTrial(class_id) |> x -> getVariationsTable(x; remove_constants = remove_constants)
 
-function getVariationsTable(sampling_tuple::Tuple{DataType, Int})
-    @assert sampling_tuple[1] <: AbstractSampling "Need a subtype of AbstractSampling in getVariationsTable.\n\t$(sampling_tuple[1]) is not a subtype of AbstractSampling."
-    return getAbstractTrial(sampling_tuple) |> getVariationsTable
+function getVariationsTable(simulation_ids::Vector{Int}; remove_constants::Bool = false)
+    simulations_df = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(simulation_ids,",")));", selection="config_id, variation_id") |> 
+        queryToDataFrame
+    unique_tuples = [(row.config_id, row.variation_id) for row in eachrow(simulations_df)] |> unique
+    var_df = DataFrame(simulation_id=Int[], VarID=Int[])
+    for unique_tuple in unique_tuples
+        append!(var_df, getVariationsTable(getConfigDB(unique_tuple[1]), [unique_tuple[2]]; remove_constants = remove_constants), cols=:union)
+    end
+    return var_df
 end
 
-########### Printing Database Functions ###########
-
-function printSimulationsTable()
-    query = "SELECT * FROM simulations;"
-    printSimulationsTableFromQuery(query)
-end
-
-function printSimulationsTable(trial_tuple::Tuple{DataType, Int})
-    query = "SELECT * FROM simulations WHERE simulation_id IN ($(join(getSimulations(trial_tuple),",")));"
-    printSimulationsTableFromQuery(query)
-end
-
-function printSimulationsTable(T::AbstractTrial)
-    query = "SELECT * FROM simulations WHERE simulation_id IN ($(join(getSimulations(T),",")));"
-    printSimulationsTableFromQuery(query)
-end
-
-function printSimulationsTableFromQuery(query::String)
-    df = DBInterface.execute(db, query) |> DataFrame
-    addFolderColumns!(df)
-    println(df[!,["simulation_id","custom_code_folder","ic_cell_folder","ic_substrate_folder","ic_ecm_folder","config_folder","rulesets_collection_folder","variation_id","rulesets_variation_id"]])
-end
-    
 function addFolderColumns!(df::DataFrame)
     col_names = ["custom_code", "config", "rulesets_collection", "ic_cell", "ic_substrate", "ic_ecm"]
     get_function = [getFolder, getFolder, getOptionalFolder, getOptionalFolder, getOptionalFolder, getOptionalFolder]
@@ -403,5 +358,51 @@ function addFolderColumns!(df::DataFrame)
     return df
 end
 
+function getSimulationsTableFromQuery(query::String; remove_constants::Bool = true)
+    df = queryToDataFrame(query)
+    id_col_names_to_remove = names(df) # a bunch of ids that we don't want to show
+    filter!(n -> !(n in ["simulation_id", "variation_id"]), id_col_names_to_remove) # keep the simulation_id and variation_id columns
+    addFolderColumns!(df) # add the folder columns
+    select!(df, Not(id_col_names_to_remove)) # remove the id columns
+    unique_tuples = [(row.config_folder, row.variation_id) for row in eachrow(df)] |> unique
+    var_df = DataFrame(VarID=Int[])
+    for unique_tuple in unique_tuples
+        append!(var_df, getVariationsTable(getConfigDB(unique_tuple[1]), [unique_tuple[2]]; remove_constants = false), cols=:union) # do not remove constants at this point because we are combining various var_dfs
+    end
+    df = outerjoin(df, var_df, on = :variation_id => :VarID) # join on variation_id (which is called VarID in var_df)
+    rename!(df, [:simulation_id => :SimID, :variation_id => :VarID])
+    if remove_constants && size(df, 1) > 1
+        col_names = names(df)
+        filter!(n -> length(unique(df[!,n])) > 1, col_names)
+        select!(df, col_names)
+    end
+    return df
+end
+
+function getSimulationsTable(T::AbstractTrial; remove_constants::Bool = true)
+    query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(getSimulations(T),",")));")
+    return getSimulationsTableFromQuery(query; remove_constants = remove_constants)
+end
+
+function getSimulationsTable(simulation_ids::Vector{Int}; remove_constants::Bool = true)
+    query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(simulation_ids,",")));")
+    return getSimulationsTableFromQuery(query; remove_constants = remove_constants)
+end
+
+function getSimulationsTable(; remove_constants::Bool = true)
+    query = constructSelectQuery("simulations", "")
+    return getSimulationsTableFromQuery(query; remove_constants = remove_constants)
+end
+
+function getSimulationsTable(class_id::VCTClassID; remove_constants::Bool = true)
+    query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(getSimulations(class_id),",")));")
+    return getSimulationsTableFromQuery(query; remove_constants = remove_constants)
+end
+
+########### Printing Database Functions ###########
+
+printVariationsTable(args...; kwargs...) = getVariationsTable(args...; kwargs...) |> println
+printSimulationsTable(args...; kwargs...) = getSimulationsTable(args...; kwargs...) |> println
+
 printVariationsTable(S::AbstractSampling) = getVariationsTable(S) |> println
-printVariationsTable(sampling_tuple::Tuple{DataType, Int}) = getVariationsTable(sampling_tuple) |> println
+printVariationsTable(class_id::VCTClassID{<:AbstractSampling}) = getVariationsTable(class_id) |> println

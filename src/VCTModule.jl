@@ -43,6 +43,8 @@ function initializeVCT(path_to_physicell::String, path_to_data::String)
     println("----------INITIALIZING----------")
     global physicell_dir = abspath(path_to_physicell)
     global data_dir = abspath(path_to_data)
+    println("Path to PhysiCell: $physicell_dir")
+    println("Path to data: $data_dir")
     initializeDatabase("$(data_dir)/vct.db")
 end
 
@@ -201,20 +203,27 @@ end
 ################## Deletion Functions ##################
 
 function deleteSimulation(simulation_ids::Vector{Int}; delete_supers::Bool=true)
-    sim_df = DBInterface.execute(db, "SELECT * FROM simulations WHERE simulation_id IN ($(join(simulation_ids,",")));") |> DataFrame
+    sim_df = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(simulation_ids,",")));") |> queryToDataFrame
     DBInterface.execute(db,"DELETE FROM simulations WHERE simulation_id IN ($(join(simulation_ids,",")));")
     # for simulation_id in simulation_ids
     for row in eachrow(sim_df)
         rm("$(data_dir)/outputs/simulations/$(row.simulation_id)", force=true, recursive=true)
         config_folder = getConfigFolder(row.config_id)
-        query_str = "SELECT COUNT(*) FROM simulations WHERE config_id = $(row.config_id) AND variation_id = $(row.variation_id);"
-        result_df = DBInterface.execute(db, query_str) |> DataFrame
+        result_df = constructSelectQuery(
+            "simulations",
+            "WHERE config_id = $(row.config_id) AND variation_id = $(row.variation_id);";
+            selection="COUNT(*)"
+        ) |> queryToDataFrame
         if result_df.var"COUNT(*)"[1] == 0
             rm("$(data_dir)/inputs/configs/$(config_folder)/variations/variation_$(row.variation_id).xml", force=true)
         end
+
         rulesets_collection_folder = getRulesetsCollectionFolder(row.rulesets_collection_id)
-        query_str = "SELECT COUNT(*) FROM simulations WHERE rulesets_collection_id = $(row.rulesets_collection_id) AND rulesets_variation_id = $(row.rulesets_variation_id);"
-        result_df = DBInterface.execute(db, query_str) |> DataFrame
+        result_df = constructSelectQuery(
+            "simulations",
+            "WHERE rulesets_collection_id = $(row.rulesets_collection_id) AND rulesets_variation_id = $(row.rulesets_variation_id);";
+            selection="COUNT(*)"
+        ) |> queryToDataFrame
         if result_df.var"COUNT(*)"[1] == 0
             rm("$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)/rulesets_collections_variations/rulesets_variation_$(row.rulesets_variation_id).xml", force=true)
         end
@@ -224,7 +233,7 @@ function deleteSimulation(simulation_ids::Vector{Int}; delete_supers::Bool=true)
         return nothing
     end
 
-    monad_ids = DBInterface.execute(db, "SELECT monad_id FROM monads;") |> DataFrame |> x -> x.monad_id
+    monad_ids = constructSelectQuery("monads", "", selection="monad_id") |> queryToDataFrame |> x -> x.monad_id
     for monad_id in monad_ids
         monad_simulation_ids = getMonadSimulations(monad_id)
         if !any(x -> x in simulation_ids, monad_simulation_ids) # if none of the monad simulation ids are among those to be deleted, then nothing to do here
@@ -255,7 +264,7 @@ function deleteMonad(monad_ids::Vector{Int}; delete_subs::Bool=true, delete_supe
     if !delete_supers
         return nothing
     end
-    sampling_ids = DBInterface.execute(db, "SELECT sampling_id FROM samplings;") |> DataFrame |> x -> x.sampling_id
+    sampling_ids = constructSelectQuery("samplings", "", selection="sampling_id") |> queryToDataFrame |> x -> x.sampling_id
     for sampling_id in sampling_ids
         sampling_monad_ids = getSamplingMonads(sampling_id)
         if !any(x -> x in monad_ids, sampling_monad_ids) # if none of the sampling monad ids are among those to be deleted, then nothing to do here
@@ -287,7 +296,7 @@ function deleteSampling(sampling_ids::Vector{Int}; delete_subs::Bool=true, delet
         return nothing
     end
 
-    trial_ids = DBInterface.execute(db, "SELECT trial_id FROM trials;") |> DataFrame |> x -> x.trial_id
+    trial_ids = constructSelectQuery("trials", "", selection="trial_id") |> queryToDataFrame |> x -> x.trial_id
     for trial_id in trial_ids
         trial_sampling_ids = getTrialSamplings(trial_id)
         if !any(x -> x in sampling_ids, trial_sampling_ids) # if none of the trial sampling ids are among those to be deleted, then nothing to do here
@@ -329,7 +338,7 @@ function resetDatabase()
         resetConfigFolder(config_folder)
     end
     
-    config_folders = DBInterface.execute(db, "SELECT folder_name FROM configs;") |> DataFrame |> x->x.folder_name
+    config_folders = constructSelectQuery("configs", "", selection="folder_name") |> queryToDataFrame |> x -> x.folder_name
     for config_folder in config_folders
         resetConfigFolder("$(data_dir)/inputs/configs/$(config_folder)")
     end
@@ -338,7 +347,7 @@ function resetDatabase()
         resetRulesetsCollectionFolder(path_to_rulesets_collection_folder)
     end
 
-    rulesets_collection_folders = DBInterface.execute(db, "SELECT folder_name FROM rulesets_collections;") |> DataFrame |> x->x.folder_name
+    rulesets_collection_folders = constructSelectQuery("rulesets_collections", "", selection="folder_name") |> queryToDataFrame |> x -> x.folder_name
     for rulesets_collection_folder in rulesets_collection_folders
         resetRulesetsCollectionFolder("$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)")
     end
@@ -350,7 +359,7 @@ function resetDatabase()
         rm("$(custom_code_folder)/macros.txt", force=true)
     end
 
-    custom_code_folders = DBInterface.execute(db, "SELECT folder_name FROM custom_codes;") |> DataFrame |> x->x.folder_name
+    custom_code_folders = constructSelectQuery("custom_codes", "", selection="folder_name") |> queryToDataFrame |> x -> x.folder_name
     for custom_code_folder in custom_code_folders
         rm("$(data_dir)/inputs/custom_codes/$(custom_code_folder)/project", force=true)
     end
@@ -552,8 +561,8 @@ end
 ################## Variations Functions ##################
 
 function addColumns(xml_paths::Vector{Vector{String}}, table_name::String, id_column_name::String, db_columns::SQLite.DB, path_to_xml::String, dataTypeRules::Function)
-    column_names = DBInterface.execute(db_columns, "PRAGMA table_info($(table_name));") |> DataFrame |> x->x[!,:name]
-    filter!(x->x!=id_column_name,column_names)
+    column_names = queryToDataFrame("PRAGMA table_info($(table_name));"; db=db_columns) |> x->x[!,:name]
+    filter!(x -> x != id_column_name, column_names)
     varied_column_names = [join(xml_path,"/") for xml_path in xml_paths]
 
     is_new_column = [!(varied_column_name in column_names) for varied_column_name in varied_column_names]
@@ -612,7 +621,8 @@ function addRow(db_columns::SQLite.DB, table_name::String, id_name::String, tabl
     new_id = DBInterface.execute(db_columns, "INSERT OR IGNORE INTO $(table_name) ($(table_features)) VALUES($(values)) RETURNING $(id_name);") |> DataFrame |> x->x[!,1]
     new_added = length(new_id)==1
     if  !new_added
-        new_id = selectRow(id_name, table_name, "WHERE ($(table_features))=($(values))"; db=db_columns)
+        query = constructSelectQuery(table_name, "WHERE ($(table_features))=($(values))"; selection=id_name)
+        new_id = queryToDataFrame(query, db=db_columns) |> x->x[!,1]
     end
     return new_id[1], new_added
 end
@@ -688,10 +698,16 @@ addGridRulesetsVariation(rulesets_collection_id::Int, EV::ElementaryVariation; r
 addGridRulesetsVariation(rulesets_collection_folder::String, EV::ElementaryVariation; reference_rulesets_variation_id::Int=0) = addGridRulesetsVariation(rulesets_collection_folder, [EV]; reference_rulesets_variation_id=reference_rulesets_variation_id)
 
 function prepareAddNew(db_columns::SQLite.DB, static_column_names::Vector{String}, varied_column_names::Vector{String}, table_name::String, id_name::String, reference_id::Int)
-    static_values = selectRow(static_column_names, table_name, "WHERE $(id_name)=$(reference_id)"; db=db_columns) |> x -> join("\"" .* string.(x) .* "\"", ",")
-    table_features = join("\"" .* static_column_names .* "\"", ",")
-    if !isempty(static_column_names)
+    if isempty(static_column_names)
+        static_values = ""
+        table_features = ""
+    else
+        query = constructSelectQuery(table_name, "WHERE $(id_name)=$(reference_id);"; selection=join("\"" .* static_column_names .* "\"", ", "))
+        df = queryToDataFrame(query, db=db_columns)
+        static_values = df |>
+            x -> join(x |> eachcol .|> c -> "\"$(string(c[1]))\"", ",")
         static_values *= ","
+        table_features = join("\"" .* static_column_names .* "\"", ",")
         table_features *= ","
     end
     table_features *= join("\"" .* varied_column_names .* "\"", ",")
@@ -776,19 +792,16 @@ getSimulations(sampling::Sampling) = getSamplingSimulations(sampling.id)
 getSimulations(monad::Monad) = getMonadSimulations(monad.id)
 getSimulations(simulation::Simulation) = [simulation.id]
 
-function getSimulations(trial_tuple::Tuple{DataType,Int}) 
-    error_string = "To use a tuple to get simulation IDs, the first element must be a subtype of AbstractTrial,"
-    error_string *= "\n\ti.e. in the set {Simulation, Monad, Sampling, Trial}"
-    error_string *= "\n\tInstead, the first element was $(trial_tuple[1])"
-    @assert trial_tuple[1] <: AbstractTrial error_string
-    if trial_tuple[1] == Simulation
-        return [trial_tuple[2]]
-    elseif trial_tuple[1] == Monad
-        return getMonadSimulations(trial_tuple[2])
-    elseif trial_tuple[1] == Sampling
-        return getSamplingSimulations(trial_tuple[2])
-    elseif trial_tuple[1] == Trial
-        return getTrialSimulations(trial_tuple[2])
+function getSimulations(class_id::VCTClassID) 
+    class_id_type = getVCTClassIDType(class_id)
+    if class_id_type == Simulation
+        return [class_id.id]
+    elseif class_id_type == Monad
+        return getMonadSimulations(class_id.id)
+    elseif class_id_type == Sampling
+        return getSamplingSimulations(class_id.id)
+    elseif class_id_type == Trial
+        return getTrialSimulations(class_id.id)
     else
         error(error_string)
     end
