@@ -703,9 +703,7 @@ function prepareAddNew(db_columns::SQLite.DB, static_column_names::Vector{String
         table_features = ""
     else
         query = constructSelectQuery(table_name, "WHERE $(id_name)=$(reference_id);"; selection=join("\"" .* static_column_names .* "\"", ", "))
-        df = queryToDataFrame(query, db=db_columns)
-        static_values = df |>
-            x -> join(x |> eachcol .|> c -> "\"$(string(c[1]))\"", ",")
+        static_values = queryToDataFrame(query, db=db_columns) |> x -> (x |> eachcol .|> c -> "\"$(string(c[1]))\"", ",")
         static_values *= ","
         table_features = join("\"" .* static_column_names .* "\"", ",")
         table_features *= ","
