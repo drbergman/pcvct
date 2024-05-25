@@ -1,4 +1,4 @@
-export Sampling, Trial, getTrial
+export Simulation, Monad, Sampling, Trial, getTrial, VCTClassID
 
 abstract type AbstractTrial end
 abstract type AbstractSampling <: AbstractTrial end
@@ -58,9 +58,15 @@ function Simulation(folder_ids::AbstractSamplingIDs, variation_id::Int, rulesets
     return Simulation(folder_ids, folder_names, variation_id, rulesets_variation_id)
 end
 
-function Simulation(config_id::Int, rulesets_collection_id::Int, ic_substrate_id::Int, ic_ecm_id::Int, custom_code_id::Int, variation_id::Int, rulesets_variation_id::Int) 
+function Simulation(config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, ic_substrate_id::Int, ic_ecm_id::Int, custom_code_id::Int, variation_id::Int, rulesets_variation_id::Int) 
     folder_ids = AbstractSamplingIDs(config_id, rulesets_collection_id, ic_cell_id, ic_substrate_id, ic_ecm_id, custom_code_id)
     folder_names  = AbstractSamplingFolders(folder_ids)
+    return Simulation(folder_ids, folder_names, variation_id, rulesets_variation_id)
+end
+
+function Simulation(config_folder::String, rulesets_collection_folder::String, ic_cell_folder::String, ic_substrate_folder::String, ic_ecm_folder::String, custom_code_folder::String, variation_id::Int, rulesets_variation_id::Int) 
+    folder_names = AbstractSamplingFolders(config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder)
+    folder_ids = AbstractSamplingIDs(folder_names)
     return Simulation(folder_ids, folder_names, variation_id, rulesets_variation_id)
 end
 
@@ -70,7 +76,7 @@ function Simulation(folder_ids::AbstractSamplingIDs, folder_names::AbstractSampl
 end
 
 function getSimulation(simulation_id::Int)
-    df = DBInterface.execute(db, "SELECT * FROM simulations WHERE simulation_id=$simulation_id;") |> DataFrame
+    df = constructSelectQuery("simulations", "WHERE simulation_id=$(simulation_id);") |> queryToDataFrame
     if isempty(df)
         error("No simulations found for simulation_id=$simulation_id. This simulation did not run.")
     end
@@ -109,16 +115,16 @@ end
 function Monad(min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_id::Int, rulesets_variation_id::Int) 
     monad_ids = DBInterface.execute(db, "INSERT OR IGNORE INTO monads (config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id,variation_id,rulesets_variation_id) VALUES($(folder_ids.config_id),$(folder_ids.rulesets_collection_id),$(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),$(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id),$(variation_id),$(rulesets_variation_id)) RETURNING monad_id;") |> DataFrame |> x -> x.monad_id
     if isempty(monad_ids) # if monad insert command was ignored, then the monad already exists
-        monad_id = DBInterface.execute(
-            db,
+        monad_id = constructSelectQuery(
+            "monads",
             """
-                SELECT monad_id FROM monads 
-                WHERE (config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id,variation_id,rulesets_variation_id)=
-                (
-                    $(folder_ids.config_id),$(folder_ids.rulesets_collection_id),$(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),$(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id),$(variation_id),$(rulesets_variation_id)
-                );
-            """
-            ) |> DataFrame |> x -> x.monad_id[1] # get the monad_id
+            WHERE (config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id,variation_id,rulesets_variation_id)=\
+            (\
+                $(folder_ids.config_id),$(folder_ids.rulesets_collection_id),$(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),$(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id),$(variation_id),$(rulesets_variation_id)\
+            );\
+            """,
+            selection="monad_id"
+        ) |> queryToDataFrame |> x -> x.monad_id[1] # get the monad_id
     else # if monad insert command was successful, then the monad is new
         monad_id = monad_ids[1] # get the monad_id
     end
@@ -127,7 +133,7 @@ function Monad(min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::A
 end
 
 function getMonad(monad_id::Int)
-    df = DBInterface.execute(db, "SELECT * FROM monads WHERE monad_id=$monad_id;") |> DataFrame
+    df = constructSelectQuery("monads", "WHERE monad_id=$(monad_id);") |> queryToDataFrame
     simulation_ids = getMonadSimulations(monad_id)
     if isempty(df) || isempty(simulation_ids)
         error("No monads found for monad_id=$monad_id. This monad did not run.")
@@ -205,7 +211,16 @@ function Sampling(monad_min_length::Int, folder_ids::AbstractSamplingIDs, folder
     monad_ids = createMonadIDs(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
     
     id = -1
-    sampling_ids = DBInterface.execute(db, "SELECT sampling_id FROM samplings WHERE (config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id)=($(folder_ids.config_id),$(folder_ids.rulesets_collection_id),$(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),$(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id));") |> DataFrame |> x -> x.sampling_id
+    sampling_ids = constructSelectQuery(
+        "samplings",
+        """
+        WHERE (config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id)=\
+        (\
+            $(folder_ids.config_id),$(folder_ids.rulesets_collection_id),$(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),$(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id)\
+        );\
+        """,
+        selection="sampling_id"
+    ) |> queryToDataFrame |> x -> x.sampling_id
     if !isempty(sampling_ids) # if there are previous samplings with the same parameters
         for sampling_id in sampling_ids # check if the monad_ids are the same with any previous monad_ids
             monad_ids_in_db = getSamplingMonads(sampling_id) # get the monad_ids belonging to this sampling
@@ -234,7 +249,7 @@ function createMonadIDs(monad_min_length::Int, folder_ids::AbstractSamplingIDs, 
 end
 
 function getSampling(sampling_id::Int)
-    df = DBInterface.execute(db, "SELECT * FROM samplings WHERE sampling_id=$sampling_id;") |> DataFrame
+    df = constructSelectQuery("samplings", "WHERE sampling_id=$(sampling_id);") |> queryToDataFrame
     monad_ids = getSamplingMonads(sampling_id)
     if isempty(df) || isempty(monad_ids)
         error("No samplings found for sampling_id=$sampling_id. This sampling did not run.")
@@ -242,7 +257,7 @@ function getSampling(sampling_id::Int)
     monad_min_length = 0 # not running more simulations for this Sampling this way
     folder_ids = AbstractSamplingIDs(df.config_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1], df.custom_code_id[1])
     folder_names = AbstractSamplingFolders(folder_ids)
-    monad_df = DBInterface.execute(db, "SELECT * FROM monads WHERE monad_id IN ($(join(monad_ids,",")))") |> DataFrame
+    monad_df = constructSelectQuery("monads", "WHERE monad_id IN ($(join(monad_ids,",")))") |> queryToDataFrame
     variation_ids = monad_df.variation_id
     rulesets_variation_ids = monad_df.rulesets_variation_id
     # I do not know if these will be in the proper order...
@@ -327,7 +342,7 @@ end
 
 function getTrialId(sampling_ids::Vector{Int})
     id = -1
-    trial_ids = DBInterface.execute(db, "SELECT trial_id FROM trials;") |> DataFrame |> x -> x.trial_id
+    trial_ids = constructSelectQuery("trials", "", selection="trial_id") |> queryToDataFrame |> x -> x.trial_id
     if !isempty(trial_ids) # if there are previous trials
         for trial_id in trial_ids # check if the sampling_ids are the same with any previous sampling_ids
             sampling_ids_in_db = getTrialSamplings(trial_id) # get the sampling_ids belonging to this trial
@@ -361,7 +376,7 @@ function Trial(monad_min_length::Int, sampling_ids::Vector{Int}, folder_ids::Vec
 end
 
 function getTrial(trial_id::Int; full_initialization::Bool=false)
-    df = DBInterface.execute(db, "SELECT * FROM trials WHERE trial_id=$trial_id;") |> DataFrame
+    df = constructSelectQuery("trials", "WHERE trial_id=$(trial_id);") |> queryToDataFrame
     if isempty(df) || isempty(getTrialSamplings(trial_id))
         error("No samplings found for trial_id=$trial_id. This trial did not run.")
     end
@@ -369,7 +384,7 @@ function getTrial(trial_id::Int; full_initialization::Bool=false)
         error("Full initialization of Trials from trial_id not yet implemented")
         sampling_ids = getTrialSamplings(trial_id)
         monad_min_length = minimum([getSamplingMonads(sampling_id) for sampling_id in sampling_ids])
-        sampling_df = DBInterface.execute(db, "SELECT * FROM samplings WHERE sampling_id IN ($(join(sampling_ids,",")))") |> DataFrame
+        sampling_df = constructSelectQuery("samplings", "WHERE sampling_id IN ($(join(sampling_ids,",")))") |> queryToDataFrame
         folder_ids = [getSamplingFolderIDs(sampling_id) for sampling_id in sampling_ids]
         folder_names = [getSamplingFolderNames(sampling_id) for sampling_id in sampling_ids]
         variation_ids = [getSamplingVariationIDs(sampling_id) for sampling_id in sampling_ids]
@@ -386,3 +401,28 @@ function getTrial(trial_id::Int; full_initialization::Bool=false)
 end
 
 Trial(trial_id::Int) = getTrial(trial_id; full_initialization=false)
+
+##########################################
+#############   VCTClassID   #############
+##########################################
+
+struct VCTClassID{T<:AbstractTrial} 
+    id::Int
+end
+
+getVCTClassIDType(class_id::VCTClassID) = typeof(class_id).parameters[1]
+
+function VCTClassID(class_str::String, id::Int)
+    if class_str == "Simulation"
+        return VCTClassID{Simulation}(id)
+    elseif class_str == "Monad"
+        return VCTClassID{Monad}(id)
+    elseif class_str == "Sampling"
+        return VCTClassID{Sampling}(id)
+    elseif class_str == "Trial"
+        return VCTClassID{Trial}(id)
+    else
+        error("class_str must be one of 'Simulation', 'Monad', 'Sampling', or 'Trial'.")
+    end
+    
+end
