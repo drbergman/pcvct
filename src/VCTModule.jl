@@ -706,7 +706,6 @@ function prepareAddNew(db_columns::SQLite.DB, static_column_names::Vector{String
         df = queryToDataFrame(query, db=db_columns)
         static_values = df |>
             x -> join(x |> eachcol .|> c -> "\"$(string(c[1]))\"", ",")
-            # x -> join("\"" .* string.(x) .* "\"", ",")
         static_values *= ","
         table_features = join("\"" .* static_column_names .* "\"", ",")
         table_features *= ","
