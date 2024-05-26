@@ -142,7 +142,7 @@ function loadRulesets(M::AbstractMonad)
     xml_doc = parse_file("$(path_to_rulesets_collections_folder)/base_rulesets.xml")
     if M.rulesets_variation_id != 0 # only update if not using hte base variation for the ruleset
         query = constructSelectQuery("rulesets_variations", "WHERE rulesets_variation_id=$(M.rulesets_variation_id);")
-        variation_row = queryToDataFrame(query; db=getRulesetsVariationsDB(M), is_row=true)
+        variation_row = queryToDataFrame(query; db=getRulesetsCollectionDB(M), is_row=true)
         for column_name in names(variation_row)
             if column_name == "rulesets_variation_id"
                 continue
@@ -230,6 +230,14 @@ function simpleVariationNames(name::String)
         return "SVG Save Interval"
     elseif startswith(name, "cell_definitions")
         return getCellParameter(name)
+    else
+        return name
+    end
+end
+
+function simpleRulesetsVariationNames(name::String)
+    if name == "rulesets_variation_id"
+        return "RulesVarID"
     else
         return name
     end

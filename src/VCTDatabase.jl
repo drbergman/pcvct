@@ -238,19 +238,23 @@ end
 
 ################## DB Interface Functions ##################
 
-function getConfigDB(config_folder::String)
-    return "$(data_dir)/inputs/configs/$(config_folder)/variations.db" |> SQLite.DB
+function getVariationDB(folder::String; type::Symbol = :config)
+    if type == :config
+        getConfigDB(folder)
+    elseif type == :rulesets_collection
+        getRulesetsCollectionDB(folder)
+    else
+        error("type must be :config or :rulesets_collection.")
+    end
 end
 
+getConfigDB(config_folder::String) = "$(data_dir)/inputs/configs/$(config_folder)/variations.db" |> SQLite.DB
 getConfigDB(config_id::Int) = getConfigFolder(config_id) |> getConfigDB
 getConfigDB(S::AbstractSampling) = getConfigDB(S.folder_names.config_folder)
 
-function getRulesetsVariationsDB(rulesets_collection_folder::String)
-    return "$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)/rulesets_variations.db" |> SQLite.DB
-end
-
-getRulesetsVariationsDB(M::AbstractMonad) = getRulesetsVariationsDB(M.folder_names.rulesets_collection_folder)
-getRulesetsVariationsDB(rulesets_collection_id::Int) = getRulesetsVariationsDB(getRulesetsCollectionFolder(rulesets_collection_id))
+getRulesetsCollectionDB(rulesets_collection_folder::String) = "$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)/rulesets_variations.db" |> SQLite.DB
+getRulesetsCollectionDB(M::AbstractMonad) = getRulesetsCollectionDB(M.folder_names.rulesets_collection_folder)
+getRulesetsCollectionDB(rulesets_collection_id::Int) = getRulesetsCollectionFolder(rulesets_collection_id) |> getRulesetsCollectionDB
 
 ########### Retrieving Database Information Functions ###########
 
@@ -310,35 +314,70 @@ end
 
 ########### Summarizing Database Functions ###########
 
-getVariationIDs(M::AbstractMonad) = [M.variation_id]
-getVariationIDs(sampling::Sampling) = sampling.variation_ids
+getConfigVariationIDs(M::AbstractMonad) = [M.variation_id]
+getConfigVariationIDs(sampling::Sampling) = sampling.variation_ids
+
+getRulesetsVariationIDs(M::AbstractMonad) = [M.rulesets_variation_id]
+getRulesetsVariationIDs(sampling::Sampling) = sampling.rulesets_variation_ids
 
 getAbstractTrial(class_id::VCTClassID) = class_id.id |> getVCTClassIDType(class_id)
 
-function getVariationsTable(config_db::SQLite.DB, variation_ids::Vector{Int}; remove_constants::Bool = false)
-    query = constructSelectQuery("variations", "WHERE variation_id IN ($(join(variation_ids,",")));")
-    df = queryToDataFrame(query, db=config_db)
+function getVariationsTable(query::String, db::SQLite.DB; remove_constants::Bool = false, simpleVariationNames=simpleVariationNames)
+    df = queryToDataFrame(query, db=db)
     if remove_constants && size(df, 1) > 1
         col_names = names(df)
         filter!(n -> length(unique(df[!,n])) > 1, col_names)
         select!(df, col_names)
     end
+    return df
+end
+
+function getConfigVariationsTable(variations_db::SQLite.DB, variation_ids::Vector{Int}; remove_constants::Bool = false)
+    query = constructSelectQuery("variations", "WHERE variation_id IN ($(join(variation_ids,",")));")
+    df = getVariationsTable(query, variations_db; remove_constants = remove_constants)
     rename!(simpleVariationNames, df)
     return df
 end
 
-getVariationsTable(S::AbstractSampling; remove_constants::Bool = false) = getVariationsTable(getConfigDB(S), getVariationIDs(S); remove_constants = remove_constants)
-getVariationsTable(class_id::VCTClassID{<:AbstractSampling}; remove_constants::Bool = false) = getAbstractTrial(class_id) |> x -> getVariationsTable(x; remove_constants = remove_constants)
+getConfigVariationsTable(S::AbstractSampling; remove_constants::Bool=false) = getConfigVariationsTable(getConfigDB(S), getConfigVariationIDs(S); remove_constants = remove_constants)
+getConfigVariationsTable(class_id::VCTClassID{<:AbstractSampling}; remove_constants::Bool = false) = getAbstractTrial(class_id) |> x -> getConfigVariationsTable(x; remove_constants = remove_constants)
 
-function getVariationsTable(simulation_ids::Vector{Int}; remove_constants::Bool = false)
-    simulations_df = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(simulation_ids,",")));", selection="config_id, variation_id") |> 
-        queryToDataFrame
-    unique_tuples = [(row.config_id, row.variation_id) for row in eachrow(simulations_df)] |> unique
-    var_df = DataFrame(simulation_id=Int[], VarID=Int[])
+function getRulesetsVariationsTable(rulesets_variations_db::SQLite.DB, rulesets_variation_ids::Vector{Int}; remove_constants::Bool = false)
+    query = constructSelectQuery("rulesets_variations", "WHERE rulesets_variation_id IN ($(join(rulesets_variation_ids,",")));")
+    df = getVariationsTable(query, rulesets_variations_db; remove_constants = remove_constants)
+    rename!(simpleRulesetsVariationNames, df)
+    return df
+end
+
+getRulesetsVariationsTable(S::AbstractSampling; remove_constants::Bool=false) = getRulesetsVariationsTable(getRulesetsCollectionDB(S), getRulesetsVariationIDs(S); remove_constants = remove_constants)
+getRulesetsVariationsTable(class_id::VCTClassID{<:AbstractSampling}; remove_constants::Bool = false) = getAbstractTrial(class_id) |> x -> getRulesetsVariationsTable(x; remove_constants = remove_constants)
+
+function getVariationsTableFromSimulations(query::String, id_name::Symbol, getVariationsTableFn::Function; remove_constants::Bool = false)
+    df = queryToDataFrame(query)
+    unique_tuples = [(row[1], row[2]) for row in eachrow(df)] |> unique
+    var_df = DataFrame(id_name=>Int[])
     for unique_tuple in unique_tuples
-        append!(var_df, getVariationsTable(getConfigDB(unique_tuple[1]), [unique_tuple[2]]; remove_constants = remove_constants), cols=:union)
+        append!(var_df, getVariationsTableFn(unique_tuple), cols=:union)
+    end
+    if remove_constants && size(var_df, 1) > 1
+        col_names = names(var_df)
+        filter!(n -> length(unique(var_df[!,n])) > 1, col_names)
+        select!(var_df, col_names)
     end
     return var_df
+end
+
+function getConfigVariationsTable(simulation_ids::Vector{Int}; remove_constants::Bool = false)
+    query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(simulation_ids,",")));", selection="config_id, variation_id")
+    getVariationsTableFn = x -> getConfigVariationsTable(getConfigDB(x[1]), [x[2]]; remove_constants = false)
+    return getVariationsTableFromSimulations(query, :VarID, getVariationsTableFn)
+end
+
+
+function getRulesetsVariationsTable(simulation_ids::Vector{Int}; remove_constants::Bool = false)
+    query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(simulation_ids,",")));", selection="rulesets_collection_id, rulesets_variation_id")
+    getVariationsTableFn = x -> getRulesetsVariationsTable(getRulesetsCollectionDB(x[1]), [x[2]]; remove_constants = false)
+    return getVariationsTableFromSimulations(query, :RulesVarID, getVariationsTableFn)
 end
 
 function addFolderColumns!(df::DataFrame)
@@ -358,25 +397,31 @@ function addFolderColumns!(df::DataFrame)
     return df
 end
 
-function getSimulationsTableFromQuery(query::String; remove_constants::Bool = true)
+function getSimulationsTableFromQuery(query::String; remove_constants::Bool=true)
     df = queryToDataFrame(query)
     id_col_names_to_remove = names(df) # a bunch of ids that we don't want to show
-    filter!(n -> !(n in ["simulation_id", "variation_id"]), id_col_names_to_remove) # keep the simulation_id and variation_id columns
+    filter!(n -> !(n in ["simulation_id", "variation_id", "rulesets_variation_id"]), id_col_names_to_remove) # keep the simulation_id and variation_id columns
     addFolderColumns!(df) # add the folder columns
     select!(df, Not(id_col_names_to_remove)) # remove the id columns
     unique_tuples = [(row.config_folder, row.variation_id) for row in eachrow(df)] |> unique
-    var_df = DataFrame(VarID=Int[])
-    for unique_tuple in unique_tuples
-        append!(var_df, getVariationsTable(getConfigDB(unique_tuple[1]), [unique_tuple[2]]; remove_constants = false), cols=:union) # do not remove constants at this point because we are combining various var_dfs
-    end
-    df = outerjoin(df, var_df, on = :variation_id => :VarID) # join on variation_id (which is called VarID in var_df)
-    rename!(df, [:simulation_id => :SimID, :variation_id => :VarID])
+    df = appendVariations(df, unique_tuples, getConfigDB, getConfigVariationsTable, :variation_id, :VarID)
+    unique_tuples = [(row.rulesets_collection_folder, row.rulesets_variation_id) for row in eachrow(df)] |> unique
+    df = appendVariations(df, unique_tuples, getRulesetsCollectionDB, getRulesetsVariationsTable, :rulesets_variation_id, :RulesVarID)
+    rename!(df, [:simulation_id => :SimID, :variation_id => :VarID, :rulesets_variation_id => :RulesVarID])
     if remove_constants && size(df, 1) > 1
         col_names = names(df)
-        filter!(n -> length(unique(df[!,n])) > 1, col_names)
+        filter!(n -> length(unique(df[!, n])) > 1, col_names)
         select!(df, col_names)
     end
     return df
+end
+
+function appendVariations(df::DataFrame, unique_tuples::Vector{Tuple{String, Int}}, getDB::Function, getVariationsTableFn::Function, id_name::Symbol, new_id_name::Symbol)
+    var_df = DataFrame(new_id_name => Int[])
+    for unique_tuple in unique_tuples
+        append!(var_df, getVariationsTableFn(getDB(unique_tuple[1]), [unique_tuple[2]]; remove_constants = false), cols=:union)
+    end
+    return outerjoin(df, var_df, on = id_name => new_id_name)
 end
 
 function getSimulationsTable(T::AbstractTrial; remove_constants::Bool = true)
@@ -401,8 +446,7 @@ end
 
 ########### Printing Database Functions ###########
 
-printVariationsTable(args...; kwargs...) = getVariationsTable(args...; kwargs...) |> println
-printSimulationsTable(args...; kwargs...) = getSimulationsTable(args...; kwargs...) |> println
+printConfigVariationsTable(args...; kwargs...) = getConfigVariationsTable(args...; kwargs...) |> println
+printRulesetsVariationsTable(args...; kwargs...) = getRulesetsVariationsTable(args...; kwargs...) |> println
 
-printVariationsTable(S::AbstractSampling) = getVariationsTable(S) |> println
-printVariationsTable(class_id::VCTClassID{<:AbstractSampling}) = getVariationsTable(class_id) |> println
+printSimulationsTable(args...; kwargs...) = getSimulationsTable(args...; kwargs...) |> println

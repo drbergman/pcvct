@@ -1,7 +1,7 @@
 module VCTModule
 
 # each file (includes below) has their own export statements
-export initializeVCT, resetDatabase, addGridVariation, addGridRulesetsVariation, runAbstractTrial, getTrialSamplings, getSimulations
+export initializeVCT, resetDatabase, addGridVariation, addGridRulesetsVariation, runAbstractTrial, getTrialSamplings, getSimulations, deleteSimulation
 
 using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables
 using MAT, Statistics # files for VCTLoader.jl
@@ -205,7 +205,6 @@ end
 function deleteSimulation(simulation_ids::Vector{Int}; delete_supers::Bool=true)
     sim_df = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(simulation_ids,",")));") |> queryToDataFrame
     DBInterface.execute(db,"DELETE FROM simulations WHERE simulation_id IN ($(join(simulation_ids,",")));")
-    # for simulation_id in simulation_ids
     for row in eachrow(sim_df)
         rm("$(data_dir)/outputs/simulations/$(row.simulation_id)", force=true, recursive=true)
         config_folder = getConfigFolder(row.config_id)
@@ -234,6 +233,7 @@ function deleteSimulation(simulation_ids::Vector{Int}; delete_supers::Bool=true)
     end
 
     monad_ids = constructSelectQuery("monads", "", selection="monad_id") |> queryToDataFrame |> x -> x.monad_id
+    monad_ids_to_delete = Int[]
     for monad_id in monad_ids
         monad_simulation_ids = getMonadSimulations(monad_id)
         if !any(x -> x in simulation_ids, monad_simulation_ids) # if none of the monad simulation ids are among those to be deleted, then nothing to do here
@@ -241,10 +241,13 @@ function deleteSimulation(simulation_ids::Vector{Int}; delete_supers::Bool=true)
         end
         filter!(x -> !(x in simulation_ids), monad_simulation_ids)
         if isempty(monad_simulation_ids)
-            deleteMonad([monad_id]; delete_subs=false, delete_supers=true)
+            push!(monad_ids_to_delete, monad_id)
         else
             recordSimulationIDs(monad_id, monad_simulation_ids)
         end
+    end
+    if !isempty(monad_ids_to_delete)
+        deleteMonad(monad_ids_to_delete; delete_subs=false, delete_supers=true)
     end
     return nothing
 end
@@ -253,18 +256,23 @@ deleteSimulation(simulation_id::Int; delete_supers::Bool=true) = deleteSimulatio
 
 function deleteMonad(monad_ids::Vector{Int}; delete_subs::Bool=true, delete_supers::Bool=true)
     DBInterface.execute(db,"DELETE FROM monads WHERE monad_id IN ($(join(monad_ids,",")));")
+    simulation_ids_to_delete = Int[]
     for monad_id in monad_ids
         if delete_subs
-            simulation_ids = getMonadSimulations(monad_id)
-            deleteSimulation(simulation_ids; delete_supers=false)
+            append!(simulation_ids_to_delete, getMonadSimulations(monad_id))
         end
         rm("$(data_dir)/outputs/monads/$(monad_id)", force=true, recursive=true)
+    end
+    if !isempty(simulation_ids_to_delete)
+        deleteSimulation(simulation_ids_to_delete; delete_supers=false)
     end
 
     if !delete_supers
         return nothing
     end
+
     sampling_ids = constructSelectQuery("samplings", "", selection="sampling_id") |> queryToDataFrame |> x -> x.sampling_id
+    sampling_ids_to_delete = Int[]
     for sampling_id in sampling_ids
         sampling_monad_ids = getSamplingMonads(sampling_id)
         if !any(x -> x in monad_ids, sampling_monad_ids) # if none of the sampling monad ids are among those to be deleted, then nothing to do here
@@ -272,10 +280,13 @@ function deleteMonad(monad_ids::Vector{Int}; delete_subs::Bool=true, delete_supe
         end
         filter!(x -> !(x in monad_ids), sampling_monad_ids)
         if isempty(sampling_monad_ids)
-            deleteSampling([sampling_id]; delete_subs=false, delete_supers=true)
+            push!(sampling_ids_to_delete, sampling_id)
         else
             recordMonadIDs(sampling_id, sampling_monad_ids)
         end
+    end
+    if !isempty(sampling_ids_to_delete)
+        deleteSampling(sampling_ids_to_delete; delete_subs=false, delete_supers=true)
     end
     return nothing
 end
@@ -284,12 +295,15 @@ deleteMonad(monad_id::Int; delete_subs::Bool=true, delete_supers::Bool=true) = d
 
 function deleteSampling(sampling_ids::Vector{Int}; delete_subs::Bool=true, delete_supers::Bool=true)
     DBInterface.execute(db,"DELETE FROM samplings WHERE sampling_id IN ($(join(sampling_ids,",")));")
+    monad_ids_to_delete = Int[]
     for sampling_id in sampling_ids
         if delete_subs
-            monad_ids = getSamplingMonads(sampling_id)
-            deleteMonad(monad_ids; delete_subs=true, delete_supers=false)
+            append!(monad_ids_to_delete, getSamplingMonads(sampling_id))
         end
         rm("$(data_dir)/outputs/samplings/$(sampling_id)", force=true, recursive=true)
+    end
+    if !isempty(monad_ids_to_delete)
+        deleteMonad(monad_ids_to_delete; delete_subs=true, delete_supers=false)
     end
 
     if !delete_supers
@@ -297,6 +311,7 @@ function deleteSampling(sampling_ids::Vector{Int}; delete_subs::Bool=true, delet
     end
 
     trial_ids = constructSelectQuery("trials", "", selection="trial_id") |> queryToDataFrame |> x -> x.trial_id
+    trial_ids_to_delete = Int[]
     for trial_id in trial_ids
         trial_sampling_ids = getTrialSamplings(trial_id)
         if !any(x -> x in sampling_ids, trial_sampling_ids) # if none of the trial sampling ids are among those to be deleted, then nothing to do here
@@ -304,10 +319,13 @@ function deleteSampling(sampling_ids::Vector{Int}; delete_subs::Bool=true, delet
         end
         filter!(x -> !(x in sampling_ids), trial_sampling_ids)
         if isempty(trial_sampling_ids)
-            deleteTrial([trial_id]; delete_subs=false)
+            push!(trial_ids_to_delete, trial_id)
         else
             recordSamplingIDs(trial_id, trial_sampling_ids)
         end
+    end
+    if !isempty(trial_ids_to_delete)
+        deleteTrial(trial_ids_to_delete; delete_subs=false)
     end
     return nothing
 end
@@ -316,12 +334,15 @@ deleteSampling(sampling_id::Int; delete_subs::Bool=true, delete_supers::Bool=tru
 
 function deleteTrial(trial_ids::Vector{Int}; delete_subs::Bool=true)
     DBInterface.execute(db,"DELETE FROM trials WHERE trial_id IN ($(join(trial_ids,",")));")
+    sampling_ids_to_delete = Int[]
     for trial_id in trial_ids
         if delete_subs
-            sampling_ids = getTrialSamplings(trial_id)
-            deleteSampling(sampling_ids; delete_subs=true, delete_supers=false)
+            append!(sampling_ids_to_delete, getTrialSamplings(trial_id))
         end
         rm("$(data_dir)/outputs/trials/$(trial_id)", force=true, recursive=true)
+    end
+    if !isempty(sampling_ids_to_delete)
+        deleteSampling(sampling_ids; delete_subs=true, delete_supers=false)
     end
     return nothing
 end
@@ -611,7 +632,7 @@ end
 
 function addRulesetsVariationsColumns(rulesets_collection_id::Int, xml_paths::Vector{Vector{String}})
     rulesets_collection_folder = getRulesetsCollectionFolder(rulesets_collection_id)
-    db_columns = getRulesetsVariationsDB(rulesets_collection_folder)
+    db_columns = getRulesetsCollectionDB(rulesets_collection_folder)
     path_to_xml = "$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)/base_rulesets.xml"
     dataTypeRules = (_, name) -> "applies_to_dead" in name ? "INT" : "REAL"
     return addColumns(xml_paths, "rulesets_variations", "rulesets_variation_id", db_columns, path_to_xml, dataTypeRules)
@@ -637,7 +658,7 @@ function addVariationRow(config_id::Int, table_features::String, static_values::
 end
 
 function addRulesetsVariationRow(rulesets_collection_id::Int, table_features::String, values::String)
-    db_columns = getRulesetsVariationsDB(rulesets_collection_id)
+    db_columns = getRulesetsCollectionDB(rulesets_collection_id)
     return addRow(db_columns, "rulesets_variations", "rulesets_variation_id", table_features, values)
 end
 
@@ -718,7 +739,7 @@ function prepareAddNewVariations(config_id::Int, static_column_names::Vector{Str
 end
 
 function prepareAddNewRulesetsVariations(rulesets_collection_id::Int, static_column_names::Vector{String}, varied_column_names::Vector{String}; reference_rulesets_variation_id::Int=0)
-    db_columns = getRulesetsVariationsDB(rulesets_collection_id)
+    db_columns = getRulesetsCollectionDB(rulesets_collection_id)
     return prepareAddNew(db_columns, static_column_names, varied_column_names, "rulesets_variations", "rulesets_variation_id", reference_rulesets_variation_id)
 end
 
