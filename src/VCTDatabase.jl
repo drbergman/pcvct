@@ -397,51 +397,58 @@ function addFolderColumns!(df::DataFrame)
     return df
 end
 
-function getSimulationsTableFromQuery(query::String; remove_constants::Bool=true)
+function getSimulationsTableFromQuery(query::String; remove_constants::Bool=true, sort_by::Vector{String}=String[], sort_ignore::Vector{String}=["SimID", "VarID", "RulesVarID"])
     df = queryToDataFrame(query)
     id_col_names_to_remove = names(df) # a bunch of ids that we don't want to show
     filter!(n -> !(n in ["simulation_id", "variation_id", "rulesets_variation_id"]), id_col_names_to_remove) # keep the simulation_id and variation_id columns
     addFolderColumns!(df) # add the folder columns
     select!(df, Not(id_col_names_to_remove)) # remove the id columns
     unique_tuples = [(row.config_folder, row.variation_id) for row in eachrow(df)] |> unique
-    df = appendVariations(df, unique_tuples, getConfigDB, getConfigVariationsTable, :variation_id, :VarID)
+    df = appendVariations(df, unique_tuples, getConfigDB, getConfigVariationsTable, :config_folder => :folder_name, :variation_id => :VarID)
     unique_tuples = [(row.rulesets_collection_folder, row.rulesets_variation_id) for row in eachrow(df)] |> unique
-    df = appendVariations(df, unique_tuples, getRulesetsCollectionDB, getRulesetsVariationsTable, :rulesets_variation_id, :RulesVarID)
+    df = appendVariations(df, unique_tuples, getRulesetsCollectionDB, getRulesetsVariationsTable, :rulesets_collection_folder => :folder_name, :rulesets_variation_id => :RulesVarID)
     rename!(df, [:simulation_id => :SimID, :variation_id => :VarID, :rulesets_variation_id => :RulesVarID])
+    col_names = names(df)
     if remove_constants && size(df, 1) > 1
-        col_names = names(df)
         filter!(n -> length(unique(df[!, n])) > 1, col_names)
         select!(df, col_names)
     end
+    if isempty(sort_by)
+        sort_by = deepcopy(col_names)
+    end
+    sort_by = [n for n in sort_by if !(n in sort_ignore) && (n in col_names)] # sort by columns in sort_by (overridden by sort_ignore) and in the dataframe
+    sort!(df, sort_by)
     return df
 end
 
-function appendVariations(df::DataFrame, unique_tuples::Vector{Tuple{String, Int}}, getDB::Function, getVariationsTableFn::Function, id_name::Symbol, new_id_name::Symbol)
-    var_df = DataFrame(new_id_name => Int[])
+function appendVariations(df::DataFrame, unique_tuples::Vector{Tuple{String, Int}}, getDB::Function, getVariationsTableFn::Function, folder_pair::Pair{Symbol, Symbol}, id_pair::Pair{Symbol, Symbol})
+    var_df = DataFrame(id_pair[2] => Int[])
     for unique_tuple in unique_tuples
-        append!(var_df, getVariationsTableFn(getDB(unique_tuple[1]), [unique_tuple[2]]; remove_constants = false), cols=:union)
+        temp_df = getVariationsTableFn(getDB(unique_tuple[1]), [unique_tuple[2]]; remove_constants = false)
+        temp_df[!,:folder_name] .= unique_tuple[1]
+        append!(var_df, temp_df, cols=:union)
     end
-    return outerjoin(df, var_df, on = id_name => new_id_name)
+    return outerjoin(df, var_df, on = [folder_pair, id_pair])
 end
 
-function getSimulationsTable(T::AbstractTrial; remove_constants::Bool = true)
+function getSimulationsTable(T::AbstractTrial; remove_constants::Bool = true, sort_by::Vector{String}=String[], sort_ignore::Vector{String}=["SimID", "VarID", "RulesVarID"])
     query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(getSimulations(T),",")));")
-    return getSimulationsTableFromQuery(query; remove_constants = remove_constants)
+    return getSimulationsTableFromQuery(query; remove_constants = remove_constants, sort_by = sort_by, sort_ignore = sort_ignore)
 end
 
-function getSimulationsTable(simulation_ids::Vector{Int}; remove_constants::Bool = true)
+function getSimulationsTable(simulation_ids::Vector{Int}; remove_constants::Bool = true, sort_by::Vector{String}=String[], sort_ignore::Vector{String}=["SimID", "VarID", "RulesVarID"])
     query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(simulation_ids,",")));")
-    return getSimulationsTableFromQuery(query; remove_constants = remove_constants)
+    return getSimulationsTableFromQuery(query; remove_constants = remove_constants, sort_by = sort_by, sort_ignore = sort_ignore)
 end
 
-function getSimulationsTable(; remove_constants::Bool = true)
+function getSimulationsTable(; remove_constants::Bool = true, sort_by::Vector{String}=String[], sort_ignore::Vector{String}=["SimID", "VarID", "RulesVarID"])
     query = constructSelectQuery("simulations", "")
-    return getSimulationsTableFromQuery(query; remove_constants = remove_constants)
+    return getSimulationsTableFromQuery(query; remove_constants = remove_constants, sort_by = sort_by, sort_ignore = sort_ignore)
 end
 
-function getSimulationsTable(class_id::VCTClassID; remove_constants::Bool = true)
+function getSimulationsTable(class_id::VCTClassID; remove_constants::Bool = true, sort_by::Vector{String}=String[], sort_ignore::Vector{String}=["SimID", "VarID", "RulesVarID"])
     query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(getSimulations(class_id),",")));")
-    return getSimulationsTableFromQuery(query; remove_constants = remove_constants)
+    return getSimulationsTableFromQuery(query; remove_constants = remove_constants, sort_by = sort_by, sort_ignore = sort_ignore)
 end
 
 ########### Printing Database Functions ###########
@@ -449,4 +456,4 @@ end
 printConfigVariationsTable(args...; kwargs...) = getConfigVariationsTable(args...; kwargs...) |> println
 printRulesetsVariationsTable(args...; kwargs...) = getRulesetsVariationsTable(args...; kwargs...) |> println
 
-printSimulationsTable(args...; kwargs...) = getSimulationsTable(args...; kwargs...) |> println
+printSimulationsTable(args...; sink=println, kwargs...) = getSimulationsTable(args...; kwargs...) |> sink

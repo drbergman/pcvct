@@ -106,7 +106,7 @@ struct Monad <: AbstractMonad
     rulesets_variation_id::Int # integer identifying which variation on the ruleset file to use (rulesets_variations_$(ruleset_id).db)
 end
 
-Base.size(monad::Monad) = size(monad.simulation_ids)
+Base.size(monad::Monad) = getMonadSimulations(monad.id) |> size
 
 function Simulation(monad::Monad)
     return Simulation(monad.folder_ids, monad.folder_names, monad.variation_id, monad.rulesets_variation_id)
@@ -175,7 +175,7 @@ struct Sampling <: AbstractSampling
     end
 end
 
-Base.size(sampling::Sampling) = size(sampling.monad_ids)
+Base.size(sampling::Sampling) = getSamplingSimulations(sampling.id) |> size
 
 function Monad(sampling::Sampling, index::Int)
     return Monad(sampling.monad_min_length, sampling.folder_ids, sampling.folder_names, sampling.variation_ids[index], sampling.rulesets_variation_ids[index])
@@ -296,7 +296,7 @@ struct Trial <: AbstractTrial
     end
 end
 
-Base.size(trial::Trial) = size(trial.sampling_ids)
+Base.size(trial::Trial) = getTrialSimulations(trial.id) |> size
 
 function Sampling(trial::Trial, index::Int)
     return Sampling(trial.sampling_ids[index], trial.monad_min_length, trial.folder_ids[index], trial.folder_names[index], trial.variation_ids[index], trial.rulesets_variation_ids[index])

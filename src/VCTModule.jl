@@ -202,8 +202,10 @@ end
 
 ################## Deletion Functions ##################
 
-function deleteSimulation(simulation_ids::Vector{Int}; delete_supers::Bool=true)
-    sim_df = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(simulation_ids,",")));") |> queryToDataFrame
+function deleteSimulation(simulation_ids::Vector{Int}; delete_supers::Bool=true, and_constraints::String="")
+    where_stmt = "WHERE simulation_id IN ($(join(simulation_ids,","))) $(and_constraints);"
+    sim_df = constructSelectQuery("simulations", where_stmt) |> queryToDataFrame
+    simulation_ids = sim_df.simulation_id # update based on the constraints added
     DBInterface.execute(db,"DELETE FROM simulations WHERE simulation_id IN ($(join(simulation_ids,",")));")
     for row in eachrow(sim_df)
         rm("$(data_dir)/outputs/simulations/$(row.simulation_id)", force=true, recursive=true)
@@ -252,7 +254,8 @@ function deleteSimulation(simulation_ids::Vector{Int}; delete_supers::Bool=true)
     return nothing
 end
 
-deleteSimulation(simulation_id::Int; delete_supers::Bool=true) = deleteSimulation([simulation_id]; delete_supers=delete_supers)
+deleteSimulation(simulation_id::Int; delete_supers::Bool=true, and_constraints::String="") = deleteSimulation([simulation_id]; delete_supers=delete_supers, and_constraints=and_constraints)
+deleteAllSimulations(; delete_supers::Bool=true, and_constraints::String="") = getSimulations() |> x -> deleteSimulation(x; delete_supers=delete_supers, and_constraints=and_constraints)
 
 function deleteMonad(monad_ids::Vector{Int}; delete_subs::Bool=true, delete_supers::Bool=true)
     DBInterface.execute(db,"DELETE FROM monads WHERE monad_id IN ($(join(monad_ids,",")));")
@@ -796,20 +799,21 @@ getSamplingMonads(sampling_id::Int) = selectConstituents("$(data_dir)/outputs/sa
 getTrialSamplings(trial_id::Int) = selectConstituents("$(data_dir)/outputs/trials/$(trial_id)/samplings.csv")
 getTrialSamplings(trial::Trial) = getTrialSamplings(trial.id)
 
-function getTrialSimulations(trial_id::Int)
-    sampling_ids = getTrialSamplings(trial_id)
-    return vcat([getSamplingSimulations(sampling_id) for sampling_id in sampling_ids]...)
-end
-
 function getSamplingSimulations(sampling_id::Int)
     monad_ids = getSamplingMonads(sampling_id)
     return vcat([getMonadSimulations(monad_id) for monad_id in monad_ids]...)
 end
 
-getSimulations(trial::Trial) = getTrialSimulations(trial.id)
-getSimulations(sampling::Sampling) = getSamplingSimulations(sampling.id)
-getSimulations(monad::Monad) = getMonadSimulations(monad.id)
+function getTrialSimulations(trial_id::Int)
+    sampling_ids = getTrialSamplings(trial_id)
+    return vcat([getSamplingSimulations(sampling_id) for sampling_id in sampling_ids]...)
+end
+
+getSimulations() = constructSelectQuery("simulations", "", selection="simulation_id") |> queryToDataFrame |> x -> x.simulation_id
 getSimulations(simulation::Simulation) = [simulation.id]
+getSimulations(monad::Monad) = getMonadSimulations(monad.id)
+getSimulations(sampling::Sampling) = getSamplingSimulations(sampling.id)
+getSimulations(trial::Trial) = getTrialSimulations(trial.id)
 
 function getSimulations(class_id::VCTClassID) 
     class_id_type = getVCTClassIDType(class_id)
