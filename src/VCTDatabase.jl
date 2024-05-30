@@ -421,10 +421,10 @@ function getSimulationsTableFromQuery(query::String; remove_constants::Bool=true
     return df
 end
 
-function appendVariations(df::DataFrame, unique_tuples::Vector{Tuple{String, Int}}, getDB::Function, getVariationsTableFn::Function, folder_pair::Pair{Symbol, Symbol}, id_pair::Pair{Symbol, Symbol})
+function appendVariations(df::DataFrame, unique_tuples::Vector{Tuple{String, Int}}, getDBFn::Function, getVariationsTableFn::Function, folder_pair::Pair{Symbol, Symbol}, id_pair::Pair{Symbol, Symbol})
     var_df = DataFrame(id_pair[2] => Int[])
     for unique_tuple in unique_tuples
-        temp_df = getVariationsTableFn(getDB(unique_tuple[1]), [unique_tuple[2]]; remove_constants = false)
+        temp_df = getVariationsTableFn(getDBFn(unique_tuple[1]), [unique_tuple[2]]; remove_constants = false)
         temp_df[!,:folder_name] .= unique_tuple[1]
         append!(var_df, temp_df, cols=:union)
     end

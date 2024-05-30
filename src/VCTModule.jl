@@ -2,9 +2,10 @@ module VCTModule
 
 # each file (includes below) has their own export statements
 export initializeVCT, resetDatabase, addGridVariation, addGridRulesetsVariation, runAbstractTrial, getTrialSamplings, getSimulations, deleteSimulation
+export addLHSVariation, addLHSRulesetsVariation
 
-using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables
-using MAT, Statistics # files for VCTLoader.jl
+using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables, Distributions, Statistics, Random
+using MAT # files for VCTLoader.jl
 
 include("VCTClasses.jl")
 include("VCTDatabase.jl") 
@@ -584,7 +585,7 @@ end
 
 ################## Variations Functions ##################
 
-function addColumns(xml_paths::Vector{Vector{String}}, table_name::String, id_column_name::String, db_columns::SQLite.DB, path_to_xml::String, dataTypeRules::Function)
+function addColumns(xml_paths::Vector{Vector{String}}, table_name::String, id_column_name::String, db_columns::SQLite.DB, path_to_xml::String, dataTypeRulesFn::Function)
     column_names = queryToDataFrame("PRAGMA table_info($(table_name));"; db=db_columns) |> x->x[!,:name]
     filter!(x -> x != id_column_name, column_names)
     varied_column_names = [join(xml_path,"/") for xml_path in xml_paths]
@@ -596,7 +597,7 @@ function addColumns(xml_paths::Vector{Vector{String}}, table_name::String, id_co
         default_values_for_new = [getField(xml_doc, xml_path) for xml_path in xml_paths[is_new_column]]
         closeXML(xml_doc)
         for (i, new_column_name) in enumerate(new_column_names)
-            sqlite_data_type = dataTypeRules(i, new_column_name)
+            sqlite_data_type = dataTypeRulesFn(i, new_column_name)
             DBInterface.execute(db_columns, "ALTER TABLE $(table_name) ADD COLUMN '$(new_column_name)' $(sqlite_data_type);")
         end
         DBInterface.execute(db_columns, "UPDATE $(table_name) SET ($(join("\"".*new_column_names.*"\"",",")))=($(join("\"".*default_values_for_new.*"\"",",")));") # set newly added columns to default values
@@ -619,7 +620,7 @@ function addVariationColumns(config_id::Int, xml_paths::Vector{Vector{String}}, 
     config_folder = getConfigFolder(config_id)
     db_columns = getConfigDB(config_folder)
     path_to_xml = "$(data_dir)/inputs/configs/$(config_folder)/PhysiCell_settings.xml"
-    dataTypeRules = (i, _) -> begin
+    dataTypeRulesFn = (i, _) -> begin
         if variable_types[i] == Bool
             "TEXT"
         elseif variable_types[i] <: Int
@@ -630,15 +631,15 @@ function addVariationColumns(config_id::Int, xml_paths::Vector{Vector{String}}, 
             "TEXT"
         end
     end
-    return addColumns(xml_paths, "variations", "variation_id", db_columns, path_to_xml, dataTypeRules)
+    return addColumns(xml_paths, "variations", "variation_id", db_columns, path_to_xml, dataTypeRulesFn)
 end
 
 function addRulesetsVariationsColumns(rulesets_collection_id::Int, xml_paths::Vector{Vector{String}})
     rulesets_collection_folder = getRulesetsCollectionFolder(rulesets_collection_id)
     db_columns = getRulesetsCollectionDB(rulesets_collection_folder)
     path_to_xml = "$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)/base_rulesets.xml"
-    dataTypeRules = (_, name) -> "applies_to_dead" in name ? "INT" : "REAL"
-    return addColumns(xml_paths, "rulesets_variations", "rulesets_variation_id", db_columns, path_to_xml, dataTypeRules)
+    dataTypeRulesFn = (_, name) -> "applies_to_dead" in name ? "INT" : "REAL"
+    return addColumns(xml_paths, "rulesets_variations", "rulesets_variation_id", db_columns, path_to_xml, dataTypeRulesFn)
 end
 
 function addRow(db_columns::SQLite.DB, table_name::String, id_name::String, table_features::String, values::String)
@@ -669,12 +670,10 @@ function addRulesetsVariationRow(rulesets_collection_id::Int, table_features::St
     return addRulesetsVariationRow(rulesets_collection_id, table_features, "$(static_values)$(varied_values)")
 end
 
-function addGrid(EV::Vector{<:ElementaryVariation}, addColumnsByPaths::Function, prepareAddNew::Function, addRow::Function)
-    xml_paths = [ev.xml_path for ev in EV]
+function addGrid(EV::Vector{<:ElementaryVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function)
     new_values = [ev.values for ev in EV]
 
-    static_column_names, varied_column_names = addColumnsByPaths(xml_paths)
-    static_values, table_features = prepareAddNew(static_column_names, varied_column_names)
+    static_values, table_features = setUpColumns(EV, addColumnsByPathsFn, prepareAddNewFn)
 
     NDG = ndgrid(new_values...)
     sz_variations = size(NDG[1])
@@ -682,9 +681,16 @@ function addGrid(EV::Vector{<:ElementaryVariation}, addColumnsByPaths::Function,
     is_new_variation_id = falses(sz_variations)
     for i in eachindex(NDG[1])
         varied_values = [A[i] for A in NDG] .|> string |> x -> join("\"" .* x .* "\"", ",")
-        variation_ids[i], is_new_variation_id[i] = addRow(table_features, static_values, varied_values)
+        variation_ids[i], is_new_variation_id[i] = addRowFn(table_features, static_values, varied_values)
     end
     return variation_ids, is_new_variation_id
+end
+
+function setUpColumns(AV::Vector{<:AbstractVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function)
+    xml_paths = [av.xml_path for av in AV]
+
+    static_column_names, varied_column_names = addColumnsByPathsFn(xml_paths)
+    return prepareAddNewFn(static_column_names, varied_column_names)
 end
 
 """
@@ -696,28 +702,26 @@ Each `ElementaryVariation` in `EV` represents a single parameter's variation acr
 """
 
 function addGridVariation(config_id::Int, EV::Vector{<:ElementaryVariation}; reference_variation_id::Int=0)
-    addColumnsByPaths = (paths) -> addVariationColumns(config_id, paths, [typeof(ev.values[1]) for ev in EV])
-    prepareAddNew = (static_column_names, varied_column_names) -> prepareAddNewVariations(config_id, static_column_names, varied_column_names; reference_variation_id=reference_variation_id)
-    addRow = (features, static_values, varied_values) -> addVariationRow(config_id, features, static_values, varied_values)
-    return addGrid(EV, addColumnsByPaths, prepareAddNew, addRow)
+    addColumnsByPathsFn = (paths) -> addVariationColumns(config_id, paths, [typeof(ev.values[1]) for ev in EV])
+    prepareAddNewFn = (static_column_names, varied_column_names) -> prepareAddNewVariations(config_id, static_column_names, varied_column_names; reference_variation_id=reference_variation_id)
+    addRowFn = (features, static_values, varied_values) -> addVariationRow(config_id, features, static_values, varied_values)
+    return addGrid(EV, addColumnsByPathsFn, prepareAddNewFn, addRowFn)
 end
 
 addGridVariation(config_folder::String, EV::Vector{<:ElementaryVariation}; reference_variation_id::Int=0) = addGridVariation(retrieveID("configs", config_folder), EV; reference_variation_id=reference_variation_id)
 
-# allow for passing in a single ElementaryVariation object
 addGridVariation(config_id::Int, EV::ElementaryVariation; reference_variation_id::Int=0) = addGridVariation(config_id, [EV]; reference_variation_id=reference_variation_id)
 addGridVariation(config_folder::String, EV::ElementaryVariation; reference_variation_id::Int=0) = addGridVariation(config_folder, [EV]; reference_variation_id=reference_variation_id)
 
 function addGridRulesetsVariation(rulesets_collection_id::Int, EV::Vector{<:ElementaryVariation}; reference_rulesets_variation_id::Int=0)
-    addColumnsByPaths = (paths) -> addRulesetsVariationsColumns(rulesets_collection_id, paths)
-    prepareAddNew = (static_names, varied_names) -> prepareAddNewRulesetsVariations(rulesets_collection_id, static_names, varied_names; reference_rulesets_variation_id=reference_rulesets_variation_id)
-    addRow = (features, static_values, varied_values) -> addRulesetsVariationRow(rulesets_collection_id, features, static_values, varied_values)
-    return addGrid(EV, addColumnsByPaths, prepareAddNew, addRow)
+    addColumnsByPathsFn = (paths) -> addRulesetsVariationsColumns(rulesets_collection_id, paths)
+    prepareAddNewFn = (static_names, varied_names) -> prepareAddNewRulesetsVariations(rulesets_collection_id, static_names, varied_names; reference_rulesets_variation_id=reference_rulesets_variation_id)
+    addRowFn = (features, static_values, varied_values) -> addRulesetsVariationRow(rulesets_collection_id, features, static_values, varied_values)
+    return addGrid(EV, addColumnsByPathsFn, prepareAddNewFn, addRowFn)
 end
 
 addGridRulesetsVariation(rulesets_collection_folder::String, EV::Vector{<:ElementaryVariation}; reference_rulesets_variation_id::Int=0) = addGridRulesetsVariation(retrieveID("rulesets_collections", rulesets_collection_folder), EV; reference_rulesets_variation_id=reference_rulesets_variation_id)
 
-# allow for passing in a single ElementaryVariation object
 addGridRulesetsVariation(rulesets_collection_id::Int, EV::ElementaryVariation; reference_rulesets_variation_id::Int=0) = addGridRulesetsVariation(rulesets_collection_id, [EV]; reference_rulesets_variation_id=reference_rulesets_variation_id)
 addGridRulesetsVariation(rulesets_collection_folder::String, EV::ElementaryVariation; reference_rulesets_variation_id::Int=0) = addGridRulesetsVariation(rulesets_collection_folder, [EV]; reference_rulesets_variation_id=reference_rulesets_variation_id)
 
@@ -745,6 +749,114 @@ function prepareAddNewRulesetsVariations(rulesets_collection_id::Int, static_col
     db_columns = getRulesetsCollectionDB(rulesets_collection_id)
     return prepareAddNew(db_columns, static_column_names, varied_column_names, "rulesets_variations", "rulesets_variation_id", reference_rulesets_variation_id)
 end
+
+################## Latin Hypercube Sampling Functions ##################
+
+function orthogonalLHS(k::Int, d::Int)
+    n = k^d
+    lhs_inds = zeros(Int, (n, d))
+    for i in 1:d
+        n_bins = k^(i - 1) # number of bins from previous dims (a bin has sampled points that are in the same subelement up through i-1 dim and need to be separated in subsequent dims)
+        bin_size = k^(d-i+1) # number of sampled points in each bin
+        if i == 1
+            lhs_inds[:, 1] = 1:n
+        else
+            bin_inds_gps = [(j - 1) * bin_size .+ (1:bin_size) |> collect for j in 1:n_bins] # the indices belonging to each of the bins (this relies on the sorting step below to easily find which points are currently in the same box and need to be separated along the ith dimension)
+            for pt_ind = 1:bin_size # pick ith coordinate for each point in the bin; each iter here will work up the ith coordinates assigning one to each bin at each iter
+                ind = zeros(Int, n_bins) # indices where the next set of ith coordinates will go
+                for (j, bin_inds) in enumerate(bin_inds_gps) # pick a random, remaining element for each bin
+                    rand_ind_of_ind = rand(1:length(bin_inds)) # pick the index of a remaining index
+                    ind[j] = popat!(bin_inds, rand_ind_of_ind) # get the random index and remove it so we don't pick it again
+                end
+                lhs_inds[ind,i] = shuffle(1:n_bins) .+ (pt_ind - 1) * n_bins # for the selected inds, shuffle the next set of ith coords into them
+            end
+        end
+        lhs_inds[:, 1:i] = sortslices(lhs_inds[:, 1:i], dims=1, by=x -> (x ./ (n / k) .|> ceil .|> Int)) # sort the found values so that sampled points in the same box upon projection into the 1:i dims are adjacent
+    end
+    return lhs_inds
+end
+
+function orthogonalLHS_relaxed(k::Int, d::Int)
+    # I have this here because this technically gives all possible orthogonal lhs samples, but my orthogonalLHS gives a more uniform LHS
+    n = k^d
+    lhs_inds = zeros(Int, (n, d))
+    for i in 1:d
+        bin_size = n / (k^(i - 1)) |> ceil |> Int # number of sampled points grouped by all previous dims
+        n_bins = k^(i - 1) # number of bins in this dimension
+        if i == 1
+            lhs_inds[:, 1] = 1:n
+            continue
+        else
+            bin_inds_gps = [(j - 1) * bin_size .+ (1:bin_size) |> collect for j in 1:n_bins] # the indexes in y corresponding to each of the bins (this relies on the sorting step below to easily find which points are currently in the same box and need to be separated along the ith dimension)
+            for pt_ind = 1:k
+                y_vals = shuffle((pt_ind - 1) * Int(n / k) .+ (1:Int(n / k)))
+                inds = zeros(Int, Int(n / k))
+                for (j, bin_inds) in enumerate(bin_inds_gps)
+                    for s in 1:Int(n / k^(i))
+                        rand_ind_of_ind = rand(1:length(bin_inds))
+                        rand_ind = popat!(bin_inds, rand_ind_of_ind) # random value remaining in bin, remove it so we don't pick it again
+                        inds[(j-1)*Int(n / k^(i))+s] = rand_ind # record the index
+                    end
+                end
+                lhs_inds[inds, i] = y_vals
+            end
+        end
+        lhs_inds[:, 1:i] = sortslices(lhs_inds[:, 1:i], dims=1, by=x -> (x ./ (n / k) .|> ceil .|> Int)) # sort the found values so that sampled points in the same box upon projection into the 1:i dims are adjacent
+    end
+end
+
+function addLHS(n::Integer, DV::Vector{DistributedVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function; add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG, orthogonalize::Bool=true)
+    icdfs = (Float64.(1:n) .- (add_noise ? rand(rng, Float64, n) : 0.5)) / n # permute below for each parameter separately
+    d = length(DV)
+    k = n ^ (1 / length(DV)) |> round |> Int
+    if orthogonalize && (n == k^d)
+        # then good to do the orthogonalization
+        lhs_inds = orthogonalLHS(k, d)
+    else
+        lhs_inds = hcat([shuffle(rng, 1:n) for _ in 1:d]...)
+    end
+    all_icdfs = icdfs[lhs_inds]
+    new_values = []
+    for (i,d) in enumerate([dv.distribution for dv in DV])
+        new_value = Statistics.quantile(d, all_icdfs[:,i]) # ok, all the new values for the given parameter
+
+        push!(new_values, new_value)
+    end
+
+    static_values, table_features = setUpColumns(DV, addColumnsByPathsFn, prepareAddNewFn)
+
+    variation_ids = zeros(Int, n)
+    is_new_variation_id = falses(n)
+
+    for i in 1:n
+        varied_values = [new_value[i] for new_value in new_values] .|> string |> x -> join("\"" .* x .* "\"", ",")
+        variation_ids[i], is_new_variation_id[i] = addRowFn(table_features, static_values, varied_values)
+    end
+    return variation_ids, is_new_variation_id
+end
+
+function addLHSVariation(n::Integer, config_id::Int, DV::Vector{DistributedVariation}; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG)
+    addColumnsByPathsFn = (paths) -> addVariationColumns(config_id, paths, [eltype(dv.distribution) for dv in DV])
+    prepareAddNewFn = (static_column_names, varied_column_names) -> prepareAddNewVariations(config_id, static_column_names, varied_column_names; reference_variation_id=reference_variation_id)
+    addRowFn = (features, static_values, varied_values) -> addVariationRow(config_id, features, static_values, varied_values)
+    return addLHS(n, DV, addColumnsByPathsFn, prepareAddNewFn, addRowFn; add_noise=add_noise, rng=rng)
+end
+
+
+addLHSVariation(n::Integer, config_folder::String, DV::Vector{DistributedVariation}; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSVariation(n, retrieveID("configs", config_folder), DV; reference_variation_id=reference_variation_id, add_noise=add_noise, rng=rng)
+addLHSVariation(n::Integer, config_id::Int, DV::DistributedVariation; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSVariation(n, config_id, [DV]; reference_variation_id=reference_variation_id, add_noise=add_noise, rng=rng)
+addLHSVariation(n::Integer, config_folder::String, DV::DistributedVariation; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSVariation(n, config_folder, [DV]; reference_variation_id=reference_variation_id, add_noise=add_noise, rng=rng)
+
+function addLHSRulesetsVariation(n::Integer, rulesets_collection_id::Int, DV::Vector{DistributedVariation}; reference_rulesets_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG)
+    addColumnsByPathsFn = (paths) -> addRulesetsVariationsColumns(rulesets_collection_id, paths)
+    prepareAddNewFn = (static_column_names, varied_column_names) -> prepareAddNewRulesetsVariations(rulesets_collection_id, static_column_names, varied_column_names; reference_rulesets_variation_id=reference_rulesets_variation_id)
+    addRowFn = (features, static_values, varied_values) -> addRulesetsVariationRow(rulesets_collection_id, features, static_values, varied_values)
+    return addLHS(n, DV, addColumnsByPathsFn, prepareAddNewFn, addRowFn; add_noise=add_noise, rng=rng)
+end
+
+addLHSRulesetsVariation(n::Integer, rulesets_collection_folder::String, DV::Vector{DistributedVariation}; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSRulesetsVariation(n, retrieveID("rulesets_collections", rulesets_collection_folder), DV; reference_variation_id=reference_variation_id, add_noise=add_noise, rng=rng)
+addLHSRulesetsVariation(n::Integer, rulesets_collection_id::Int, DV::DistributedVariation; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSRulesetsVariation(n, rulesets_collection_id, [DV]; reference_variation_id=reference_variation_id, add_noise=add_noise, rng=rng)
+addLHSRulesetsVariation(n::Integer, rulesets_collection_folder::String, DV::DistributedVariation; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSRulesetsVariation(n, rulesets_collection_folder, [DV]; reference_variation_id=reference_variation_id, add_noise=add_noise, rng=rng)
 
 ################## Compression Functions ##################
 

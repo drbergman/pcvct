@@ -1,4 +1,5 @@
-export ElementaryVariation, addCustomDataVariationDimension!
+export ElementaryVariation, DistributedVariation, addCustomDataVariationDimension!
+export UniformDistributedVariation, NormalDistributedVariation
 
 
 ################## XML Functions ##################
@@ -176,12 +177,26 @@ motilityPath(cell_definition::String, field_name::String) = [motilityPath(cell_d
 
 ################## Variation Dimension Functions ##################
 
-struct ElementaryVariation{T}
+abstract type AbstractVariation end
+struct ElementaryVariation{T} <: AbstractVariation
     xml_path::Vector{String}
     values::Vector{T}
 end
 
 ElementaryVariation{T}(xml_path::Vector{String}, value::T) where T = ElementaryVariation{T}(xml_path, [value])
+
+struct DistributedVariation <: AbstractVariation
+    xml_path::Vector{String}
+    distribution::Distribution
+end
+
+function UniformDistributedVariation(xml_path::Vector{String}, lb::T, ub::T) where {T<:Real}
+    return DistributedVariation(xml_path, Uniform(lb, ub))
+end
+
+function NormalDistributedVariation(xml_path::Vector{String}, mu::T, sigma::T; lb::Real=-Inf, ub::Real=Inf) where {T<:Real}
+    return DistributedVariation(xml_path, Normal(mu, sigma))
+end
 
 function addMotilityVariationDimension!(EV::Vector{ElementaryVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
     xml_path = motilityPath(cell_definition, field_name)
