@@ -1,4 +1,4 @@
-export ElementaryVariation, DistributedVariation, addCustomDataVariationDimension!
+export ElementaryVariation, DistributedVariation, addDomainVariationDimension!, addCustomDataVariationDimension!, addAttackRateVariationDimension!, addMotilityVariationDimension!
 export UniformDistributedVariation, NormalDistributedVariation
 
 
@@ -16,14 +16,14 @@ function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{String}; require
         if !occursin(":",path_element)
             current_element = find_element(current_element, path_element)
             if isnothing(current_element)
-                error_msg = "Element not found: $(join(xml_path, " -> "))"
-                required ? error(error_msg) : return nothing
+                
+                required ? retrieveElementError(xml_path, path_element) : return nothing
             end
             continue
         end
         # Deal with checking attributes
-        path_element_name, attribute_check = split(path_element,":",limit=2)
-        attribute_name, attribute_value = split(attribute_check,":") # if I need to add a check for multiple attributes, we can do that later
+        path_element_name, attribute_check = split(path_element, ":", limit=2)
+        attribute_name, attribute_value = split(attribute_check, ":") # if I need to add a check for multiple attributes, we can do that later
         candidate_elements = get_elements_by_tagname(current_element, path_element_name)
         found = false
         for ce in candidate_elements
@@ -36,7 +36,7 @@ function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{String}; require
         if !found
             error_msg = "Element not found: $(join(xml_path, "//"))"
             error_msg *= "\n\tFailed at: $(path_element)"
-            required ? error(error_msg) : return nothing
+            required ? retrieveElementError(xml_path, path_element) : return nothing
         end
     end
     return current_element
@@ -44,6 +44,12 @@ end
 
 function retrieveElement(path_to_xml::String,xml_path::Vector{String}; required::Bool=true)
     return openXML(path_to_xml) |> x->retrieveElement(x, xml_path; required=required)
+end
+
+function retrieveElementError(xml_path::Vector{String}, path_element::String)
+    error_msg = "Element not found: $(join(xml_path, " -> "))"
+    error_msg *= "\n\tFailed at: $(path_element)"
+    throw(ArgumentError(error_msg))
 end
 
 function getField(xml_doc::XMLDocument, xml_path::Vector{String}; required::Bool=true)
@@ -175,6 +181,20 @@ necrosisPath(cell_definition::String) = [deathPath(cell_definition); "model:code
 motilityPath(cell_definition::String) = [phenotypePath(cell_definition); "motility"]
 motilityPath(cell_definition::String, field_name::String) = [motilityPath(cell_definition); field_name]
 
+cellInteractionsPath(cell_definition::String) = [phenotypePath(cell_definition); "cell_interactions"]
+cellInteractionsPath(cell_definition::String, field_name::String) = [cellInteractionsPath(cell_definition); field_name]
+
+attackRatesPath(cell_definition::String) = cellInteractionsPath(cell_definition, "attack_rates")
+attackRatesPath(cell_definition::String, target_name::String) = [attackRatesPath(cell_definition); "attack_rate:name:$(target_name)"]
+
+function customDataPath(cell_definition::String, field_name::String)
+    return ["cell_definitions", "cell_definition:name:$(cell_definition)", "custom_data", field_name]
+end
+
+function customDataPath(cell_definition::String, field_names::Vector{String})
+    return [customDataPath(cell_definition, field_name) for field_name in field_names]
+end
+
 ################## Variation Dimension Functions ##################
 
 abstract type AbstractVariation end
@@ -195,7 +215,30 @@ function UniformDistributedVariation(xml_path::Vector{String}, lb::T, ub::T) whe
 end
 
 function NormalDistributedVariation(xml_path::Vector{String}, mu::T, sigma::T; lb::Real=-Inf, ub::Real=Inf) where {T<:Real}
-    return DistributedVariation(xml_path, Normal(mu, sigma))
+    return DistributedVariation(xml_path, Truncated(Normal(mu, sigma), lb, ub))
+end
+
+function addDomainVariationDimension!(EV::Vector{ElementaryVariation}, domain::NTuple{N,Real} where N) 
+    bounds_tags = ["x_min", "x_max", "y_min", "y_max", "z_min", "z_max"]
+    for (tag, value) in zip(bounds_tags, domain)
+        xml_path = ["domain", tag]
+        push!(EV, ElementaryVariation(xml_path, [value]))
+    end
+end
+
+function addDomainVariationDimension!(EV::Vector{ElementaryVariation}, domain::NamedTuple)
+    for (tag, value) in pairs(domain)
+        tag = String(tag)
+        if startswith("min", tag)
+            last_character = tag[end]
+            tag = "$(last_character)_min"
+        elseif startswith("max", tag)
+            last_character = tag[end]
+            tag = "$(last_character)_max"
+        end
+        xml_path = ["domain", tag]
+        push!(EV, ElementaryVariation(xml_path, [value...])) # do this to make sure that singletons and vectors are converted to vectors
+    end
 end
 
 function addMotilityVariationDimension!(EV::Vector{ElementaryVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
@@ -203,12 +246,9 @@ function addMotilityVariationDimension!(EV::Vector{ElementaryVariation}, cell_de
     push!(EV, ElementaryVariation(xml_path, values))
 end
 
-function customDataPath(cell_definition::String, field_name::String)
-    return ["cell_definitions", "cell_definition:name:$(cell_definition)", "custom_data", field_name]
-end
-
-function customDataPath(cell_definition::String, field_names::Vector{String})
-    return [customDataPath(cell_definition, field_name) for field_name in field_names]
+function addAttackRateVariationDimension!(EV::Vector{ElementaryVariation}, cell_definition::String, target_name::String, values::Vector{T} where T)
+    xml_path = attackRatesPath(cell_definition, target_name)
+    push!(EV, ElementaryVariation(xml_path, values))
 end
 
 function addCustomDataVariationDimension!(EV::Vector{ElementaryVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)

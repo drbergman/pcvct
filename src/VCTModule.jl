@@ -44,8 +44,8 @@ function initializeVCT(path_to_physicell::String, path_to_data::String)
     println("----------INITIALIZING----------")
     global physicell_dir = abspath(path_to_physicell)
     global data_dir = abspath(path_to_data)
-    println("Path to PhysiCell: $physicell_dir")
-    println("Path to data: $data_dir")
+    println(rpad("Path to PhysiCell:", 20, ' ') * physicell_dir)
+    println(rpad("Path to data:", 20, ' ') * data_dir)
     initializeDatabase("$(data_dir)/vct.db")
 end
 
@@ -307,6 +307,15 @@ function deleteSampling(sampling_ids::Vector{Int}; delete_subs::Bool=true, delet
         rm("$(data_dir)/outputs/samplings/$(sampling_id)", force=true, recursive=true)
     end
     if !isempty(monad_ids_to_delete)
+        all_sampling_ids = constructSelectQuery("samplings", "", selection="sampling_id") |> queryToDataFrame |> x -> x.sampling_id
+        for sampling_id in all_sampling_ids
+            if sampling_id in sampling_ids
+                continue # skip the samplings to be deleted (we want to delete their monads)
+            end
+            # this is then a sampling that we are not deleting, do not delete their monads!!
+            monad_ids = getSamplingMonads(sampling_id)
+            filter!(x -> !(x in monad_ids), monad_ids_to_delete) # if a monad to delete is in the sampling to keep, then do not delete it!! (or more in line with logic here: if a monad marked for deletion is not in this sampling we are keeping, then leave it in the deletion list)
+        end
         deleteMonad(monad_ids_to_delete; delete_subs=true, delete_supers=false)
     end
 
@@ -346,7 +355,16 @@ function deleteTrial(trial_ids::Vector{Int}; delete_subs::Bool=true)
         rm("$(data_dir)/outputs/trials/$(trial_id)", force=true, recursive=true)
     end
     if !isempty(sampling_ids_to_delete)
-        deleteSampling(sampling_ids; delete_subs=true, delete_supers=false)
+        all_trial_ids = constructSelectQuery("trials", "", selection="trial_id") |> queryToDataFrame |> x -> x.trial_id
+        for trial_id in all_trial_ids
+            if trial_id in trial_ids
+                continue # skip the trials to be deleted (we want to delete their samplings)
+            end
+            # this is then a trial that we are not deleting, do not delete their samplings!!
+            sampling_ids = getTrialSamplings(trial_id)
+            filter!(x -> !(x in sampling_ids), sampling_ids_to_delete) # if a sampling to delete is in the trial to keep, then do not delete it!! (or more in line with logic here: if a sampling marked for deletion is not in this trial we are keeping, then leave it in the deletion list)
+        end
+        deleteSampling(sampling_ids_to_delete; delete_subs=true, delete_supers=false)
     end
     return nothing
 end
@@ -354,6 +372,20 @@ end
 deleteTrial(trial_id::Int; delete_subs::Bool=true) = deleteTrial([trial_id]; delete_subs=delete_subs)
 
 function resetDatabase()
+
+    # prompt user to confirm
+    println("Are you sure you want to reset the database? (y/n)")
+    response = readline()
+    if response != "y" # make user be very specific about resetting
+        println("You entered '$response'.\n\tResetting the database has been cancelled.\n\n\tDo you want to continue with the script? (y/n)")
+        response = readline()
+        if response != "y" # make user be very specific about continuing
+            println("You entered '$response'.\n\tThe script has been cancelled.")
+            error("Script cancelled.")
+        end
+        println("You entered '$response'.\n\tThe script will continue.")
+        return
+    end
     rm("$(data_dir)/outputs/simulations", force=true, recursive=true)
     rm("$(data_dir)/outputs/monads", force=true, recursive=true)
     rm("$(data_dir)/outputs/samplings", force=true, recursive=true)
@@ -544,6 +576,13 @@ function runAbstractTrial(T::AbstractTrial; use_previous_sims::Bool=false, force
         n_ran += ran
         n_success += success
     end
+
+    println("Finished $(typeof(T)) $(T.id).")
+    print("\tRan $(n_ran) simulations of $(length(simulation_tasks)) scheduled")
+    use_previous_sims ? println(" (*).") : println(".")
+    println("\tSuccessful completion of $(n_success).")
+    use_previous_sims && println("\n(*) Some scheduled simulations do not run because matching previous simulations were found.")
+    println("\n--------------------------------------------------\n")
     return n_ran, n_success
 end
 

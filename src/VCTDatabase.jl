@@ -5,10 +5,9 @@ db::SQLite.DB = SQLite.DB()
 ################## Database Initialization Functions ##################
 
 function initializeDatabase(path_to_database::String)
-    println(path_to_database)
-    println("loading up the global db variable")
+    println(rpad("Path to database:", 20, ' ') * path_to_database)
     global db = SQLite.DB(path_to_database)
-    println("VCT database located at $(path_to_database) loaded.")
+    println("Successfully loaded database.")
     return createSchema()
 end
 
@@ -187,7 +186,7 @@ function createICTable(ic_name::String; data_dir_contents=String[])
                     continue
                 end
                 if isfile("$(data_dir)/inputs/ics/$(ic_name)/$(ic_folder)/metadata.xml")
-                    metadata = parse_file("$(data_dir)/inputs/ics/$(ic_name)/$(ic_folder)/metadata.xml")
+                    metadata = parse_file("$(data_dir)/inputs/ics/$(ic_name)/$(ic_folder)/metadata.xml") |> root
                     description = content(find_element(metadata, "description"))
                 else
                     description = ""

@@ -1,3 +1,5 @@
+using DataFrames
+
 export PhysiCellSnapshot, PhysiCellSequence, getCellPositionSequence, getCellDataSequence, computeMeanSpeed
 
 abstract type AbstractPhysiCellSequence end
@@ -120,6 +122,49 @@ function getCellDataSequence(sequence::PhysiCellSequence, labels::Vector{String}
     return [ID => NamedTuple{(:time, labels...)}([[v.time]; [C(v,label) for label in labels]]) for (ID, v) in data] |> Dict
 end
 
+# population functions
+
+function populationCount(snapshot::PhysiCellSnapshot; include_dead::Bool=false)
+    unique_cell_types = unique(snapshot.cells[!,:cell_type])
+    data = Dict{Int, Int}(zip(unique_cell_types, zeros(Int, length(unique_cell_types))))
+    for row in eachrow(snapshot.cells)
+        if !include_dead && row[:dead]
+            continue
+        end
+        data[row.cell_type] += 1
+    end
+    return data
+end
+
+function populationTimeSeries(sequence::PhysiCellSequence; include_dead::Bool=false)
+    df = DataFrame(time = [snapshot.time for snapshot in sequence.snapshots])
+    for (i, snapshot) in enumerate(sequence.snapshots)
+        population_count = populationCount(snapshot; include_dead=include_dead)
+        for (ID, count) in pairs(population_count)
+            if string(ID) in names(df)
+                df[i, Symbol(ID)] = count
+            else
+                df[!, Symbol(ID)] = zeros(Int, nrow(df))
+                df[i, Symbol(ID)] = count
+            end
+        end
+    end
+    return df
+end
+
+function populationTimeSeries(folder::String; include_dead::Bool=false)
+    return PhysiCellSequence(folder) |> x -> populationTimeSeries(x; include_dead=include_dead)
+end
+
+function populationTimeSeries(simulation_id::Int; include_dead::Bool=false)
+    # return "$(data_dir)/outputs/simulations/$(simulation_id)/output" |> x -> populationTimeSeries(x; include_dead=include_dead)
+    df = "$(data_dir)/outputs/simulations/$(simulation_id)/output" |> x -> populationTimeSeries(x; include_dead=include_dead)
+    println("Finished populationTimeSeries for simulation_id: $simulation_id")
+    return df
+end
+
+# speed functions
+
 function getCellPositionSequence(sequence::PhysiCellSequence; include_dead::Bool=false, include_cell_type::Bool=true)
     return getCellDataSequence(sequence, "position"; include_dead=include_dead, include_cell_type=include_cell_type)
 end
@@ -160,7 +205,7 @@ end
 
 function computeMeanSpeed(folder::String; direction=:any)
     sequence = PhysiCellSequence(folder)
-    pos = getCellDataSequence(sequence, "position"; include_dead=false, include_cell_type=true)
+    pos = getCellPositionSequence(sequence; include_dead=false, include_cell_type=true)
     return [meanSpeed(p; direction=direction) for p in values(pos) if length(p.time) > 1]
 end
 
