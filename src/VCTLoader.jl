@@ -163,6 +163,19 @@ function populationTimeSeries(simulation_id::Int; include_dead::Bool=false)
     return df
 end
 
+function finalPopulationCount(folder::String; include_dead::Bool=false)
+    n = 0
+    while isfile("$(folder)/output$(lpad(n+1,8,"0")).xml")
+        n += 1
+    end
+    final_snapshot = PhysiCellSnapshot(folder, n)
+    return populationCount(final_snapshot; include_dead=include_dead)
+end
+
+function finalPopulationCount(simulation_id::Int; include_dead::Bool=false)
+    return "$(data_dir)/outputs/simulations/$(simulation_id)/output" |> x -> finalPopulationCount(x; include_dead=include_dead)
+end
+
 # speed functions
 
 function getCellPositionSequence(sequence::PhysiCellSequence; include_dead::Bool=false, include_cell_type::Bool=true)
@@ -213,9 +226,7 @@ function computeMeanSpeed(simulation_id::Int; direction=:any)
     return "$(data_dir)/outputs/simulations/$(simulation_id)/output" |> x -> computeMeanSpeed(x; direction=direction)
 end
 
-function computeMeanSpeed(class_id::VCTClassID; direction=:any)
+function computeMeanSpeed(class_id::Union{VCTClassID, AbstractTrial}; direction=:any)
     simulation_ids = getSimulations(class_id)
     return [simulation_id => computeMeanSpeed(simulation_id; direction=direction) for simulation_id in simulation_ids] |> Dict
 end
-
-computeMeanSpeed(T::AbstractTrial; direction=:any) = computeMeanSpeed((typeof(T), T.id); direction=direction)
