@@ -1,6 +1,6 @@
 using DataFrames
 
-export PhysiCellSnapshot, PhysiCellSequence, getCellPositionSequence, getCellDataSequence, computeMeanSpeed
+export PhysiCellSnapshot, PhysiCellSequence, getCellPositionSequence, getCellDataSequence, computeMeanSpeed, finalPopulationCount, populationTimeSeries
 
 abstract type AbstractPhysiCellSequence end
 

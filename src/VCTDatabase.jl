@@ -1,4 +1,4 @@
-export printSimulationsTable, printVariationsTable
+export printSimulationsTable, printVariationsTable, getSimulationsTable
 
 db::SQLite.DB = SQLite.DB()
 
