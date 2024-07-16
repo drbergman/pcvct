@@ -4,7 +4,7 @@ module VCTModule
 export initializeVCT, resetDatabase, addGridVariation, addGridRulesetsVariation, runAbstractTrial, getTrialSamplings, getSimulations, deleteSimulation
 export addLHSVariation, addLHSRulesetsVariation
 
-using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables, Distributions, Statistics, Random
+using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables, Distributions, Statistics, Random, QuasiMonteCarlo
 using MAT # files for VCTLoader.jl
 
 include("VCTClasses.jl")
@@ -855,10 +855,60 @@ function addLHS(n::Integer, DV::Vector{DistributedVariation}, addColumnsByPathsF
         lhs_inds = hcat([shuffle(rng, 1:n) for _ in 1:d]...)
     end
     all_icdfs = icdfs[lhs_inds]
+
+    return icdfsToVariations(all_icdfs, DV, addColumnsByPathsFn, prepareAddNewFn, addRowFn)
+end
+
+function addLHSVariation(n::Integer, config_id::Int, DV::Vector{DistributedVariation}; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG)
+    fns = prepareVariationFunctions(config_id, DV)
+    return addLHS(n, DV, fns...; add_noise=add_noise, rng=rng)
+end
+
+addLHSVariation(n::Integer, config_folder::String, DV::Vector{DistributedVariation}; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSVariation(n, retrieveID("configs", config_folder), DV; reference_variation_id=reference_variation_id, add_noise=add_noise, rng=rng)
+addLHSVariation(n::Integer, config_id::Int, DV::DistributedVariation; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSVariation(n, config_id, [DV]; reference_variation_id=reference_variation_id, add_noise=add_noise, rng=rng)
+addLHSVariation(n::Integer, config_folder::String, DV::DistributedVariation; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSVariation(n, config_folder, [DV]; reference_variation_id=reference_variation_id, add_noise=add_noise, rng=rng)
+
+function addLHSRulesetsVariation(n::Integer, rulesets_collection_id::Int, DV::Vector{DistributedVariation}; reference_rulesets_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG)
+    fns = prepareRulesetsVariationFunctions(rulesets_collection_id, DV)
+    return addLHS(n, DV, fns...; add_noise=add_noise, rng=rng)
+end
+
+addLHSRulesetsVariation(n::Integer, rulesets_collection_folder::String, DV::Vector{DistributedVariation}; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSRulesetsVariation(n, retrieveID("rulesets_collections", rulesets_collection_folder), DV; reference_variation_id=reference_variation_id, add_noise=add_noise, rng=rng)
+addLHSRulesetsVariation(n::Integer, rulesets_collection_id::Int, DV::DistributedVariation; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSRulesetsVariation(n, rulesets_collection_id, [DV]; reference_variation_id=reference_variation_id, add_noise=add_noise, rng=rng)
+addLHSRulesetsVariation(n::Integer, rulesets_collection_folder::String, DV::DistributedVariation; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSRulesetsVariation(n, rulesets_collection_folder, [DV]; reference_variation_id=reference_variation_id, add_noise=add_noise, rng=rng)
+
+################## Sobol Sequence Sampling Functions ##################
+
+function addSobol(n::Integer, DV::Vector{DistributedVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function)
+    d = length(DV)
+    icdfs = QuasiMonteCarlo.sample(n, d, SobolSample())
+    return icdfsToVariations(icdfs, DV, addColumnsByPathsFn, prepareAddNewFn, addRowFn)
+end
+
+function addSobolVariation(n::Integer, config_id::Int, DV::Vector{DistributedVariation}; reference_variation_id::Int=0)
+    fns = prepareVariationFunctions(config_id, DV)
+    return addSobol(n, DV, fns...)
+end
+
+addSobolVariation(n::Integer, config_folder::String, DV::Vector{DistributedVariation}; reference_variation_id::Int=0) = addSobolVariation(n, retrieveID("configs", config_folder), DV; reference_variation_id=reference_variation_id)
+addSobolVariation(n::Integer, config_id::Int, DV::DistributedVariation; reference_variation_id::Int=0) = addSobolVariation(n, config_id, [DV]; reference_variation_id=reference_variation_id)
+addSobolVariation(n::Integer, config_folder::String, DV::DistributedVariation; reference_variation_id::Int=0) = addSobolVariation(n, config_folder, [DV]; reference_variation_id=reference_variation_id)
+
+function addSobolRulesetsVariation(n::Integer, rulesets_collection_id::Int, DV::Vector{DistributedVariation}; reference_rulesets_variation_id::Int=0)
+    fns = prepareRulesetsVariationFunctions(rulesets_collection_id, DV)
+    return addSobol(n, DV, fns...)
+end
+
+addSobolRulesetsVariation(n::Integer, rulesets_collection_folder::String, DV::Vector{DistributedVariation}; reference_rulesets_variation_id::Int=0) = addSobolRulesetsVariation(n, retrieveID("rulesets_collections", rulesets_collection_folder), DV; reference_rulesets_variation_id=reference_rulesets_variation_id)
+addSobolRulesetsVariation(n::Integer, rulesets_collection_id::Int, DV::DistributedVariation; reference_rulesets_variation_id::Int=0) = addSobolRulesetsVariation(n, rulesets_collection_id, [DV]; reference_rulesets_variation_id=reference_rulesets_variation_id)
+addSobolRulesetsVariation(n::Integer, rulesets_collection_folder::String, DV::DistributedVariation; reference_rulesets_variation_id::Int=0) = addSobolRulesetsVariation(n, rulesets_collection_folder, [DV]; reference_rulesets_variation_id=reference_rulesets_variation_id)
+
+################## Sampling Helper Functions ##################
+
+function icdfsToVariations(icdfs::Matrix{Float64}, DV::Vector{DistributedVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function)
     new_values = []
     for (i,d) in enumerate([dv.distribution for dv in DV])
-        new_value = Statistics.quantile(d, all_icdfs[:,i]) # ok, all the new values for the given parameter
-
+        new_value = Statistics.quantile(d, icdfs[i,:]) # ok, all the new values for the given parameter
         push!(new_values, new_value)
     end
 
@@ -874,28 +924,19 @@ function addLHS(n::Integer, DV::Vector{DistributedVariation}, addColumnsByPathsF
     return variation_ids, is_new_variation_id
 end
 
-function addLHSVariation(n::Integer, config_id::Int, DV::Vector{DistributedVariation}; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG)
+function prepareVariationFunctions(config_id::Int, DV::Vector{DistributedVariation})
     addColumnsByPathsFn = (paths) -> addVariationColumns(config_id, paths, [eltype(dv.distribution) for dv in DV])
-    prepareAddNewFn = (static_column_names, varied_column_names) -> prepareAddNewVariations(config_id, static_column_names, varied_column_names; reference_variation_id=reference_variation_id)
+    prepareAddNewFn = (static_column_names, varied_column_names) -> prepareAddNewVariations(config_id, static_column_names, varied_column_names)
     addRowFn = (features, static_values, varied_values) -> addVariationRow(config_id, features, static_values, varied_values)
-    return addLHS(n, DV, addColumnsByPathsFn, prepareAddNewFn, addRowFn; add_noise=add_noise, rng=rng)
+    return addColumnsByPathsFn, prepareAddNewFn, addRowFn
 end
 
-
-addLHSVariation(n::Integer, config_folder::String, DV::Vector{DistributedVariation}; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSVariation(n, retrieveID("configs", config_folder), DV; reference_variation_id=reference_variation_id, add_noise=add_noise, rng=rng)
-addLHSVariation(n::Integer, config_id::Int, DV::DistributedVariation; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSVariation(n, config_id, [DV]; reference_variation_id=reference_variation_id, add_noise=add_noise, rng=rng)
-addLHSVariation(n::Integer, config_folder::String, DV::DistributedVariation; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSVariation(n, config_folder, [DV]; reference_variation_id=reference_variation_id, add_noise=add_noise, rng=rng)
-
-function addLHSRulesetsVariation(n::Integer, rulesets_collection_id::Int, DV::Vector{DistributedVariation}; reference_rulesets_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG)
+function prepareRulesetsVariationFunctions(rulesets_collection_id::Int, DV::Vector{DistributedVariation})
     addColumnsByPathsFn = (paths) -> addRulesetsVariationsColumns(rulesets_collection_id, paths)
-    prepareAddNewFn = (static_column_names, varied_column_names) -> prepareAddNewRulesetsVariations(rulesets_collection_id, static_column_names, varied_column_names; reference_rulesets_variation_id=reference_rulesets_variation_id)
+    prepareAddNewFn = (static_column_names, varied_column_names) -> prepareAddNewRulesetsVariations(rulesets_collection_id, static_column_names, varied_column_names)
     addRowFn = (features, static_values, varied_values) -> addRulesetsVariationRow(rulesets_collection_id, features, static_values, varied_values)
-    return addLHS(n, DV, addColumnsByPathsFn, prepareAddNewFn, addRowFn; add_noise=add_noise, rng=rng)
+    return addColumnsByPathsFn, prepareAddNewFn, addRowFn
 end
-
-addLHSRulesetsVariation(n::Integer, rulesets_collection_folder::String, DV::Vector{DistributedVariation}; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSRulesetsVariation(n, retrieveID("rulesets_collections", rulesets_collection_folder), DV; reference_variation_id=reference_variation_id, add_noise=add_noise, rng=rng)
-addLHSRulesetsVariation(n::Integer, rulesets_collection_id::Int, DV::DistributedVariation; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSRulesetsVariation(n, rulesets_collection_id, [DV]; reference_variation_id=reference_variation_id, add_noise=add_noise, rng=rng)
-addLHSRulesetsVariation(n::Integer, rulesets_collection_folder::String, DV::DistributedVariation; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSRulesetsVariation(n, rulesets_collection_folder, [DV]; reference_variation_id=reference_variation_id, add_noise=add_noise, rng=rng)
 
 ################## Compression Functions ##################
 
