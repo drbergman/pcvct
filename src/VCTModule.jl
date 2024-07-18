@@ -627,7 +627,7 @@ end
 function addColumns(xml_paths::Vector{Vector{String}}, table_name::String, id_column_name::String, db_columns::SQLite.DB, path_to_xml::String, dataTypeRulesFn::Function)
     column_names = queryToDataFrame("PRAGMA table_info($(table_name));"; db=db_columns) |> x->x[!,:name]
     filter!(x -> x != id_column_name, column_names)
-    varied_column_names = [join(xml_path,"/") for xml_path in xml_paths]
+    varied_column_names = [xmlPathToColumnName(xml_path) for xml_path in xml_paths]
 
     is_new_column = [!(varied_column_name in column_names) for varied_column_name in varied_column_names]
     if any(is_new_column)
@@ -860,7 +860,7 @@ function addLHS(n::Integer, DV::Vector{DistributedVariation}, addColumnsByPathsF
 end
 
 function addLHSVariation(n::Integer, config_id::Int, DV::Vector{DistributedVariation}; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG)
-    fns = prepareVariationFunctions(config_id, DV)
+    fns = prepareVariationFunctions(config_id, DV; reference_variation_id=reference_variation_id)
     return addLHS(n, DV, fns...; add_noise=add_noise, rng=rng)
 end
 
@@ -869,7 +869,7 @@ addLHSVariation(n::Integer, config_id::Int, DV::DistributedVariation; reference_
 addLHSVariation(n::Integer, config_folder::String, DV::DistributedVariation; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSVariation(n, config_folder, [DV]; reference_variation_id=reference_variation_id, add_noise=add_noise, rng=rng)
 
 function addLHSRulesetsVariation(n::Integer, rulesets_collection_id::Int, DV::Vector{DistributedVariation}; reference_rulesets_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG)
-    fns = prepareRulesetsVariationFunctions(rulesets_collection_id, DV)
+    fns = prepareRulesetsVariationFunctions(rulesets_collection_id)
     return addLHS(n, DV, fns...; add_noise=add_noise, rng=rng)
 end
 
@@ -886,7 +886,7 @@ function addSobol(n::Integer, DV::Vector{DistributedVariation}, addColumnsByPath
 end
 
 function addSobolVariation(n::Integer, config_id::Int, DV::Vector{DistributedVariation}; reference_variation_id::Int=0)
-    fns = prepareVariationFunctions(config_id, DV)
+    fns = prepareVariationFunctions(config_id, DV; reference_variation_id=reference_variation_id)
     return addSobol(n, DV, fns...)
 end
 
@@ -895,7 +895,7 @@ addSobolVariation(n::Integer, config_id::Int, DV::DistributedVariation; referenc
 addSobolVariation(n::Integer, config_folder::String, DV::DistributedVariation; reference_variation_id::Int=0) = addSobolVariation(n, config_folder, [DV]; reference_variation_id=reference_variation_id)
 
 function addSobolRulesetsVariation(n::Integer, rulesets_collection_id::Int, DV::Vector{DistributedVariation}; reference_rulesets_variation_id::Int=0)
-    fns = prepareRulesetsVariationFunctions(rulesets_collection_id, DV)
+    fns = prepareRulesetsVariationFunctions(rulesets_collection_id)
     return addSobol(n, DV, fns...)
 end
 
@@ -924,14 +924,14 @@ function icdfsToVariations(icdfs::Matrix{Float64}, DV::Vector{DistributedVariati
     return variation_ids, is_new_variation_id
 end
 
-function prepareVariationFunctions(config_id::Int, DV::Vector{DistributedVariation})
+function prepareVariationFunctions(config_id::Int, DV::Vector{DistributedVariation}; reference_variation_id=0)
     addColumnsByPathsFn = (paths) -> addVariationColumns(config_id, paths, [eltype(dv.distribution) for dv in DV])
-    prepareAddNewFn = (static_column_names, varied_column_names) -> prepareAddNewVariations(config_id, static_column_names, varied_column_names)
+    prepareAddNewFn = (static_column_names, varied_column_names) -> prepareAddNewVariations(config_id, static_column_names, varied_column_names; reference_variation_id=reference_variation_id)
     addRowFn = (features, static_values, varied_values) -> addVariationRow(config_id, features, static_values, varied_values)
     return addColumnsByPathsFn, prepareAddNewFn, addRowFn
 end
 
-function prepareRulesetsVariationFunctions(rulesets_collection_id::Int, DV::Vector{DistributedVariation})
+function prepareRulesetsVariationFunctions(rulesets_collection_id::Int)
     addColumnsByPathsFn = (paths) -> addRulesetsVariationsColumns(rulesets_collection_id, paths)
     prepareAddNewFn = (static_column_names, varied_column_names) -> prepareAddNewRulesetsVariations(rulesets_collection_id, static_column_names, varied_column_names)
     addRowFn = (features, static_values, varied_values) -> addRulesetsVariationRow(rulesets_collection_id, features, static_values, varied_values)

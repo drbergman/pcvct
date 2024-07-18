@@ -90,6 +90,10 @@ function multiplyField(xml_doc::XMLDocument, xml_path::Vector{String}, multiplie
     return nothing
 end
 
+function xmlPathToColumnName(xml_path::Vector{String})
+    return join(xml_path, "/")
+end
+
 function updateFieldsFromCSV(xml_doc::XMLDocument, path_to_csv::String)
     df = CSV.read(path_to_csv,DataFrame;header=false,silencewarnings=true,types=String)
     for i = axes(df,1)
