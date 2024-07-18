@@ -856,7 +856,7 @@ function addLHS(n::Integer, DV::Vector{DistributedVariation}, addColumnsByPathsF
     end
     all_icdfs = icdfs[lhs_inds]
 
-    return icdfsToVariations(all_icdfs, DV, addColumnsByPathsFn, prepareAddNewFn, addRowFn)
+    return icdfsToVariations(n, all_icdfs, DV, addColumnsByPathsFn, prepareAddNewFn, addRowFn)
 end
 
 function addLHSVariation(n::Integer, config_id::Int, DV::Vector{DistributedVariation}; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG)
@@ -882,7 +882,7 @@ addLHSRulesetsVariation(n::Integer, rulesets_collection_folder::String, DV::Dist
 function addSobol(n::Integer, DV::Vector{DistributedVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function)
     d = length(DV)
     icdfs = QuasiMonteCarlo.sample(n, d, SobolSample())
-    return icdfsToVariations(icdfs, DV, addColumnsByPathsFn, prepareAddNewFn, addRowFn)
+    return icdfsToVariations(n, icdfs', DV, addColumnsByPathsFn, prepareAddNewFn, addRowFn)
 end
 
 function addSobolVariation(n::Integer, config_id::Int, DV::Vector{DistributedVariation}; reference_variation_id::Int=0)
@@ -905,10 +905,10 @@ addSobolRulesetsVariation(n::Integer, rulesets_collection_folder::String, DV::Di
 
 ################## Sampling Helper Functions ##################
 
-function icdfsToVariations(icdfs::Matrix{Float64}, DV::Vector{DistributedVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function)
+function icdfsToVariations(n::Int, icdfs::Matrix{Float64}, DV::Vector{DistributedVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function)
     new_values = []
     for (i,d) in enumerate([dv.distribution for dv in DV])
-        new_value = Statistics.quantile(d, icdfs[i,:]) # ok, all the new values for the given parameter
+        new_value = Statistics.quantile(d, icdfs[:,i]) # ok, all the new values for the given parameter
         push!(new_values, new_value)
     end
 
