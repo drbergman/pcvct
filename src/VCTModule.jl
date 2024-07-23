@@ -12,10 +12,11 @@ include("VCTDatabase.jl")
 include("VCTConfiguration.jl")
 include("VCTExtraction.jl")
 include("VCTLoader.jl")
+include("VCTSensitivity.jl")
 
 physicell_dir::String = abspath("PhysiCell")
 data_dir::String = abspath("data")
-PHYSICELL_CPP::String = haskey(ENV, "PHYSICELL_CPP") ? ENV["PHYSICELL_CPP"] : "/opt/homebrew/bin/g++-13"
+PHYSICELL_CPP::String = haskey(ENV, "PHYSICELL_CPP") ? ENV["PHYSICELL_CPP"] : "/opt/homebrew/bin/g++-14"
 
 ################## Initialization Functions ##################
 
@@ -688,7 +689,7 @@ function addRow(db_columns::SQLite.DB, table_name::String, id_name::String, tabl
         query = constructSelectQuery(table_name, "WHERE ($(table_features))=($(values))"; selection=id_name)
         new_id = queryToDataFrame(query, db=db_columns) |> x->x[!,1]
     end
-    return new_id[1], new_added
+    return new_id[1]
 end
 
 function addVariationRow(config_id::Int, table_features::String, values::String)
@@ -717,12 +718,11 @@ function addGrid(EV::Vector{<:ElementaryVariation}, addColumnsByPathsFn::Functio
     NDG = ndgrid(new_values...)
     sz_variations = size(NDG[1])
     variation_ids = zeros(Int, sz_variations)
-    is_new_variation_id = falses(sz_variations)
     for i in eachindex(NDG[1])
         varied_values = [A[i] for A in NDG] .|> string |> x -> join("\"" .* x .* "\"", ",")
-        variation_ids[i], is_new_variation_id[i] = addRowFn(table_features, static_values, varied_values)
+        variation_ids[i] = addRowFn(table_features, static_values, varied_values)
     end
-    return variation_ids, is_new_variation_id
+    return variation_ids
 end
 
 function setUpColumns(AV::Vector{<:AbstractVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function)
@@ -879,33 +879,36 @@ addLHSRulesetsVariation(n::Integer, rulesets_collection_folder::String, DV::Dist
 
 ################## Sobol Sequence Sampling Functions ##################
 
-function addSobol(n::Integer, DV::Vector{DistributedVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function)
+function addSobol(n::Integer, DV::Vector{DistributedVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function; n_matrices::Int=1)
     d = length(DV)
-    icdfs = QuasiMonteCarlo.sample(n, d, SobolSample())
-    return icdfsToVariations(n, icdfs', DV, addColumnsByPathsFn, prepareAddNewFn, addRowFn)
+    icdfs = QuasiMonteCarlo.sample(n, d * n_matrices, SobolSample()) # this returns a matrix of size (d * n_matrices) x n, i.e. each column is n_matrices samples of the d parameters
+    total_samples = n_matrices * n # total number of samples represented here
+    icdfs_reshaped = reshape(icdfs, (d, total_samples)) # split each column into n_matrices columns (note: every group of consecutive n_matrices columns has a representative of each of the n_matrices samples)
+    variation_ids = icdfsToVariations(total_samples, icdfs_reshaped', DV, addColumnsByPathsFn, prepareAddNewFn, addRowFn) # a vector of all variation_ids grouped as above
+    variation_ids = reshape(variation_ids, (n_matrices, n))' # first, pull out the n_matrices groupings into columns and then the n samples for each matrix into rows; return such that each column is a sobol sample
+    return variation_ids, icdfs
 end
 
-function addSobolVariation(n::Integer, config_id::Int, DV::Vector{DistributedVariation}; reference_variation_id::Int=0)
+function addSobolVariation(n::Integer, config_id::Int, DV::Vector{DistributedVariation}; reference_variation_id::Int=0, n_matrices::Int=1)
     fns = prepareVariationFunctions(config_id, DV; reference_variation_id=reference_variation_id)
-    return addSobol(n, DV, fns...)
+    return addSobol(n, DV, fns...; n_matrices=n_matrices)
 end
+addSobolVariation(n::Integer, config_folder::String, DV::Vector{DistributedVariation}; reference_variation_id::Int=0, n_matrices::Int=1) = addSobolVariation(n, retrieveID("configs", config_folder), DV; reference_variation_id=reference_variation_id, n_matrices=n_matrices)
+addSobolVariation(n::Integer, config_id::Int, DV::DistributedVariation; reference_variation_id::Int=0, n_matrices::Int=1) = addSobolVariation(n, config_id, [DV]; reference_variation_id=reference_variation_id, n_matrices=n_matrices)
+addSobolVariation(n::Integer, config_folder::String, DV::DistributedVariation; reference_variation_id::Int=0, n_matrices::Int=1) = addSobolVariation(n, config_folder, [DV]; reference_variation_id=reference_variation_id, n_matrices=n_matrices)
 
-addSobolVariation(n::Integer, config_folder::String, DV::Vector{DistributedVariation}; reference_variation_id::Int=0) = addSobolVariation(n, retrieveID("configs", config_folder), DV; reference_variation_id=reference_variation_id)
-addSobolVariation(n::Integer, config_id::Int, DV::DistributedVariation; reference_variation_id::Int=0) = addSobolVariation(n, config_id, [DV]; reference_variation_id=reference_variation_id)
-addSobolVariation(n::Integer, config_folder::String, DV::DistributedVariation; reference_variation_id::Int=0) = addSobolVariation(n, config_folder, [DV]; reference_variation_id=reference_variation_id)
-
-function addSobolRulesetsVariation(n::Integer, rulesets_collection_id::Int, DV::Vector{DistributedVariation}; reference_rulesets_variation_id::Int=0)
+function addSobolRulesetsVariation(n::Integer, rulesets_collection_id::Int, DV::Vector{DistributedVariation}; reference_rulesets_variation_id::Int=0, n_matrices::Int=1)
     fns = prepareRulesetsVariationFunctions(rulesets_collection_id)
-    return addSobol(n, DV, fns...)
+    return addSobol(n, DV, fns...; n_matrices=n_matrices)
 end
 
-addSobolRulesetsVariation(n::Integer, rulesets_collection_folder::String, DV::Vector{DistributedVariation}; reference_rulesets_variation_id::Int=0) = addSobolRulesetsVariation(n, retrieveID("rulesets_collections", rulesets_collection_folder), DV; reference_rulesets_variation_id=reference_rulesets_variation_id)
-addSobolRulesetsVariation(n::Integer, rulesets_collection_id::Int, DV::DistributedVariation; reference_rulesets_variation_id::Int=0) = addSobolRulesetsVariation(n, rulesets_collection_id, [DV]; reference_rulesets_variation_id=reference_rulesets_variation_id)
-addSobolRulesetsVariation(n::Integer, rulesets_collection_folder::String, DV::DistributedVariation; reference_rulesets_variation_id::Int=0) = addSobolRulesetsVariation(n, rulesets_collection_folder, [DV]; reference_rulesets_variation_id=reference_rulesets_variation_id)
+addSobolRulesetsVariation(n::Integer, rulesets_collection_folder::String, DV::Vector{DistributedVariation}; reference_rulesets_variation_id::Int=0, n_matrices::Int=1) = addSobolRulesetsVariation(n, retrieveID("rulesets_collections", rulesets_collection_folder), DV; reference_rulesets_variation_id=reference_rulesets_variation_id, n_matrices=n_matrices)
+addSobolRulesetsVariation(n::Integer, rulesets_collection_id::Int, DV::DistributedVariation; reference_rulesets_variation_id::Int=0, n_matrices::Int=1) = addSobolRulesetsVariation(n, rulesets_collection_id, [DV]; reference_rulesets_variation_id=reference_rulesets_variation_id, n_matrices=n_matrices)
+addSobolRulesetsVariation(n::Integer, rulesets_collection_folder::String, DV::DistributedVariation; reference_rulesets_variation_id::Int=0, n_matrices::Int=1) = addSobolRulesetsVariation(n, rulesets_collection_folder, [DV]; reference_rulesets_variation_id=reference_rulesets_variation_id, n_matrices=n_matrices)
 
 ################## Sampling Helper Functions ##################
 
-function icdfsToVariations(n::Int, icdfs::Matrix{Float64}, DV::Vector{DistributedVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function)
+function icdfsToVariations(n::Int, icdfs::AbstractMatrix{Float64}, DV::Vector{DistributedVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function)
     new_values = []
     for (i,d) in enumerate([dv.distribution for dv in DV])
         new_value = Statistics.quantile(d, icdfs[:,i]) # ok, all the new values for the given parameter
@@ -915,13 +918,12 @@ function icdfsToVariations(n::Int, icdfs::Matrix{Float64}, DV::Vector{Distribute
     static_values, table_features = setUpColumns(DV, addColumnsByPathsFn, prepareAddNewFn)
 
     variation_ids = zeros(Int, n)
-    is_new_variation_id = falses(n)
 
     for i in 1:n
         varied_values = [new_value[i] for new_value in new_values] .|> string |> x -> join("\"" .* x .* "\"", ",")
-        variation_ids[i], is_new_variation_id[i] = addRowFn(table_features, static_values, varied_values)
+        variation_ids[i] = addRowFn(table_features, static_values, varied_values)
     end
-    return variation_ids, is_new_variation_id
+    return variation_ids
 end
 
 function prepareVariationFunctions(config_id::Int, DV::Vector{DistributedVariation}; reference_variation_id=0)
@@ -987,7 +989,9 @@ function selectConstituents(path_to_csv::String)
 end
 
 getMonadSimulations(monad_id::Int) = selectConstituents("$(data_dir)/outputs/monads/$(monad_id)/simulations.csv")
+getMonadSimulations(monad::Monad) = getMonadSimulations(monad.id)
 getSamplingMonads(sampling_id::Int) = selectConstituents("$(data_dir)/outputs/samplings/$(sampling_id)/monads.csv")
+getSamplingMonads(sampling::Sampling) = getSamplingMonads(sampling.id)
 getTrialSamplings(trial_id::Int) = selectConstituents("$(data_dir)/outputs/trials/$(trial_id)/samplings.csv")
 getTrialSamplings(trial::Trial) = getTrialSamplings(trial.id)
 
@@ -1003,9 +1007,9 @@ end
 
 getSimulations() = constructSelectQuery("simulations", "", selection="simulation_id") |> queryToDataFrame |> x -> x.simulation_id
 getSimulations(simulation::Simulation) = [simulation.id]
-getSimulations(monad::Monad) = getMonadSimulations(monad.id)
-getSimulations(sampling::Sampling) = getSamplingSimulations(sampling.id)
-getSimulations(trial::Trial) = getTrialSimulations(trial.id)
+getSimulations(monad::Monad) = getMonadSimulations(monad)
+getSimulations(sampling::Sampling) = getSamplingSimulations(sampling)
+getSimulations(trial::Trial) = getTrialSimulations(trial)
 
 function getSimulations(class_id::VCTClassID) 
     class_id_type = getVCTClassIDType(class_id)

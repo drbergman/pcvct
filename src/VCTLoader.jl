@@ -182,7 +182,7 @@ function getCellPositionSequence(sequence::PhysiCellSequence; include_dead::Bool
     return getCellDataSequence(sequence, "position"; include_dead=include_dead, include_cell_type=include_cell_type)
 end
 
-function meanSpeed(p; direction=:any)
+function meanSpeed(p; direction=:any)::NTuple{3,Dict{Int,Float64}}
     x, y, z = [col for col in eachcol(p.position)]
     cell_type = p.cell_type
     dx = x[2:end] .- x[1:end-1]
@@ -209,24 +209,25 @@ function meanSpeed(p; direction=:any)
         I = isnothing(I) ? length(type_change)+2-start_ind : I # if the cell_type is constant till the end, set I to be at the end
         # If start_ind = 1 (at start of sim) and I = 2 (so cell_type[3] != cell_type[2], meaning that for steps [1,2] cell_type is constnat), only use dx in stepping from 1->2 since somewhere in 2->3 the type changes. That is, use dx[1]
         distance_dict[cell_type[start_ind]] += sum(dist_fn.(dx[start_ind:I-1], dy[start_ind:I-1], dz[start_ind:I-1]))  # only count distance travelled while remaining in the initial cell_type
-        # distance_dict[cell_type[start_ind]] += sum(sqrt.(dx[start_ind:start_ind+I-2] .^ 2 + dy[start_ind:start_ind+I-2] .^ 2) + dz[start_ind:start_ind+I-2])  # only count distance travelled while remaining in the initial cell_type
         time_dict[cell_type[start_ind]] += p.time[start_ind+I-1] - p.time[start_ind] # record time spent in this cell_type (note p.time is not diffs like dx and dy are, hence the difference in indices)
         start_ind += I # advance the start to the first instance of a new cell_type
     end
-    return [k => distance_dict[k] / time_dict[k] for k in cell_types] |> Dict # convert to speed
+    speed_dict = [k => distance_dict[k] / time_dict[k] for k in cell_types] |> Dict # convert to speed
+    return speed_dict, distance_dict, time_dict
 end
 
-function computeMeanSpeed(folder::String; direction=:any)
+function computeMeanSpeed(folder::String; direction=:any)::NTuple{3,Vector{Dict{Int,Float64}}}
     sequence = PhysiCellSequence(folder)
     pos = getCellPositionSequence(sequence; include_dead=false, include_cell_type=true)
-    return [meanSpeed(p; direction=direction) for p in values(pos) if length(p.time) > 1]
+    dicts = [meanSpeed(p; direction=direction) for p in values(pos) if length(p.time) > 1]
+    return [dict[1] for dict in dicts], [dict[2] for dict in dicts], [dict[3] for dict in dicts]
 end
 
-function computeMeanSpeed(simulation_id::Int; direction=:any)
+function computeMeanSpeed(simulation_id::Int; direction=:any)::NTuple{3,Vector{Dict{Int,Float64}}}
     return "$(data_dir)/outputs/simulations/$(simulation_id)/output" |> x -> computeMeanSpeed(x; direction=direction)
 end
 
-function computeMeanSpeed(class_id::Union{VCTClassID, AbstractTrial}; direction=:any)
+function computeMeanSpeed(class_id::Union{VCTClassID,AbstractTrial}; direction=:any)
     simulation_ids = getSimulations(class_id)
     return [simulation_id => computeMeanSpeed(simulation_id; direction=direction) for simulation_id in simulation_ids] |> Dict
 end
