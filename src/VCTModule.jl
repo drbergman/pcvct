@@ -382,20 +382,25 @@ end
 
 deleteTrial(trial_id::Int; delete_subs::Bool=true) = deleteTrial([trial_id]; delete_subs=delete_subs)
 
-function resetDatabase()
+function resetDatabase(force_reset::Bool=false, force_continue::Bool=false)
 
-    # prompt user to confirm
-    println("Are you sure you want to reset the database? (y/n)")
-    response = readline()
-    if response != "y" # make user be very specific about resetting
-        println("You entered '$response'.\n\tResetting the database has been cancelled.\n\n\tDo you want to continue with the script? (y/n)")
+    if !force_reset
+        # prompt user to confirm
+        println("Are you sure you want to reset the database? (y/n)")
         response = readline()
-        if response != "y" # make user be very specific about continuing
-            println("You entered '$response'.\n\tThe script has been cancelled.")
-            error("Script cancelled.")
+        if response != "y" # make user be very specific about resetting
+            println("You entered '$response'.\n\tResetting the database has been cancelled.")
+            if !force_continue
+                println("\n\tDo you want to continue with the script? (y/n)")
+                response = readline()
+                if response != "y" # make user be very specific about continuing
+                    println("You entered '$response'.\n\tThe script has been cancelled.")
+                    error("Script cancelled.")
+                end
+                println("You entered '$response'.\n\tThe script will continue.")
+            end
+            return
         end
-        println("You entered '$response'.\n\tThe script will continue.")
-        return
     end
     rm("$(data_dir)/outputs/simulations", force=true, recursive=true)
     rm("$(data_dir)/outputs/monads", force=true, recursive=true)
