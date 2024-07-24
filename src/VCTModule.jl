@@ -382,7 +382,7 @@ end
 
 deleteTrial(trial_id::Int; delete_subs::Bool=true) = deleteTrial([trial_id]; delete_subs=delete_subs)
 
-function resetDatabase(force_reset::Bool=false, force_continue::Bool=false)
+function resetDatabase(; force_reset::Bool=false, force_continue::Bool=false)
 
     if !force_reset
         # prompt user to confirm
