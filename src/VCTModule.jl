@@ -66,9 +66,19 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
     end
 
     path_to_folder = "$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)" # source dir needs to end in / or else the dir is copied into target, not the source files
-    run(`cp -r $(path_to_folder)/custom_modules/ $(physicell_dir)/custom_modules`)
-    run(`cp $(path_to_folder)/main.cpp $(physicell_dir)/main.cpp`)
-    run(`cp $(path_to_folder)/Makefile $(physicell_dir)/Makefile`)
+    for file in readdir("$(path_to_folder)/custom_modules", sort=false)
+        if !isfile("$(path_to_folder)/custom_modules/$(file)")
+            continue
+        end
+        src = "$(path_to_folder)/custom_modules/$(file)"
+        dst = "$(physicell_dir)/custom_modules/$(file)"
+        cp(src, dst, force=true)
+    end
+    cp("$(path_to_folder)/main.cpp", "$(physicell_dir)/main.cpp", force=true)
+    cp("$(path_to_folder)/Makefile", "$(physicell_dir)/Makefile", force=true)
+    # run(`cp -r $(path_to_folder)/custom_modules/* $(physicell_dir)/custom_modules`)
+    # run(`cp $(path_to_folder)/main.cpp $(physicell_dir)/main.cpp`)
+    # run(`cp $(path_to_folder)/Makefile $(physicell_dir)/Makefile`)
 
     cmd = `make -j 20 CC=$(PHYSICELL_CPP) PROGRAM_NAME=project_ccid_$(S.folder_ids.custom_code_id) CFLAGS=$(cflags)`
 
