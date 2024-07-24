@@ -500,6 +500,9 @@ function runSimulation(simulation::Simulation; do_full_setup::Bool=true, force_r
     try
         run(pipeline(cmd, stdout="$(path_to_simulation_folder)/output.log", stderr="$(path_to_simulation_folder)/output.err"), wait=true)
     catch
+        println("\tSimulation $(simulation.id) failed.")
+        println("\tCompile command: $cmd")
+        println("\tCheck $(path_to_simulation_folder)/output.err for more information.")
         success = false
     else
         rm("$(path_to_simulation_folder)/output.err", force=true)
