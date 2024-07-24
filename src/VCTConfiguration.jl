@@ -151,7 +151,7 @@ function loadRulesets(M::AbstractMonad)
 
     # create xml file using LightXML
     xml_doc = parse_file("$(path_to_rulesets_collections_folder)/base_rulesets.xml")
-    if M.rulesets_variation_id != 0 # only update if not using hte base variation for the ruleset
+    if M.rulesets_variation_id != 0 # only update if not using the base variation for the ruleset
         query = constructSelectQuery("rulesets_variations", "WHERE rulesets_variation_id=$(M.rulesets_variation_id);")
         variation_row = queryToDataFrame(query; db=getRulesetsCollectionDB(M), is_row=true)
         for column_name in names(variation_row)
