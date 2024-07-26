@@ -455,8 +455,6 @@ function resetConfigFolder(path_to_config_folder::String)
     end
     rm("$(path_to_config_folder)/variations.db", force=true)
     rm("$(path_to_config_folder)/variations", force=true, recursive=true)
-
-    rm("$(path_to_config_folder)/rulesets_collections.db", force=true)
 end
 
 function resetRulesetsCollectionFolder(path_to_rulesets_collection_folder::String)
@@ -464,9 +462,7 @@ function resetRulesetsCollectionFolder(path_to_rulesets_collection_folder::Strin
         return
     end
     rm("$(path_to_rulesets_collection_folder)/rulesets_variations.db", force=true)
-    rm("$(path_to_rulesets_collection_folder)/rulesets_variations", force=true)
-
-    rm("$(path_to_rulesets_collection_folder)/rulesets_variations.db", force=true)
+    rm("$(path_to_rulesets_collection_folder)/rulesets_collections_variations", force=true, recursive=true)
 end
 
 ################## Running Functions ##################
@@ -589,23 +585,25 @@ function runAbstractTrial(T::AbstractTrial; use_previous_sims::Bool=false, force
     getMacroFlags(T)
 
     simulation_tasks = collectSimulationTasks(T; use_previous_sims=use_previous_sims, force_recompile=force_recompile)
-    n_ran = 0
-    n_success = 0
+    n_ran = Threads.Atomic{Int}(0)
+    n_success = Threads.Atomic{Int}(0)
 
     Threads.@threads :static for simulation_task in simulation_tasks
         schedule(simulation_task)
         ran, success = fetch(simulation_task)
-        n_ran += ran
-        n_success += success
+
+        # prevent data races on n_ran and n_success
+        ran ? Threads.atomic_add!(n_ran, 1) : nothing # shorthand for add 1 if ran is true
+        success ? Threads.atomic_add!(n_success, 1) : nothing # shorthand for add 1 if success is true
     end
 
     println("Finished $(typeof(T)) $(T.id).")
-    print("\tRan $(n_ran) simulations of $(length(simulation_tasks)) scheduled")
+    print("\tRan $(n_ran[]) simulations of $(length(simulation_tasks)) scheduled")
     use_previous_sims ? println(" (*).") : println(".")
-    println("\tSuccessful completion of $(n_success).")
+    println("\tSuccessful completion of $(n_success[]).")
     use_previous_sims && println("\n(*) Some scheduled simulations do not run because matching previous simulations were found.")
     println("\n--------------------------------------------------\n")
-    return n_ran, n_success
+    return n_ran[], n_success[]
 end
 
 ################## Recording Functions ##################
