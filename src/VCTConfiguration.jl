@@ -1,6 +1,3 @@
-include("../PhysiCell-XMLRules/src/PhysiCell_XMLRules.jl")
-using .PhysiCell_XMLRules
-
 export ElementaryVariation, DistributedVariation, addDomainVariationDimension!, addCustomDataVariationDimension!, addAttackRateVariationDimension!, addMotilityVariationDimension!
 export UniformDistributedVariation, NormalDistributedVariation
 
@@ -155,6 +152,7 @@ function loadRulesets(M::AbstractMonad)
     # create xml file using LightXML
     path_to_base_xml = "$(path_to_rulesets_collections_folder)/base_rulesets.xml"
     if !isfile(path_to_base_xml)
+        # this could happen if the rules are not being varied (so no call to addRulesetsVariationsColumns) and then a sim runs without the base_rulesets.xml being created yet
         writeRules(path_to_base_xml, "$(path_to_rulesets_collections_folder)/base_rulesets.csv")
     end
         

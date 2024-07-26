@@ -14,6 +14,9 @@ include("VCTExtraction.jl")
 include("VCTLoader.jl")
 include("VCTSensitivity.jl")
 
+include("../PhysiCell-XMLRules/src/PhysiCell_XMLRules.jl")
+using .PhysiCell_XMLRules
+
 physicell_dir::String = abspath("PhysiCell")
 data_dir::String = abspath("data")
 PHYSICELL_CPP::String = haskey(ENV, "PHYSICELL_CPP") ? ENV["PHYSICELL_CPP"] : "/opt/homebrew/bin/g++-14"
@@ -695,9 +698,13 @@ end
 function addRulesetsVariationsColumns(rulesets_collection_id::Int, xml_paths::Vector{Vector{String}})
     rulesets_collection_folder = getRulesetsCollectionFolder(rulesets_collection_id)
     db_columns = getRulesetsCollectionDB(rulesets_collection_folder)
-    path_to_xml = "$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)/base_rulesets.xml"
+    path_to_rulesets_collection_folder = "$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)"
+    path_to_base_xml = "$(path_to_rulesets_collection_folder)/base_rulesets.xml"
+    if !isfile(path_to_base_xml)
+        writeRules(path_to_base_xml, "$(path_to_rulesets_collection_folder)/base_rulesets.csv")
+    end
     dataTypeRulesFn = (_, name) -> occursin("applies_to_dead", name) ? "INT" : "REAL"
-    return addColumns(xml_paths, "rulesets_variations", "rulesets_variation_id", db_columns, path_to_xml, dataTypeRulesFn)
+    return addColumns(xml_paths, "rulesets_variations", "rulesets_variation_id", db_columns, path_to_base_xml, dataTypeRulesFn)
 end
 
 function addRow(db_columns::SQLite.DB, table_name::String, id_name::String, table_features::String, values::String)
