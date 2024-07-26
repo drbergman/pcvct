@@ -12,10 +12,11 @@ include("VCTDatabase.jl")
 include("VCTConfiguration.jl")
 include("VCTExtraction.jl")
 include("VCTLoader.jl")
+include("VCTSensitivity.jl")
 
 physicell_dir::String = abspath("PhysiCell")
 data_dir::String = abspath("data")
-PHYSICELL_CPP::String = haskey(ENV, "PHYSICELL_CPP") ? ENV["PHYSICELL_CPP"] : "/opt/homebrew/bin/g++-13"
+PHYSICELL_CPP::String = haskey(ENV, "PHYSICELL_CPP") ? ENV["PHYSICELL_CPP"] : "/opt/homebrew/bin/g++-14"
 
 ################## Initialization Functions ##################
 
@@ -65,9 +66,19 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
     end
 
     path_to_folder = "$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)" # source dir needs to end in / or else the dir is copied into target, not the source files
-    run(`cp -r $(path_to_folder)/custom_modules/ $(physicell_dir)/custom_modules`)
-    run(`cp $(path_to_folder)/main.cpp $(physicell_dir)/main.cpp`)
-    run(`cp $(path_to_folder)/Makefile $(physicell_dir)/Makefile`)
+    for file in readdir("$(path_to_folder)/custom_modules", sort=false)
+        if !isfile("$(path_to_folder)/custom_modules/$(file)")
+            continue
+        end
+        src = "$(path_to_folder)/custom_modules/$(file)"
+        dst = "$(physicell_dir)/custom_modules/$(file)"
+        cp(src, dst, force=true)
+    end
+    cp("$(path_to_folder)/main.cpp", "$(physicell_dir)/main.cpp", force=true)
+    cp("$(path_to_folder)/Makefile", "$(physicell_dir)/Makefile", force=true)
+    # run(`cp -r $(path_to_folder)/custom_modules/* $(physicell_dir)/custom_modules`)
+    # run(`cp $(path_to_folder)/main.cpp $(physicell_dir)/main.cpp`)
+    # run(`cp $(path_to_folder)/Makefile $(physicell_dir)/Makefile`)
 
     cmd = `make -j 20 CC=$(PHYSICELL_CPP) PROGRAM_NAME=project_ccid_$(S.folder_ids.custom_code_id) CFLAGS=$(cflags)`
 
@@ -371,20 +382,25 @@ end
 
 deleteTrial(trial_id::Int; delete_subs::Bool=true) = deleteTrial([trial_id]; delete_subs=delete_subs)
 
-function resetDatabase()
+function resetDatabase(; force_reset::Bool=false, force_continue::Bool=false)
 
-    # prompt user to confirm
-    println("Are you sure you want to reset the database? (y/n)")
-    response = readline()
-    if response != "y" # make user be very specific about resetting
-        println("You entered '$response'.\n\tResetting the database has been cancelled.\n\n\tDo you want to continue with the script? (y/n)")
+    if !force_reset
+        # prompt user to confirm
+        println("Are you sure you want to reset the database? (y/n)")
         response = readline()
-        if response != "y" # make user be very specific about continuing
-            println("You entered '$response'.\n\tThe script has been cancelled.")
-            error("Script cancelled.")
+        if response != "y" # make user be very specific about resetting
+            println("You entered '$response'.\n\tResetting the database has been cancelled.")
+            if !force_continue
+                println("\n\tDo you want to continue with the script? (y/n)")
+                response = readline()
+                if response != "y" # make user be very specific about continuing
+                    println("You entered '$response'.\n\tThe script has been cancelled.")
+                    error("Script cancelled.")
+                end
+                println("You entered '$response'.\n\tThe script will continue.")
+            end
+            return
         end
-        println("You entered '$response'.\n\tThe script will continue.")
-        return
     end
     rm("$(data_dir)/outputs/simulations", force=true, recursive=true)
     rm("$(data_dir)/outputs/monads", force=true, recursive=true)
@@ -489,6 +505,9 @@ function runSimulation(simulation::Simulation; do_full_setup::Bool=true, force_r
     try
         run(pipeline(cmd, stdout="$(path_to_simulation_folder)/output.log", stderr="$(path_to_simulation_folder)/output.err"), wait=true)
     catch
+        println("\tSimulation $(simulation.id) failed.")
+        println("\tCompile command: $cmd")
+        println("\tCheck $(path_to_simulation_folder)/output.err for more information.")
         success = false
     else
         rm("$(path_to_simulation_folder)/output.err", force=true)
@@ -627,7 +646,7 @@ end
 function addColumns(xml_paths::Vector{Vector{String}}, table_name::String, id_column_name::String, db_columns::SQLite.DB, path_to_xml::String, dataTypeRulesFn::Function)
     column_names = queryToDataFrame("PRAGMA table_info($(table_name));"; db=db_columns) |> x->x[!,:name]
     filter!(x -> x != id_column_name, column_names)
-    varied_column_names = [join(xml_path,"/") for xml_path in xml_paths]
+    varied_column_names = [xmlPathToColumnName(xml_path) for xml_path in xml_paths]
 
     is_new_column = [!(varied_column_name in column_names) for varied_column_name in varied_column_names]
     if any(is_new_column)
@@ -677,7 +696,7 @@ function addRulesetsVariationsColumns(rulesets_collection_id::Int, xml_paths::Ve
     rulesets_collection_folder = getRulesetsCollectionFolder(rulesets_collection_id)
     db_columns = getRulesetsCollectionDB(rulesets_collection_folder)
     path_to_xml = "$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)/base_rulesets.xml"
-    dataTypeRulesFn = (_, name) -> "applies_to_dead" in name ? "INT" : "REAL"
+    dataTypeRulesFn = (_, name) -> occursin("applies_to_dead", name) ? "INT" : "REAL"
     return addColumns(xml_paths, "rulesets_variations", "rulesets_variation_id", db_columns, path_to_xml, dataTypeRulesFn)
 end
 
@@ -688,7 +707,7 @@ function addRow(db_columns::SQLite.DB, table_name::String, id_name::String, tabl
         query = constructSelectQuery(table_name, "WHERE ($(table_features))=($(values))"; selection=id_name)
         new_id = queryToDataFrame(query, db=db_columns) |> x->x[!,1]
     end
-    return new_id[1], new_added
+    return new_id[1]
 end
 
 function addVariationRow(config_id::Int, table_features::String, values::String)
@@ -717,12 +736,11 @@ function addGrid(EV::Vector{<:ElementaryVariation}, addColumnsByPathsFn::Functio
     NDG = ndgrid(new_values...)
     sz_variations = size(NDG[1])
     variation_ids = zeros(Int, sz_variations)
-    is_new_variation_id = falses(sz_variations)
     for i in eachindex(NDG[1])
         varied_values = [A[i] for A in NDG] .|> string |> x -> join("\"" .* x .* "\"", ",")
-        variation_ids[i], is_new_variation_id[i] = addRowFn(table_features, static_values, varied_values)
+        variation_ids[i] = addRowFn(table_features, static_values, varied_values)
     end
-    return variation_ids, is_new_variation_id
+    return variation_ids
 end
 
 function setUpColumns(AV::Vector{<:AbstractVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function)
@@ -860,7 +878,7 @@ function addLHS(n::Integer, DV::Vector{DistributedVariation}, addColumnsByPathsF
 end
 
 function addLHSVariation(n::Integer, config_id::Int, DV::Vector{DistributedVariation}; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG)
-    fns = prepareVariationFunctions(config_id, DV)
+    fns = prepareVariationFunctions(config_id, DV; reference_variation_id=reference_variation_id)
     return addLHS(n, DV, fns...; add_noise=add_noise, rng=rng)
 end
 
@@ -869,7 +887,7 @@ addLHSVariation(n::Integer, config_id::Int, DV::DistributedVariation; reference_
 addLHSVariation(n::Integer, config_folder::String, DV::DistributedVariation; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSVariation(n, config_folder, [DV]; reference_variation_id=reference_variation_id, add_noise=add_noise, rng=rng)
 
 function addLHSRulesetsVariation(n::Integer, rulesets_collection_id::Int, DV::Vector{DistributedVariation}; reference_rulesets_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG)
-    fns = prepareRulesetsVariationFunctions(rulesets_collection_id, DV)
+    fns = prepareRulesetsVariationFunctions(rulesets_collection_id)
     return addLHS(n, DV, fns...; add_noise=add_noise, rng=rng)
 end
 
@@ -879,33 +897,36 @@ addLHSRulesetsVariation(n::Integer, rulesets_collection_folder::String, DV::Dist
 
 ################## Sobol Sequence Sampling Functions ##################
 
-function addSobol(n::Integer, DV::Vector{DistributedVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function)
+function addSobol(n::Integer, DV::Vector{DistributedVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function; n_matrices::Int=1)
     d = length(DV)
-    icdfs = QuasiMonteCarlo.sample(n, d, SobolSample())
-    return icdfsToVariations(n, icdfs', DV, addColumnsByPathsFn, prepareAddNewFn, addRowFn)
+    icdfs = QuasiMonteCarlo.sample(n, d * n_matrices, SobolSample()) # this returns a matrix of size (d * n_matrices) x n, i.e. each column is n_matrices samples of the d parameters
+    total_samples = n_matrices * n # total number of samples represented here
+    icdfs_reshaped = reshape(icdfs, (d, total_samples)) # split each column into n_matrices columns (note: every group of consecutive n_matrices columns has a representative of each of the n_matrices samples)
+    variation_ids = icdfsToVariations(total_samples, icdfs_reshaped', DV, addColumnsByPathsFn, prepareAddNewFn, addRowFn) # a vector of all variation_ids grouped as above
+    variation_ids = reshape(variation_ids, (n_matrices, n))' # first, pull out the n_matrices groupings into columns and then the n samples for each matrix into rows; return such that each column is a sobol sample
+    return variation_ids, icdfs
 end
 
-function addSobolVariation(n::Integer, config_id::Int, DV::Vector{DistributedVariation}; reference_variation_id::Int=0)
-    fns = prepareVariationFunctions(config_id, DV)
-    return addSobol(n, DV, fns...)
+function addSobolVariation(n::Integer, config_id::Int, DV::Vector{DistributedVariation}; reference_variation_id::Int=0, n_matrices::Int=1)
+    fns = prepareVariationFunctions(config_id, DV; reference_variation_id=reference_variation_id)
+    return addSobol(n, DV, fns...; n_matrices=n_matrices)
+end
+addSobolVariation(n::Integer, config_folder::String, DV::Vector{DistributedVariation}; reference_variation_id::Int=0, n_matrices::Int=1) = addSobolVariation(n, retrieveID("configs", config_folder), DV; reference_variation_id=reference_variation_id, n_matrices=n_matrices)
+addSobolVariation(n::Integer, config_id::Int, DV::DistributedVariation; reference_variation_id::Int=0, n_matrices::Int=1) = addSobolVariation(n, config_id, [DV]; reference_variation_id=reference_variation_id, n_matrices=n_matrices)
+addSobolVariation(n::Integer, config_folder::String, DV::DistributedVariation; reference_variation_id::Int=0, n_matrices::Int=1) = addSobolVariation(n, config_folder, [DV]; reference_variation_id=reference_variation_id, n_matrices=n_matrices)
+
+function addSobolRulesetsVariation(n::Integer, rulesets_collection_id::Int, DV::Vector{DistributedVariation}; reference_rulesets_variation_id::Int=0, n_matrices::Int=1)
+    fns = prepareRulesetsVariationFunctions(rulesets_collection_id)
+    return addSobol(n, DV, fns...; n_matrices=n_matrices)
 end
 
-addSobolVariation(n::Integer, config_folder::String, DV::Vector{DistributedVariation}; reference_variation_id::Int=0) = addSobolVariation(n, retrieveID("configs", config_folder), DV; reference_variation_id=reference_variation_id)
-addSobolVariation(n::Integer, config_id::Int, DV::DistributedVariation; reference_variation_id::Int=0) = addSobolVariation(n, config_id, [DV]; reference_variation_id=reference_variation_id)
-addSobolVariation(n::Integer, config_folder::String, DV::DistributedVariation; reference_variation_id::Int=0) = addSobolVariation(n, config_folder, [DV]; reference_variation_id=reference_variation_id)
-
-function addSobolRulesetsVariation(n::Integer, rulesets_collection_id::Int, DV::Vector{DistributedVariation}; reference_rulesets_variation_id::Int=0)
-    fns = prepareRulesetsVariationFunctions(rulesets_collection_id, DV)
-    return addSobol(n, DV, fns...)
-end
-
-addSobolRulesetsVariation(n::Integer, rulesets_collection_folder::String, DV::Vector{DistributedVariation}; reference_rulesets_variation_id::Int=0) = addSobolRulesetsVariation(n, retrieveID("rulesets_collections", rulesets_collection_folder), DV; reference_rulesets_variation_id=reference_rulesets_variation_id)
-addSobolRulesetsVariation(n::Integer, rulesets_collection_id::Int, DV::DistributedVariation; reference_rulesets_variation_id::Int=0) = addSobolRulesetsVariation(n, rulesets_collection_id, [DV]; reference_rulesets_variation_id=reference_rulesets_variation_id)
-addSobolRulesetsVariation(n::Integer, rulesets_collection_folder::String, DV::DistributedVariation; reference_rulesets_variation_id::Int=0) = addSobolRulesetsVariation(n, rulesets_collection_folder, [DV]; reference_rulesets_variation_id=reference_rulesets_variation_id)
+addSobolRulesetsVariation(n::Integer, rulesets_collection_folder::String, DV::Vector{DistributedVariation}; reference_rulesets_variation_id::Int=0, n_matrices::Int=1) = addSobolRulesetsVariation(n, retrieveID("rulesets_collections", rulesets_collection_folder), DV; reference_rulesets_variation_id=reference_rulesets_variation_id, n_matrices=n_matrices)
+addSobolRulesetsVariation(n::Integer, rulesets_collection_id::Int, DV::DistributedVariation; reference_rulesets_variation_id::Int=0, n_matrices::Int=1) = addSobolRulesetsVariation(n, rulesets_collection_id, [DV]; reference_rulesets_variation_id=reference_rulesets_variation_id, n_matrices=n_matrices)
+addSobolRulesetsVariation(n::Integer, rulesets_collection_folder::String, DV::DistributedVariation; reference_rulesets_variation_id::Int=0, n_matrices::Int=1) = addSobolRulesetsVariation(n, rulesets_collection_folder, [DV]; reference_rulesets_variation_id=reference_rulesets_variation_id, n_matrices=n_matrices)
 
 ################## Sampling Helper Functions ##################
 
-function icdfsToVariations(n::Int, icdfs::Matrix{Float64}, DV::Vector{DistributedVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function)
+function icdfsToVariations(n::Int, icdfs::AbstractMatrix{Float64}, DV::Vector{DistributedVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function)
     new_values = []
     for (i,d) in enumerate([dv.distribution for dv in DV])
         new_value = Statistics.quantile(d, icdfs[:,i]) # ok, all the new values for the given parameter
@@ -915,23 +936,22 @@ function icdfsToVariations(n::Int, icdfs::Matrix{Float64}, DV::Vector{Distribute
     static_values, table_features = setUpColumns(DV, addColumnsByPathsFn, prepareAddNewFn)
 
     variation_ids = zeros(Int, n)
-    is_new_variation_id = falses(n)
 
     for i in 1:n
         varied_values = [new_value[i] for new_value in new_values] .|> string |> x -> join("\"" .* x .* "\"", ",")
-        variation_ids[i], is_new_variation_id[i] = addRowFn(table_features, static_values, varied_values)
+        variation_ids[i] = addRowFn(table_features, static_values, varied_values)
     end
-    return variation_ids, is_new_variation_id
+    return variation_ids
 end
 
-function prepareVariationFunctions(config_id::Int, DV::Vector{DistributedVariation})
+function prepareVariationFunctions(config_id::Int, DV::Vector{DistributedVariation}; reference_variation_id=0)
     addColumnsByPathsFn = (paths) -> addVariationColumns(config_id, paths, [eltype(dv.distribution) for dv in DV])
-    prepareAddNewFn = (static_column_names, varied_column_names) -> prepareAddNewVariations(config_id, static_column_names, varied_column_names)
+    prepareAddNewFn = (static_column_names, varied_column_names) -> prepareAddNewVariations(config_id, static_column_names, varied_column_names; reference_variation_id=reference_variation_id)
     addRowFn = (features, static_values, varied_values) -> addVariationRow(config_id, features, static_values, varied_values)
     return addColumnsByPathsFn, prepareAddNewFn, addRowFn
 end
 
-function prepareRulesetsVariationFunctions(rulesets_collection_id::Int, DV::Vector{DistributedVariation})
+function prepareRulesetsVariationFunctions(rulesets_collection_id::Int)
     addColumnsByPathsFn = (paths) -> addRulesetsVariationsColumns(rulesets_collection_id, paths)
     prepareAddNewFn = (static_column_names, varied_column_names) -> prepareAddNewRulesetsVariations(rulesets_collection_id, static_column_names, varied_column_names)
     addRowFn = (features, static_values, varied_values) -> addRulesetsVariationRow(rulesets_collection_id, features, static_values, varied_values)
@@ -987,7 +1007,9 @@ function selectConstituents(path_to_csv::String)
 end
 
 getMonadSimulations(monad_id::Int) = selectConstituents("$(data_dir)/outputs/monads/$(monad_id)/simulations.csv")
+getMonadSimulations(monad::Monad) = getMonadSimulations(monad.id)
 getSamplingMonads(sampling_id::Int) = selectConstituents("$(data_dir)/outputs/samplings/$(sampling_id)/monads.csv")
+getSamplingMonads(sampling::Sampling) = getSamplingMonads(sampling.id)
 getTrialSamplings(trial_id::Int) = selectConstituents("$(data_dir)/outputs/trials/$(trial_id)/samplings.csv")
 getTrialSamplings(trial::Trial) = getTrialSamplings(trial.id)
 
