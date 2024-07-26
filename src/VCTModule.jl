@@ -696,7 +696,7 @@ function addRulesetsVariationsColumns(rulesets_collection_id::Int, xml_paths::Ve
     rulesets_collection_folder = getRulesetsCollectionFolder(rulesets_collection_id)
     db_columns = getRulesetsCollectionDB(rulesets_collection_folder)
     path_to_xml = "$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)/base_rulesets.xml"
-    dataTypeRulesFn = (_, name) -> "applies_to_dead" in name ? "INT" : "REAL"
+    dataTypeRulesFn = (_, name) -> occursin("applies_to_dead", name) ? "INT" : "REAL"
     return addColumns(xml_paths, "rulesets_variations", "rulesets_variation_id", db_columns, path_to_xml, dataTypeRulesFn)
 end
 
@@ -1025,9 +1025,9 @@ end
 
 getSimulations() = constructSelectQuery("simulations", "", selection="simulation_id") |> queryToDataFrame |> x -> x.simulation_id
 getSimulations(simulation::Simulation) = [simulation.id]
-getSimulations(monad::Monad) = getMonadSimulations(monad)
-getSimulations(sampling::Sampling) = getSamplingSimulations(sampling)
-getSimulations(trial::Trial) = getTrialSimulations(trial)
+getSimulations(monad::Monad) = getMonadSimulations(monad.id)
+getSimulations(sampling::Sampling) = getSamplingSimulations(sampling.id)
+getSimulations(trial::Trial) = getTrialSimulations(trial.id)
 
 function getSimulations(class_id::VCTClassID) 
     class_id_type = getVCTClassIDType(class_id)
