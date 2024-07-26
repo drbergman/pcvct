@@ -807,6 +807,16 @@ function prepareAddNewRulesetsVariations(rulesets_collection_id::Int, static_col
     return prepareAddNew(db_columns, static_column_names, varied_column_names, "rulesets_variations", "rulesets_variation_id", reference_rulesets_variation_id)
 end
 
+function addGridCombo(config_id::Int, rulesets_collection_id::Int, config_variations::Vector{<:ElementaryVariation}, rulesets_variations::Vector{<:ElementaryVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
+    variation_ids = addGridVariation(config_id, config_variations; reference_variation_id=reference_variation_id)
+    rulesets_variation_ids = addGridRulesetsVariation(rulesets_collection_id, rulesets_variations; reference_rulesets_variation_id=reference_rulesets_variation_id)
+    all_variation_ids = repeat(variation_ids, inner = length(rulesets_variation_ids))
+    all_rulesets_variation_ids = repeat(rulesets_variation_ids, outer = length(variation_ids))
+    return all_variation_ids, all_rulesets_variation_ids
+end
+
+addGridCombo(config_folder::String, rulesets_collection_folder::String, config_variations::Vector{<:ElementaryVariation}, rulesets_variations::Vector{<:ElementaryVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0) = addGridCombo(retrieveID("configs", config_folder), retrieveID("rulesets_collections", rulesets_collection_folder), config_variations, rulesets_variations; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
+
 ################## Latin Hypercube Sampling Functions ##################
 
 function orthogonalLHS(k::Int, d::Int)
