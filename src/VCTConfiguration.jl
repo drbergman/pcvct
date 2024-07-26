@@ -222,7 +222,7 @@ function NormalDistributedVariation(xml_path::Vector{String}, mu::T, sigma::T; l
     return DistributedVariation(xml_path, Truncated(Normal(mu, sigma), lb, ub))
 end
 
-function addDomainVariationDimension!(EV::Vector{ElementaryVariation}, domain::NTuple{N,Real} where N) 
+function addDomainVariationDimension!(EV::Vector{<:ElementaryVariation}, domain::NTuple{N,Real} where N) 
     bounds_tags = ["x_min", "x_max", "y_min", "y_max", "z_min", "z_max"]
     for (tag, value) in zip(bounds_tags, domain)
         xml_path = ["domain", tag]
@@ -230,7 +230,7 @@ function addDomainVariationDimension!(EV::Vector{ElementaryVariation}, domain::N
     end
 end
 
-function addDomainVariationDimension!(EV::Vector{ElementaryVariation}, domain::NamedTuple)
+function addDomainVariationDimension!(EV::Vector{<:ElementaryVariation}, domain::NamedTuple)
     for (tag, value) in pairs(domain)
         tag = String(tag)
         if startswith("min", tag)
@@ -245,22 +245,22 @@ function addDomainVariationDimension!(EV::Vector{ElementaryVariation}, domain::N
     end
 end
 
-function addMotilityVariationDimension!(EV::Vector{ElementaryVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
+function addMotilityVariationDimension!(EV::Vector{<:ElementaryVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
     xml_path = motilityPath(cell_definition, field_name)
     push!(EV, ElementaryVariation(xml_path, values))
 end
 
-function addAttackRateVariationDimension!(EV::Vector{ElementaryVariation}, cell_definition::String, target_name::String, values::Vector{T} where T)
+function addAttackRateVariationDimension!(EV::Vector{<:ElementaryVariation}, cell_definition::String, target_name::String, values::Vector{T} where T)
     xml_path = attackRatesPath(cell_definition, target_name)
     push!(EV, ElementaryVariation(xml_path, values))
 end
 
-function addCustomDataVariationDimension!(EV::Vector{ElementaryVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
+function addCustomDataVariationDimension!(EV::Vector{<:ElementaryVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
     xml_path = customDataPath(cell_definition, field_name)
     push!(EV, ElementaryVariation(xml_path, values))
 end
 
-function addCustomDataVariationDimension!(EV::Vector{ElementaryVariation}, cell_definition::String, field_names::Vector{String}, values::Vector{Vector})
+function addCustomDataVariationDimension!(EV::Vector{<:ElementaryVariation}, cell_definition::String, field_names::Vector{String}, values::Vector{Vector})
     for (field_name, value) in zip(field_names,values)
         addCustomDataVariationDimension!(EV, cell_definition, field_name, value)
     end
