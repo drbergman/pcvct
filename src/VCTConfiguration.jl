@@ -1,3 +1,6 @@
+include("../PhysiCell-XMLRules/src/PhysiCell_XMLRules.jl")
+using .PhysiCell_XMLRules
+
 export ElementaryVariation, DistributedVariation, addDomainVariationDimension!, addCustomDataVariationDimension!, addAttackRateVariationDimension!, addMotilityVariationDimension!
 export UniformDistributedVariation, NormalDistributedVariation
 
@@ -139,18 +142,23 @@ function loadConfiguration(sampling::Sampling)
 end
 
 function loadRulesets(M::AbstractMonad)
-    if M.rulesets_variation_id == -1
+    if M.rulesets_variation_id == -1 # no rules being used
         return
     end
     path_to_rulesets_collections_folder = "$(data_dir)/inputs/rulesets_collections/$(M.folder_names.rulesets_collection_folder)"
     path_to_rulesets_xml = "$(path_to_rulesets_collections_folder)/rulesets_collections_variations/rulesets_variation_$(M.rulesets_variation_id).xml"
-    if isfile(path_to_rulesets_xml)
+    if isfile(path_to_rulesets_xml) # already have the rulesets variation created
         return
     end
-    mkpath(dirname(path_to_rulesets_xml))
+    mkpath(dirname(path_to_rulesets_xml)) # ensure the directory exists
 
     # create xml file using LightXML
-    xml_doc = parse_file("$(path_to_rulesets_collections_folder)/base_rulesets.xml")
+    path_to_base_xml = "$(path_to_rulesets_collections_folder)/base_rulesets.xml"
+    if !isfile(path_to_base_xml)
+        writeRules(path_to_base_xml, "$(path_to_rulesets_collections_folder)/base_rulesets.csv")
+    end
+        
+    xml_doc = parse_file(path_to_base_xml)
     if M.rulesets_variation_id != 0 # only update if not using the base variation for the ruleset
         query = constructSelectQuery("rulesets_variations", "WHERE rulesets_variation_id=$(M.rulesets_variation_id);")
         variation_row = queryToDataFrame(query; db=getRulesetsCollectionDB(M), is_row=true)
