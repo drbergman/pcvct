@@ -14,6 +14,9 @@ include("VCTExtraction.jl")
 include("VCTLoader.jl")
 include("VCTSensitivity.jl")
 
+include("../PhysiCell-XMLRules/src/PhysiCell_XMLRules.jl")
+using .PhysiCell_XMLRules
+
 physicell_dir::String = abspath("PhysiCell")
 data_dir::String = abspath("data")
 PHYSICELL_CPP::String = haskey(ENV, "PHYSICELL_CPP") ? ENV["PHYSICELL_CPP"] : "/opt/homebrew/bin/g++-14"
@@ -695,9 +698,13 @@ end
 function addRulesetsVariationsColumns(rulesets_collection_id::Int, xml_paths::Vector{Vector{String}})
     rulesets_collection_folder = getRulesetsCollectionFolder(rulesets_collection_id)
     db_columns = getRulesetsCollectionDB(rulesets_collection_folder)
-    path_to_xml = "$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)/base_rulesets.xml"
+    path_to_rulesets_collection_folder = "$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)"
+    path_to_base_xml = "$(path_to_rulesets_collection_folder)/base_rulesets.xml"
+    if !isfile(path_to_base_xml)
+        writeRules(path_to_base_xml, "$(path_to_rulesets_collection_folder)/base_rulesets.csv")
+    end
     dataTypeRulesFn = (_, name) -> occursin("applies_to_dead", name) ? "INT" : "REAL"
-    return addColumns(xml_paths, "rulesets_variations", "rulesets_variation_id", db_columns, path_to_xml, dataTypeRulesFn)
+    return addColumns(xml_paths, "rulesets_variations", "rulesets_variation_id", db_columns, path_to_base_xml, dataTypeRulesFn)
 end
 
 function addRow(db_columns::SQLite.DB, table_name::String, id_name::String, table_features::String, values::String)
@@ -806,6 +813,16 @@ function prepareAddNewRulesetsVariations(rulesets_collection_id::Int, static_col
     db_columns = getRulesetsCollectionDB(rulesets_collection_id)
     return prepareAddNew(db_columns, static_column_names, varied_column_names, "rulesets_variations", "rulesets_variation_id", reference_rulesets_variation_id)
 end
+
+function addGridCombo(config_id::Int, rulesets_collection_id::Int, config_variations::Vector{<:ElementaryVariation}, rulesets_variations::Vector{<:ElementaryVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
+    variation_ids = addGridVariation(config_id, config_variations; reference_variation_id=reference_variation_id)
+    rulesets_variation_ids = addGridRulesetsVariation(rulesets_collection_id, rulesets_variations; reference_rulesets_variation_id=reference_rulesets_variation_id)
+    all_variation_ids = repeat(variation_ids, inner = length(rulesets_variation_ids))
+    all_rulesets_variation_ids = repeat(rulesets_variation_ids, outer = length(variation_ids))
+    return all_variation_ids, all_rulesets_variation_ids
+end
+
+addGridCombo(config_folder::String, rulesets_collection_folder::String, config_variations::Vector{<:ElementaryVariation}, rulesets_variations::Vector{<:ElementaryVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0) = addGridCombo(retrieveID("configs", config_folder), retrieveID("rulesets_collections", rulesets_collection_folder), config_variations, rulesets_variations; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
 
 ################## Latin Hypercube Sampling Functions ##################
 
