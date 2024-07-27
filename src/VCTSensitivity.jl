@@ -143,16 +143,20 @@ function measureSobolSensitivity(sampling::Sampling, f::Function)
     A_values = @view values[:,1]
     B_values = @view values[:,2]
     Aᵦ_values = [values[:,2+i] for i in 1:d]
-    expected_value = mean([A_values; B_values])
-    total_variance = mean([A_values; B_values].^2) - expected_value^2
+    expected_value² = mean(A_values .* B_values) # see Saltelli, 2002 Eq 21
+    total_variance = var([A_values; B_values])
     first_order_variances = zeros(Float64, d)
     total_order_variances = zeros(Float64, d)
     for (i, Aᵦ) in enumerate(Aᵦ_values)
-        # first_order_variances[i] = (B_values .* Aᵦ) .- expected_value^2 |> mean # Sobol, 1993
-        # first_order_variances[i] = total_variance - 0.5 * mean((B_values .- Aᵦ).^2) # Jansen, 1999
-        first_order_variances[i] = B_values .* (Aᵦ .- A_values) |> mean # Saltelli, 2010
+        # I found Jansen, 1999 to do best for first order variances on a simple test of f(x,y) = x.^2 + y.^2 + c with a uniform distribution on [0,1] x [0,1] including with noise added
+        # first_order_variances[i] = mean(B_values .* Aᵦ) .- expected_value² # Sobol, 1993
+        first_order_variances[i] = total_variance - 0.5 * mean((B_values .- Aᵦ).^2) # Jansen, 1999
+        # first_order_variances[i] = mean(B_values .* (Aᵦ .- A_values)) # Saltelli, 2010
 
-        total_order_variances[i] = 0.5 * (Aᵦ .- A_values .|> abs2 |> mean) # Jansen, 1999
+        # I found Jansen, 1999 to do best for total order variances on a simple test of f(x,y) = x.^2 + y.^2 + c with a uniform distribution on [0,1] x [0,1] including with noise added
+        # total_order_variances[i] = total_variance - mean(A_values .* Aᵦ) + expected_value² # Homma, 1996
+        # total_order_variances[i] = mean(A_values .* (A_values .- Aᵦ)) # Sobol, 2007
+        total_order_variances[i] = 0.5 * mean((Aᵦ .- A_values).^2) # Jansen, 1999
     end
     println("A_values = $A_values")
     println("B_values = $B_values")
