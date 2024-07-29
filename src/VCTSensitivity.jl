@@ -132,7 +132,7 @@ function recordSobolSchemeRulesetsVariations(DV::Vector{DistributedVariation}, a
     return recordSensitivityScheme(DV, all_rulesets_variation_ids, path_to_csv; initial_header_names=["A", "B"])
 end
 
-function measureSobolSensitivity(sampling::Sampling, f::Function)
+function measureSobolSensitivity(sampling::Sampling, f::Function; si_method::Symbol=:Jansen1999, st_method::Symbol=:Jansen1999)
     value_dict = evaluateFunctionOnSampling(sampling, f)
     variation_id_matrix, rulesets_variation_id_matrix = readSensitivityScheme(sampling, readSobolScheme)
     values = zeros(Float64, size(variation_id_matrix))
@@ -149,21 +149,23 @@ function measureSobolSensitivity(sampling::Sampling, f::Function)
     total_order_variances = zeros(Float64, d)
     for (i, Aᵦ) in enumerate(Aᵦ_values)
         # I found Jansen, 1999 to do best for first order variances on a simple test of f(x,y) = x.^2 + y.^2 + c with a uniform distribution on [0,1] x [0,1] including with noise added
-        # first_order_variances[i] = mean(B_values .* Aᵦ) .- expected_value² # Sobol, 1993
-        first_order_variances[i] = total_variance - 0.5 * mean((B_values .- Aᵦ).^2) # Jansen, 1999
-        # first_order_variances[i] = mean(B_values .* (Aᵦ .- A_values)) # Saltelli, 2010
+        if si_method == :Sobol1993
+            first_order_variances[i] = mean(B_values .* Aᵦ) .- expected_value² # Sobol, 1993
+        elseif si_method == :Jansen1999
+            first_order_variances[i] = total_variance - 0.5 * mean((B_values .- Aᵦ).^2) # Jansen, 1999
+        elseif si_method == :Saltelli2010
+            first_order_variances[i] = mean(B_values .* (Aᵦ .- A_values)) # Saltelli, 2010
+        end
 
         # I found Jansen, 1999 to do best for total order variances on a simple test of f(x,y) = x.^2 + y.^2 + c with a uniform distribution on [0,1] x [0,1] including with noise added
-        # total_order_variances[i] = total_variance - mean(A_values .* Aᵦ) + expected_value² # Homma, 1996
-        # total_order_variances[i] = mean(A_values .* (A_values .- Aᵦ)) # Sobol, 2007
-        total_order_variances[i] = 0.5 * mean((Aᵦ .- A_values).^2) # Jansen, 1999
+        if st_method == :Homma1996
+            total_order_variances[i] = total_variance - mean(A_values .* Aᵦ) + expected_value² # Homma, 1996
+        elseif st_method == :Sobol2007
+            total_order_variances[i] = mean(A_values .* (A_values .- Aᵦ)) # Sobol, 2007
+        elseif st_method == :Jansen1999
+            total_order_variances[i] = 0.5 * mean((Aᵦ .- A_values).^2) # Jansen, 1999
+        end
     end
-    println("A_values = $A_values")
-    println("B_values = $B_values")
-    println("Aᵦ_values = $Aᵦ_values")
-    println("total_variance = $total_variance")
-    println("first_order_variances = $first_order_variances")
-    println("total_order_variances = $total_order_variances")
     
     first_order_indices = first_order_variances ./ total_variance
     total_order_indices = total_order_variances ./ total_variance
