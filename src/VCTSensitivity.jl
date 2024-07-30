@@ -182,10 +182,10 @@ end
 
 ############# Random Balance Design (RBD) #############
 
-function rbdSensitivity(n_points::Int, monad_min_length::Int, folder_names::AbstractSamplingFolders, DV::Vector{DistributedVariation}; force_recompile::Bool = true, reference_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true)
+function rbdSensitivity(n_points::Int, monad_min_length::Int, folder_names::AbstractSamplingFolders, DV::Vector{DistributedVariation}; force_recompile::Bool = true, reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true)
     all_variation_ids, variations_matrix = addRBDVariation(n_points, folder_names.config_folder, DV; reference_variation_id=reference_variation_id, rng=rng, use_sobol=use_sobol)
-    all_rulesets_variation_ids = zeros(Int, size(all_variation_ids)) # hard code this for now
-    rulesets_variations_matrix = zeros(Int, size(variations_matrix)) # hard code this for now
+    all_rulesets_variation_ids = reference_rulesets_variation_id .+ zeros(Int, size(all_variation_ids)) # hard code this for now
+    rulesets_variations_matrix = reference_rulesets_variation_id .+ zeros(Int, size(variations_matrix)) # hard code this for now
     sampling = Sampling(monad_min_length, folder_names, all_variation_ids[:], all_rulesets_variation_ids[:])
     recordRBDScheme(sampling, DV, variations_matrix, rulesets_variations_matrix)
     n_ran, n_success = runAbstractTrial(sampling; use_previous_sims=true, force_recompile=force_recompile)
