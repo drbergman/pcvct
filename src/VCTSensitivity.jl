@@ -93,8 +93,7 @@ function sobolSensitivity(n_points::Int, monad_min_length::Int, folder_names::Ab
 end
 
 function addSobolSensitivityVariation(n::Integer, config_id::Int, DV::Vector{DistributedVariation}; reference_variation_id::Int=0)
-    fns = prepareVariationFunctions(config_id, DV; reference_variation_id=reference_variation_id)
-    variation_ids, icdfs = addSobol(n, DV, fns...; n_matrices=2)
+    variation_ids, icdfs = addSobolVariation(n, config_id, DV; reference_variation_id=reference_variation_id, n_matrices=2)
     d = length(DV)
     icdfs = reshape(icdfs, (d, 2, n))
     A = icdfs[:,1,:]
@@ -179,6 +178,37 @@ function readSobolScheme(path_to_folder::String, scheme::String)
     end
     df = CSV.read(path_to_csv, DataFrame)
     return Matrix(df)
+end
+
+############# Random Balance Design (RBD) #############
+
+function rbdSensitivity(n_points::Int, monad_min_length::Int, folder_names::AbstractSamplingFolders, DV::Vector{DistributedVariation}; force_recompile::Bool = true, reference_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true)
+    all_variation_ids, variations_matrix = addRBDVariation(n_points, folder_names.config_folder, DV; reference_variation_id=reference_variation_id, rng=rng, use_sobol=use_sobol)
+    all_rulesets_variation_ids = zeros(Int, size(all_variation_ids)) # hard code this for now
+    rulesets_variations_matrix = zeros(Int, size(variations_matrix)) # hard code this for now
+    sampling = Sampling(monad_min_length, folder_names, all_variation_ids[:], all_rulesets_variation_ids[:])
+    recordRBDScheme(sampling, DV, variations_matrix, rulesets_variations_matrix)
+    n_ran, n_success = runAbstractTrial(sampling; use_previous_sims=true, force_recompile=force_recompile)
+    return sampling
+end
+
+function recordRBDScheme(sampling::Sampling, DV::Vector{DistributedVariation}, variations_matrix::Matrix{Int}, rulesets_variations_matrix::Matrix{Int})
+    d = length(DV)
+    sampling_id = sampling.id
+    path_to_folder = "$(data_dir)/outputs/samplings/$(sampling_id)/"
+    mkpath(path_to_folder)
+    recordRBDSchemeVariations(DV, variations_matrix, path_to_folder)
+    recordRBDSchemeRulesetsVariations(DV, rulesets_variations_matrix, path_to_folder)
+end
+
+function recordRBDSchemeVariations(DV::Vector{DistributedVariation}, all_variation_ids::Matrix{Int}, path_to_folder::String)
+    path_to_csv = "$(path_to_folder)/rbd_scheme_variations.csv"
+    return recordSensitivityScheme(DV, all_variation_ids, path_to_csv; initial_header_names=String[])
+end
+
+function recordRBDSchemeRulesetsVariations(DV::Vector{DistributedVariation}, all_rulesets_variation_ids::Matrix{Int}, path_to_folder::String)
+    path_to_csv = "$(path_to_folder)/rbd_scheme_rulesets_variations.csv"
+    return recordSensitivityScheme(DV, all_rulesets_variation_ids, path_to_csv; initial_header_names=String[])
 end
 
 ############# Generic Helper Functions #############

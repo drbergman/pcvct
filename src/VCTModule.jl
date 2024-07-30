@@ -4,7 +4,7 @@ module VCTModule
 export initializeVCT, resetDatabase, addGridVariation, addGridRulesetsVariation, runAbstractTrial, getTrialSamplings, getSimulations, deleteSimulation
 export addLHSVariation, addLHSRulesetsVariation
 
-using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables, Distributions, Statistics, Random, QuasiMonteCarlo
+using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables, Distributions, Statistics, Random, QuasiMonteCarlo, Sobol
 using MAT # files for VCTLoader.jl
 
 include("VCTClasses.jl")
@@ -588,6 +588,8 @@ function runAbstractTrial(T::AbstractTrial; use_previous_sims::Bool=false, force
     n_ran = Threads.Atomic{Int}(0)
     n_success = Threads.Atomic{Int}(0)
 
+    println("Running $(typeof(T)) $(T.id) requiring $(length(simulation_tasks)) simulations...")
+
     Threads.@threads :static for simulation_task in simulation_tasks
         schedule(simulation_task)
         ran, success = fetch(simulation_task)
@@ -938,6 +940,55 @@ end
 addSobolRulesetsVariation(n::Integer, rulesets_collection_folder::String, DV::Vector{DistributedVariation}; reference_rulesets_variation_id::Int=0, n_matrices::Int=1) = addSobolRulesetsVariation(n, retrieveID("rulesets_collections", rulesets_collection_folder), DV; reference_rulesets_variation_id=reference_rulesets_variation_id, n_matrices=n_matrices)
 addSobolRulesetsVariation(n::Integer, rulesets_collection_id::Int, DV::DistributedVariation; reference_rulesets_variation_id::Int=0, n_matrices::Int=1) = addSobolRulesetsVariation(n, rulesets_collection_id, [DV]; reference_rulesets_variation_id=reference_rulesets_variation_id, n_matrices=n_matrices)
 addSobolRulesetsVariation(n::Integer, rulesets_collection_folder::String, DV::DistributedVariation; reference_rulesets_variation_id::Int=0, n_matrices::Int=1) = addSobolRulesetsVariation(n, rulesets_collection_folder, [DV]; reference_rulesets_variation_id=reference_rulesets_variation_id, n_matrices=n_matrices)
+
+################## Random Balanced Design Sampling Functions ##################
+
+function addRBD(n::Integer, DV::Vector{DistributedVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function; rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true)
+    d = length(DV)
+    if use_sobol
+        println("Using Sobol sequence for RBD.")
+        sobol_seq = SobolSeq(d)
+        pre_s = zeros(Float64, (d, n-1))
+        for col in eachcol(pre_s)
+            next!(sobol_seq, col)
+        end
+        S = -π .+ 2π * pre_s'
+        icdfs = 0.5 .+ [zeros(Float64, (1,d)); asin.(sin.(S)) ./ π]
+    else
+        pre_s = range(-π, stop = π, length = n+1) |> collect
+        pop!(pre_s)
+        S = [s0[randperm(rng, n)] for _ in 1:d] |> x->reduce(hcat, x)
+        icdfs = 0.5 .+ asin.(sin.(S)) ./ π
+    end
+    
+    variation_ids = icdfsToVariations(n, icdfs, DV, addColumnsByPathsFn, prepareAddNewFn, addRowFn)
+    
+    variations_matrix = zeros(Int, (n, d))
+    for i in 1:d
+        variations_matrix[1,i] = variation_ids[1]
+        variations_matrix[2:end, i] = variation_ids[1 .+ sortperm(S[:,i])]
+    end
+
+    return variation_ids, variations_matrix
+end
+
+function addRBDVariation(n::Integer, config_id::Int, DV::Vector{DistributedVariation}; reference_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true)
+    use_sobol = use_sobol && ispow2(n) # only use sobol if n is a power of 2
+    fns = prepareVariationFunctions(config_id, DV; reference_variation_id=reference_variation_id)
+    return addRBD(n, DV, fns...; rng=rng, use_sobol=use_sobol)
+end
+addRBDVariation(n::Integer, config_folder::String, DV::Vector{DistributedVariation}; reference_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true) = addRBDVariation(n, retrieveID("configs", config_folder), DV; reference_variation_id=reference_variation_id, rng=rng, use_sobol=use_sobol)
+addRBDVariation(n::Integer, config_id::Int, DV::DistributedVariation; reference_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true) = addRBDVariation(n, config_id, [DV]; reference_variation_id=reference_variation_id, rng=rng, use_sobol=use_sobol)
+addRBDVariation(n::Integer, config_folder::String, DV::DistributedVariation; reference_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true) = addRBDVariation(n, config_folder, [DV]; reference_variation_id=reference_variation_id, rng=rng, use_sobol=use_sobol)
+
+function addRBDRulesetsVariation(n::Integer, rulesets_collection_id::Int, DV::Vector{DistributedVariation}; reference_rulesets_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true)
+    use_sobol = use_sobol && ispow2(n) # only use sobol if n is a power of 2
+    fns = prepareRulesetsVariationFunctions(rulesets_collection_id)
+    return addRBD(n, DV, fns...; rng=rng, use_sobol=use_sobol)
+end
+addRBDRulesetsVariation(n::Integer, rulesets_collection_folder::String, DV::Vector{DistributedVariation}; reference_rulesets_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true) = addRBDRulesetsVariation(n, retrieveID("rulesets_collections", rulesets_collection_folder), DV; reference_rulesets_variation_id=reference_rulesets_variation_id, rng=rng, use_sobol=use_sobol)
+addRBDRulesetsVariation(n::Integer, rulesets_collection_id::Int, DV::DistributedVariation; reference_rulesets_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true) = addRBDRulesetsVariation(n, rulesets_collection_id, [DV]; reference_rulesets_variation_id=reference_rulesets_variation_id, rng=rng, use_sobol=use_sobol)
+addRBDRulesetsVariation(n::Integer, rulesets_collection_folder::String, DV::DistributedVariation; reference_rulesets_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true) = addRBDRulesetsVariation(n, rulesets_collection_folder, [DV]; reference_rulesets_variation_id=reference_rulesets_variation_id, rng=rng, use_sobol=use_sobol)
 
 ################## Sampling Helper Functions ##################
 
