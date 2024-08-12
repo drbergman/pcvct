@@ -259,16 +259,11 @@ function deleteStalledSimulations(; user_check::Bool=true)
 
     # simulation folder OR in the database
     all_simulation_ids = (readdir("$(data_dir)/outputs/simulations", join=true) |> filter(x->isdir(x)) .|> x->parse(Int,basename(x))) ∪ getSimulations()
-    println("typeof(all_simulation_ids) = $(typeof(all_simulation_ids))")
-    println("length(all_simulation_ids) = $(length(all_simulation_ids))")
 
     id_check_fn(id) = getStatus(VCTClassID{Simulation}(id)) == :finished && !isfile("$(data_dir)/outputs/simulations/$(id)/output/final.xml")
     stalled_simulation_ids = [id for id in all_simulation_ids if id_check_fn(id)]
 
-    println("Deleting $(length(stalled_simulation_ids)) stalled simulations.")
-    println("Simulation ids to be deleted:")
-    display(stalled_simulation_ids)
-    # deleteSimulation(all_simulation_ids)
+    deleteSimulation(stalled_simulation_ids)
 end
 
 function getStatus(class_id::VCTClassID)

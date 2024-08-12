@@ -68,25 +68,6 @@ function makePerturbation(av::AbstractVariation, base_value, addFn::Function)
     return new_variation_id[1]
 end
 
-# function perturbVariation(av::AbstractVariation, variation_id::Int, folder_names::AbstractSamplingFolders)
-#     base_value, variation_target = getBaseValue(av, variation_id, folder_names)
-#     cdf_at_base = cdf(av.distribution, base_value)
-#     dcdf = cdf_at_base < 0.5 ? 0.5 : -0.5
-#     new_value = quantile(av.distribution, cdf_at_base + dcdf)
-
-#     new_ev = ElementaryVariation(av.xml_path, [new_value])
-
-#     if variation_target == :config
-#         new_variation_id = addGridVariation(folder_names.config_folder, new_ev; reference_variation_id=variation_id)
-#     elseif variation_target == :rulesets
-#         new_variation_id = addGridRulesetsVariation(folder_names.rulesets_collection_folder, new_ev; reference_rulesets_variation_id=variation_id)
-#     else
-#         error("Unknown variation target: $variation_target")
-#     end
-#     @assert length(new_variation_id) == 1 "Only doing one perturbation at a time"
-#     return new_variation_id[1], variation_target
-# end
-
 function getConfigBaseValue(av::AbstractVariation, variation_id::Int, folder::String)
     column_name = variationColumnName(av)
     return getConfigBaseValue(column_name, variation_id, folder)
