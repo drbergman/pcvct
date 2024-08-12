@@ -2,61 +2,122 @@ using Distributions, DataFrames, CSV, Sobol
 
 ############# Morris One-At-A-Time (MOAT) #############
 
-function moatSensitivity(n_points::Int, monad_min_length::Int, folder_names::AbstractSamplingFolders, DV::Vector{DistributedVariation}; force_recompile::Bool = true, reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG)
-    variation_ids = addLHSVariation(n_points, folder_names.config_folder, DV; reference_variation_id=reference_variation_id, add_noise=add_noise, rng=rng)
-    rulesets_variation_ids = zeros(Int, length(variation_ids)) # hard code this for now
-    perturbed_variation_ids = zeros(Int, (n_points, length(DV)))
-    for (base_point_ind, variation_id) in enumerate(variation_ids) # for each base point in the LHS
-        for (par_ind, dv) in enumerate(DV) # perturb each parameter one time
-            new_variation_id = perturbVariation(dv, variation_id, folder_names.config_folder)
-            perturbed_variation_ids[base_point_ind, par_ind] = new_variation_id
+function moatSensitivity(n_points::Int, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; force_recompile::Bool = true, reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG, orthogonalize::Bool=true)
+    config_variation_ids, rulesets_variation_ids = addVariations(LHSVariation(n_points; add_noise=add_noise, rng=rng, orthogonalize=orthogonalize), folder_names.config_folder, folder_names.rulesets_collection_folder, AV; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
+    perturbed_config_variation_ids = repeat(config_variation_ids, 1, length(AV))
+    perturbed_rulesets_variation_ids = repeat(rulesets_variation_ids, 1, length(AV))
+    for (base_point_ind, (variation_id, rulesets_variation_id)) in enumerate(zip(config_variation_ids, rulesets_variation_ids)) # for each base point in the LHS
+        for (par_ind, av) in enumerate(AV) # perturb each parameter one time
+            variation_target = variationTarget(av)
+            if variation_target == :config
+                perturbed_config_variation_ids[base_point_ind, par_ind] = perturbConfigVariation(av, variation_id, folder_names.config_folder)
+            elseif variation_target == :rulesets
+                perturbed_rulesets_variation_ids[base_point_ind, par_ind] = perturbRulesetsVariation(av, rulesets_variation_id, folder_names.rulesets_collection_folder)
+            else
+                error("Unknown variation target: $variation_target")
+            end
         end
     end
-    perturbed_rulesets_variation_ids = zeros(Int, size(perturbed_variation_ids)) # hard code this for now
-    all_variation_ids = hcat(variation_ids, perturbed_variation_ids)
+    all_config_variation_ids = hcat(config_variation_ids, perturbed_config_variation_ids)
     all_rulesets_variation_ids = hcat(rulesets_variation_ids, perturbed_rulesets_variation_ids)
-    sampling = Sampling(monad_min_length, folder_names, all_variation_ids[:], all_rulesets_variation_ids[:])
-    recordMOATScheme(sampling, DV, all_variation_ids, all_rulesets_variation_ids)
+    sampling = Sampling(monad_min_length, folder_names, all_config_variation_ids[:], all_rulesets_variation_ids[:])
+    recordMOATScheme(sampling, AV, all_config_variation_ids, all_rulesets_variation_ids)
     n_ran, n_success = runAbstractTrial(sampling; use_previous_sims=true, force_recompile=force_recompile)
     return sampling
 end
 
-function recordMOATScheme(sampling::Sampling, DV::Vector{DistributedVariation}, all_variation_ids::Matrix{Int}, all_rulesets_variation_ids::Matrix{Int})
+function recordMOATScheme(sampling::Sampling, AV::Vector{<:AbstractVariation}, all_config_variation_ids::Matrix{Int}, all_rulesets_variation_ids::Matrix{Int})
     sampling_id = sampling.id
     path_to_folder = "$(data_dir)/outputs/samplings/$(sampling_id)/"
     mkpath(path_to_folder)
-    recordMOATSchemeVariations(DV, all_variation_ids, path_to_folder)
-    recordMOATSchemeRulesetsVariations(DV, all_rulesets_variation_ids, path_to_folder)
+    recordMOATSchemeConfigVariations(AV, all_config_variation_ids, path_to_folder)
+    recordMOATSchemeRulesetsVariations(AV, all_rulesets_variation_ids, path_to_folder)
 end
 
-function recordMOATSchemeVariations(DV::Vector{DistributedVariation}, all_variation_ids::Matrix{Int}, path_to_folder::String)
+function recordMOATSchemeConfigVariations(AV::Vector{<:AbstractVariation}, all_config_variation_ids::Matrix{Int}, path_to_folder::String)
     path_to_csv = "$(path_to_folder)/moat_scheme_variations.csv"
-    return recordSensitivityScheme(DV, all_variation_ids, path_to_csv)
+    return recordSensitivityScheme(AV, all_config_variation_ids, path_to_csv)
 end
 
-function recordMOATSchemeRulesetsVariations(DV::Vector{DistributedVariation}, all_rulesets_variation_ids::Matrix{Int}, path_to_folder::String)
+function recordMOATSchemeRulesetsVariations(AV::Vector{DistributedVariation}, all_rulesets_variation_ids::Matrix{Int}, path_to_folder::String)
     path_to_csv = "$(path_to_folder)/moat_scheme_rulesets_variations.csv"
-    return recordSensitivityScheme(DV, all_rulesets_variation_ids, path_to_csv)
+    return recordSensitivityScheme(AV, all_rulesets_variation_ids, path_to_csv)
 end
 
-function perturbVariation(DV::DistributedVariation, variation_id::Int, config_folder::String)
-    base_value = getBaseValue(DV, variation_id, config_folder)
-    cdf_at_base = cdf(DV.distribution, base_value)
+function perturbConfigVariation(av::AbstractVariation, variation_id::Int, folder::String)
+    base_value = getConfigBaseValue(variationColumnName(av), variation_id, folder)
+    addFn = (ev) -> addGridVariation(folder, ev; reference_variation_id=variation_id)
+    return makePerturbation(av, base_value, addFn)
+end
+
+function perturbRulesetsVariation(av::AbstractVariation, variation_id::Int, folder::String)
+    base_value = getRulesetsBaseValue(variationColumnName(av), variation_id, folder)
+    addFn = (ev) -> addGridRulesetsVariation(folder, ev; reference_rulesets_variation_id=variation_id)
+    return makePerturbation(av, base_value, addFn)
+end
+
+function makePerturbation(av::AbstractVariation, base_value, addFn::Function)
+    cdf_at_base = variationCDF(av, base_value)
     dcdf = cdf_at_base < 0.5 ? 0.5 : -0.5
-    new_value = quantile(DV.distribution, cdf_at_base + dcdf)
+    new_value = getVariationValues(av; cdf=cdf_at_base + dcdf)
 
-    new_ev = ElementaryVariation(DV.xml_path, [new_value])
+    new_ev = ElementaryVariation(getVariationXMLPath(av), [new_value])
 
-    new_variation_id = addGridVariation(config_folder, new_ev; reference_variation_id=variation_id)
+    new_variation_id = addFn(new_ev)
     @assert length(new_variation_id) == 1 "Only doing one perturbation at a time"
     return new_variation_id[1]
 end
 
-function getBaseValue(DV::DistributedVariation, variation_id::Int, config_folder::String)
-    column_name = xmlPathToColumnName(DV.xml_path)
+# function perturbVariation(av::AbstractVariation, variation_id::Int, folder_names::AbstractSamplingFolders)
+#     base_value, variation_target = getBaseValue(av, variation_id, folder_names)
+#     cdf_at_base = cdf(av.distribution, base_value)
+#     dcdf = cdf_at_base < 0.5 ? 0.5 : -0.5
+#     new_value = quantile(av.distribution, cdf_at_base + dcdf)
+
+#     new_ev = ElementaryVariation(av.xml_path, [new_value])
+
+#     if variation_target == :config
+#         new_variation_id = addGridVariation(folder_names.config_folder, new_ev; reference_variation_id=variation_id)
+#     elseif variation_target == :rulesets
+#         new_variation_id = addGridRulesetsVariation(folder_names.rulesets_collection_folder, new_ev; reference_rulesets_variation_id=variation_id)
+#     else
+#         error("Unknown variation target: $variation_target")
+#     end
+#     @assert length(new_variation_id) == 1 "Only doing one perturbation at a time"
+#     return new_variation_id[1], variation_target
+# end
+
+function getConfigBaseValue(av::AbstractVariation, variation_id::Int, folder::String)
+    column_name = variationColumnName(av)
+    return getConfigBaseValue(column_name, variation_id, folder)
+end
+
+function getConfigBaseValue(column_name::String, variation_id::Int, folder::String)
     query = constructSelectQuery("variations", "WHERE variation_id=$variation_id;"; selection="\"$(column_name)\"")
-    variation_value_df = queryToDataFrame(query; db=getConfigDB(config_folder), is_row=true)
+    variation_value_df = queryToDataFrame(query; db=getConfigDB(folder), is_row=true)
     return variation_value_df[1,1]
+end
+
+function getRulesetsBaseValue(av::AbstractVariation, variation_id::Int, folder::String)
+    column_name = variationColumnName(av)
+    return getRulesetsBaseValue(column_name, variation_id, folder)
+end
+
+function getRulesetsBaseValue(column_name::String, variation_id::Int, folder::String)
+    query = constructSelectQuery("rulesets_variations", "WHERE rulesets_variation_id=$variation_id;"; selection="\"$(column_name)\"")
+    variation_value_df = queryToDataFrame(query; db=getRulesetsCollectionDB(folder), is_row=true)
+    return variation_value_df[1,1]
+end
+
+function getBaseValue(av::AbstractVariation, variation_id::Int, folder_names::AbstractSamplingFolders)
+    variation_target = variationTarget(av)
+    if variation_target == :config
+        return getConfigBaseValue(av, variation_id, folder_names.config_folder)
+    elseif variation_target == :rulesets
+        return getRulesetsBaseValue(av, variation_id, folder_names.rulesets_collection_folder)
+    else
+        error("Unknown variation target: $variation_target")
+    end
 end
 
 function measureMOATSensitivity(sampling::Sampling, f::Function)
@@ -83,47 +144,54 @@ end
 
 ############# Sobol sequences and sobol indices #############
 
-function sobolSensitivity(n_points::Int, monad_min_length::Int, folder_names::AbstractSamplingFolders, DV::Vector{DistributedVariation}; force_recompile::Bool = true, reference_variation_id::Int=0)
-    all_variation_ids = addSobolSensitivityVariation(n_points, folder_names.config_folder, DV; reference_variation_id=reference_variation_id)
-    all_rulesets_variation_ids = zeros(Int, size(all_variation_ids)) # hard code this for now
-    sampling = Sampling(monad_min_length, folder_names, all_variation_ids[:], all_rulesets_variation_ids[:])
-    recordSobolScheme(sampling, DV, all_variation_ids, all_rulesets_variation_ids)
+function sobolSensitivity(n_points::Int, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; force_recompile::Bool = true, reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
+    all_config_variation_ids, all_rulesets_variation_ids = addSobolSensitivityVariation(n_points, folder_names.config_folder, folder_names.rulesets_collection_folder, AV; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
+    sampling = Sampling(monad_min_length, folder_names, all_config_variation_ids[:], all_rulesets_variation_ids[:])
+    recordSobolScheme(sampling, AV, all_config_variation_ids, all_rulesets_variation_ids)
     n_ran, n_success = runAbstractTrial(sampling; use_previous_sims=true, force_recompile=force_recompile)
     return sampling
 end
 
-function addSobolSensitivityVariation(n::Integer, config_id::Int, DV::Vector{DistributedVariation}; reference_variation_id::Int=0)
-    variation_ids, icdfs = addSobolVariation(n, config_id, DV; reference_variation_id=reference_variation_id, n_matrices=2)
-    d = length(DV)
-    icdfs = reshape(icdfs, (d, 2, n))
-    A = icdfs[:,1,:]
-    variation_ids_A = variation_ids[:,1:d]
-    B = icdfs[:,2,:]
-    variation_ids_B = variation_ids[:,d+1:end]
+function addSobolSensitivityVariation(n::Integer, config_id::Int, rulesets_collection_id::Int, AV::Vector{<:AbstractVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
+    config_variation_ids, rulesets_variation_ids, cdfs, config_variations, rulesets_variations = addVariations(SobolVariation(n; n_matrices=2), config_id, rulesets_collection_id, AV; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
+    d_config = length(config_variations)
+    d_rulesets = length(rulesets_variations)
+    d = d_config + d_rulesets
+    config_variation_ids_A = config_variation_ids[:,1]
+    rulesets_variation_ids_A = rulesets_variation_ids[:,1]
+    A = cdfs[:,1,:] # cdfs is of size (d, 2, n)
+    config_variation_ids_B = config_variation_ids[:,2]
+    rulesets_variation_ids_B = rulesets_variation_ids[:,2]
+    B = cdfs[:,2,:]
     Aᵦ = [copy(A) for _ in 1:d]
-    variation_ids_Aᵦ = zeros(Int, n, d)
+    config_variation_ids_Aᵦ = repeat(config_variation_ids_A, 1, d)
+    rulesets_variation_ids_Aᵦ = repeat(rulesets_variation_ids_A, 1, d)
     for (i, b_row) in enumerate(eachrow(B))
         Aᵦ[i][i,:] = b_row
-        variation_ids_Aᵦ[:,i] = icdfsToVariations(n, Aᵦ[i]', DV, fns...) # a vector of all variation_ids grouped as above
+        if i <= length(config_variations)
+            config_variation_ids_Aᵦ[:,i] = cdfsToVariations(Aᵦ[i][1:length(config_variations),:]', config_variations, prepareVariationFunctions(config_id, config_variations; reference_variation_id=reference_variation_id)...)
+        else
+            rulesets_variation_ids_Aᵦ[:,i] = cdfsToVariations(Aᵦ[i][length(config_variations)+1:end,:]', rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)...)
+        end
     end
-    return hcat(variation_ids_A, variation_ids_B, variation_ids_Aᵦ)
+    return hcat(config_variation_ids_A, config_variation_ids_B, config_variation_ids_Aᵦ), hcat(rulesets_variation_ids_A, rulesets_variation_ids_B, rulesets_variation_ids_Aᵦ)
 end
 
-addSobolSensitivityVariation(n::Integer, config_folder::String, DV::Vector{DistributedVariation}; reference_variation_id::Int=0) = addSobolSensitivityVariation(n, retrieveID("configs", config_folder), DV; reference_variation_id=reference_variation_id)
-addSobolSensitivityVariation(n::Integer, config_id::Int, DV::DistributedVariation; reference_variation_id::Int=0) = addSobolSensitivityVariation(n, config_id, [DV]; reference_variation_id=reference_variation_id)
-addSobolSensitivityVariation(n::Integer, config_folder::String, DV::DistributedVariation; reference_variation_id::Int=0) = addSobolSensitivityVariation(n, retrieveID("configs", config_folder), [DV]; reference_variation_id=reference_variation_id)
+addSobolSensitivityVariation(n::Integer, config_folder::String, rulesets_collection_folder::String, AV::Vector{<:AbstractVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0) = addSobolSensitivityVariation(n, retrieveID("configs", config_folder), retrieveID("rulesets_collections", rulesets_collection_folder), AV; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
+addSobolSensitivityVariation(n::Integer, config_id::Int, rulesets_collection_id::Int, av::AbstractVariation; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0) = addSobolSensitivityVariation(n, config_id, rulesets_collection_id, [av]; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
+addSobolSensitivityVariation(n::Integer, config_folder::String, rulesets_collection_folder::String, av::AbstractVariation; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0) = addSobolSensitivityVariation(n, retrieveID("configs", config_folder), retrieveID("rulesets_collections", rulesets_collection_folder), [av]; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
 
-function recordSobolScheme(sampling::Sampling, DV::Vector{DistributedVariation}, all_variation_ids::Matrix{Int}, all_rulesets_variation_ids::Matrix{Int})
+function recordSobolScheme(sampling::Sampling, DV::Vector{DistributedVariation}, all_config_variation_ids::Matrix{Int}, all_rulesets_variation_ids::Matrix{Int})
     sampling_id = sampling.id
     path_to_folder = "$(data_dir)/outputs/samplings/$(sampling_id)/"
     mkpath(path_to_folder)
-    recordSobolSchemeVariations(DV, all_variation_ids, path_to_folder)
+    recordSobolSchemeVariations(DV, all_config_variation_ids, path_to_folder)
     recordSobolSchemeRulesetsVariations(DV, all_rulesets_variation_ids, path_to_folder)
 end
 
-function recordSobolSchemeVariations(DV::Vector{DistributedVariation}, all_variation_ids::Matrix{Int}, path_to_folder::String)
+function recordSobolSchemeVariations(DV::Vector{DistributedVariation}, all_config_variation_ids::Matrix{Int}, path_to_folder::String)
     path_to_csv = "$(path_to_folder)/sobol_scheme_variations.csv"
-    return recordSensitivityScheme(DV, all_variation_ids, path_to_csv; initial_header_names=["A", "B"])
+    return recordSensitivityScheme(DV, all_config_variation_ids, path_to_csv; initial_header_names=["A", "B"])
 end
 
 function recordSobolSchemeRulesetsVariations(DV::Vector{DistributedVariation}, all_rulesets_variation_ids::Matrix{Int}, path_to_folder::String)
@@ -182,28 +250,26 @@ end
 
 ############# Random Balance Design (RBD) #############
 
-function rbdSensitivity(n_points::Int, monad_min_length::Int, folder_names::AbstractSamplingFolders, DV::Vector{DistributedVariation}; force_recompile::Bool = true, reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true)
-    all_variation_ids, variations_matrix = addRBDVariation(n_points, folder_names.config_folder, DV; reference_variation_id=reference_variation_id, rng=rng, use_sobol=use_sobol)
-    all_rulesets_variation_ids = reference_rulesets_variation_id .+ zeros(Int, size(all_variation_ids)) # hard code this for now
-    rulesets_variations_matrix = reference_rulesets_variation_id .+ zeros(Int, size(variations_matrix)) # hard code this for now
-    sampling = Sampling(monad_min_length, folder_names, all_variation_ids[:], all_rulesets_variation_ids[:])
-    recordRBDScheme(sampling, DV, variations_matrix, rulesets_variations_matrix)
+function rbdSensitivity(n_points::Int, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; force_recompile::Bool = true, reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true)
+    config_variation_ids, rulesets_variation_ids, variations_matrix, rulesets_variations_matrix = addVariations(RBDVariation(n_points, rng, use_sobol), folder_names.config_folder, folder_names.rulesets_collection_folder, AV; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
+    sampling = Sampling(monad_min_length, folder_names, config_variation_ids[:], rulesets_variation_ids[:])
+    recordRBDScheme(sampling, AV, variations_matrix, rulesets_variations_matrix)
     n_ran, n_success = runAbstractTrial(sampling; use_previous_sims=true, force_recompile=force_recompile)
     return sampling
 end
 
-function recordRBDScheme(sampling::Sampling, DV::Vector{DistributedVariation}, variations_matrix::Matrix{Int}, rulesets_variations_matrix::Matrix{Int})
-    d = length(DV)
+function recordRBDScheme(sampling::Sampling, AV::Vector{<:AbstractVariation}, variations_matrix::Matrix{Int}, rulesets_variations_matrix::Matrix{Int})
+    d = length(AV)
     sampling_id = sampling.id
     path_to_folder = "$(data_dir)/outputs/samplings/$(sampling_id)/"
     mkpath(path_to_folder)
-    recordRBDSchemeVariations(DV, variations_matrix, path_to_folder)
-    recordRBDSchemeRulesetsVariations(DV, rulesets_variations_matrix, path_to_folder)
+    recordRBDSchemeVariations(AV, variations_matrix, path_to_folder)
+    recordRBDSchemeRulesetsVariations(AV, rulesets_variations_matrix, path_to_folder)
 end
 
-function recordRBDSchemeVariations(DV::Vector{DistributedVariation}, all_variation_ids::Matrix{Int}, path_to_folder::String)
+function recordRBDSchemeVariations(DV::Vector{DistributedVariation}, all_config_variation_ids::Matrix{Int}, path_to_folder::String)
     path_to_csv = "$(path_to_folder)/rbd_scheme_variations.csv"
-    return recordSensitivityScheme(DV, all_variation_ids, path_to_csv; initial_header_names=String[])
+    return recordSensitivityScheme(DV, all_config_variation_ids, path_to_csv; initial_header_names=String[])
 end
 
 function recordRBDSchemeRulesetsVariations(DV::Vector{DistributedVariation}, all_rulesets_variation_ids::Matrix{Int}, path_to_folder::String)
@@ -213,9 +279,9 @@ end
 
 ############# Generic Helper Functions #############
 
-function recordSensitivityScheme(DV::Vector{DistributedVariation}, all_variation_ids::Matrix{Int}, path_to_csv::String; initial_header_names::Vector{String}=["base"])
-    header_line = [initial_header_names..., [xmlPathToColumnName(dv.xml_path) for dv in DV]...]
-    lines_df = DataFrame(all_variation_ids, header_line)
+function recordSensitivityScheme(AV::Vector{<:AbstractVariation}, all_config_variation_ids::Matrix{Int}, path_to_csv::String; initial_header_names::Vector{String}=["base"])
+    header_line = [initial_header_names..., [variationColumnName(av) for av in AV]...]
+    lines_df = DataFrame(all_config_variation_ids, header_line)
     return CSV.write(path_to_csv, lines_df; writeheader=true)
 end
 
@@ -228,7 +294,6 @@ function evaluateFunctionOnSampling(sampling::Sampling, f::Function)
         rulesets_variation_id = monad.rulesets_variation_id
         simulation_ids = getMonadSimulations(monad_id)
         sim_values = [f(simulation_id) for simulation_id in simulation_ids]
-        println("sim_values = $sim_values")
         value = sim_values |> mean
         value_dict[(variation_id, rulesets_variation_id)] = value
     end

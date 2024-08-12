@@ -207,36 +207,15 @@ end
 
 ################## Variation Dimension Functions ##################
 
-abstract type AbstractVariation end
-struct ElementaryVariation{T} <: AbstractVariation
-    xml_path::Vector{String}
-    values::Vector{T}
-end
-
-ElementaryVariation{T}(xml_path::Vector{String}, value::T) where T = ElementaryVariation{T}(xml_path, [value])
-
-struct DistributedVariation <: AbstractVariation
-    xml_path::Vector{String}
-    distribution::Distribution
-end
-
-function UniformDistributedVariation(xml_path::Vector{String}, lb::T, ub::T) where {T<:Real}
-    return DistributedVariation(xml_path, Uniform(lb, ub))
-end
-
-function NormalDistributedVariation(xml_path::Vector{String}, mu::T, sigma::T; lb::Real=-Inf, ub::Real=Inf) where {T<:Real}
-    return DistributedVariation(xml_path, Truncated(Normal(mu, sigma), lb, ub))
-end
-
-function addDomainVariationDimension!(EV::Vector{<:ElementaryVariation}, domain::NTuple{N,Real} where N) 
+function addDomainVariationDimension!(AV::Vector{<:AbstractVariation}, domain::NTuple{N,Real} where N) 
     bounds_tags = ["x_min", "x_max", "y_min", "y_max", "z_min", "z_max"]
     for (tag, value) in zip(bounds_tags, domain)
         xml_path = ["domain", tag]
-        push!(EV, ElementaryVariation(xml_path, [value]))
+        push!(AV, ElementaryVariation(xml_path, [value]))
     end
 end
 
-function addDomainVariationDimension!(EV::Vector{<:ElementaryVariation}, domain::NamedTuple)
+function addDomainVariationDimension!(AV::Vector{<:AbstractVariation}, domain::NamedTuple)
     for (tag, value) in pairs(domain)
         tag = String(tag)
         if startswith("min", tag)
@@ -247,26 +226,26 @@ function addDomainVariationDimension!(EV::Vector{<:ElementaryVariation}, domain:
             tag = "$(last_character)_max"
         end
         xml_path = ["domain", tag]
-        push!(EV, ElementaryVariation(xml_path, [value...])) # do this to make sure that singletons and vectors are converted to vectors
+        push!(AV, ElementaryVariation(xml_path, [value...])) # do this to make sure that singletons and vectors are converted to vectors
     end
 end
 
-function addMotilityVariationDimension!(EV::Vector{<:ElementaryVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
+function addMotilityVariationDimension!(AV::Vector{<:AbstractVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
     xml_path = motilityPath(cell_definition, field_name)
-    push!(EV, ElementaryVariation(xml_path, values))
+    push!(AV, ElementaryVariation(xml_path, values))
 end
 
-function addAttackRateVariationDimension!(EV::Vector{<:ElementaryVariation}, cell_definition::String, target_name::String, values::Vector{T} where T)
+function addAttackRateVariationDimension!(AV::Vector{<:AbstractVariation}, cell_definition::String, target_name::String, values::Vector{T} where T)
     xml_path = attackRatesPath(cell_definition, target_name)
-    push!(EV, ElementaryVariation(xml_path, values))
+    push!(AV, ElementaryVariation(xml_path, values))
 end
 
-function addCustomDataVariationDimension!(EV::Vector{<:ElementaryVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
+function addCustomDataVariationDimension!(AV::Vector{<:AbstractVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
     xml_path = customDataPath(cell_definition, field_name)
-    push!(EV, ElementaryVariation(xml_path, values))
+    push!(AV, ElementaryVariation(xml_path, values))
 end
 
-function addCustomDataVariationDimension!(EV::Vector{<:ElementaryVariation}, cell_definition::String, field_names::Vector{String}, values::Vector{Vector})
+function addCustomDataVariationDimension!(AV::Vector{<:AbstractVariation}, cell_definition::String, field_names::Vector{String}, values::Vector{Vector})
     for (field_name, value) in zip(field_names,values)
         addCustomDataVariationDimension!(EV, cell_definition, field_name, value)
     end
