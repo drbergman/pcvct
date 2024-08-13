@@ -13,7 +13,7 @@ struct DistributedVariation <: AbstractVariation
     distribution::Distribution
 end
 
-getVariationXMLPath(av::AbstractVariation) = av.xml_path
+getVariationXMLPath(av::AbstractVariation) = av.xml_path::Vector{String}
 variationColumnName(av::AbstractVariation) = getVariationXMLPath(av) |> xmlPathToColumnName
 
 function UniformDistributedVariation(xml_path::Vector{String}, lb::T, ub::T) where {T<:Real}
@@ -183,9 +183,11 @@ function prepareAddNew(db_columns::SQLite.DB, static_column_names::Vector{String
     else
         query = constructSelectQuery(table_name, "WHERE $(id_name)=$(reference_id);"; selection=join("\"" .* static_column_names .* "\"", ", "))
         static_values = queryToDataFrame(query, db=db_columns) |> x -> join(x |> eachcol .|> c -> "\"$(string(c[1]))\"", ",")
-        static_values *= ","
         table_features = join("\"" .* static_column_names .* "\"", ",")
-        table_features *= ","
+        if !isempty(varied_column_names)
+            static_values *= ","
+            table_features *= ","
+        end
     end
     table_features *= join("\"" .* varied_column_names .* "\"", ",")
     return static_values, table_features
