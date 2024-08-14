@@ -1,4 +1,4 @@
-using Distributions, DataFrames, CSV, Sobol
+using Distributions, DataFrames, CSV, Sobol, FFTW
 
 ############# Morris One-At-A-Time (MOAT) #############
 
@@ -256,6 +256,29 @@ end
 function recordRBDSchemeRulesetsVariations(DV::Vector{DistributedVariation}, all_rulesets_variation_ids::Matrix{Int}, path_to_folder::String)
     path_to_csv = "$(path_to_folder)/rbd_scheme_rulesets_variations.csv"
     return recordSensitivityScheme(DV, all_rulesets_variation_ids, path_to_csv; initial_header_names=String[])
+end
+
+function readRBDScheme(path_to_folder::String, scheme::String)
+    path_to_csv = "$(path_to_folder)/rbd_scheme_$(scheme).csv"
+    if !isfile(path_to_csv)
+        error("No RBD scheme found at $path_to_csv")
+    end
+    df = CSV.read(path_to_csv, DataFrame)
+    return Matrix(df)
+end
+
+function measureRBDSensitivity(sampling::Sampling, f::Function)
+    value_dict = evaluateFunctionOnSampling(sampling, f)
+    variation_id_matrix, rulesets_variation_id_matrix = readSensitivityScheme(sampling, readRBDScheme)
+    values = zeros(Float64, size(variation_id_matrix))
+    for (ind, (variation_id, rulesets_variation_id)) in enumerate(zip(variation_id_matrix, rulesets_variation_id_matrix))
+        values[ind] = value_dict[(variation_id, rulesets_variation_id)]
+    end
+    ys = fft(values, 1) .|> abs2
+    ys ./= size(values, 1)
+    V = sum(ys[2:end,:], dims=1)
+    Vi = 2*sum(ys[2:(num_harmonics+1),:], dims=1)
+    return Vi ./ V
 end
 
 ############# Generic Helper Functions #############
