@@ -267,7 +267,7 @@ function readRBDScheme(path_to_folder::String, scheme::String)
     return Matrix(df)
 end
 
-function measureRBDSensitivity(sampling::Sampling, f::Function)
+function measureRBDSensitivity(sampling::Sampling, f::Function; num_harmonics::Int=6)
     value_dict = evaluateFunctionOnSampling(sampling, f)
     variation_id_matrix, rulesets_variation_id_matrix = readSensitivityScheme(sampling, readRBDScheme)
     values = zeros(Float64, size(variation_id_matrix))
