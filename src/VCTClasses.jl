@@ -132,6 +132,11 @@ function Monad(min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::A
     return Monad(monad_id, min_length, simulation_ids, folder_ids, folder_names, variation_id, rulesets_variation_id) # return the monad
 end
 
+function Monad(min_length::Int, folder_names::AbstractSamplingFolders, variation_id::Int, rulesets_variation_id::Int) 
+    folder_ids = AbstractSamplingIDs(folder_names)
+    return Monad(min_length, folder_ids, folder_names, variation_id, rulesets_variation_id)
+end
+
 function getMonad(monad_id::Int)
     df = constructSelectQuery("monads", "WHERE monad_id=$(monad_id);") |> queryToDataFrame
     simulation_ids = getMonadSimulations(monad_id)
@@ -186,8 +191,7 @@ function Sampling(monad_min_length::Int, config_id::Int, rulesets_collection_id:
     return Sampling(monad_min_length, folder_ids, variation_ids, rulesets_variation_ids)
 end
 
-function Sampling(monad_min_length::Int, folder_ids::AbstractSamplingIDs, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int}; 
-    )
+function Sampling(monad_min_length::Int, folder_ids::AbstractSamplingIDs, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int})
     folder_names = AbstractSamplingFolders(folder_ids)
     return Sampling(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
 end
@@ -235,6 +239,15 @@ function Sampling(monad_min_length::Int, folder_ids::AbstractSamplingIDs, folder
         id = DBInterface.execute(db, "INSERT INTO samplings (config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id) VALUES($(folder_ids.config_id),$(folder_ids.rulesets_collection_id),$(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),$(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id)) RETURNING sampling_id;") |> DataFrame |> x -> x.sampling_id[1] # get the sampling_id
     end
     return Sampling(id, monad_min_length, monad_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
+end
+
+function Sampling(monad_min_length::Int, monads::Array{AbstractMonad})
+    folder_ids = [monad.folder_ids for monad in monads]
+    folder_names = [monad.folder_names for monad in monads]
+    variation_ids = [monad.variation_id for monad in monads]
+    rulesets_variation_ids = [monad.rulesets_variation_id for monad in monads]
+    monad_ids = [monad.id for monad in monads]
+    return Sampling(monad_min_length, monad_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
 end
 
 function createMonadIDs(monad_min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_ids::Vector{Int}, rulesets_variation_ids::Vector{Int})

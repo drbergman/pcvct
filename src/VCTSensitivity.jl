@@ -20,18 +20,28 @@ function moatSensitivity(n_points::Int, monad_min_length::Int, folder_names::Abs
     end
     all_config_variation_ids = hcat(config_variation_ids, perturbed_config_variation_ids)
     all_rulesets_variation_ids = hcat(rulesets_variation_ids, perturbed_rulesets_variation_ids)
-    sampling = Sampling(monad_min_length, folder_names, all_config_variation_ids[:], all_rulesets_variation_ids[:])
-    recordMOATScheme(sampling, AV, all_config_variation_ids, all_rulesets_variation_ids)
+    monad_dict = Dict{Tuple{Int, Int}, Monad}()
+    monad_ids = zeros(Int, size(all_config_variation_ids))
+    for (i, (variation_id, rulesets_variation_id)) in enumerate(zip(all_config_variation_ids, all_rulesets_variation_ids))
+        if (variation_id, rulesets_variation_id) in keys(monad_dict)
+            monad_ids[i] = monad_dict[(variation_id, rulesets_variation_id)].id
+            continue
+        end
+        monad = Monad(monad_min_length, folder_names, variation_id, rulesets_variation_id)
+        monad_dict[(variation_id, rulesets_variation_id)] = monad
+        monad_ids[i] = monad.id
+    end
+    sampling = Sampling(monad_min_length, monad_dict |> values |> collect)
+    recordMOATScheme(sampling, AV, monad_ids)
     n_ran, n_success = runAbstractTrial(sampling; use_previous_sims=true, force_recompile=force_recompile)
     return sampling
 end
 
-function recordMOATScheme(sampling::Sampling, AV::Vector{<:AbstractVariation}, all_config_variation_ids::Matrix{Int}, all_rulesets_variation_ids::Matrix{Int})
+function recordMOATScheme(sampling::Sampling, AV::Vector{<:AbstractVariation}, monad_ids::Matrix{Int})
     sampling_id = sampling.id
     path_to_folder = "$(data_dir)/outputs/samplings/$(sampling_id)/"
     mkpath(path_to_folder)
-    recordMOATSchemeConfigVariations(AV, all_config_variation_ids, path_to_folder)
-    recordMOATSchemeRulesetsVariations(AV, all_rulesets_variation_ids, path_to_folder)
+    return recordSensitivityScheme(AV, monad_ids, "$(path_to_folder)/moat_scheme.csv")
 end
 
 function recordMOATSchemeConfigVariations(AV::Vector{<:AbstractVariation}, all_config_variation_ids::Matrix{Int}, path_to_folder::String)
@@ -283,9 +293,9 @@ end
 
 ############# Generic Helper Functions #############
 
-function recordSensitivityScheme(AV::Vector{<:AbstractVariation}, all_config_variation_ids::Matrix{Int}, path_to_csv::String; initial_header_names::Vector{String}=["base"])
+function recordSensitivityScheme(AV::Vector{<:AbstractVariation}, monad_ids::Matrix{Int}, path_to_csv::String; initial_header_names::Vector{String}=["base"])
     header_line = [initial_header_names..., [variationColumnName(av) for av in AV]...]
-    lines_df = DataFrame(all_config_variation_ids, header_line)
+    lines_df = DataFrame(monad_ids, header_line)
     return CSV.write(path_to_csv, lines_df; writeheader=true)
 end
 
