@@ -56,6 +56,6 @@ function compressIDs(ids::Vector{Int})
     return Tables.table(lines)
 end
 
-compressSimulationIDs(simulation_ids::Array{Int}) = simulation_ids |> vec |> sort |> compressIDs
-compressMonadIDs(monad_ids::Array{Int}) = monad_ids |> vec |> sort |> compressIDs
-compressSamplingIDs(sampling_ids::Array{Int}) = sampling_ids |> vec |> sort |> compressIDs
+compressSimulationIDs(simulation_ids::Array{Int}) = simulation_ids |> vec |> unique |> sort |> compressIDs
+compressMonadIDs(monad_ids::Array{Int}) = monad_ids |> vec |> unique |> sort |> compressIDs
+compressSamplingIDs(sampling_ids::Array{Int}) = sampling_ids |> vec |> unique |> sort |> compressIDs
