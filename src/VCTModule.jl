@@ -117,4 +117,11 @@ function getSimulations(class_id::VCTClassID)
     end
 end
 
+################## Miscellaneous Functions ##################
+
+function getOutputFolder(T::AbstractTrial)
+    name = typeof(T) |> string |> lowercase
+    return "$(data_dir)/outputs/$(name)s/$(T.id)"
+end
+
 end

@@ -174,12 +174,12 @@ function resetDatabase(; force_reset::Bool=false, force_continue::Bool=false)
         println("Are you sure you want to reset the database? (y/n)")
         response = readline()
         if response != "y" # make user be very specific about resetting
-            println("You entered '$response'.\n\tResetting the database has been cancelled.")
+            println("\tYou entered '$response'.\n\tResetting the database has been cancelled.")
             if !force_continue
-                println("\n\tDo you want to continue with the script? (y/n)")
+                println("\nDo you want to continue with the script? (y/n)")
                 response = readline()
                 if response != "y" # make user be very specific about continuing
-                    println("You entered '$response'.\n\tThe script has been cancelled.")
+                    println("\tYou entered '$response'.\n\tThe script has been cancelled.")
                     error("Script cancelled.")
                 end
                 println("You entered '$response'.\n\tThe script will continue.")

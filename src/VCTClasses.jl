@@ -137,6 +137,11 @@ function Monad(min_length::Int, folder_names::AbstractSamplingFolders, variation
     return Monad(min_length, folder_ids, folder_names, variation_id, rulesets_variation_id)
 end
 
+function Monad(folder_names::AbstractSamplingFolders, variation_id::Int, rulesets_variation_id::Int)
+    min_length = 0 # not making a monad to run if not supplying the min_length info
+    Monad(min_length, folder_names, variation_id, rulesets_variation_id)
+end
+
 function getMonad(monad_id::Int)
     df = constructSelectQuery("monads", "WHERE monad_id=$(monad_id);") |> queryToDataFrame
     simulation_ids = getMonadSimulations(monad_id)
@@ -213,7 +218,10 @@ end
 
 function Sampling(monad_min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int})
     monad_ids = createMonadIDs(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
-    
+    return Sampling(monad_min_length, monad_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
+end
+
+function Sampling(monad_min_length::Int, monad_ids::Array{Int}, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int})
     id = -1
     sampling_ids = constructSelectQuery(
         "samplings",
@@ -241,9 +249,15 @@ function Sampling(monad_min_length::Int, folder_ids::AbstractSamplingIDs, folder
     return Sampling(id, monad_min_length, monad_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
 end
 
-function Sampling(monad_min_length::Int, monads::Array{AbstractMonad})
-    folder_ids = [monad.folder_ids for monad in monads]
-    folder_names = [monad.folder_names for monad in monads]
+function Sampling(monad_min_length::Int, monads::Array{<:AbstractMonad})
+    folder_ids = monads[1].folder_ids
+    for monad in monads
+        if monad.folder_ids != folder_ids
+            error("All monads must have the same folder_ids")
+            # could choose to make a trial from these here...
+        end
+    end
+    folder_names = monads[1].folder_names
     variation_ids = [monad.variation_id for monad in monads]
     rulesets_variation_ids = [monad.rulesets_variation_id for monad in monads]
     monad_ids = [monad.id for monad in monads]

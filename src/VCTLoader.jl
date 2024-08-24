@@ -125,13 +125,15 @@ end
 # population functions
 
 function populationCount(snapshot::PhysiCellSnapshot; include_dead::Bool=false)
-    unique_cell_types = unique(snapshot.cells[!,:cell_type])
-    data = Dict{Int, Int}(zip(unique_cell_types, zeros(Int, length(unique_cell_types))))
-    for row in eachrow(snapshot.cells)
-        if !include_dead && row[:dead]
-            continue
-        end
-        data[row.cell_type] += 1
+    data = Dict{Int, Int}()
+    if include_dead
+        cell_df = snapshot.cells
+    else
+        cell_df = @view snapshot.cells[snapshot.cells.dead .== false, :]
+    end
+    unique_cell_types = unique(cell_df.cell_type)
+    for cell_type in unique_cell_types
+        data[cell_type] = count(x -> x == cell_type, cell_df.cell_type)
     end
     return data
 end
