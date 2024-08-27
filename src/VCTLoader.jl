@@ -6,7 +6,7 @@ abstract type AbstractPhysiCellSequence end
 
 struct PhysiCellSnapshot <: AbstractPhysiCellSequence
     folder::String
-    index::Int
+    index::{Int, Symbol}
     time::Float64
     cells::DataFrame
 end
@@ -37,9 +37,10 @@ function getLabels(xml_doc::XMLDocument)
     return labels
 end
 
-function PhysiCellSnapshot(folder::String, index::Int; labels::Vector{String}=String[])
-    xml_doc = VCTModule.openXML("$(folder)/output$(lpad(index,8,"0")).xml")
-    mat_file = "$(folder)/output$(lpad(index,8,"0"))_cells.mat"
+function PhysiCellSnapshot(folder::String, filename_base::String; labels::Vector{String}=String[])
+    filepath_base = "$(folder)/$(filename_base)"
+    xml_doc = VCTModule.openXML("$(filepath_base).xml")
+    mat_file = "$(filepath_base)_cells.mat"
     time = VCTModule.getField(xml_doc, ["metadata","current_time"]) |> x->parse(Float64, x)
     if isempty(labels)
         labels = getLabels(xml_doc)
@@ -50,6 +51,17 @@ function PhysiCellSnapshot(folder::String, index::Int; labels::Vector{String}=St
     cells[!,:cell_type] = convert.(Int,cells[!,:cell_type])
     VCTModule.closeXML(xml_doc)
     return PhysiCellSnapshot(folder, index, time, DataFrame(cells))
+end
+
+function PhysiCellSnapshot(folder::String, index::Int; labels::Vector{String}=String[])
+    filename_base = "output$(lpad(index,8,"0"))"
+    return PhysiCellSnapshot(folder, filename_base; labels=labels)
+end
+
+function PhysiCellSnapshot(folder::String, index::Symbol; labels::Vector{String}=String[])
+    @assert index in [:initial, :final] "The non-integer index must be either :initial or :final"
+    filename_base = string(index)
+    return PhysiCellSnapshot(folder, filename_base; labels=labels)
 end
 
 function PhysiCellSequence(folder::String)
@@ -166,11 +178,7 @@ function populationTimeSeries(simulation_id::Int; include_dead::Bool=false)
 end
 
 function finalPopulationCount(folder::String; include_dead::Bool=false)
-    n = 0
-    while isfile("$(folder)/output$(lpad(n+1,8,"0")).xml")
-        n += 1
-    end
-    final_snapshot = PhysiCellSnapshot(folder, n)
+    final_snapshot = PhysiCellSnapshot(folder, "final")
     return populationCount(final_snapshot; include_dead=include_dead)
 end
 

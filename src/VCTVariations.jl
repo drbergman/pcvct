@@ -218,16 +218,46 @@ LHSVariation(n; add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG, ortho
 struct SobolVariation <: AddVariationMethod
     n::Int
     n_matrices::Int
+    randomization::RandomizationMethod
+    skip_start::Union{Missing, Bool, Int}
+    include_one::Union{Missing, Bool}
 end
-SobolVariation(n::Int; n_matrices::Int=1) = SobolVariation(n, n_matrices)
-SobolVariation(; pow2::Int=1, n_matrices::Int=1) = SobolVariation(2^pow2, n_matrices)
+SobolVariation(n::Int; n_matrices::Int=1, randomization::RandomizationMethod=NoRand(), skip_start::Union{Missing, Bool, Int}=missing, include_one::Union{Missing, Bool}=missing) = SobolVariation(n, n_matrices, randomization, skip_start, include_one)
+SobolVariation(; pow2::Int=1, n_matrices::Int=1, randomization::RandomizationMethod=NoRand(), skip_start::Union{Missing, Bool, Int}=missing, include_one::Union{Missing, Bool}=missing) = SobolVariation(2^pow2, n_matrices, randomization, skip_start, include_one)
 
 struct RBDVariation <: AddVariationMethod
     n::Int
     rng::AbstractRNG
     use_sobol::Bool
+    pow2_diff::Union{Missing, Int}
+    num_cycles::Rational
+
+    function RBDVariation(n::Int, rng::AbstractRNG, use_sobol::Bool, pow2_diff::Union{Missing, Int}, num_cycles::Union{Missing, Int, Rational})
+        if use_sobol
+            k = log2(n) |> round |> Int # nearest power of 2 to n
+            if ismissing(pow2_diff)
+                pow2_diff = n - 2^k
+            else
+                @assert pow2_diff == n - 2^k "pow2_diff must be n - 2^k for RBDVariation with Sobol sequence"
+            end
+            @assert abs(pow2_diff) <= 1 "n must be within 1 of a power of 2 for RBDVariation with Sobol sequence"
+            if ismissing(num_cycles)
+                num_cycles = 1//2
+            else
+                @assert num_cycles == 1//2 "num_cycles must be 1//2 for RBDVariation with Sobol sequence"
+            end
+        else
+            pow2_diff = missing # not used in this case
+            if ismissing(num_cycles)
+                num_cycles = 1
+            else
+                @assert num_cycles == 1 "num_cycles must be 1 for RBDVariation with random sequence"
+            end
+        end
+        return new(n, rng, use_sobol, pow2_diff, num_cycles)
+    end
 end
-RBDVariation(n::Int; rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true) = RBDVariation(n, rng, use_sobol)
+RBDVariation(n::Int; rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true, pow2_diff=missing, num_cycles=missing) = RBDVariation(n, rng, use_sobol, pow2_diff, num_cycles)
 
 function addVariations(method::AddVariationMethod, config_id::Int, rulesets_collection_id::Int, AV::Vector{<:AbstractVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0) 
     config_variations, rulesets_variations = parseVariations(AV)
@@ -236,20 +266,20 @@ end
 
 addVariations(method::AddVariationMethod, config_folder::String, rulesets_collection_folder::String, AV::Vector{<:AbstractVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0) = addVariations(method, retrieveID("configs", config_folder), retrieveID("rulesets_collections", rulesets_collection_folder), AV; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
 
-function addParsedVariations(method::GridVariation, config_id::Int, rulesets_collection_id::Int, config_variations::Vector{<:AbstractVariation}, rulesets_variations::Vector{<:AbstractVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
-    return addGridCombo(config_id, rulesets_collection_id, config_variations, rulesets_variations; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
+function addParsedVariations(grid_variation::GridVariation, config_id::Int, rulesets_collection_id::Int, config_variations::Vector{<:AbstractVariation}, rulesets_variations::Vector{<:AbstractVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
+    return addGridCombo(grid_variation, config_id, rulesets_collection_id, config_variations, rulesets_variations; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
 end
 
-function addParsedVariations(method::LHSVariation, config_id::Int, rulesets_collection_id::Int, config_variations::Vector{<:AbstractVariation}, rulesets_variations::Vector{<:AbstractVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
-    addLHSCombo(method.n, config_id, rulesets_collection_id, config_variations, rulesets_variations; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, add_noise=method.add_noise, rng=method.rng, orthogonalize=method.orthogonalize)
+function addParsedVariations(lhs_variation::LHSVariation, config_id::Int, rulesets_collection_id::Int, config_variations::Vector{<:AbstractVariation}, rulesets_variations::Vector{<:AbstractVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
+    addLHSCombo(lhs_variation, config_id, rulesets_collection_id, config_variations, rulesets_variations; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
 end
 
-function addParsedVariations(method::SobolVariation, config_id::Int, rulesets_collection_id::Int, config_variations::Vector{<:AbstractVariation}, rulesets_variations::Vector{<:AbstractVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
-   addSobolCombo(method.n, config_id, rulesets_collection_id, config_variations, rulesets_variations; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, n_matrices=method.n_matrices)
+function addParsedVariations(sobol_variation::SobolVariation, config_id::Int, rulesets_collection_id::Int, config_variations::Vector{<:AbstractVariation}, rulesets_variations::Vector{<:AbstractVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
+   addSobolCombo(sobol_variation, config_id, rulesets_collection_id, config_variations, rulesets_variations; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
 end
 
-function addParsedVariations(method::RBDVariation, config_id::Int, rulesets_collection_id::Int, config_variations::Vector{<:AbstractVariation}, rulesets_variations::Vector{<:AbstractVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
-    addRBDCombo(method.n, config_id, rulesets_collection_id, config_variations, rulesets_variations; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, rng=method.rng, use_sobol=method.use_sobol)
+function addParsedVariations(rbd_variation::RBDVariation, config_id::Int, rulesets_collection_id::Int, config_variations::Vector{<:AbstractVariation}, rulesets_variations::Vector{<:AbstractVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
+    addRBDCombo(rbd_variation, config_id, rulesets_collection_id, config_variations, rulesets_variations; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
 end
 
 function parseVariations(AV::Vector{<:AbstractVariation})
@@ -303,7 +333,7 @@ addGridRulesetsVariation(rulesets_collection_folder::String, AV::Vector{<:Abstra
 addGridRulesetsVariation(rulesets_collection_id::Int, AV::AbstractVariation; reference_rulesets_variation_id::Int=0) = addGridRulesetsVariation(rulesets_collection_id, [AV]; reference_rulesets_variation_id=reference_rulesets_variation_id)
 addGridRulesetsVariation(rulesets_collection_folder::String, AV::AbstractVariation; reference_rulesets_variation_id::Int=0) = addGridRulesetsVariation(rulesets_collection_folder, [AV]; reference_rulesets_variation_id=reference_rulesets_variation_id)
 
-function addGridCombo(config_id::Int, rulesets_collection_id::Int, config_variations::Vector{<:AbstractVariation}, rulesets_variations::Vector{<:AbstractVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
+function addGridCombo(grid_variation::GridVariation, config_id::Int, rulesets_collection_id::Int, config_variations::Vector{<:AbstractVariation}, rulesets_variations::Vector{<:AbstractVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
     config_variation_ids = addGridVariation(config_id, config_variations; reference_variation_id=reference_variation_id)
     rulesets_variation_ids = addGridRulesetsVariation(rulesets_collection_id, rulesets_variations; reference_rulesets_variation_id=reference_rulesets_variation_id)
     all_variation_ids = repeat(vec(config_variation_ids), inner = length(rulesets_variation_ids))
@@ -404,16 +434,16 @@ addLHSRulesetsVariation(n::Integer, rulesets_collection_folder::String, AV::Vect
 addLHSRulesetsVariation(n::Integer, rulesets_collection_id::Int, AV::AbstractVariation; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSRulesetsVariation(n, rulesets_collection_id, [AV]; reference_variation_id=reference_variation_id, add_noise=add_noise, rng=rng)
 addLHSRulesetsVariation(n::Integer, rulesets_collection_folder::String, AV::AbstractVariation; reference_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSRulesetsVariation(n, rulesets_collection_folder, [AV]; reference_variation_id=reference_variation_id, add_noise=add_noise, rng=rng)
 
-function addLHSCombo(n::Int, config_id::Int, rulesets_collection_id::Int, config_variations::Vector{<:AbstractVariation}, rulesets_variations::Vector{<:AbstractVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG, orthogonalize::Bool=true)
+function addLHSCombo(lhs_variation::LHSVariation, config_id::Int, rulesets_collection_id::Int, config_variations::Vector{<:AbstractVariation}, rulesets_variations::Vector{<:AbstractVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
     d = length(config_variations) + length(rulesets_variations)
-    cdfs = generateLHSCDFs(n, d; add_noise=add_noise, rng=rng, orthogonalize=orthogonalize)
+    cdfs = generateLHSCDFs(lhs_variation.n, d; add_noise=lhs_variation.add_noise, rng=lhs_variation.rng, orthogonalize=lhs_variation.orthogonalize)
     if isempty(config_variations)
-        config_variation_ids = fill(reference_variation_id, n)
+        config_variation_ids = fill(reference_variation_id, lhs_variation.n)
     else
         config_variation_ids = cdfsToVariations(cdfs[:, 1:length(config_variations)], config_variations, prepareVariationFunctions(config_id, config_variations; reference_variation_id=reference_variation_id)...)
     end
     if isempty(rulesets_variations)
-        rulesets_variation_ids = fill(reference_rulesets_variation_id, n)
+        rulesets_variation_ids = fill(reference_rulesets_variation_id, lhs_variation.n)
     else
         rulesets_variation_ids = cdfsToVariations(cdfs[:, length(config_variations)+1:end], rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)...)
     end
@@ -422,139 +452,191 @@ end
 
 ################## Sobol Sequence Sampling Functions ##################
 
-function generateSobolCDFs(n::Int, d::Int; n_matrices::Int=1, T::Type=Float64, R::RandomizationMethod=NoRand(), skip_start::Union{Missing, Bool, Int}=missing)
+function generateSobolCDFs(n::Int, d::Int; n_matrices::Int=1, T::Type=Float64, randomization::RandomizationMethod=NoRand(), skip_start::Union{Missing, Bool, Int}=missing, include_one::Union{Missing, Bool}=missing)
     s = Sobol.SobolSeq(d * n_matrices)
-    if ismissing(skip_start) || skip_start == false
-        cdfs = randomize(reduce(hcat, [zeros(Float64, n_matrices*d), [next!(s) for i in 1:n-1]...]), R)
+    if ismissing(skip_start) # default to this
+        if ispow2(n + 1) # then n = 2^k - 1
+            skip_start = 1 # skip the first point (0)
+        else
+            skip_start = false # don't skip the first point (0)
+            if ispow2(n - 1) # then n = 2^k + 1
+                include_one |= ismissing(include_one) # unless otherwise specified, assume the +1 is to get the boundary 1 included as well
+            elseif ispow2(n) # then n = 2^k
+                nothing # including 0, grab the first 2^k points
+            else # not within 1 of a power of 2, just start at the beginning?
+                nothing
+            end
+        end
+    end
+    if skip_start == false # false or 0
+        cdfs = randomize(reduce(hcat, [zeros(T, n_matrices * d), [next!(s) for i in 1:n-1]...]), randomization)
     else
         cdfs = Matrix{T}(undef, d * n_matrices, n)
-        num_to_skip = skip_start == true ? ((1 << (floor(Int, log2(n - 1)) + 1)) - 1) : skip_start
+        num_to_skip = skip_start === true ? ((1 << (floor(Int, log2(n - 1)) + 1))) : skip_start
+        num_to_skip -= 1 # the SobolSeq already skips 0
         for _ in 1:num_to_skip
             Sobol.next!(s)
         end
         for col in eachcol(cdfs)
             Sobol.next!(s, col)
         end
-        cdfs = randomize(cdfs, R)
+        cdfs = randomize(cdfs, randomization)
+    end
+    if include_one===true # cannot compare missing==true, but can make this comparison
+        cdfs = hcat(cdfs, ones(T, d * n_matrices))
     end
     return reshape(cdfs, (d, n_matrices, n)) 
 end
 
-function addSobol(n::Integer, AV::Vector{<:AbstractVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function; n_matrices::Int=1)
-    d = length(AV)
-    cdfs = generateSobolCDFs(n, d; n_matrices=n_matrices) # cdfs is (d, n_matrices, n)
-    cdfs_reshaped = reshape(cdfs, (d, n_matrices * n)) # reshape to (d, n_matrices * n) so that each column is a sobol sample
-    variation_ids = cdfsToVariations(cdfs_reshaped', AV, addColumnsByPathsFn, prepareAddNewFn, addRowFn) # a vector of all variation_ids grouped as above
-    variation_ids = reshape(variation_ids, (n_matrices, n))' # first, pull out the n_matrices groupings into columns and then the n samples for each matrix into rows; return such that each column is a sobol sample
-    return variation_ids, cdfs
-end
+generateSobolCDFs(sobol_variation::SobolVariation, d::Int) = generateSobolCDFs(sobol_variation.n, d; n_matrices=sobol_variation.n_matrices, randomization=sobol_variation.randomization, skip_start=sobol_variation.skip_start, include_one=sobol_variation.include_one)
 
-function addSobolVariation(n::Integer, config_id::Int, AV::Vector{<:AbstractVariation}; reference_variation_id::Int=0, n_matrices::Int=1)
-    fns = prepareVariationFunctions(config_id, AV; reference_variation_id=reference_variation_id)
-    return addSobol(n, AV, fns...; n_matrices=n_matrices)
-end
-addSobolVariation(n::Integer, config_folder::String, AV::Vector{<:AbstractVariation}; reference_variation_id::Int=0, n_matrices::Int=1) = addSobolVariation(n, retrieveID("configs", config_folder), AV; reference_variation_id=reference_variation_id, n_matrices=n_matrices)
-addSobolVariation(n::Integer, config_id::Int, AV::AbstractVariation; reference_variation_id::Int=0, n_matrices::Int=1) = addSobolVariation(n, config_id, [AV]; reference_variation_id=reference_variation_id, n_matrices=n_matrices)
-addSobolVariation(n::Integer, config_folder::String, AV::AbstractVariation; reference_variation_id::Int=0, n_matrices::Int=1) = addSobolVariation(n, config_folder, [AV]; reference_variation_id=reference_variation_id, n_matrices=n_matrices)
+# function addSobol(n::Integer, AV::Vector{<:AbstractVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function; n_matrices::Int=1)
+#     d = length(AV)
+#     cdfs = generateSobolCDFs(n, d; n_matrices=n_matrices) # cdfs is (d, n_matrices, n)
+#     cdfs_reshaped = reshape(cdfs, (d, n_matrices * n)) # reshape to (d, n_matrices * n) so that each column is a sobol sample
+#     variation_ids = cdfsToVariations(cdfs_reshaped', AV, addColumnsByPathsFn, prepareAddNewFn, addRowFn) # a vector of all variation_ids grouped as above
+#     variation_ids = reshape(variation_ids, (n_matrices, n))' # first, pull out the n_matrices groupings into columns and then the n samples for each matrix into rows; return such that each column is a sobol sample
+#     return variation_ids, cdfs
+# end
 
-function addSobolRulesetsVariation(n::Integer, rulesets_collection_id::Int, AV::Vector{<:AbstractVariation}; reference_rulesets_variation_id::Int=0, n_matrices::Int=1)
-    fns = prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)
-    return addSobol(n, AV, fns...; n_matrices=n_matrices)
-end
+# function addSobolVariation(n::Integer, config_id::Int, AV::Vector{<:AbstractVariation}; reference_variation_id::Int=0, n_matrices::Int=1)
+#     fns = prepareVariationFunctions(config_id, AV; reference_variation_id=reference_variation_id)
+#     return addSobol(n, AV, fns...; n_matrices=n_matrices)
+# end
+# addSobolVariation(n::Integer, config_folder::String, AV::Vector{<:AbstractVariation}; reference_variation_id::Int=0, n_matrices::Int=1) = addSobolVariation(n, retrieveID("configs", config_folder), AV; reference_variation_id=reference_variation_id, n_matrices=n_matrices)
+# addSobolVariation(n::Integer, config_id::Int, AV::AbstractVariation; reference_variation_id::Int=0, n_matrices::Int=1) = addSobolVariation(n, config_id, [AV]; reference_variation_id=reference_variation_id, n_matrices=n_matrices)
+# addSobolVariation(n::Integer, config_folder::String, AV::AbstractVariation; reference_variation_id::Int=0, n_matrices::Int=1) = addSobolVariation(n, config_folder, [AV]; reference_variation_id=reference_variation_id, n_matrices=n_matrices)
 
-addSobolRulesetsVariation(n::Integer, rulesets_collection_folder::String, AV::Vector{<:AbstractVariation}; reference_rulesets_variation_id::Int=0, n_matrices::Int=1) = addSobolRulesetsVariation(n, retrieveID("rulesets_collections", rulesets_collection_folder), AV; reference_rulesets_variation_id=reference_rulesets_variation_id, n_matrices=n_matrices)
-addSobolRulesetsVariation(n::Integer, rulesets_collection_id::Int, AV::AbstractVariation; reference_rulesets_variation_id::Int=0, n_matrices::Int=1) = addSobolRulesetsVariation(n, rulesets_collection_id, [AV]; reference_rulesets_variation_id=reference_rulesets_variation_id, n_matrices=n_matrices)
-addSobolRulesetsVariation(n::Integer, rulesets_collection_folder::String, AV::AbstractVariation; reference_rulesets_variation_id::Int=0, n_matrices::Int=1) = addSobolRulesetsVariation(n, rulesets_collection_folder, [AV]; reference_rulesets_variation_id=reference_rulesets_variation_id, n_matrices=n_matrices)
+# function addSobolRulesetsVariation(n::Integer, rulesets_collection_id::Int, AV::Vector{<:AbstractVariation}; reference_rulesets_variation_id::Int=0, n_matrices::Int=1)
+#     fns = prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)
+#     return addSobol(n, AV, fns...; n_matrices=n_matrices)
+# end
 
-function addSobolCombo(n::Int, config_id::Int, rulesets_collection_id::Int, config_variations::Vector{<:AbstractVariation}, rulesets_variations::Vector{<:AbstractVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0, n_matrices::Int=1)
+# addSobolRulesetsVariation(n::Integer, rulesets_collection_folder::String, AV::Vector{<:AbstractVariation}; reference_rulesets_variation_id::Int=0, n_matrices::Int=1) = addSobolRulesetsVariation(n, retrieveID("rulesets_collections", rulesets_collection_folder), AV; reference_rulesets_variation_id=reference_rulesets_variation_id, n_matrices=n_matrices)
+# addSobolRulesetsVariation(n::Integer, rulesets_collection_id::Int, AV::AbstractVariation; reference_rulesets_variation_id::Int=0, n_matrices::Int=1) = addSobolRulesetsVariation(n, rulesets_collection_id, [AV]; reference_rulesets_variation_id=reference_rulesets_variation_id, n_matrices=n_matrices)
+# addSobolRulesetsVariation(n::Integer, rulesets_collection_folder::String, AV::AbstractVariation; reference_rulesets_variation_id::Int=0, n_matrices::Int=1) = addSobolRulesetsVariation(n, rulesets_collection_folder, [AV]; reference_rulesets_variation_id=reference_rulesets_variation_id, n_matrices=n_matrices)
+
+function addSobolCombo(sobol_variation::SobolVariation, config_id::Int, rulesets_collection_id::Int, config_variations::Vector{<:AbstractVariation}, rulesets_variations::Vector{<:AbstractVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
     d = length(config_variations) + length(rulesets_variations)
-    cdfs = generateSobolCDFs(n, d; n_matrices=n_matrices) # cdfs is (d, n_matrices, n)
-    cdfs_reshaped = reshape(cdfs, (d, n_matrices * n)) # reshape to (d, n_matrices * n) so that each column is a sobol sample
+    cdfs = generateSobolCDFs(sobol_variation, d) # cdfs is (d, sobol_variation.n_matrices, sobol_variation.n)
+    cdfs_reshaped = reshape(cdfs, (d, sobol_variation.n_matrices * sobol_variation.n)) # reshape to (d, sobol_variation.n_matrices * sobol_variation.n) so that each column is a sobol sample
     cdfs_reshaped = cdfs_reshaped' # transpose so that each row is a sobol sample
     config_variation_ids = cdfsToVariations(cdfs_reshaped[:,1:length(config_variations)], config_variations, prepareVariationFunctions(config_id, config_variations; reference_variation_id=reference_variation_id)...)
     rulesets_variation_ids = cdfsToVariations(cdfs_reshaped[:,length(config_variations)+1:end], rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)...)
-    config_variation_ids = reshape(config_variation_ids, (n_matrices, n))' # first, each sobol matrix variation indices goes into a row so that each column is the kth sample for each matrix; take the transpose so that each column corresponds to a matrix
-    rulesets_variation_ids = reshape(rulesets_variation_ids, (n_matrices, n))'
+    config_variation_ids = reshape(config_variation_ids, (sobol_variation.n_matrices, sobol_variation.n))' # first, each sobol matrix variation indices goes into a row so that each column is the kth sample for each matrix; take the transpose so that each column corresponds to a matrix
+    rulesets_variation_ids = reshape(rulesets_variation_ids, (sobol_variation.n_matrices, sobol_variation.n))'
     return config_variation_ids, rulesets_variation_ids, cdfs, config_variations, rulesets_variations
 end
 
 ################## Random Balanced Design Sampling Functions ##################
 
-function addRBD(n::Integer, AV::Vector{<:AbstractVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function; rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true)
-    d = length(AV)
-    cdfs, S = generateRBDCDFs(n, d; rng=rng, use_sobol=use_sobol)
+# function addRBD(n::Integer, AV::Vector{<:AbstractVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function; rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true)
+#     d = length(AV)
+#     cdfs, S = generateRBDCDFs(n, d; rng=rng, use_sobol=use_sobol)
     
-    variation_ids = cdfsToVariations(cdfs, AV, addColumnsByPathsFn, prepareAddNewFn, addRowFn)
-    variations_matrix = createSortedRBDMatrix(variation_ids, S)
+#     variation_ids = cdfsToVariations(cdfs, AV, addColumnsByPathsFn, prepareAddNewFn, addRowFn)
+#     variations_matrix = createSortedRBDMatrix(variation_ids, S)
 
-    return variation_ids, variations_matrix
-end
+#     return variation_ids, variations_matrix
+# end
 
-function generateRBDCDFs(n::Int, d::Int; rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true)
-    if use_sobol
+function generateRBDCDFs(rbd_variation::RBDVariation, d::Int)
+    if rbd_variation.use_sobol
         println("Using Sobol sequence for RBD.")
-        sobol_seq = SobolSeq(d)
-        pre_s = zeros(Float64, (d, n-1))
-        for col in eachcol(pre_s)
-            next!(sobol_seq, col)
-        end
-        S = -π .+ 2π * pre_s'
-        if n == 1
+        if rbd_variation.n == 1
+            S = zeros(Float64, (1, d))
             cdfs = 0.5 .+ zeros(Float64, (1,d))
-        elseif n == 2
-            cdfs = 0.5 .+ zeros(Float64, (2, d))
         else
-            cdfs_all = range(0, stop=1, length=Int(n / 2) + 1) |> collect # all the cdf values that will be used
-            cdfs_all = vcat(cdfs_all, reverse(cdfs_all[2:end-1])) # make them go 0->1->0 but not repeat the 0 and 1
-            cdfs_all = circshift(cdfs_all, Int(n / 4)) # shift so that the first value is 0.5 and we begin by decreasing to 0
-            # now use the values from cdfs_all to create the cdfs for each parameter based on the pre_s values
-            cdfs = zeros(Float64, (n, d)) 
-            for (pre_s_row, cdfs_col) in zip(eachrow(pre_s), eachcol(cdfs))
-                ord = sortperm(pre_s_row) |> invperm # this ranks all of the pre_s values for this parameter (remember, the first one at 0 is omitted by SobolSeq)
-                cdfs_col .= [0.5; cdfs_all[ord.+1]] # the first one (0.5) comes from the omitted 0.0 to start the SobolSeq; the rest are the cdfs based on the pre_s values (the +1 is because ord comes from pre_s which omits the first element, but this first element is included in cdfs_all)
+            @assert !ismissing(rbd_variation.pow2_diff) "pow2_diff must be calculated for RBDVariation constructor with Sobol sequence. How else could we get here?"
+            @assert rbd_variation.num_cycles == 1//2 "num_cycles must be 1//2 for RBDVariation constructor with Sobol sequence. How else could we get here?"
+            if rbd_variation.pow2_diff == -1
+                skip_start = 1
+            elseif rbd_variation.pow2_diff == 0
+                skip_start = true
+            else
+                skip_start = false
             end
+            println("skip_start: $skip_start")
+            S = generateSobolCDFs(rbd_variation.n, d; n_matrices=1, randomization=NoRand(), skip_start=skip_start, include_one=rbd_variation.pow2_diff==1) # pre_s is (d, n_matrices, rbd_variation.n)
+            S = reshape(S, d, rbd_variation.n)'
+            cdfs = deepcopy(S)
         end
-        # cdfs = 0.5 .+ [zeros(Float64, (1,d)); asin.(sin.(S)) ./ π] # this is the simpler line to do this, but floating point arithmetic introduces some differences that should not exist when using a n=2^k Sobol sequence
     else
-        pre_s = range(-π, stop = π, length = n+1) |> collect
+        @assert rbd_variation.num_cycles == 1 "num_cycles must be 1 for RBDVariation constructor with random sequence. How else could we get here?"
+        pre_s = range(-π, stop = π, length = rbd_variation.n+1) |> collect
         pop!(pre_s)
-        S = [s0[randperm(rng, n)] for _ in 1:d] |> x->reduce(hcat, x)
+        S = [pre_s[randperm(rbd_variation.rng, rbd_variation.n)] for _ in 1:d] |> x->reduce(hcat, x)
         cdfs = 0.5 .+ asin.(sin.(S)) ./ π
     end
     return cdfs, S
 end
 
+# This function could be used to get a Sobol sequence for the RBD using all [-π, π] values
+# function generateRBDCDFs(n::Int, d::Int; rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true)
+#     if use_sobol
+#         println("Using Sobol sequence for RBD.")
+#         sobol_seq = SobolSeq(d)
+#         pre_s = zeros(Float64, (d, n-1))
+#         for col in eachcol(pre_s)
+#             next!(sobol_seq, col)
+#         end
+#         S = -π .+ 2π * pre_s'
+#         if n == 1
+#             cdfs = 0.5 .+ zeros(Float64, (1,d))
+#         elseif n == 2
+#             cdfs = 0.5 .+ zeros(Float64, (2, d))
+#         else
+#             cdfs_all = range(0, stop=1, length=Int(n / 2) + 1) |> collect # all the cdf values that will be used
+#             cdfs_all = vcat(cdfs_all, reverse(cdfs_all[2:end-1])) # make them go 0->1->0 but not repeat the 0 and 1
+#             cdfs_all = circshift(cdfs_all, Int(n / 4)) # shift so that the first value is 0.5 and we begin by decreasing to 0
+#             # now use the values from cdfs_all to create the cdfs for each parameter based on the pre_s values
+#             cdfs = zeros(Float64, (n, d)) 
+#             for (pre_s_row, cdfs_col) in zip(eachrow(pre_s), eachcol(cdfs))
+#                 ord = sortperm(pre_s_row) |> invperm # this ranks all of the pre_s values for this parameter (remember, the first one at 0 is omitted by SobolSeq)
+#                 cdfs_col .= [0.5; cdfs_all[ord.+1]] # the first one (0.5) comes from the omitted 0.0 to start the SobolSeq; the rest are the cdfs based on the pre_s values (the +1 is because ord comes from pre_s which omits the first element, but this first element is included in cdfs_all)
+#             end
+#         end
+#         # cdfs = 0.5 .+ [zeros(Float64, (1,d)); asin.(sin.(S)) ./ π] # this is the simpler line to do this, but floating point arithmetic introduces some differences that should not exist when using a n=2^k Sobol sequence
+#     else
+#         pre_s = range(-π, stop = π, length = n+1) |> collect
+#         pop!(pre_s)
+#         S = [s0[randperm(rng, n)] for _ in 1:d] |> x->reduce(hcat, x)
+#         cdfs = 0.5 .+ asin.(sin.(S)) ./ π
+#     end
+#     return cdfs, S
+# end
+
 function createSortedRBDMatrix(variation_ids::Vector{Int}, S::AbstractMatrix{Float64})
-    variations_matrix = zeros(Int, size(S) .+ (1, 0)) # the first point (zeros(Int, (1,d))) is omitted by the Sobol sequence call
+    variations_matrix = zeros(Int, size(S))
     for (i, col) in enumerate(eachcol(S))
-        variations_matrix[1,i] = variation_ids[1]
-        variations_matrix[2:end, i] = variation_ids[1 .+ sortperm(col)]
+        # variations_matrix[1,i] = variation_ids[1]
+        variations_matrix[:, i] = variation_ids[sortperm(col)]
     end
     return variations_matrix
 end
 
-function addRBDVariation(n::Integer, config_id::Int, AV::Vector{<:AbstractVariation}; reference_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true)
-    use_sobol &= ispow2(n) # only use sobol if n is a power of 2
-    fns = prepareVariationFunctions(config_id, AV; reference_variation_id=reference_variation_id)
-    return addRBD(n, AV, fns...; rng=rng, use_sobol=use_sobol)
-end
-addRBDVariation(n::Integer, config_folder::String, AV::Vector{<:AbstractVariation}; reference_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true) = addRBDVariation(n, retrieveID("configs", config_folder), AV; reference_variation_id=reference_variation_id, rng=rng, use_sobol=use_sobol)
-addRBDVariation(n::Integer, config_id::Int, AV::AbstractVariation; reference_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true) = addRBDVariation(n, config_id, [AV]; reference_variation_id=reference_variation_id, rng=rng, use_sobol=use_sobol)
-addRBDVariation(n::Integer, config_folder::String, AV::AbstractVariation; reference_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true) = addRBDVariation(n, config_folder, [AV]; reference_variation_id=reference_variation_id, rng=rng, use_sobol=use_sobol)
+# function addRBDVariation(n::Integer, config_id::Int, AV::Vector{<:AbstractVariation}; reference_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true)
+#     use_sobol &= ispow2(n) # only use sobol if n is a power of 2
+#     fns = prepareVariationFunctions(config_id, AV; reference_variation_id=reference_variation_id)
+#     return addRBD(n, AV, fns...; rng=rng, use_sobol=use_sobol)
+# end
+# addRBDVariation(n::Integer, config_folder::String, AV::Vector{<:AbstractVariation}; reference_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true) = addRBDVariation(n, retrieveID("configs", config_folder), AV; reference_variation_id=reference_variation_id, rng=rng, use_sobol=use_sobol)
+# addRBDVariation(n::Integer, config_id::Int, AV::AbstractVariation; reference_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true) = addRBDVariation(n, config_id, [AV]; reference_variation_id=reference_variation_id, rng=rng, use_sobol=use_sobol)
+# addRBDVariation(n::Integer, config_folder::String, AV::AbstractVariation; reference_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true) = addRBDVariation(n, config_folder, [AV]; reference_variation_id=reference_variation_id, rng=rng, use_sobol=use_sobol)
 
-function addRBDRulesetsVariation(n::Integer, rulesets_collection_id::Int, AV::Vector{<:AbstractVariation}; reference_rulesets_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true)
-    use_sobol &= ispow2(n) # only use sobol if n is a power of 2
-    fns = prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)
-    return addRBD(n, AV, fns...; rng=rng, use_sobol=use_sobol)
-end
-addRBDRulesetsVariation(n::Integer, rulesets_collection_folder::String, AV::Vector{<:AbstractVariation}; reference_rulesets_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true) = addRBDRulesetsVariation(n, retrieveID("rulesets_collections", rulesets_collection_folder), AV; reference_rulesets_variation_id=reference_rulesets_variation_id, rng=rng, use_sobol=use_sobol)
-addRBDRulesetsVariation(n::Integer, rulesets_collection_id::Int, AV::AbstractVariation; reference_rulesets_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true) = addRBDRulesetsVariation(n, rulesets_collection_id, [AV]; reference_rulesets_variation_id=reference_rulesets_variation_id, rng=rng, use_sobol=use_sobol)
-addRBDRulesetsVariation(n::Integer, rulesets_collection_folder::String, AV::AbstractVariation; reference_rulesets_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true) = addRBDRulesetsVariation(n, rulesets_collection_folder, [AV]; reference_rulesets_variation_id=reference_rulesets_variation_id, rng=rng, use_sobol=use_sobol)
+# function addRBDRulesetsVariation(n::Integer, rulesets_collection_id::Int, AV::Vector{<:AbstractVariation}; reference_rulesets_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true)
+#     use_sobol &= ispow2(n) # only use sobol if n is a power of 2
+#     fns = prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)
+#     return addRBD(n, AV, fns...; rng=rng, use_sobol=use_sobol)
+# end
+# addRBDRulesetsVariation(n::Integer, rulesets_collection_folder::String, AV::Vector{<:AbstractVariation}; reference_rulesets_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true) = addRBDRulesetsVariation(n, retrieveID("rulesets_collections", rulesets_collection_folder), AV; reference_rulesets_variation_id=reference_rulesets_variation_id, rng=rng, use_sobol=use_sobol)
+# addRBDRulesetsVariation(n::Integer, rulesets_collection_id::Int, AV::AbstractVariation; reference_rulesets_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true) = addRBDRulesetsVariation(n, rulesets_collection_id, [AV]; reference_rulesets_variation_id=reference_rulesets_variation_id, rng=rng, use_sobol=use_sobol)
+# addRBDRulesetsVariation(n::Integer, rulesets_collection_folder::String, AV::AbstractVariation; reference_rulesets_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true) = addRBDRulesetsVariation(n, rulesets_collection_folder, [AV]; reference_rulesets_variation_id=reference_rulesets_variation_id, rng=rng, use_sobol=use_sobol)
 
-function addRBDCombo(n::Int, config_id::Int, rulesets_collection_id::Int, config_variations::Vector{<:AbstractVariation}, rulesets_variations::Vector{<:AbstractVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true)
+function addRBDCombo(rbd_variation::RBDVariation, config_id::Int, rulesets_collection_id::Int, config_variations::Vector{<:AbstractVariation}, rulesets_variations::Vector{<:AbstractVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true)
     d = length(config_variations) + length(rulesets_variations)
-    use_sobol &= ispow2(n) # only use sobol if n is a power of 2
-    cdfs, S = generateRBDCDFs(n, d; rng=rng, use_sobol=use_sobol)
+    cdfs, S = generateRBDCDFs(rbd_variation, d)
+    println("cdfs: "); display(cdfs)
     config_variation_ids = cdfsToVariations(cdfs[:, 1:length(config_variations)], config_variations, prepareVariationFunctions(config_id, config_variations; reference_variation_id=reference_variation_id)...)
     rulesets_variation_ids = cdfsToVariations(cdfs[:, length(config_variations)+1:end], rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)...)
     variations_matrix = createSortedRBDMatrix(config_variation_ids, S)
