@@ -319,7 +319,6 @@ function calculateGSA!(rbd_sampling::RBDSampling, f::Function)
     if rbd_sampling.num_cycles == 1//2
         values = vcat(values, values[end-1:-1:2,:])
     end
-    println("values: "); display(values)
     ys = fft(values, 1) .|> abs2
     ys ./= size(values, 1)
     V = sum(ys[2:end, :], dims=1)

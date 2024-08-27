@@ -607,10 +607,9 @@ end
 # end
 
 function createSortedRBDMatrix(variation_ids::Vector{Int}, S::AbstractMatrix{Float64})
-    variations_matrix = zeros(Int, size(S))
-    for (i, col) in enumerate(eachcol(S))
-        # variations_matrix[1,i] = variation_ids[1]
-        variations_matrix[:, i] = variation_ids[sortperm(col)]
+    variations_matrix = Array{Int}(undef, size(S))
+    for (vm_col, s_col) in zip(eachcol(variations_matrix), eachcol(S))
+        vm_col = variation_ids[sortperm(s_col)]
     end
     return variations_matrix
 end
@@ -636,7 +635,6 @@ end
 function addRBDCombo(rbd_variation::RBDVariation, config_id::Int, rulesets_collection_id::Int, config_variations::Vector{<:AbstractVariation}, rulesets_variations::Vector{<:AbstractVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true)
     d = length(config_variations) + length(rulesets_variations)
     cdfs, S = generateRBDCDFs(rbd_variation, d)
-    println("cdfs: "); display(cdfs)
     config_variation_ids = cdfsToVariations(cdfs[:, 1:length(config_variations)], config_variations, prepareVariationFunctions(config_id, config_variations; reference_variation_id=reference_variation_id)...)
     rulesets_variation_ids = cdfsToVariations(cdfs[:, length(config_variations)+1:end], rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)...)
     variations_matrix = createSortedRBDMatrix(config_variation_ids, S)
