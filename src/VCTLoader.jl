@@ -6,7 +6,7 @@ abstract type AbstractPhysiCellSequence end
 
 struct PhysiCellSnapshot <: AbstractPhysiCellSequence
     folder::String
-    index::{Int, Symbol}
+    index::Union{Int, Symbol}
     time::Float64
     cells::DataFrame
 end
