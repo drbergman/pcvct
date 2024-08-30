@@ -1,19 +1,20 @@
+function recordIDs(path_to_folder::String, filename::String, ids::Array{Int})
+    mkpath(path_to_folder)
+    path_to_csv = "$(path_to_folder)/$(filename).csv"
+    lines_table = compressIDs(ids)
+    CSV.write(path_to_csv, lines_table; writeheader=false)
+end
+
 function recordSimulationIDs(monad_id::Int, simulation_ids::Array{Int})
     path_to_folder = "$(data_dir)/outputs/monads/$(monad_id)/"
-    mkpath(path_to_folder)
-    path_to_csv = "$(path_to_folder)/simulations.csv"
-    lines_table = compressSimulationIDs(simulation_ids)
-    CSV.write(path_to_csv, lines_table; writeheader=false)
+    recordIDs(path_to_folder, "simulations", simulation_ids)
 end
 
 recordSimulationIDs(monad::Monad) = recordSimulationIDs(monad.id, monad.simulation_ids)
 
 function recordMonadIDs(sampling_id::Int, monad_ids::Array{Int})
     path_to_folder = "$(data_dir)/outputs/samplings/$(sampling_id)/"
-    mkpath(path_to_folder)
-    path_to_csv = "$(path_to_folder)/monads.csv"
-    lines_table = compressMonadIDs(monad_ids)
-    CSV.write(path_to_csv, lines_table; writeheader=false)
+    recordIDs(path_to_folder, "monads", monad_ids)
 end
 
 recordMonadIDs(sampling::Sampling) = recordMonadIDs(sampling.id, sampling.monad_ids)
@@ -27,14 +28,13 @@ function recordSamplingIDs(trial::Trial)
 end
 
 function recordSamplingIDs(path_to_folder::String, sampling_ids::Array{Int})
-    path_to_csv = "$(path_to_folder)/samplings.csv"
-    lines_table = compressSamplingIDs(sampling_ids)
-    CSV.write(path_to_csv, lines_table; writeheader=false)
+    recordIDs(path_to_folder, "samplings", sampling_ids)
 end
 
 ################## Compression Functions ##################
 
-function compressIDs(ids::Vector{Int})
+function compressIDs(ids::AbstractArray{Int})
+    ids = ids |> vec |> unique |> sort
     lines = String[]
     while !isempty(ids) # while there are still ids to compress
         if length(ids) == 1 # if there's only one id left
@@ -55,7 +55,3 @@ function compressIDs(ids::Vector{Int})
     end
     return Tables.table(lines)
 end
-
-compressSimulationIDs(simulation_ids::Array{Int}) = simulation_ids |> vec |> unique |> sort |> compressIDs
-compressMonadIDs(monad_ids::Array{Int}) = monad_ids |> vec |> unique |> sort |> compressIDs
-compressSamplingIDs(sampling_ids::Array{Int}) = sampling_ids |> vec |> unique |> sort |> compressIDs

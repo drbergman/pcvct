@@ -106,7 +106,7 @@ struct Monad <: AbstractMonad
     rulesets_variation_id::Int # integer identifying which variation on the ruleset file to use (rulesets_variations_$(ruleset_id).db)
 end
 
-Base.size(monad::Monad) = getMonadSimulations(monad.id) |> size
+Base.size(monad::Monad) = readMonadSimulations(monad.id) |> size
 
 function Simulation(monad::Monad)
     return Simulation(monad.folder_ids, monad.folder_names, monad.variation_id, monad.rulesets_variation_id)
@@ -128,7 +128,7 @@ function Monad(min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::A
     else # if monad insert command was successful, then the monad is new
         monad_id = monad_ids[1] # get the monad_id
     end
-    simulation_ids = getMonadSimulations(monad_id) # get the simulation ids belonging to this monad
+    simulation_ids = readMonadSimulations(monad_id) # get the simulation ids belonging to this monad
     return Monad(monad_id, min_length, simulation_ids, folder_ids, folder_names, variation_id, rulesets_variation_id) # return the monad
 end
 
@@ -144,7 +144,7 @@ end
 
 function getMonad(monad_id::Int)
     df = constructSelectQuery("monads", "WHERE monad_id=$(monad_id);") |> queryToDataFrame
-    simulation_ids = getMonadSimulations(monad_id)
+    simulation_ids = readMonadSimulations(monad_id)
     if isempty(df) || isempty(simulation_ids)
         error("No monads found for monad_id=$monad_id. This monad did not run.")
     end
@@ -179,7 +179,13 @@ struct Sampling <: AbstractSampling
         n_variations = length(variation_ids)
         n_rulesets_variations = length(rulesets_variation_ids)
         if n_monads != n_variations || n_monads != n_rulesets_variations # the negation of this is n_monads == n_variations && n_monads == n_rulesets_variations, which obviously means they're all the same
-            throw(ArgumentError("Number of monads, variations, and rulesets variations must be the same"))
+            error_message = """
+                Number of monads, variations, and rulesets variations must be the same
+                \tn_monads = $n_monads
+                \tn_variations = $n_variations
+                \tn_rulesets_variations = $n_rulesets_variations
+            """
+            throw(ArgumentError(error_message))
         end
         return new(id, monad_min_length, monad_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
     end
@@ -235,7 +241,7 @@ function Sampling(monad_min_length::Int, monad_ids::Array{Int}, folder_ids::Abst
     ) |> queryToDataFrame |> x -> x.sampling_id
     if !isempty(sampling_ids) # if there are previous samplings with the same parameters
         for sampling_id in sampling_ids # check if the monad_ids are the same with any previous monad_ids
-            monad_ids_in_db = getSamplingMonads(sampling_id) # get the monad_ids belonging to this sampling
+            monad_ids_in_db = readSamplingMonads(sampling_id) # get the monad_ids belonging to this sampling
             if symdiff(monad_ids_in_db, monad_ids) |> isempty # if the monad_ids are the same
                 id = sampling_id # use the existing sampling_id
                 break
@@ -277,7 +283,7 @@ end
 
 function getSampling(sampling_id::Int)
     df = constructSelectQuery("samplings", "WHERE sampling_id=$(sampling_id);") |> queryToDataFrame
-    monad_ids = getSamplingMonads(sampling_id)
+    monad_ids = readSamplingMonads(sampling_id)
     if isempty(df) || isempty(monad_ids)
         error("No samplings found for sampling_id=$sampling_id. This sampling did not run.")
     end
@@ -372,7 +378,7 @@ function getTrialId(sampling_ids::Vector{Int})
     trial_ids = constructSelectQuery("trials", "", selection="trial_id") |> queryToDataFrame |> x -> x.trial_id
     if !isempty(trial_ids) # if there are previous trials
         for trial_id in trial_ids # check if the sampling_ids are the same with any previous sampling_ids
-            sampling_ids_in_db = getTrialSamplings(trial_id) # get the sampling_ids belonging to this trial
+            sampling_ids_in_db = readTrialSamplings(trial_id) # get the sampling_ids belonging to this trial
             if symdiff(sampling_ids_in_db, sampling_ids) |> isempty # if the sampling_ids are the same
                 id = trial_id # use the existing trial_id
                 break
@@ -404,13 +410,13 @@ end
 
 function getTrial(trial_id::Int; full_initialization::Bool=false)
     df = constructSelectQuery("trials", "WHERE trial_id=$(trial_id);") |> queryToDataFrame
-    if isempty(df) || isempty(getTrialSamplings(trial_id))
+    if isempty(df) || isempty(readTrialSamplings(trial_id))
         error("No samplings found for trial_id=$trial_id. This trial did not run.")
     end
     if full_initialization
         error("Full initialization of Trials from trial_id not yet implemented")
-        sampling_ids = getTrialSamplings(trial_id)
-        monad_min_length = minimum([getSamplingMonads(sampling_id) for sampling_id in sampling_ids])
+        sampling_ids = readTrialSamplings(trial_id)
+        monad_min_length = minimum([readSamplingMonads(sampling_id) for sampling_id in sampling_ids])
         sampling_df = constructSelectQuery("samplings", "WHERE sampling_id IN ($(join(sampling_ids,",")))") |> queryToDataFrame
         folder_ids = [getSamplingFolderIDs(sampling_id) for sampling_id in sampling_ids]
         folder_names = [getSamplingFolderNames(sampling_id) for sampling_id in sampling_ids]

@@ -37,8 +37,14 @@ function getLabels(xml_doc::XMLDocument)
     return labels
 end
 
-function PhysiCellSnapshot(folder::String, filename_base::String; labels::Vector{String}=String[])
-    filepath_base = "$(folder)/$(filename_base)"
+function indexToFilename(index::Symbol)
+    @assert index in [:initial, :final] "The non-integer index must be either :initial or :final"
+    return string(index)
+end
+indexToFilename(index::Int) = "output$(lpad(index,8,"0"))"
+
+function PhysiCellSnapshot(folder::String, index::Union{Int, Symbol}; labels::Vector{String}=String[])
+    filepath_base = "$(folder)/$(indexToFilename(index))"
     xml_doc = VCTModule.openXML("$(filepath_base).xml")
     mat_file = "$(filepath_base)_cells.mat"
     time = VCTModule.getField(xml_doc, ["metadata","current_time"]) |> x->parse(Float64, x)
@@ -51,17 +57,6 @@ function PhysiCellSnapshot(folder::String, filename_base::String; labels::Vector
     cells[!,:cell_type] = convert.(Int,cells[!,:cell_type])
     VCTModule.closeXML(xml_doc)
     return PhysiCellSnapshot(folder, index, time, DataFrame(cells))
-end
-
-function PhysiCellSnapshot(folder::String, index::Int; labels::Vector{String}=String[])
-    filename_base = "output$(lpad(index,8,"0"))"
-    return PhysiCellSnapshot(folder, filename_base; labels=labels)
-end
-
-function PhysiCellSnapshot(folder::String, index::Symbol; labels::Vector{String}=String[])
-    @assert index in [:initial, :final] "The non-integer index must be either :initial or :final"
-    filename_base = string(index)
-    return PhysiCellSnapshot(folder, filename_base; labels=labels)
 end
 
 function PhysiCellSequence(folder::String)
@@ -178,7 +173,7 @@ function populationTimeSeries(simulation_id::Int; include_dead::Bool=false)
 end
 
 function finalPopulationCount(folder::String; include_dead::Bool=false)
-    final_snapshot = PhysiCellSnapshot(folder, "final")
+    final_snapshot = PhysiCellSnapshot(folder, :final)
     return populationCount(final_snapshot; include_dead=include_dead)
 end
 

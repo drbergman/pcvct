@@ -33,14 +33,14 @@ function runSimulation(simulation::Simulation; do_full_setup::Bool=true, force_r
     cmd = `$executable_str $config_str $flags`
     println("\tRunning simulation: $(simulation.id)...")
     try
-        run(pipeline(cmd, stdout="$(path_to_simulation_folder)/output.log", stderr="$(path_to_simulation_folder)/output.err"), wait=true)
+        run(pipeline(cmd; stdout="$(path_to_simulation_folder)/output.log", stderr="$(path_to_simulation_folder)/output.err"); wait=true)
     catch
         println("\tSimulation $(simulation.id) failed.")
         println("\tCompile command: $cmd")
         println("\tCheck $(path_to_simulation_folder)/output.err for more information.")
         success = false
     else
-        rm("$(path_to_simulation_folder)/output.err", force=true)
+        rm("$(path_to_simulation_folder)/output.err"; force=true)
         success = true
     end
     ran = true
@@ -111,7 +111,7 @@ collectSimulationTasks(sampling::Sampling; use_previous_sims::Bool=false, force_
 collectSimulationTasks(trial::Trial; use_previous_sims::Bool=false, force_recompile::Bool=false) = runTrial(trial; use_previous_sims=use_previous_sims, force_recompile=force_recompile)
 
 function runAbstractTrial(T::AbstractTrial; use_previous_sims::Bool=false, force_recompile::Bool=true)
-    cd(()->run(pipeline(`make clean`, stdout=devnull)), physicell_dir)
+    cd(()->run(pipeline(`make clean`; stdout=devnull)), physicell_dir)
 
     getMacroFlags(T)
 

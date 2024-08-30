@@ -1,7 +1,7 @@
 module VCTModule
 
 # each file (includes below) has their own export statements
-export initializeVCT, resetDatabase, addGridVariation, addGridRulesetsVariation, runAbstractTrial, getTrialSamplings, getSimulations, deleteSimulation
+export initializeVCT, resetDatabase, addGridVariation, addGridRulesetsVariation, runAbstractTrial, readTrialSamplings, getSimulations, deleteSimulation
 export addLHSVariation, addLHSRulesetsVariation
 export GridVariation, LHSVariation, addVariations
 
@@ -61,7 +61,7 @@ end
 
 ################## Selection Functions ##################
 
-function selectConstituents(path_to_csv::String)
+function readConstituentIDs(path_to_csv::String)
     if !isfile(path_to_csv)
         return Int[]
     end
@@ -79,26 +79,37 @@ function selectConstituents(path_to_csv::String)
     return ids
 end
 
-getMonadSimulations(monad_id::Int) = selectConstituents("$(data_dir)/outputs/monads/$(monad_id)/simulations.csv")
-getMonadSimulations(monad::Monad) = getMonadSimulations(monad.id)
-getSamplingMonads(sampling_id::Int) = selectConstituents("$(data_dir)/outputs/samplings/$(sampling_id)/monads.csv")
-getSamplingMonads(sampling::Sampling) = getSamplingMonads(sampling.id)
-getTrialSamplings(trial_id::Int) = selectConstituents("$(data_dir)/outputs/trials/$(trial_id)/samplings.csv")
-getTrialSamplings(trial::Trial) = getTrialSamplings(trial.id)
+constituentsType(trial::Trial) = Sampling
+constituentsType(sampling::Sampling) = Monad
+constituentsType(monad::Monad) = Simulation
+
+function readConstituentIDs(T::AbstractTrial)
+    type_str = typeof(T) |> string |> lowercase
+    path_to_folder = "$(data_dir)/outputs/$(type_str)s/$(T.id)"
+    filename = lowercase(string(constituentsType(T))) * "s"
+    return readConstituentIDs("$(path_to_folder)/$(filename).csv")
+end
+
+readMonadSimulations(monad_id::Int) = readConstituentIDs("$(data_dir)/outputs/monads/$(monad_id)/simulations.csv")
+readMonadSimulations(monad::Monad) = readMonadSimulations(monad.id)
+readSamplingMonads(sampling_id::Int) = readConstituentIDs("$(data_dir)/outputs/samplings/$(sampling_id)/monads.csv")
+readSamplingMonads(sampling::Sampling) = readSamplingMonads(sampling.id)
+readTrialSamplings(trial_id::Int) = readConstituentIDs("$(data_dir)/outputs/trials/$(trial_id)/samplings.csv")
+readTrialSamplings(trial::Trial) = readTrialSamplings(trial.id)
 
 function getSamplingSimulations(sampling_id::Int)
-    monad_ids = getSamplingMonads(sampling_id)
-    return vcat([getMonadSimulations(monad_id) for monad_id in monad_ids]...)
+    monad_ids = readSamplingMonads(sampling_id)
+    return vcat([readMonadSimulations(monad_id) for monad_id in monad_ids]...)
 end
 
 function getTrialSimulations(trial_id::Int)
-    sampling_ids = getTrialSamplings(trial_id)
+    sampling_ids = readTrialSamplings(trial_id)
     return vcat([getSamplingSimulations(sampling_id) for sampling_id in sampling_ids]...)
 end
 
 getSimulations() = constructSelectQuery("simulations", "", selection="simulation_id") |> queryToDataFrame |> x -> x.simulation_id
 getSimulations(simulation::Simulation) = [simulation.id]
-getSimulations(monad::Monad) = getMonadSimulations(monad.id)
+getSimulations(monad::Monad) = readMonadSimulations(monad.id)
 getSimulations(sampling::Sampling) = getSamplingSimulations(sampling.id)
 getSimulations(trial::Trial) = getTrialSimulations(trial.id)
 
@@ -107,7 +118,7 @@ function getSimulations(class_id::VCTClassID)
     if class_id_type == Simulation
         return [class_id.id]
     elseif class_id_type == Monad
-        return getMonadSimulations(class_id.id)
+        return readMonadSimulations(class_id.id)
     elseif class_id_type == Sampling
         return getSamplingSimulations(class_id.id)
     elseif class_id_type == Trial

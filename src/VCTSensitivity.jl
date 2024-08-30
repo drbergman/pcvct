@@ -341,7 +341,7 @@ function evaluateFunctionOnSampling(gsa_sampling::GSASampling, f::Function)
     values = zeros(Float64, size(monad_id_df))
     for (ind, monad_id) in enumerate(monad_id_df |> Matrix)
         if !(monad_id in keys(value_dict))
-            simulation_ids = getMonadSimulations(monad_id)
+            simulation_ids = readMonadSimulations(monad_id)
             sim_values = [f(simulation_id) for simulation_id in simulation_ids]
             value = sim_values |> mean
             value_dict[monad_id] = value

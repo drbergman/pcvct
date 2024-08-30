@@ -8,7 +8,7 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
     end
 
     if clean
-        cd(()->run(pipeline(`make clean`, stdout=devnull)), physicell_dir)
+        cd(()->run(pipeline(`make clean`; stdout=devnull)), physicell_dir)
     end
 
     path_to_folder = "$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)" # source dir needs to end in / or else the dir is copied into target, not the source files
@@ -23,20 +23,20 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
     cp("$(path_to_folder)/main.cpp", "$(physicell_dir)/main.cpp", force=true)
     cp("$(path_to_folder)/Makefile", "$(physicell_dir)/Makefile", force=true)
 
-    cmd = `make -j 20 CC=$(PHYSICELL_CPP) PROGRAM_NAME=project_ccid_$(S.folder_ids.custom_code_id) CFLAGS=$(cflags)`
+    cmd = `make CC=$(PHYSICELL_CPP) PROGRAM_NAME=project_ccid_$(S.folder_ids.custom_code_id) CFLAGS=$(cflags)`
 
     println("Compiling custom code for $(S.folder_names.custom_code_folder) with flags: $cflags")
 
-    cd(() -> run(pipeline(cmd, stdout="$(path_to_folder)/compilation.log", stderr="$(path_to_folder)/compilation.err")), physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory; make sure the macro ADDON_PHYSIECM is defined (should work even if multiply defined, e.g., by Makefile)
+    cd(() -> run(pipeline(cmd; stdout="$(path_to_folder)/compilation.log", stderr="$(path_to_folder)/compilation.err")), physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory; make sure the macro ADDON_PHYSIECM is defined (should work even if multiply defined, e.g., by Makefile)
     
     # check if the error file is empty, if it is, delete it
     if filesize("$(path_to_folder)/compilation.err") == 0
-        rm("$(path_to_folder)/compilation.err", force=true)
+        rm("$(path_to_folder)/compilation.err"; force=true)
     end
 
-    rm("$(physicell_dir)/custom_modules/custom.cpp", force=true)
-    rm("$(physicell_dir)/custom_modules/custom.h", force=true)
-    rm("$(physicell_dir)/main.cpp", force=true)
+    rm("$(physicell_dir)/custom_modules/custom.cpp"; force=true)
+    rm("$(physicell_dir)/custom_modules/custom.h"; force=true)
+    rm("$(physicell_dir)/main.cpp"; force=true)
     run(`cp $(physicell_dir)/sample_projects/Makefile-default $(physicell_dir)/Makefile`)
 
     mv("$(physicell_dir)/project_ccid_$(S.folder_ids.custom_code_id)", "$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)/project", force=true)

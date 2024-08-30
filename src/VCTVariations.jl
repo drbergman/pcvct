@@ -468,11 +468,12 @@ function generateSobolCDFs(n::Int, d::Int; n_matrices::Int=1, T::Type=Float64, r
             end
         end
     end
+    n_draws = n - (include_one===true) # if include_one is true, then we need to draw n-1 points and then append 1 to the end
     if skip_start == false # false or 0
-        cdfs = randomize(reduce(hcat, [zeros(T, n_matrices * d), [next!(s) for i in 1:n-1]...]), randomization)
+        cdfs = randomize(reduce(hcat, [zeros(T, n_matrices * d), [next!(s) for i in 1:n_draws-1]...]), randomization) # n_draws-1 because the SobolSeq already skips 0
     else
-        cdfs = Matrix{T}(undef, d * n_matrices, n)
-        num_to_skip = skip_start === true ? ((1 << (floor(Int, log2(n - 1)) + 1))) : skip_start
+        cdfs = Matrix{T}(undef, d * n_matrices, n_draws)
+        num_to_skip = skip_start === true ? ((1 << (floor(Int, log2(n_draws - 1)) + 1))) : skip_start
         num_to_skip -= 1 # the SobolSeq already skips 0
         for _ in 1:num_to_skip
             Sobol.next!(s)
@@ -556,7 +557,6 @@ function generateRBDCDFs(rbd_variation::RBDVariation, d::Int)
             else
                 skip_start = false
             end
-            println("skip_start: $skip_start")
             S = generateSobolCDFs(rbd_variation.n, d; n_matrices=1, randomization=NoRand(), skip_start=skip_start, include_one=rbd_variation.pow2_diff==1) # pre_s is (d, n_matrices, rbd_variation.n)
             S = reshape(S, d, rbd_variation.n)'
             cdfs = deepcopy(S)
@@ -609,7 +609,7 @@ end
 function createSortedRBDMatrix(variation_ids::Vector{Int}, S::AbstractMatrix{Float64})
     variations_matrix = Array{Int}(undef, size(S))
     for (vm_col, s_col) in zip(eachcol(variations_matrix), eachcol(S))
-        vm_col = variation_ids[sortperm(s_col)]
+        vm_col .= variation_ids[sortperm(s_col)]
     end
     return variations_matrix
 end
