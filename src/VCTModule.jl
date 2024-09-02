@@ -57,6 +57,7 @@ function initializeVCT(path_to_physicell::String, path_to_data::String)
     println(rpad("Path to PhysiCell:", 20, ' ') * physicell_dir)
     println(rpad("Path to data:", 20, ' ') * data_dir)
     initializeDatabase("$(data_dir)/vct.db")
+    flush(stdout)
 end
 
 ################## Selection Functions ##################

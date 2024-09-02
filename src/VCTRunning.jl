@@ -32,6 +32,7 @@ function runSimulation(simulation::Simulation; do_full_setup::Bool=true, force_r
     end
     cmd = `$executable_str $config_str $flags`
     println("\tRunning simulation: $(simulation.id)...")
+    flush(stdout)
     try
         run(pipeline(cmd; stdout="$(path_to_simulation_folder)/output.log", stderr="$(path_to_simulation_folder)/output.err"); wait=true)
     catch
