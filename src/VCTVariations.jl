@@ -663,7 +663,6 @@ end
 ################## Sampling Helper Functions ##################
 
 function cdfsToVariations(cdfs::AbstractMatrix{Float64}, AV::Vector{<:AbstractVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function)
-    println("cdfs: "); display(cdfs)
     n = size(cdfs, 1)
     new_values = []
     for (i, av) in enumerate(AV)
