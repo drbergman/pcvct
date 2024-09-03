@@ -14,8 +14,8 @@ function methodString(gsa_sampling::GSASampling)
     return endswith(method, "sampling") ? method[1:end-8] : method
 end
 
-function sensitivitySampling(method::GSAMethod, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; force_recompile::Bool=true, reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0, functions::Vector{<:Function}=Function[])
-    gsa_sampling = _runSensitivitySampling(method, monad_min_length, folder_names, AV; force_recompile=force_recompile, reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
+function sensitivitySampling(method::GSAMethod, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; force_recompile::Bool=true, reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0, ignore_indices::Vector{Int}=Int[], functions::Vector{<:Function}=Function[])
+    gsa_sampling = _runSensitivitySampling(method, monad_min_length, folder_names, AV; force_recompile=force_recompile, reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, ignore_indices=ignore_indices)
     sensitivityResults!(gsa_sampling, functions)
     return gsa_sampling
 end
@@ -42,11 +42,14 @@ end
 
 MOATSampling(sampling::Sampling, monad_ids_df::DataFrame) = MOATSampling(sampling, monad_ids_df, Dict{Function, GlobalSensitivity.MorrisResult}())
 
-function _runSensitivitySampling(method::MOAT, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; force_recompile::Bool=true, reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
-    return moatSensitivity(method, monad_min_length, folder_names, AV; force_recompile=force_recompile, reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
+function _runSensitivitySampling(method::MOAT, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; force_recompile::Bool=true, reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0, ignore_indices::Vector{Int}=Int[])
+    return moatSensitivity(method, monad_min_length, folder_names, AV; force_recompile=force_recompile, reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, ignore_indices=ignore_indices)
 end
 
-function moatSensitivity(method::MOAT, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; force_recompile::Bool=true, reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
+function moatSensitivity(method::MOAT, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; force_recompile::Bool=true, reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0, ignore_indices::Vector{Int}=Int[])
+    if !isempty(ignore_indices)
+        error("MOAT does not support ignoring indices...yet? Only Sobolʼ does for now.")
+    end
     config_variation_ids, rulesets_variation_ids = addVariations(method.lhs_variation, folder_names.config_folder, folder_names.rulesets_collection_folder, AV; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
     perturbed_config_variation_ids = repeat(config_variation_ids, 1, length(AV))
     perturbed_rulesets_variation_ids = repeat(rulesets_variation_ids, 1, length(AV))
@@ -72,9 +75,9 @@ function moatSensitivity(method::MOAT, monad_min_length::Int, folder_names::Abst
     return MOATSampling(sampling, monad_ids_df)
 end
 
-function moatSensitivity(n_points::Int, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; force_recompile::Bool=true, reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG, orthogonalize::Bool=true)
+function moatSensitivity(n_points::Int, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; force_recompile::Bool=true, reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG, orthogonalize::Bool=true, ignore_indices::Vector{Int}=Int[])
     lhs_variation = LHSVariation(n_points; add_noise=add_noise, rng=rng, orthogonalize=orthogonalize)
-    return moatSensitivity(lhs_variation, monad_min_length, folder_names, AV; force_recompile=force_recompile, reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
+    return moatSensitivity(lhs_variation, monad_min_length, folder_names, AV; force_recompile=force_recompile, reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, ignore_indices=ignore_indices)
 end
 
 function perturbConfigVariation(av::AbstractVariation, variation_id::Int, folder::String)
@@ -174,47 +177,52 @@ end
 
 SobolSampling(sampling::Sampling, monad_ids_df::DataFrame; sobol_index_methods::NamedTuple{(:first_order, :total_order), Tuple{Symbol, Symbol}}=(first_order=:Jansen1999, total_order=:Jansen1999)) = SobolSampling(sampling, monad_ids_df, Dict{Function, GlobalSensitivity.SobolResult}(), sobol_index_methods)
 
-function _runSensitivitySampling(method::Sobolʼ, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; force_recompile::Bool=true, reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
-    return sobolSensitivity(method, monad_min_length, folder_names, AV; force_recompile=force_recompile, reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
+function _runSensitivitySampling(method::Sobolʼ, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; force_recompile::Bool=true, reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0, ignore_indices::Vector{Int}=Int[])
+    return sobolSensitivity(method, monad_min_length, folder_names, AV; force_recompile=force_recompile, reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, ignore_indices=ignore_indices)
 end
 
-function sobolSensitivity(method::Sobolʼ, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; force_recompile::Bool=true, reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
+function sobolSensitivity(method::Sobolʼ, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; force_recompile::Bool=true, reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0, ignore_indices::Vector{Int}=Int[])
     config_id = retrieveID("configs", folder_names.config_folder)
     rulesets_collection_id = retrieveID("rulesets_collections", folder_names.rulesets_collection_folder)
-    config_variation_ids, rulesets_variation_ids, cdfs, config_variations, rulesets_variations = addVariations(method.sobol_variation, config_id, rulesets_collection_id, AV; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
-    d_config = length(config_variations)
-    d_rulesets = length(rulesets_variations)
+    config_variation_ids, rulesets_variation_ids, cdfs, parsed_variations = addVariations(method.sobol_variation, config_id, rulesets_collection_id, AV; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
+    d_config = length(parsed_variations.config_variations)
+    d_rulesets = length(parsed_variations.rulesets_variations)
     d = d_config + d_rulesets
+    d_varied = d - length(ignore_indices)
+    focus_indices = [i for i in 1:d if !(i in ignore_indices)]
     config_variation_ids_A = config_variation_ids[:,1]
     rulesets_variation_ids_A = rulesets_variation_ids[:,1]
     A = cdfs[:,1,:] # cdfs is of size (d, 2, n)
     config_variation_ids_B = config_variation_ids[:,2]
     rulesets_variation_ids_B = rulesets_variation_ids[:,2]
     B = cdfs[:,2,:]
-    Aᵦ = [copy(A) for _ in 1:d]
-    config_variation_ids_Aᵦ = repeat(config_variation_ids_A, 1, d)
-    rulesets_variation_ids_Aᵦ = repeat(rulesets_variation_ids_A, 1, d)
-    for (i, b_row) in enumerate(eachrow(B))
-        Aᵦ[i][i,:] = b_row
-        if i <= length(config_variations)
-            config_variation_ids_Aᵦ[:,i] = cdfsToVariations(Aᵦ[i][1:length(config_variations),:]', config_variations, prepareVariationFunctions(config_id, config_variations; reference_variation_id=reference_variation_id)...)
+    # Aᵦ = [copy(A) for _ in 1:d_varied] # only make these for the varied parameters to measure their total sensitivity indices
+    Aᵦ = [i => copy(A) for i in focus_indices] |> Dict
+    # config_variation_ids_Aᵦ = repeat(config_variation_ids_A, 1, d_varied)
+    config_variation_ids_Aᵦ = [i => copy(config_variation_ids_A) for i in focus_indices] |> Dict
+    # rulesets_variation_ids_Aᵦ = repeat(rulesets_variation_ids_A, 1, d_varied)
+    rulesets_variation_ids_Aᵦ = [i => copy(rulesets_variation_ids_A) for i in focus_indices] |> Dict
+    for i in focus_indices
+        Aᵦ[i][i,:] .= B[i,:]
+        if i in parsed_variations.config_variations
+            config_variation_ids_Aᵦ[i] = cdfsToVariations(Aᵦ[i][parsed_variations.config_variation_indices,:]', parsed_variations.config_variations, prepareVariationFunctions(config_id, parsed_variations.config_variations; reference_variation_id=reference_variation_id)...)
         else
-            rulesets_variation_ids_Aᵦ[:,i] = cdfsToVariations(Aᵦ[i][length(config_variations)+1:end,:]', rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)...)
+            rulesets_variation_ids_Aᵦ[i] = cdfsToVariations(Aᵦ[i][parsed_variations.rulesets_variation_indices,:]', parsed_variations.rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)...)
         end
     end
-    all_config_variation_ids = hcat(config_variation_ids_A, config_variation_ids_B, config_variation_ids_Aᵦ)
-    all_rulesets_variation_ids = hcat(rulesets_variation_ids_A, rulesets_variation_ids_B, rulesets_variation_ids_Aᵦ)
+    all_config_variation_ids = hcat(config_variation_ids_A, config_variation_ids_B, [config_variation_ids_Aᵦ[i] for i in focus_indices]...) # make sure to the values from the dict in the expected order
+    all_rulesets_variation_ids = hcat(rulesets_variation_ids_A, rulesets_variation_ids_B, [rulesets_variation_ids_Aᵦ[i] for i in focus_indices]...)
     monad_dict, monad_ids = variationsToMonads(folder_names, all_config_variation_ids, all_rulesets_variation_ids)
     monads = monad_dict |> values |> collect
-    header_line = ["A", "B", [variationColumnName(av) for av in AV]...]
+    header_line = ["A", "B", [variationColumnName(av) for av in AV[focus_indices]]...]
     monad_ids_df = DataFrame(monad_ids, header_line)
     sampling = Sampling(monad_min_length, monads)
     n_ran, n_success = runAbstractTrial(sampling; use_previous_sims=true, force_recompile=force_recompile)
     return SobolSampling(sampling, monad_ids_df; sobol_index_methods=method.sobol_index_methods)
 end
 
-function sobolSensitivity(n_points::Int, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; force_recompile::Bool = true, reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0, sobol_index_methods::NamedTuple{(:first_order, :total_order), Tuple{Symbol, Symbol}}=(first_order=:Jansen1999, total_order=:Jansen1999))
-    return sobolSensitivity(SobolVariation(n_points; n_matrices=2), monad_min_length, folder_names, AV; force_recompile=force_recompile, reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, sobol_index_methods=sobol_index_methods)
+function sobolSensitivity(n_points::Int, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; force_recompile::Bool = true, reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0, sobol_index_methods::NamedTuple{(:first_order, :total_order), Tuple{Symbol, Symbol}}=(first_order=:Jansen1999, total_order=:Jansen1999), ignore_indices::Vector{Int}=Int[])
+    return sobolSensitivity(Sobolʼ(n_points; sobol_index_methods=sobol_index_methods), monad_min_length, folder_names, AV; force_recompile=force_recompile, reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, sobol_index_methods=sobol_index_methods, ignore_indices=ignore_indices)
 end
 
 function calculateGSA!(sobol_sampling::SobolSampling, functions::Vector{<:Function})
@@ -285,11 +293,14 @@ end
 
 RBDSampling(sampling::Sampling, monad_ids_df::DataFrame, num_cycles; num_harmonics::Int=6) = RBDSampling(sampling, monad_ids_df, Dict{Function, GlobalSensitivity.SobolResult}(), num_harmonics, num_cycles)
 
-function _runSensitivitySampling(method::RBD, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; force_recompile::Bool=true, reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
-    return rbdSensitivity(method, monad_min_length, folder_names, AV; force_recompile=force_recompile, reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
+function _runSensitivitySampling(method::RBD, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; force_recompile::Bool=true, reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0, ignore_indices::Vector{Int}=Int[])
+    return rbdSensitivity(method, monad_min_length, folder_names, AV; force_recompile=force_recompile, reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, ignore_indices=ignore_indices)
 end
 
-function rbdSensitivity(method::RBD, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; force_recompile::Bool=true, reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0, num_harmonics::Int=6)
+function rbdSensitivity(method::RBD, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; force_recompile::Bool=true, reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0, ignore_indices::Vector{Int}=Int[])
+    if !isempty(ignore_indices)
+        error("RBD does not support ignoring indices...yet? Only Sobolʼ does for now.")
+    end
     config_variation_ids, rulesets_variation_ids, variations_matrix, rulesets_variations_matrix = addVariations(method.rbd_variation, folder_names.config_folder, folder_names.rulesets_collection_folder, AV; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
     monad_dict, monad_ids = variationsToMonads(folder_names, variations_matrix, rulesets_variations_matrix)
     monads = monad_dict |> values |> collect
@@ -297,11 +308,12 @@ function rbdSensitivity(method::RBD, monad_min_length::Int, folder_names::Abstra
     monad_ids_df = DataFrame(monad_ids, header_line)
     sampling = Sampling(monad_min_length, monads)
     n_ran, n_success = runAbstractTrial(sampling; use_previous_sims=true, force_recompile=force_recompile)
-    return RBDSampling(sampling, monad_ids_df, method.rbd_variation.num_cycles; num_harmonics=num_harmonics)
+    return RBDSampling(sampling, monad_ids_df, method.rbd_variation.num_cycles; num_harmonics=method.num_harmonics)
 end
 
-function rbdSensitivity(n_points::Int, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; force_recompile::Bool = true, reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true, num_harmonics::Int=6)
-    return rbdSensitivity(RBDVariation(n_points; rng=rng, use_sobol=use_sobol), monad_min_length, folder_names, AV; force_recompile=force_recompile, reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, num_harmonics=num_harmonics)
+function rbdSensitivity(n_points::Int, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; force_recompile::Bool = true, reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true, num_harmonics::Int=6, num_cycles::Int=missing)
+    method = RBD(n_points; rng=rng, use_sobol=use_sobol, num_harmonics=num_harmonics, num_cycles=num_cycles)
+    return rbdSensitivity(method, monad_min_length, folder_names, AV; force_recompile=force_recompile, reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
 end
 
 function calculateGSA!(rbd_sampling::RBDSampling, functions::Vector{<:Function})
