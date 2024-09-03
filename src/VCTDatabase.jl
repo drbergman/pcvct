@@ -18,7 +18,7 @@ end
 
 function createSchema()
     # make sure necessary directories are present
-    data_dir_contents = readdir("$(data_dir)/inputs/", sort=false)
+    data_dir_contents = readdir("$(data_dir)/inputs/"; sort=false)
     if !("custom_codes" in data_dir_contents)
         error("No $(data_dir)/inputs/custom_codes found. This is where to put the folders for custom_modules, main.cpp, and Makefile.")
     end
@@ -34,7 +34,7 @@ function createSchema()
     """
     createPCVCTTable("custom_codes", custom_codes_schema)
         
-    custom_codes_folders = readdir("$(data_dir)/inputs/custom_codes", sort=false) |> filter(x->isdir("$(data_dir)/inputs/custom_codes/$(x)"))
+    custom_codes_folders = readdir("$(data_dir)/inputs/custom_codes"; sort=false) |> filter(x->isdir("$(data_dir)/inputs/custom_codes/$(x)"))
     if isempty(custom_codes_folders)
         error("No folders in $(data_dir)/inputs/custom_codes found. Add custom_modules, main.cpp, and Makefile to a folder here to move forward.")
     end
@@ -43,9 +43,9 @@ function createSchema()
     end
     
     # initialize and populate ics tables
-    createICTable("cells", data_dir_contents=data_dir_contents)
-    createICTable("substrates", data_dir_contents=data_dir_contents)
-    createICTable("ecms", data_dir_contents=data_dir_contents)
+    createICTable("cells"; data_dir_contents=data_dir_contents)
+    createICTable("substrates"; data_dir_contents=data_dir_contents)
+    createICTable("ecms"; data_dir_contents=data_dir_contents)
 
     # initialize and populate configs table
     configs_schema = """
@@ -55,15 +55,15 @@ function createSchema()
     """
     createPCVCTTable("configs", configs_schema)
         
-    config_folders = readdir("$(data_dir)/inputs/configs", sort=false) |> filter(x->isdir("$(data_dir)/inputs/configs/$(x)"))
+    config_folders = readdir("$(data_dir)/inputs/configs"; sort=false) |> filter(x->isdir("$(data_dir)/inputs/configs/$(x)"))
     if isempty(config_folders)
         error("No folders in $(data_dir)/inputs/configs found. Add PhysiCell_settings.xml and rules files here.")
     end
     for config_folder in config_folders
         DBInterface.execute(db, "INSERT OR IGNORE INTO configs (folder_name) VALUES ('$(config_folder)');")
-        db_variations = "$(data_dir)/inputs/configs/$(config_folder)/variations.db" |> SQLite.DB
-        createPCVCTTable("variations", "variation_id INTEGER PRIMARY KEY"; db=db_variations)
-        DBInterface.execute(db_variations, "INSERT OR IGNORE INTO variations (variation_id) VALUES(0);")
+        db_config_variations = "$(data_dir)/inputs/configs/$(config_folder)/variations.db" |> SQLite.DB
+        createPCVCTTable("variations", "variation_id INTEGER PRIMARY KEY"; db=db_config_variations)
+        DBInterface.execute(db_config_variations, "INSERT OR IGNORE INTO variations (variation_id) VALUES(0);")
     end
 
     # initialize and populate rulesets_collections table
@@ -75,11 +75,12 @@ function createSchema()
     createPCVCTTable("rulesets_collections", rulesets_collections_schema)
 
     if "rulesets_collections" in data_dir_contents
-        rulesets_collections_folders = readdir("$(data_dir)/inputs/rulesets_collections", sort=false) |> filter(x -> isdir("$(data_dir)/inputs/rulesets_collections/$(x)"))
+        rulesets_collections_folders = readdir("$(data_dir)/inputs/rulesets_collections"; sort=false) |> filter(x -> isdir("$(data_dir)/inputs/rulesets_collections/$(x)"))
         for rulesets_collection_folder in rulesets_collections_folders
             DBInterface.execute(db, "INSERT OR IGNORE INTO rulesets_collections (folder_name) VALUES ('$(rulesets_collection_folder)');")
             db_rulesets_variations = "$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)/rulesets_variations.db" |> SQLite.DB
             createPCVCTTable("rulesets_variations", "rulesets_variation_id INTEGER PRIMARY KEY"; db=db_rulesets_variations)
+            DBInterface.execute(db_rulesets_variations, "INSERT OR IGNORE INTO rulesets_variations (rulesets_variation_id) VALUES(0);")
         end
     end
             
