@@ -266,22 +266,6 @@ end
 
 addVariations(method::AddVariationMethod, config_folder::String, rulesets_collection_folder::String, AV::Vector{<:AbstractVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0) = addVariations(method, retrieveID("configs", config_folder), retrieveID("rulesets_collections", rulesets_collection_folder), AV; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
 
-function addParsedVariations(grid_variation::GridVariation, config_id::Int, rulesets_collection_id::Int, parsed_variations::ParsedVariations; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
-    return addGridCombo(grid_variation, config_id, rulesets_collection_id, parsed_variations; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
-end
-
-function addParsedVariations(lhs_variation::LHSVariation, config_id::Int, rulesets_collection_id::Int, parsed_variations::ParsedVariations; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
-    return addLHSCombo(lhs_variation, config_id, rulesets_collection_id, parsed_variations; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
-end
-
-function addParsedVariations(sobol_variation::SobolVariation, config_id::Int, rulesets_collection_id::Int, parsed_variations::ParsedVariations; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
-   return addSobolCombo(sobol_variation, config_id, rulesets_collection_id, parsed_variations; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
-end
-
-function addParsedVariations(rbd_variation::RBDVariation, config_id::Int, rulesets_collection_id::Int, parsed_variations::ParsedVariations; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
-    return addRBDCombo(rbd_variation, config_id, rulesets_collection_id, parsed_variations; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
-end
-
 struct ParsedVariations
     config_variations::Vector{<:AbstractVariation}
     rulesets_variations::Vector{<:AbstractVariation}
@@ -314,6 +298,22 @@ function ParsedVariations(AV::Vector{<:AbstractVariation})
         end
     end
     return ParsedVariations(config_variations, rulesets_variations, config_variation_indices, rulesets_variation_indices)
+end
+
+function addParsedVariations(grid_variation::GridVariation, config_id::Int, rulesets_collection_id::Int, parsed_variations::ParsedVariations; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
+    return addGridCombo(grid_variation, config_id, rulesets_collection_id, parsed_variations; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
+end
+
+function addParsedVariations(lhs_variation::LHSVariation, config_id::Int, rulesets_collection_id::Int, parsed_variations::ParsedVariations; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
+    return addLHSCombo(lhs_variation, config_id, rulesets_collection_id, parsed_variations; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
+end
+
+function addParsedVariations(sobol_variation::SobolVariation, config_id::Int, rulesets_collection_id::Int, parsed_variations::ParsedVariations; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
+   return addSobolCombo(sobol_variation, config_id, rulesets_collection_id, parsed_variations; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
+end
+
+function addParsedVariations(rbd_variation::RBDVariation, config_id::Int, rulesets_collection_id::Int, parsed_variations::ParsedVariations; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
+    return addRBDCombo(rbd_variation, config_id, rulesets_collection_id, parsed_variations; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
 end
 
 function variationTarget(av::AbstractVariation)
@@ -663,6 +663,7 @@ end
 ################## Sampling Helper Functions ##################
 
 function cdfsToVariations(cdfs::AbstractMatrix{Float64}, AV::Vector{<:AbstractVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function)
+    println("cdfs: "); display(cdfs)
     n = size(cdfs, 1)
     new_values = []
     for (i, av) in enumerate(AV)

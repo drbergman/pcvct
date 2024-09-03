@@ -133,6 +133,7 @@ end
 
 function getOutputFolder(T::AbstractTrial)
     name = typeof(T) |> string |> lowercase
+    name = split(name, ".")[end] # remove module name that comes with the type, e.g. main.vctmodule.sampling -> sampling
     return "$(data_dir)/outputs/$(name)s/$(T.id)"
 end
 

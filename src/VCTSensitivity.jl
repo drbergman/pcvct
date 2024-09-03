@@ -188,7 +188,6 @@ function sobolSensitivity(method::Sobolʼ, monad_min_length::Int, folder_names::
     d_config = length(parsed_variations.config_variations)
     d_rulesets = length(parsed_variations.rulesets_variations)
     d = d_config + d_rulesets
-    d_varied = d - length(ignore_indices)
     focus_indices = [i for i in 1:d if !(i in ignore_indices)]
     config_variation_ids_A = config_variation_ids[:,1]
     rulesets_variation_ids_A = rulesets_variation_ids[:,1]
@@ -204,10 +203,10 @@ function sobolSensitivity(method::Sobolʼ, monad_min_length::Int, folder_names::
     rulesets_variation_ids_Aᵦ = [i => copy(rulesets_variation_ids_A) for i in focus_indices] |> Dict
     for i in focus_indices
         Aᵦ[i][i,:] .= B[i,:]
-        if i in parsed_variations.config_variations
-            config_variation_ids_Aᵦ[i] = cdfsToVariations(Aᵦ[i][parsed_variations.config_variation_indices,:]', parsed_variations.config_variations, prepareVariationFunctions(config_id, parsed_variations.config_variations; reference_variation_id=reference_variation_id)...)
+        if i in parsed_variations.config_variation_indices
+            config_variation_ids_Aᵦ[i][:] .= cdfsToVariations(Aᵦ[i][parsed_variations.config_variation_indices,:]', parsed_variations.config_variations, prepareVariationFunctions(config_id, parsed_variations.config_variations; reference_variation_id=reference_variation_id)...)
         else
-            rulesets_variation_ids_Aᵦ[i] = cdfsToVariations(Aᵦ[i][parsed_variations.rulesets_variation_indices,:]', parsed_variations.rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)...)
+            rulesets_variation_ids_Aᵦ[i][:] .= cdfsToVariations(Aᵦ[i][parsed_variations.rulesets_variation_indices,:]', parsed_variations.rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)...)
         end
     end
     all_config_variation_ids = hcat(config_variation_ids_A, config_variation_ids_B, [config_variation_ids_Aᵦ[i] for i in focus_indices]...) # make sure to the values from the dict in the expected order

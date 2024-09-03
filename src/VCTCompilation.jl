@@ -24,6 +24,9 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
     cp("$(path_to_folder)/Makefile", "$(physicell_dir)/Makefile", force=true)
 
     cmd = `make CC=$(PHYSICELL_CPP) PROGRAM_NAME=project_ccid_$(S.folder_ids.custom_code_id) CFLAGS=$(cflags)`
+    if Sys.isapple() # hacky way to say the -j flag works on my machine but not on the HPC
+        cmd = `$cmd -j 20`
+    end
 
     println("Compiling custom code for $(S.folder_names.custom_code_folder) with flags: $cflags")
 
@@ -47,15 +50,14 @@ function getCompilerFlags(S::AbstractSampling)
     recompile = false # only recompile if need is found
     clean = false # only clean if need is found
     cflags = "-march=native -O3 -fomit-frame-pointer -fopenmp -m64 -std=c++11"
-    add_mfpmath = false
-    if Sys.iswindows()
-        add_mfpmath = true
-    elseif Sys.isapple()
+    if Sys.isapple()
         if strip(read(`uname -s`, String)) == "Darwin"
             cc_path = strip(read(`which $(PHYSICELL_CPP)`, String))
             var = strip(read(`file $cc_path`, String))
             add_mfpmath = split(var)[end] != "arm64"
         end
+    else
+        add_mfpmath = true
     end
     if add_mfpmath
         cflags *= " -mfpmath=both"
