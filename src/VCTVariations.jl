@@ -261,7 +261,7 @@ RBDVariation(n::Int; rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true, p
 
 function addVariations(method::AddVariationMethod, config_id::Int, rulesets_collection_id::Int, AV::Vector{<:AbstractVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0) 
     parsed_variations = ParsedVariations(AV)
-    addParsedVariations(method, config_id, rulesets_collection_id, parsed_variations; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
+    return addParsedVariations(method, config_id, rulesets_collection_id, parsed_variations; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
 end
 
 addVariations(method::AddVariationMethod, config_folder::String, rulesets_collection_folder::String, AV::Vector{<:AbstractVariation}; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0) = addVariations(method, retrieveID("configs", config_folder), retrieveID("rulesets_collections", rulesets_collection_folder), AV; reference_variation_id=reference_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
@@ -352,8 +352,16 @@ addGridRulesetsVariation(rulesets_collection_id::Int, AV::AbstractVariation; ref
 addGridRulesetsVariation(rulesets_collection_folder::String, AV::AbstractVariation; reference_rulesets_variation_id::Int=0) = addGridRulesetsVariation(rulesets_collection_folder, [AV]; reference_rulesets_variation_id=reference_rulesets_variation_id)
 
 function addGridCombo(grid_variation::GridVariation, config_id::Int, rulesets_collection_id::Int, pv::ParsedVariations; reference_variation_id::Int=0, reference_rulesets_variation_id::Int=0)
-    config_variation_ids = addGridVariation(config_id, pv.config_variations; reference_variation_id=reference_variation_id)
-    rulesets_variation_ids = addGridRulesetsVariation(rulesets_collection_id, pv.rulesets_variations; reference_rulesets_variation_id=reference_rulesets_variation_id)
+    if length(pv.config_variations)==0
+        config_variation_ids = [reference_variation_id]
+    else
+        config_variation_ids = addGridVariation(config_id, pv.config_variations; reference_variation_id=reference_variation_id)
+    end
+    if length(pv.rulesets_variations)==0
+        rulesets_variation_ids = [reference_rulesets_variation_id]
+    else
+        rulesets_variation_ids = addGridRulesetsVariation(rulesets_collection_id, pv.rulesets_variations; reference_rulesets_variation_id=reference_rulesets_variation_id)
+    end
     all_variation_ids = repeat(vec(config_variation_ids), inner = length(rulesets_variation_ids))
     all_rulesets_variation_ids = repeat(vec(rulesets_variation_ids), outer = length(config_variation_ids))
     return all_variation_ids, all_rulesets_variation_ids

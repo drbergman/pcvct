@@ -195,11 +195,8 @@ function sobolSensitivity(method::Sobolʼ, monad_min_length::Int, folder_names::
     config_variation_ids_B = config_variation_ids[:,2]
     rulesets_variation_ids_B = rulesets_variation_ids[:,2]
     B = cdfs[:,2,:]
-    # Aᵦ = [copy(A) for _ in 1:d_varied] # only make these for the varied parameters to measure their total sensitivity indices
     Aᵦ = [i => copy(A) for i in focus_indices] |> Dict
-    # config_variation_ids_Aᵦ = repeat(config_variation_ids_A, 1, d_varied)
     config_variation_ids_Aᵦ = [i => copy(config_variation_ids_A) for i in focus_indices] |> Dict
-    # rulesets_variation_ids_Aᵦ = repeat(rulesets_variation_ids_A, 1, d_varied)
     rulesets_variation_ids_Aᵦ = [i => copy(rulesets_variation_ids_A) for i in focus_indices] |> Dict
     for i in focus_indices
         Aᵦ[i][i,:] .= B[i,:]
