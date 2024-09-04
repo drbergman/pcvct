@@ -16,6 +16,24 @@ function initializeDatabase()
     return createSchema()
 end
 
+function patchBaseRulesetsVariationNotInDB(rulesets_collection_folder::String, db_rulesets_variations::SQLite.DB)
+    # then we are adding in this row after the db was made (so that means the db was made before this got patched)
+    column_names = queryToDataFrame("PRAGMA table_info(rulesets_variations);"; db=db_rulesets_variations) |> x->x[!,:name]
+    filter!(x -> x != "rulesets_variation_id", column_names) 
+    path_to_rulesets_collections_folder = "$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)"
+    path_to_xml = "$(path_to_rulesets_collections_folder)/base_rulesets.xml"
+    if !isfile(path_to_xml)
+        writeRules(path_to_xml, "$(path_to_rulesets_collections_folder)/base_rulesets.csv")
+    end
+    xml_doc = openXML(path_to_xml)
+    for column_name in column_names
+        xml_path = columnNameToXMLPath(column_name)
+        base_value = getField(xml_doc, xml_path)
+        query = "UPDATE rulesets_variations SET '$(column_name)'=$(base_value) WHERE rulesets_variation_id=0;"
+        DBInterface.execute(db_rulesets_variations, query)
+    end
+end
+
 function createSchema()
     # make sure necessary directories are present
     data_dir_contents = readdir("$(data_dir)/inputs/", sort=false)
@@ -80,6 +98,10 @@ function createSchema()
             DBInterface.execute(db, "INSERT OR IGNORE INTO rulesets_collections (folder_name) VALUES ('$(rulesets_collection_folder)');")
             db_rulesets_variations = "$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)/rulesets_variations.db" |> SQLite.DB
             createPCVCTTable("rulesets_variations", "rulesets_variation_id INTEGER PRIMARY KEY"; db=db_rulesets_variations)
+            df = DBInterface.execute(db_rulesets_variations, "INSERT OR IGNORE INTO rulesets_variations (rulesets_variation_id) VALUES(0) RETURNING rulesets_variation_id;") |> DataFrame
+            if !isempty(df)
+                patchBaseRulesetsVariationNotInDB(rulesets_collection_folder, db_rulesets_variations)
+            end
         end
     end
             

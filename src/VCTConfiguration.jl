@@ -42,7 +42,7 @@ function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{String}; require
     return current_element
 end
 
-function retrieveElement(path_to_xml::String,xml_path::Vector{String}; required::Bool=true)
+function retrieveElement(path_to_xml::String, xml_path::Vector{String}; required::Bool=true)
     return openXML(path_to_xml) |> x->retrieveElement(x, xml_path; required=required)
 end
 
@@ -63,7 +63,7 @@ function getOutputFolder(path_to_xml)
     return rel_path_to_output
 end
 
-function updateField(xml_doc::XMLDocument, xml_path::Vector{String},new_value::Union{Int,Real,String})
+function updateField(xml_doc::XMLDocument, xml_path::Vector{String}, new_value::Union{Int,Real,String})
     current_element = retrieveElement(xml_doc, xml_path; required=true)
     set_content(current_element, string(new_value))
     return nothing
@@ -93,6 +93,11 @@ end
 function xmlPathToColumnName(xml_path::Vector{String})
     return join(xml_path, "/")
 end
+
+function columnNameToXMLPath(column_name::String)
+    return split(column_name, "/") .|> string
+end
+
 
 function updateFieldsFromCSV(xml_doc::XMLDocument, path_to_csv::String)
     df = CSV.read(path_to_csv,DataFrame;header=false,silencewarnings=true,types=String)
