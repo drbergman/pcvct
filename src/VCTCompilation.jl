@@ -83,7 +83,6 @@ function getCompilerFlags(S::AbstractSampling)
 end
 
 function getMacroFlags(S::AbstractSampling)
-    current_macros = readMacrosFile(S)
     initializeMacros(S)
     return readMacrosFile(S)
 end

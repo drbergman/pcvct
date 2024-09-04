@@ -112,9 +112,9 @@ collectSimulationTasks(sampling::Sampling; use_previous_sims::Bool=false, force_
 collectSimulationTasks(trial::Trial; use_previous_sims::Bool=false, force_recompile::Bool=false) = runTrial(trial; use_previous_sims=use_previous_sims, force_recompile=force_recompile)
 
 function runAbstractTrial(T::AbstractTrial; use_previous_sims::Bool=false, force_recompile::Bool=true)
-    cd(()->run(pipeline(`make clean`; stdout=devnull)), physicell_dir)
+    cd(()->run(pipeline(`make clean`; stdout=devnull)), physicell_dir) # remove all *.o files so that a future recompile will re-compile all the files
 
-    getMacroFlags(T)
+    getMacroFlags(T) # make sure all the macros files are up-to-date
 
     simulation_tasks = collectSimulationTasks(T; use_previous_sims=use_previous_sims, force_recompile=force_recompile)
     n_ran = Threads.Atomic{Int}(0)
@@ -132,7 +132,7 @@ function runAbstractTrial(T::AbstractTrial; use_previous_sims::Bool=false, force
     end
 
     println("Finished $(typeof(T)) $(T.id).")
-    print("\tRan $(n_ran[]) simulations of $(length(simulation_tasks)) scheduled")
+    print("\tRan $(n_ran[]) simulations of $(length(simulation_tasks)) scheduled.")
     use_previous_sims ? println(" (*).") : println(".")
     println("\tSuccessful completion of $(n_success[]).")
     use_previous_sims && println("\n(*) Some scheduled simulations do not run because matching previous simulations were found.")

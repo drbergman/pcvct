@@ -4,6 +4,8 @@ abstract type AbstractTrial end
 abstract type AbstractSampling <: AbstractTrial end
 abstract type AbstractMonad <: AbstractSampling end
 
+Base.size(T::AbstractTrial) = getSimulations(T) |> size
+
 ##########################################
 ########   AbstractSamplingIDs   #########
 ##########################################
@@ -89,6 +91,8 @@ end
 
 Simulation(simulation_id::Int) = getSimulation(simulation_id)
 
+Base.size(simulation::Simulation) = 1
+
 ##########################################
 ###############   Monad   ################
 ##########################################
@@ -105,8 +109,6 @@ struct Monad <: AbstractMonad
     variation_id::Int # integer identifying which variation on the base config file to use (variations_$(config_id).db)
     rulesets_variation_id::Int # integer identifying which variation on the ruleset file to use (rulesets_variations_$(ruleset_id).db)
 end
-
-Base.size(monad::Monad) = readMonadSimulations(monad.id) |> size
 
 function Simulation(monad::Monad)
     return Simulation(monad.folder_ids, monad.folder_names, monad.variation_id, monad.rulesets_variation_id)
@@ -190,8 +192,6 @@ struct Sampling <: AbstractSampling
         return new(id, monad_min_length, monad_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
     end
 end
-
-Base.size(sampling::Sampling) = getSamplingSimulations(sampling.id) |> size
 
 function Monad(sampling::Sampling, index::Int)
     return Monad(sampling.monad_min_length, sampling.folder_ids, sampling.folder_names, sampling.variation_ids[index], sampling.rulesets_variation_ids[index])
@@ -329,8 +329,6 @@ struct Trial <: AbstractTrial
     end
 end
 
-Base.size(trial::Trial) = getTrialSimulations(trial.id) |> size
-
 function Sampling(trial::Trial, index::Int)
     return Sampling(trial.sampling_ids[index], trial.monad_min_length, trial.folder_ids[index], trial.folder_names[index], trial.variation_ids[index], trial.rulesets_variation_ids[index])
 end
@@ -457,5 +455,4 @@ function VCTClassID(class_str::String, id::Int)
     else
         error("class_str must be one of 'Simulation', 'Monad', 'Sampling', or 'Trial'.")
     end
-    
 end
