@@ -12,6 +12,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
+        with:
+          submodules: true
+          token: ${{ secrets.GH_PCVCT }}
       - name: Download PhysiCell
         run: |
           python ./tests/get_my_physicell.py
@@ -29,9 +32,16 @@ jobs:
           touch ./tests/test-project/data/inputs/rulesets_collections/default/base_rulesets.csv
           echo "default,pressure,decreases,cycle entry,0,0.5,4,0" >> ./tests/test-project/data/inputs/rulesets_collections/default/base_rulesets.csv
           echo "Template project files are in place within ./tests/test-project/data/inputs"
-      - name: Add julia packages
+      - name: Set up Julia
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.10.4' # lts was producing inconsistent versions. sometimes 1.6.7, sometimes 1.10.5. so I'm going with the version I have been most recently developing with.
+      - name: Install julia dependencies
         run: |
-          julia -e "using Pkg; Pkg.add([\"DataFrames\", \"CSV\", \"SQLite\", \"Random\", \"LightXML\", \"LazyGrids\", \"Dates\", \"Tables\", \"Distributions\", \"Statistics\", \"QuasiMonteCarlo\", \"Sobol\", \"MAT\","\FFTW\"])"
+          julia -e 'using Pkg; \
+                    Pkg.add(["DataFrames", "CSV", "SQLite", "Random", "LightXML", "LazyGrids", "Dates", "Tables", "Distributions", "Statistics", "QuasiMonteCarlo", "Sobol", "MAT", "FFTW", "GlobalSensitivity"]); \
+                    Pkg.update()'
+          echo "Julia packages added and updated"
       - name: Initialize database
         run: |
           cd ./tests
