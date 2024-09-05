@@ -87,6 +87,9 @@ jobs:
       statuses: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
+          token: ${{ secrets.GH_PCVCT }}
       - uses: julia-actions/setup-julia@v2
         with:
           version: '1'

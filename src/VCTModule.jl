@@ -1,6 +1,3 @@
-println("VCTModule.jl: pwd = $(pwd())")
-println("VCTModule.jl: @__DIR__ = $(@__DIR__)")
-
 # each file (includes below) has their own export statements
 export initializeVCT, resetDatabase, addGridVariation, addGridRulesetsVariation, runAbstractTrial, readTrialSamplings, getSimulations, deleteSimulation
 export addLHSVariation, addLHSRulesetsVariation
