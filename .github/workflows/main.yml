@@ -41,30 +41,24 @@ jobs:
       with:
         submodules: true
         token: ${{ secrets.GH_PCVCT }}
-    - name: Download PhysiCell
-      run: |
-        python3 ./tests/get_my_physicell.py
-        unzip -q PhysiCell-my-physicell.zip -d ./tests
-        echo "PhysiCell downloaded, unzipped, and moved to ./tests/PhysiCell"
     - name: Set up test project
       run: |
-        mv ./tests/PhysiCell-my-physicell ./tests/PhysiCell
-        mkdir -p ./tests/test-project/data/inputs/configs/default
-        cp ./tests/PhysiCell/sample_projects/template/config/PhysiCell_settings.xml ./tests/test-project/data/inputs/configs/default/PhysiCell_settings.xml
-        mkdir -p ./tests/test-project/data/inputs/custom_codes/default
-        cp ./tests/PhysiCell/sample_projects/template/main.cpp ./tests/test-project/data/inputs/custom_codes/default/main.cpp
-        cp ./tests/PhysiCell/sample_projects/template/Makefile ./tests/test-project/data/inputs/custom_codes/default/Makefile
-        cp -r ./tests/PhysiCell/sample_projects/template/custom_modules ./tests/test-project/data/inputs/custom_codes/default/custom_modules
-        mkdir -p ./tests/test-project/data/inputs/rulesets_collections/default
-        touch ./tests/test-project/data/inputs/rulesets_collections/default/base_rulesets.csv
-        echo "default,pressure,decreases,cycle entry,0,0.5,4,0" >> ./tests/test-project/data/inputs/rulesets_collections/default/base_rulesets.csv
-        echo "Template project files are in place within ./tests/test-project/data/inputs"
+        mkdir -p ./test/test-project/data/inputs/configs/default
+        cp ./test/PhysiCell/sample_projects/template/config/PhysiCell_settings.xml ./test/test-project/data/inputs/configs/default/PhysiCell_settings.xml
+        mkdir -p ./test/test-project/data/inputs/custom_codes/default
+        cp ./test/PhysiCell/sample_projects/template/main.cpp ./test/test-project/data/inputs/custom_codes/default/main.cpp
+        cp ./test/PhysiCell/sample_projects/template/Makefile ./test/test-project/data/inputs/custom_codes/default/Makefile
+        cp -r ./test/PhysiCell/sample_projects/template/custom_modules ./test/test-project/data/inputs/custom_codes/default/custom_modules
+        mkdir -p ./test/test-project/data/inputs/rulesets_collections/default
+        touch ./test/test-project/data/inputs/rulesets_collections/default/base_rulesets.csv
+        echo "default,pressure,decreases,cycle entry,0,0.5,4,0" >> ./test/test-project/data/inputs/rulesets_collections/default/base_rulesets.csv
+        echo "Template project files are in place within ./test/test-project/data/inputs"
     - uses: julia-actions/setup-julia@v2
       with:
         version: ${{ matrix.julia-version }}
     - uses: julia-actions/cache@v2
     - uses: julia-actions/julia-buildpkg@v1
-    # - uses: julia-actions/julia-runtest@v1 # not sure what this does yet...runs files marked as tests?
+    - uses: julia-actions/julia-runtest@v1 # not sure what this does yet...runs files marked as tests?
     - name: Install julia dependencies
       run: |
         julia -e 'using Pkg; \
