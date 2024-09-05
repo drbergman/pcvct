@@ -54,8 +54,8 @@ function initializeVCT(path_to_physicell::String, path_to_data::String)
     global data_dir = abspath(path_to_data)
     println(rpad("Path to PhysiCell:", 20, ' ') * physicell_dir)
     println(rpad("Path to data:", 20, ' ') * data_dir)
-    println(rpad("Compiler:", 20, ' ') * PHYSICELL_CPP)
     initializeDatabase("$(data_dir)/vct.db")
+    println(rpad("Compiler:", 20, ' ') * PHYSICELL_CPP)
     flush(stdout)
 end
 
