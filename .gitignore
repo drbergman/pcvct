@@ -1,2 +1,11 @@
 .DS_Store
 test.jl
+
+# from PkgTemplate.jl
+*.jl.*.cov
+*.jl.cov
+*.jl.mem
+/Manifest.toml
+/docs/Manifest.toml
+/docs/build/
+

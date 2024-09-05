@@ -38,20 +38,20 @@ n_ran, n_success = runAbstractTrial(simulation)
 if n_success == 0
     println("Simulation failed...")
     # print out the compilation error file if exists
-    if isfile("$(data_dir)/inputs/custom_codes/$(custom_code_folder)/output.err")
-        println(read("$(data_dir)/inputs/custom_codes/$(custom_code_folder)/output.err", String))
+    if isfile("$(path_to_data_folder)/inputs/custom_codes/$(custom_code_folder)/output.err")
+        println(read("$(path_to_data_folder)/inputs/custom_codes/$(custom_code_folder)/output.err", String))
     else
         println("No compilation error file found.")
     end
     # print out the output error file if exists
-    if isfile("$(data_dir)/outputs/simulations/$(simulation.id)/output.err")
-        println(read("$(data_dir)/outputs/simulations/$(simulation.id)/output.err", String))
+    if isfile("$(path_to_data_folder)/outputs/simulations/$(simulation.id)/output.err")
+        println(read("$(path_to_data_folder)/outputs/simulations/$(simulation.id)/output.err", String))
     else
         println("No output error file found.")
     end
     # print out the output log file if exists
-    if isfile("$(data_dir)/outputs/simulations/$(simulation.id)/output.log")
-        println(read("$(data_dir)/outputs/simulations/$(simulation.id)/output.log", String))
+    if isfile("$(path_to_data_folder)/outputs/simulations/$(simulation.id)/output.log")
+        println(read("$(path_to_data_folder)/outputs/simulations/$(simulation.id)/output.log", String))
     else
         println("No output log file found.")
     end

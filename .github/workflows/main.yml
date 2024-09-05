@@ -28,12 +28,6 @@ jobs:
             julia-version: '1'
             shell: "bash"
             compiler: "g++-13"
-        # include: # can't get this to work yet...
-        #   - os: macOS-latest
-        #     name: "macOS"
-        #     shell: "bash"
-        #     compiler: "g++-13"
-        #     julia-version: '1'
 
     runs-on: ${{ matrix.os }}
 
@@ -47,11 +41,6 @@ jobs:
       with:
         submodules: true
         token: ${{ secrets.GH_PCVCT }}
-    - name: Pip install requests
-      if: matrix.os == 'macOS-latest'
-      run: |
-        python3 -m pip install --upgrade pip
-        pip3 install requests
     - name: Download PhysiCell
       run: |
         python3 ./tests/get_my_physicell.py
