@@ -3,7 +3,7 @@
 	url = https://github.com/drbergman/PhysiCell-XMLRules
 	
 [submodule "PhysiCell"]
-	path = PhysiCell
+	path = test/PhysiCell
 	url = https://github.com/drbergman/PhysiCell
 	shallow = true
 	depth = 1
