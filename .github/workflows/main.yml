@@ -33,8 +33,8 @@ jobs:
         submodules: true
         token: ${{ secrets.GH_PCVCT }}
     - name: Pip install requests
+      if: matrix.os == 'macOS-latest'
       run: |
-        if: matrix.os == 'macOS-latest'
         python -m pip install --upgrade pip
         pip install requests
     - name: Download PhysiCell
@@ -49,6 +49,7 @@ jobs:
         cp ./tests/PhysiCell/sample_projects/template/config/PhysiCell_settings.xml ./tests/test-project/data/inputs/configs/default/PhysiCell_settings.xml
         mkdir -p ./tests/test-project/data/inputs/custom_codes/default
         cp ./tests/PhysiCell/sample_projects/template/main.cpp ./tests/test-project/data/inputs/custom_codes/default/main.cpp
+        cp ./tests/PhysiCell/sample_projects/template/Makefile ./tests/test-project/data/inputs/custom_codes/default/Makefile
         cp -r ./tests/PhysiCell/sample_projects/template/custom_modules ./tests/test-project/data/inputs/custom_codes/default/custom_modules
         mkdir -p ./tests/test-project/data/inputs/rulesets_collections/default
         touch ./tests/test-project/data/inputs/rulesets_collections/default/base_rulesets.csv
@@ -66,32 +67,8 @@ jobs:
                   Pkg.update()'
         echo "Julia packages added and updated"
     # - uses: julia-actions/julia-runtest@v1 # not sure what this does yet...runs files marked as tests?
-    - name: Initialize database
+    - name: Run sampling
       run: |
         cd ./tests
-        julia ./test-project/VCT/InitializeDatabase.jl
-        echo "Database initialized"
-# jobs:
-#   build:
-#     runs-on: ubuntu-latest
-#     steps:
-#       # - name: Checkout repository
-#       #   uses: actions/checkout@v2
-#       #   with:
-#       #     submodules: true
-#       #     token: ${{ secrets.GH_PCVCT }}
-#       # - name: Set up Julia
-#       #   uses: julia-actions/setup-julia@v2
-#       #   with:
-#       #     version: '1' # lts was producing inconsistent versions. sometimes 1.6.7, sometimes 1.10.5. so I'm going with the version I have been most recently developing with.
-#       - name: Install julia dependencies
-#         run: |
-#           julia -e 'using Pkg; \
-#                     Pkg.add(["DataFrames", "CSV", "SQLite", "Random", "LightXML", "LazyGrids", "Dates", "Tables", "Distributions", "Statistics", "QuasiMonteCarlo", "Sobol", "MAT", "FFTW", "GlobalSensitivity"]); \
-#                     Pkg.update()'
-#           echo "Julia packages added and updated"
-#       - name: Initialize database
-#         run: |
-#           cd ./tests
-#           julia ./test-project/VCT/InitializeDatabase.jl
-#           echo "Database initialized"
+        julia -t 8 ./test-project/VCT/RunSampling.jl
+        echo "RunSampling.jl complete"
