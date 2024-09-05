@@ -29,6 +29,9 @@ jobs:
           touch ./tests/test-project/data/inputs/rulesets_collections/default/base_rulesets.csv
           echo "default,pressure,decreases,cycle entry,0,0.5,4,0" >> ./tests/test-project/data/inputs/rulesets_collections/default/base_rulesets.csv
           echo "Template project files are in place within ./tests/test-project/data/inputs"
+      - name: Add julia packages
+        run: |
+          julia -e "using Pkg; Pkg.add([\"DataFrames\", \"CSV\", \"SQLite\", \"Random\", \"LightXML\", \"LazyGrids\", \"Dates\", \"Tables\", \"Distributions\", \"Statistics\", \"QuasiMonteCarlo\", \"Sobol\", \"MAT\","\FFTW\"])"
       - name: Initialize database
         run: |
           cd ./tests
