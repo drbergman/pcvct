@@ -50,11 +50,11 @@ jobs:
     - name: Pip install requests
       if: matrix.os == 'macOS-latest'
       run: |
-        python -m pip install --upgrade pip
-        pip install requests
+        python3 -m pip install --upgrade pip
+        pip3 install requests
     - name: Download PhysiCell
       run: |
-        python ./tests/get_my_physicell.py
+        python3 ./tests/get_my_physicell.py
         unzip -q PhysiCell-my-physicell.zip -d ./tests
         echo "PhysiCell downloaded, unzipped, and moved to ./tests/PhysiCell"
     - name: Set up test project

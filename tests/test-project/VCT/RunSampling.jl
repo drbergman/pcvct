@@ -34,7 +34,28 @@ config_variation_id = config_variation_ids[1]
 rulesets_variation_id = rulesets_variation_ids[1]
 simulation = Simulation(config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder, config_variation_id, rulesets_variation_id)
 
-runAbstractTrial(simulation)
+n_ran, n_success = runAbstractTrial(simulation)
+if n_success == 0
+    println("Simulation failed...")
+    # print out the compilation error file if exists
+    if isfile("$(data_dir)/inputs/custom_codes/$(custom_code_folder)/output.err")
+        println(read("$(data_dir)/inputs/custom_codes/$(custom_code_folder)/output.err", String))
+    else
+        println("No compilation error file found.")
+    end
+    # print out the output error file if exists
+    if isfile("$(data_dir)/outputs/simulations/$(simulation.id)/output.err")
+        println(read("$(data_dir)/outputs/simulations/$(simulation.id)/output.err", String))
+    else
+        println("No output error file found.")
+    end
+    # print out the output log file if exists
+    if isfile("$(data_dir)/outputs/simulations/$(simulation.id)/output.log")
+        println(read("$(data_dir)/outputs/simulations/$(simulation.id)/output.log", String))
+    else
+        println("No output log file found.")
+    end
+end
 
 println("""
 ############################################
