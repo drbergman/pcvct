@@ -1,5 +1,3 @@
-module VCTModule
-
 # each file (includes below) has their own export statements
 export initializeVCT, resetDatabase, addGridVariation, addGridRulesetsVariation, runAbstractTrial, readTrialSamplings, getSimulations, deleteSimulation
 export addLHSVariation, addLHSRulesetsVariation
@@ -136,6 +134,4 @@ function getOutputFolder(T::AbstractTrial)
     name = typeof(T) |> string |> lowercase
     name = split(name, ".")[end] # remove module name that comes with the type, e.g. main.vctmodule.sampling -> sampling
     return "$(data_dir)/outputs/$(name)s/$(T.id)"
-end
-
 end
