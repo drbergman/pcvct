@@ -32,6 +32,11 @@ jobs:
       with:
         submodules: true
         token: ${{ secrets.GH_PCVCT }}
+    - name: Pip install requests
+      run: |
+        if: matrix.os == 'macOS-latest'
+        python -m pip install --upgrade pip
+        pip install requests
     - name: Download PhysiCell
       run: |
         python ./tests/get_my_physicell.py
