@@ -18,7 +18,7 @@ end
 
 function getLabels(xml_doc::XMLDocument)
     xml_path = ["cellular_information", "cell_populations", "cell_population", "custom", "simplified_data", "labels"]
-    labels_element = VCTModule.retrieveElement(xml_doc, xml_path; required=true)
+    labels_element = retrieveElement(xml_doc, xml_path; required=true)
 
     labels = String[]
     for label in child_elements(labels_element)
@@ -45,9 +45,9 @@ indexToFilename(index::Int) = "output$(lpad(index,8,"0"))"
 
 function PhysiCellSnapshot(folder::String, index::Union{Int, Symbol}; labels::Vector{String}=String[])
     filepath_base = "$(folder)/$(indexToFilename(index))"
-    xml_doc = VCTModule.openXML("$(filepath_base).xml")
+    xml_doc = openXML("$(filepath_base).xml")
     mat_file = "$(filepath_base)_cells.mat"
-    time = VCTModule.getField(xml_doc, ["metadata","current_time"]) |> x->parse(Float64, x)
+    time = getField(xml_doc, ["metadata","current_time"]) |> x->parse(Float64, x)
     if isempty(labels)
         labels = getLabels(xml_doc)
     end
@@ -55,7 +55,7 @@ function PhysiCellSnapshot(folder::String, index::Union{Int, Symbol}; labels::Ve
     cells[!,:ID] = convert.(Int,cells[!,:ID])
     cells[!,:dead] = convert.(Bool,cells[!,:dead])
     cells[!,:cell_type] = convert.(Int,cells[!,:cell_type])
-    VCTModule.closeXML(xml_doc)
+    closeXML(xml_doc)
     return PhysiCellSnapshot(folder, index, time, DataFrame(cells))
 end
 

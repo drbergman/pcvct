@@ -56,19 +56,19 @@ jobs:
     - uses: julia-actions/setup-julia@v2
       with:
         version: ${{ matrix.julia-version }}
+    - name: Set environment variable PHYSICELL_CPP
+      run: echo "PHYSICELL_CPP=${{ matrix.compiler }}" >> $GITHUB_ENV
     - uses: julia-actions/cache@v2
     - uses: julia-actions/julia-buildpkg@v1
     - uses: julia-actions/julia-runtest@v1 # not sure what this does yet...runs files marked as tests?
-    - name: Install julia dependencies
-      run: |
-        julia -e 'using Pkg; \
-                  Pkg.add(["DataFrames", "CSV", "SQLite", "Random", "LightXML", "LazyGrids", "Dates", "Tables", "Distributions", "Statistics", "QuasiMonteCarlo", "Sobol", "MAT", "FFTW", "GlobalSensitivity"]); \
-                  Pkg.update()'
-        echo "Julia packages added and updated"
-    - name: Set environment variable PHYSICELL_CPP
-      run: echo "PHYSICELL_CPP=${{ matrix.compiler }}" >> $GITHUB_ENV
-    - name: Run sampling
-      run: |
-        cd ./tests
-        julia -t 8 ./test-project/VCT/RunSampling.jl
-        echo "RunSampling.jl complete"
+    # - name: Install julia dependencies
+    #   run: |
+    #     julia -e 'using Pkg; \
+    #               Pkg.add(["DataFrames", "CSV", "SQLite", "Random", "LightXML", "LazyGrids", "Dates", "Tables", "Distributions", "Statistics", "QuasiMonteCarlo", "Sobol", "MAT", "FFTW", "GlobalSensitivity"]); \
+    #               Pkg.update()'
+    #     echo "Julia packages added and updated"
+    # - name: Run sampling
+    #   run: |
+    #     cd ./test
+    #     julia -t 8 ./test-project/VCT/RunSampling.jl
+    #     echo "RunSampling.jl complete"

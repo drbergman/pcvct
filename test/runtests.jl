@@ -3,5 +3,5 @@ using Test
 
 @testset "pcvct.jl" begin
     # Write your tests here.
-    @assert 2+2==4
+    include("./test-project/VCT/RunSampling.jl")
 end
