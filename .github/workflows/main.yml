@@ -20,12 +20,27 @@ jobs:
           - '1.10.4' # the one I have been developing with
           - '1' # to check the latest v1 version
           - 'pre' # check upcoming releases
-        os:
-          - ubuntu-latest
+        os: ["ubuntu-latest"]
+        shell: ["bash"]
+        compiler: ["g++"]
         include:
-          - os: macOS-latest
+          - os: "macOS-latest"
             julia-version: '1'
+            shell: "bash"
+            compiler: "g++-13"
+        # include: # can't get this to work yet...
+        #   - os: macOS-latest
+        #     name: "macOS"
+        #     shell: "bash"
+        #     compiler: "g++-13"
+        #     julia-version: '1'
+
     runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+    
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -60,13 +75,15 @@ jobs:
         version: ${{ matrix.julia-version }}
     - uses: julia-actions/cache@v2
     - uses: julia-actions/julia-buildpkg@v1
+    # - uses: julia-actions/julia-runtest@v1 # not sure what this does yet...runs files marked as tests?
     - name: Install julia dependencies
       run: |
         julia -e 'using Pkg; \
                   Pkg.add(["DataFrames", "CSV", "SQLite", "Random", "LightXML", "LazyGrids", "Dates", "Tables", "Distributions", "Statistics", "QuasiMonteCarlo", "Sobol", "MAT", "FFTW", "GlobalSensitivity"]); \
                   Pkg.update()'
         echo "Julia packages added and updated"
-    # - uses: julia-actions/julia-runtest@v1 # not sure what this does yet...runs files marked as tests?
+    - name: Set environment variable PHYSICELL_CPP
+      run: echo "PHYSICELL_CPP=${{ matrix.compiler }}" >> $GITHUB_ENV
     - name: Run sampling
       run: |
         cd ./tests
