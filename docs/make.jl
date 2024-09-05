@@ -1,3 +1,6 @@
+println("make.jl: pwd = $(pwd())")
+println("make.jl: @__DIR__ = $(@__DIR__)")
+
 using pcvct
 using Documenter
 
