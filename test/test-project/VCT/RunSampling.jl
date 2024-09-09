@@ -95,7 +95,7 @@ println("""
 ############################################
 """)
 
-runAbstractTrial(sampling)
+n_ran, n_success = runAbstractTrial(sampling)
 
 println("""
 ############################################
@@ -103,16 +103,27 @@ println("""
 ############################################
 """)
 
-simulation_ids = getSimulations(sampling)
-expected_num_sims = monad_min_length
+n_simulations = length(sampling) # number of simulations recorded (in .csvs) for this sampling
+n_expected_sims = monad_min_length
 for ev in EV
-    global expected_num_sims *= length(ev.values)
+    global n_expected_sims *= length(ev.values)
 end
+n_variations = length(sampling.variation_ids)
 
-@test length(simulation_ids) == expected_num_sims
+# make sure the number of simulations in this sampling is what we expected based on...
+@test n_simulations == n_expected_sims # the EVs...
+@test n_simulations == n_variations * monad_min_length # ...how many variation ids we recorded (number of rulesets_variations_ids must match variation_ids on construction of sampling)
+@test n_simulations == n_ran # ...how many simulations we started
+@test n_simulations == n_success # ...how many simulations succeeded
 
 println("""
 ############################################
 ##    SAMPLING SUCCESSFULLY IN CSVS!      ##
 ############################################
 """)
+
+n_ran, n_success = runAbstractTrial(sampling; use_previous_sims=true)
+
+# no new simulations should have been run
+@test n_ran == 0 
+@test n_success == 0

@@ -15,7 +15,7 @@ include("VCTLoader.jl")
 include("VCTSensitivity.jl")
 include("VCTCompilation.jl")
 include("VCTDeletion.jl")
-include("VCTRunning.jl")
+include("VCTRunner.jl")
 include("VCTRecorder.jl")
 
 include("../PhysiCell-XMLRules/src/PhysiCell_XMLRules.jl")

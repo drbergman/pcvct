@@ -133,7 +133,7 @@ function runAbstractTrial(T::AbstractTrial; use_previous_sims::Bool=false, force
 
     n_asterisks = 1
     asterisks = Dict{String, Int}()
-    size_T = size(T)
+    size_T = length(T)
     println("Finished $(typeof(T)) $(T.id).")
     println("\t- Consists of $(size_T) simulations.")
     print(  "\t- Scheduled $(length(simulation_tasks)) simulations to complete this $(typeof(T)).")
