@@ -340,7 +340,7 @@ end
 function recordSensitivityScheme(gsa_sampling::GSASampling)
     method = methodString(gsa_sampling)
     path_to_csv = "$(getOutputFolder(gsa_sampling.sampling))/$(method)_scheme.csv"
-    return CSV.write(path_to_csv, getMonadIDDataFrame(gsa_sampling); writeheader=true)
+    return CSV.write(path_to_csv, getMonadIDDataFrame(gsa_sampling); header=true)
 end
 
 function evaluateFunctionOnSampling(gsa_sampling::GSASampling, f::Function)
