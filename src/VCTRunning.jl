@@ -131,11 +131,47 @@ function runAbstractTrial(T::AbstractTrial; use_previous_sims::Bool=false, force
         success ? Threads.atomic_add!(n_success, 1) : nothing # shorthand for add 1 if success is true
     end
 
+    n_asterisks = 1
+    asterisks = Dict{String, Int}()
+    size_T = size(T)
     println("Finished $(typeof(T)) $(T.id).")
-    print("\tRan $(n_ran[]) simulations of $(length(simulation_tasks)) scheduled.")
-    use_previous_sims ? println(" (*).") : println(".")
-    println("\tSuccessful completion of $(n_success[]).")
-    use_previous_sims && println("\n(*) Some scheduled simulations do not run because matching previous simulations were found.")
+    println("\t- Consists of $(size_T) simulations.")
+    print(  "\t- Scheduled $(length(simulation_tasks)) simulations to complete this $(typeof(T)).")
+    print_low_schedule_message = use_previous_sims && length(simulation_tasks) < size_T
+    if print_low_schedule_message
+        println(" ($(repeat("*", n_asterisks))).")
+        asterisks["low_schedule_message"] = n_asterisks
+        n_asterisks += 1
+    else
+        println(".")
+    end
+    print(  "\t- Ran $(n_ran[]) simulations.")
+    print_low_ran_warning = n_ran[] < length(simulation_tasks)
+    if print_low_ran_warning
+        println(" ($(repeat("*", n_asterisks))).")
+        asterisks["low_ran_warning"] = n_asterisks
+        n_asterisks += 1
+    else
+        println(".")
+    end
+    print(  "\t- Successful completion of $(n_success[]) simulations.")
+    print_low_success_warning = n_success[] < n_ran[]
+    if print_low_success_warning
+        println(" ($(repeat("*", n_asterisks))).")
+        asterisks["low_success_warning"] = n_asterisks
+        n_asterisks += 1 # in case something gets added later
+    else
+        println(".")
+    end
+    if print_low_schedule_message
+        println("\n($(repeat("*", asterisks["low_schedule_message"]))) pcvct found matching simulations and will save you time by not re-running them!")
+    end
+    if print_low_ran_warning
+        println("\n($(repeat("*", asterisks["low_ran_warning"]))) Some scheduled simulations did not run. This would happen because a simulation had run previously, but no been recorded with the monad.")
+    end
+    if print_low_success_warning
+        println("\n($(repeat("*", asterisks["low_success_warning"]))) Some simulations did not complete successfully. Check the output.err files for more information.")
+    end
     println("\n--------------------------------------------------\n")
     return n_ran[], n_success[]
 end
