@@ -2,7 +2,7 @@ function recordIDs(path_to_folder::String, filename::String, ids::Array{Int})
     mkpath(path_to_folder)
     path_to_csv = "$(path_to_folder)/$(filename).csv"
     lines_table = compressIDs(ids)
-    CSV.write(path_to_csv, lines_table; writeheader=false)
+    CSV.write(path_to_csv, lines_table; header=false)
 end
 
 function recordSimulationIDs(monad_id::Int, simulation_ids::Array{Int})

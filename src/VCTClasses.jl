@@ -4,7 +4,7 @@ abstract type AbstractTrial end
 abstract type AbstractSampling <: AbstractTrial end
 abstract type AbstractMonad <: AbstractSampling end
 
-Base.size(T::AbstractTrial) = getSimulations(T) |> size
+Base.length(T::AbstractTrial) = getSimulations(T) |> length
 
 ##########################################
 ########   AbstractSamplingIDs   #########
@@ -91,7 +91,7 @@ end
 
 Simulation(simulation_id::Int) = getSimulation(simulation_id)
 
-Base.size(simulation::Simulation) = 1
+Base.length(simulation::Simulation) = 1
 
 ##########################################
 ###############   Monad   ################
