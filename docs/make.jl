@@ -18,6 +18,6 @@ makedocs(;
 )
 
 deploydocs(;
-    repo="github.com/drbergman/pcvct.jl",
+    repo="github.com/drbergman/pcvct",
     devbranch="main",
 )
