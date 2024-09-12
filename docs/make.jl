@@ -8,7 +8,7 @@ makedocs(;
     authors="Daniel Bergman <danielrbergman@gmail.com> and contributors",
     sitename="pcvct.jl",
     format=Documenter.HTML(;
-        canonical="https://drbergman.github.io/pcvct.jl",
+        canonical="https://drbergman.github.io/pcvct",
         edit_link="main",
         assets=String[],
     ),
