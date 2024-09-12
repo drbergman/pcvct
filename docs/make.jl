@@ -6,7 +6,7 @@ DocMeta.setdocmeta!(pcvct, :DocTestSetup, :(using pcvct); recursive=true)
 makedocs(;
     modules=[pcvct],
     authors="Daniel Bergman <danielrbergman@gmail.com> and contributors",
-    sitename="pcvct.jl",
+    sitename="pcvct",
     format=Documenter.HTML(;
         canonical="https://drbergman.github.io/pcvct",
         edit_link="main",
