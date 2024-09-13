@@ -81,6 +81,7 @@ rulesets_variation_ids = zeros(Int, size(config_variation_ids))
 sampling = Sampling(monad_min_length, config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder, config_variation_ids, rulesets_variation_ids)
 
 n_ran, n_success = runAbstractTrial(sampling)
+@test length(sampling) == length(config_variation_ids)
 @test n_ran == n_success
 
 ## test the in place functions
