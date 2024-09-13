@@ -35,7 +35,7 @@ element_paths = [
 ]
 
 for ep in element_paths
-    ce = pcvct.retrieveElement(path_to_xml, xml_path; required=false)
+    ce = pcvct.retrieveElement(path_to_xml, ep[2]; required=false)
     @test !isnothing(ce) # make sure the element was found
 end
 
@@ -56,7 +56,7 @@ node_paths = [
 ] |> Dict
 
 EV = ElementaryVariation[]
-for (i, xml_path) in enumerate(keys(node_paths))
+for (i, xml_path) in enumerate(values(node_paths))
     if typeof(xml_path[1])==String # do not add the custom_datas_path since they also vary "sample"
         if xml_path[end] == "number_of_cells"
             push!(EV, ElementaryVariation(xml_path, [1, 2]))
