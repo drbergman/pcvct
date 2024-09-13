@@ -1,16 +1,11 @@
 using Test, pcvct
 
+include("./PrintHelpers.jl")
+
 filename = @__FILE__
 filename = split(filename, "/") |> last
 str = "TESTING WITH $(filename)"
-str = lpad(str, length(str) + Int(ceil((40 - length(str))/2)))
-str = rpad(str, 40)
-
-println("""
-############################################
-##$(str)##
-############################################
-""")
+hashBorderPrint(str)
 
 path_to_physicell_folder = "./PhysiCell" # path to PhysiCell folder
 path_to_data_folder = "./test-project/data" # path to data folder
@@ -114,3 +109,37 @@ sampling = Sampling(monad_min_length, config_folder, rulesets_collection_folder,
 
 n_ran, n_success = runAbstractTrial(sampling)
 @test n_ran == n_success
+
+hashBorderPrint("SUCCESSFULLY VARIED CONFIG PARAMETERS!")
+
+EV = ElementaryVariation[]
+"default,pressure,decreases,cycle entry,0,0.5,4,0"
+
+xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","max_response"]
+push!(EV, ElementaryVariation(xml_path, [0.0, 1e-8]))
+xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","signal:name:cycle entry","half_max"]
+push!(EV, ElementaryVariation(xml_path, [0.25, 0.75]))
+
+rulesets_variation_ids = addGridRulesetsVariation(rulesets_collection_folder, EV)
+
+config_variation_ids = fill(reference_config_variation_id, size(rulesets_variations_ids))
+sampling = Sampling(monad_min_length, config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder, config_variation_ids, rulesets_variation_ids)
+
+n_ran, n_success = runAbstractTrial(sampling)
+@test n_ran == n_success
+
+hashBorderPrint("SUCCESSFULLY VARIED RULESETS PARAMETERS!")
+
+EV = ElementaryVariation[]
+addMotilityVariationDimension!(EV, "default", "speed", [0.1, 1.0])
+xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","signal:name:cycle entry","half_max"]
+push!(EV, ElementaryVariation(xml_path, [0.25, 0.75]))
+
+config_variation_ids, rulesets_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, EV; reference_variation_id=reference_config_variation_id, reference_rulesets_variation_id=0)
+
+sampling = Sampling(monad_min_length, config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder, config_variation_ids, rulesets_variation_ids)
+
+n_ran, n_success = runAbstractTrial(sampling)
+@test n_ran == n_success
+
+hashBorderPrint("SUCCESSFULLY VARIED CONFIG AND RULESETS PARAMETERS!")
