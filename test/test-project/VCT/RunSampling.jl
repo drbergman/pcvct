@@ -1,26 +1,17 @@
 using Test, pcvct
 
+include("./PrintHelpers.jl")
+
 filename = @__FILE__
 filename = split(filename, "/") |> last
 str = "TESTING WITH $(filename)"
-str = lpad(str, length(str) + Int(ceil((40 - length(str))/2)))
-str = rpad(str, 40)
-
-println("""
-############################################
-##$(str)##
-############################################
-""")
+hashBorderPrint(str)
 
 path_to_physicell_folder = "./PhysiCell" # path to PhysiCell folder
 path_to_data_folder = "./test-project/data" # path to data folder
 initializeVCT(path_to_physicell_folder, path_to_data_folder)
 
-println("""
-############################################
-##   DATABASE SUCCESSFULLY INITIALIZED!   ##
-############################################
-""")
+hashBorderPrint("DATABASE SUCCESSFULLY INITIALIZED!")
 
 config_folder = "default"
 rulesets_collection_folder = "default"
@@ -31,11 +22,7 @@ push!(EV, ElementaryVariation(["save","SVG","interval"], [30.0]))
 
 config_variation_ids, rulesets_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, EV)
 
-println("""
-############################################
-##     DATABASE SUCCESSFULLY UPDATED!     ##
-############################################
-""")
+hashBorderPrint("DATABASE SUCCESSFULLY UPDATED!")
 
 ic_cell_folder = ""
 ic_substrate_folder = ""
@@ -47,41 +34,33 @@ simulation = Simulation(config_folder, rulesets_collection_folder, ic_cell_folde
 
 n_ran, n_success = runAbstractTrial(simulation)
 if n_success == 0
-    println("Simulation failed...")
+    hashBorderPrint("Simulation failed...")
     # print out the compilation error file if exists
     if isfile("$(path_to_data_folder)/inputs/custom_codes/$(custom_code_folder)/output.err")
         println(read("$(path_to_data_folder)/inputs/custom_codes/$(custom_code_folder)/output.err", String))
     else
-        println("No compilation error file found.")
+        hashBorderPrint("No compilation error file found.")
     end
     # print out the output error file if exists
     if isfile("$(path_to_data_folder)/outputs/simulations/$(simulation.id)/output.err")
         println(read("$(path_to_data_folder)/outputs/simulations/$(simulation.id)/output.err", String))
     else
-        println("No output error file found.")
+        hashBorderPrint("No output error file found.")
     end
     # print out the output log file if exists
     if isfile("$(path_to_data_folder)/outputs/simulations/$(simulation.id)/output.log")
         println(read("$(path_to_data_folder)/outputs/simulations/$(simulation.id)/output.log", String))
     else
-        println("No output log file found.")
+        hashBorderPrint("No output log file found.")
     end
 end
 
-println("""
-############################################
-##      SIMULATION SUCCESSFULLY RUN!      ##
-############################################
-""")
+hashBorderPrint("SIMULATION SUCCESSFULLY RUN!")
 
 query = pcvct.constructSelectQuery("simulations", "")
 df = pcvct.queryToDataFrame(query; is_row=true)
 
-println("""
-############################################
-##     SIMULATION SUCCESSFULLY IN DB!     ##
-############################################
-""")
+hashBorderPrint("SIMULATION SUCCESSFULLY IN DB!")
 
 monad_min_length = 2
 
@@ -98,19 +77,11 @@ push!(EV, ElementaryVariation(xml_path, [7.0, 8.0]))
 config_variation_ids, rulesets_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, EV; reference_variation_id=config_variation_id, reference_rulesets_variation_id=rulesets_variation_id)
 sampling = Sampling(monad_min_length, config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder, config_variation_ids, rulesets_variation_ids)
 
-println("""
-############################################
-##      SAMPLING SUCCESSFULLY CREATED!    ##
-############################################
-""")
+hashBorderPrint("SAMPLING SUCCESSFULLY CREATED!")
 
 n_ran, n_success = runAbstractTrial(sampling)
 
-println("""
-############################################
-##      SAMPLING SUCCESSFULLY RUN!        ##
-############################################
-""")
+hashBorderPrint("SAMPLING SUCCESSFULLY RUN!")
 
 n_simulations = length(sampling) # number of simulations recorded (in .csvs) for this sampling
 n_expected_sims = monad_min_length
@@ -125,11 +96,7 @@ n_variations = length(sampling.variation_ids)
 @test n_simulations == n_ran # ...how many simulations we started
 @test n_simulations == n_success # ...how many simulations succeeded
 
-println("""
-############################################
-##    SAMPLING SUCCESSFULLY IN CSVS!      ##
-############################################
-""")
+hashBorderPrint("SAMPLING SUCCESSFULLY IN CSVS!")
 
 n_ran, n_success = runAbstractTrial(sampling; use_previous_sims=true, force_recompile=false)
 
@@ -137,11 +104,7 @@ n_ran, n_success = runAbstractTrial(sampling; use_previous_sims=true, force_reco
 @test n_ran == 0 
 @test n_success == 0
 
-println("""
-############################################
-##   SUCCESSFULLY FOUND PREVIOUS SIMS!    ##
-############################################
-""")
+hashBorderPrint("SUCCESSFULLY FOUND PREVIOUS SIMS!")
 
 trial = Trial([sampling])
 
@@ -151,8 +114,4 @@ n_ran, n_success = runAbstractTrial(trial; use_previous_sims=true, force_recompi
 @test n_ran == 0 
 @test n_success == 0
 
-println("""
-############################################
-##        SUCCESSFULLY RAN TRIAL!         ##
-############################################
-""")
+hashBorderPrint("SUCCESSFULLY RAN TRIAL!")
