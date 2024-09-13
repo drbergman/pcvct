@@ -1,7 +1,19 @@
 using Test, pcvct
 
-path_to_physicell_folder = "./test/PhysiCell" # path to PhysiCell folder
-path_to_data_folder = "./test/test-project/data" # path to data folder
+filename = @__FILE__
+filename = split(filename, "/") |> last
+str = "TESTING WITH $(filename)"
+str = lpad(str, length(str) + Int(ceil((40 - length(str))/2)))
+str = rpad(str, 40)
+
+println("""
+############################################
+##$(str)##
+############################################
+""")
+
+path_to_physicell_folder = "./PhysiCell" # path to PhysiCell folder
+path_to_data_folder = "./test-project/data" # path to data folder
 initializeVCT(path_to_physicell_folder, path_to_data_folder)
 
 config_folder = "default"
@@ -81,12 +93,12 @@ append!(config_variation_ids, new_config_variation_ids)
 
 
 EV = ElementaryVariation[]
-addDomainVariationDimension!(EV, (:xmin=>-78.1, :xmax=>78.1, :ymin=>-30.1, :ymax=>30.1, :zmin=>-10.1, :zmax=>10.1))
+addDomainVariationDimension!(EV, (x_min=-78.1, x_max=78.1, y_min=-30.1, y_max=30.1, z_min=-10.1, z_max=10.1))
 new_config_variation_ids = addGridVariation(config_folder, EV; reference_variation_id=reference_config_variation_id)
 append!(config_variation_ids, new_config_variation_ids)
 
 EV = ElementaryVariation[]
-addDomainVariationDimension!(EV, (:min_x=>-78.2, :maxy=>30.2))
+addDomainVariationDimension!(EV, (min_x=-78.2, maxy=30.2))
 new_config_variation_ids = addGridVariation(config_folder, EV; reference_variation_id=reference_config_variation_id)
 append!(config_variation_ids, new_config_variation_ids)
 
