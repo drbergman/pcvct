@@ -127,3 +127,23 @@ n_ran, n_success = runAbstractTrial(sampling; use_previous_sims=true)
 # no new simulations should have been run
 @test n_ran == 0 
 @test n_success == 0
+
+println("""
+############################################
+##   SUCCESSFULLY FOUND PREVIOUS SIMS!    ##
+############################################
+""")
+
+trial = Trial([sampling])
+
+n_ran, n_success = runAbstractTrial(trial; use_previous_sims=true)
+
+# no new simulations should have been run
+@test n_ran == 0 
+@test n_success == 0
+
+println("""
+############################################
+##        SUCCESSFULLY RAN TRIAL!         ##
+############################################
+""")
