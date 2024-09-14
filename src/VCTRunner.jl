@@ -143,7 +143,7 @@ function runAbstractTrial(T::AbstractTrial; use_previous_sims::Bool=false, force
         asterisks["low_schedule_message"] = n_asterisks
         n_asterisks += 1
     else
-        println(".")
+        println()
     end
     print(  "\t- Ran $(n_ran[]) simulations.")
     print_low_ran_warning = n_ran[] < length(simulation_tasks)
@@ -152,7 +152,7 @@ function runAbstractTrial(T::AbstractTrial; use_previous_sims::Bool=false, force
         asterisks["low_ran_warning"] = n_asterisks
         n_asterisks += 1
     else
-        println(".")
+        println()
     end
     print(  "\t- Successful completion of $(n_success[]) simulations.")
     print_low_success_warning = n_success[] < n_ran[]
@@ -161,7 +161,7 @@ function runAbstractTrial(T::AbstractTrial; use_previous_sims::Bool=false, force
         asterisks["low_success_warning"] = n_asterisks
         n_asterisks += 1 # in case something gets added later
     else
-        println(".")
+        println()
     end
     if print_low_schedule_message
         println("\n($(repeat("*", asterisks["low_schedule_message"]))) pcvct found matching simulations and will save you time by not re-running them!")

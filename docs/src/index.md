@@ -4,7 +4,7 @@ CurrentModule = pcvct
 
 # pcvct
 
-Documentation for [pcvct](https://github.com/drbergman/pcvct.jl).
+Documentation for [pcvct](https://github.com/drbergman/pcvct).
 
 ```@index
 ```
