@@ -166,7 +166,7 @@ function addGrid(AV::Vector{<:AbstractVariation}, addColumnsByPathsFn::Function,
         varied_values = [A[i] for A in NDG] .|> string |> x -> join("\"" .* x .* "\"", ",")
         variation_ids[i] = addRowFn(table_features, static_values, varied_values)
     end
-    return variation_ids
+    return variation_ids |> vec
 end
 
 function setUpColumns(AV::Vector{<:AbstractVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function)

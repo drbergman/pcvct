@@ -33,8 +33,6 @@ function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{String}; require
             end
         end
         if !found
-            error_msg = "Element not found: $(join(xml_path, "//"))"
-            error_msg *= "\n\tFailed at: $(path_element)"
             required ? retrieveElementError(xml_path, path_element) : return nothing
         end
     end
