@@ -16,7 +16,6 @@ function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{String}; require
         if !occursin(":",path_element)
             current_element = find_element(current_element, path_element)
             if isnothing(current_element)
-                
                 required ? retrieveElementError(xml_path, path_element) : return nothing
             end
             continue
@@ -97,7 +96,6 @@ end
 function columnNameToXMLPath(column_name::String)
     return split(column_name, "/") .|> string
 end
-
 
 function updateFieldsFromCSV(xml_doc::XMLDocument, path_to_csv::String)
     df = CSV.read(path_to_csv,DataFrame;header=false,silencewarnings=true,types=String)
@@ -180,34 +178,49 @@ end
 
 ################## XML Path Helper Functions ##################
 
-function cellDefinitionPath(cell_definition::String)
+# can I define my own macro that takes all these functions and adds methods for FN(cell_def, node::String) and FN(cell_def, path_suffix::Vector{String})??
+function cellDefinitionPath(cell_definition::String)::Vector{String}
     return ["cell_definitions", "cell_definition:name:$(cell_definition)"]
 end
 
-function phenotypePath(cell_definition::String)
+function phenotypePath(cell_definition::String)::Vector{String}
     return [cellDefinitionPath(cell_definition); "phenotype"]
 end
 
-cyclePath(cell_definition::String) = [phenotypePath(cell_definition); "cycle"]
-deathPath(cell_definition::String) = [phenotypePath(cell_definition); "death"]
-apoptosisPath(cell_definition::String) = [deathPath(cell_definition); "model:code:100"]
-necrosisPath(cell_definition::String) = [deathPath(cell_definition); "model:code:101"]
+cyclePath(cell_definition::String)::Vector{String} = [phenotypePath(cell_definition); "cycle"]
+deathPath(cell_definition::String)::Vector{String} = [phenotypePath(cell_definition); "death"]
+apoptosisPath(cell_definition::String)::Vector{String} = [deathPath(cell_definition); "model:code:100"]
+necrosisPath(cell_definition::String)::Vector{String} = [deathPath(cell_definition); "model:code:101"]
 
-motilityPath(cell_definition::String) = [phenotypePath(cell_definition); "motility"]
-motilityPath(cell_definition::String, field_name::String) = [motilityPath(cell_definition); field_name]
+motilityPath(cell_definition::String)::Vector{String} = [phenotypePath(cell_definition); "motility"]
+motilityPath(cell_definition::String, field_name::String)::Vector{String} = [motilityPath(cell_definition); field_name]
 
-cellInteractionsPath(cell_definition::String) = [phenotypePath(cell_definition); "cell_interactions"]
-cellInteractionsPath(cell_definition::String, field_name::String) = [cellInteractionsPath(cell_definition); field_name]
+cellInteractionsPath(cell_definition::String)::Vector{String} = [phenotypePath(cell_definition); "cell_interactions"]
+cellInteractionsPath(cell_definition::String, field_name::String)::Vector{String} = [cellInteractionsPath(cell_definition); field_name]
 
-attackRatesPath(cell_definition::String) = cellInteractionsPath(cell_definition, "attack_rates")
-attackRatesPath(cell_definition::String, target_name::String) = [attackRatesPath(cell_definition); "attack_rate:name:$(target_name)"]
+attackRatesPath(cell_definition::String)::Vector{String} = cellInteractionsPath(cell_definition, "attack_rates")
+attackRatesPath(cell_definition::String, target_name::String)::Vector{String} = [attackRatesPath(cell_definition); "attack_rate:name:$(target_name)"]
 
-function customDataPath(cell_definition::String, field_name::String)
-    return ["cell_definitions", "cell_definition:name:$(cell_definition)", "custom_data", field_name]
+customDataPath(cell_definition::String)::Vector{String} = [cellDefinitionPath(cell_definition); "custom_data"]
+
+function customDataPath(cell_definition::String, field_name::String)::Vector{String}
+    return [customDataPath(cell_definition); field_name]
 end
 
 function customDataPath(cell_definition::String, field_names::Vector{String})
     return [customDataPath(cell_definition, field_name) for field_name in field_names]
+end
+
+function userParameterPath(field_name::String)::Vector{String}
+    return ["user_parameters"; field_name]
+end
+
+function userParameterPath(field_names::Vector{String})
+    return [userParameterPath(field_name) for field_name in field_names]
+end
+
+function initialConditionPath()
+    return ["initial_conditions"; "cell_positions"; "filename"]
 end
 
 ################## Variation Dimension Functions ##################
@@ -223,10 +236,10 @@ end
 function addDomainVariationDimension!(AV::Vector{<:AbstractVariation}, domain::NamedTuple)
     for (tag, value) in pairs(domain)
         tag = String(tag)
-        if startswith("min", tag)
+        if startswith(tag, "min")
             last_character = tag[end]
             tag = "$(last_character)_min"
-        elseif startswith("max", tag)
+        elseif startswith(tag, "max")
             last_character = tag[end]
             tag = "$(last_character)_max"
         end
@@ -256,17 +269,7 @@ function addCustomDataVariationDimension!(AV::Vector{<:AbstractVariation}, cell_
     end
 end
 
-function userParameterPath(field_name::String)
-    return ["user_parameters", field_name]
-end
-
-function userParameterPath(field_names::Vector{String})
-    return [userParameterPath(field_name) for field_name in field_names]
-end
-
-function initialConditionPath()
-    return ["initial_conditions","cell_positions","filename"]
-end
+################## Simplify Name Functions ##################
 
 function simpleVariationNames(name::String)
     if name == "variation_id"

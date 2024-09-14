@@ -1,7 +1,16 @@
 using Test, pcvct
 
-# include("../../../src/pcvct.jl") # include
-# using .pcvct
+filename = @__FILE__
+filename = split(filename, "/") |> last
+str = "TESTING WITH $(filename)"
+str = lpad(str, length(str) + Int(ceil((40 - length(str))/2)))
+str = rpad(str, 40)
+
+println("""
+############################################
+##$(str)##
+############################################
+""")
 
 path_to_physicell_folder = "./PhysiCell" # path to PhysiCell folder
 path_to_data_folder = "./test-project/data" # path to data folder
@@ -122,8 +131,28 @@ println("""
 ############################################
 """)
 
-n_ran, n_success = runAbstractTrial(sampling; use_previous_sims=true)
+n_ran, n_success = runAbstractTrial(sampling; use_previous_sims=true, force_recompile=false)
 
 # no new simulations should have been run
 @test n_ran == 0 
 @test n_success == 0
+
+println("""
+############################################
+##   SUCCESSFULLY FOUND PREVIOUS SIMS!    ##
+############################################
+""")
+
+trial = Trial([sampling])
+
+n_ran, n_success = runAbstractTrial(trial; use_previous_sims=true, force_recompile=false)
+
+# no new simulations should have been run
+@test n_ran == 0 
+@test n_success == 0
+
+println("""
+############################################
+##        SUCCESSFULLY RAN TRIAL!         ##
+############################################
+""")
