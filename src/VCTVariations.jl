@@ -37,7 +37,7 @@ function getVariationValues(dv::DistributedVariation; cdf=missing)
     if ismissing(cdf)
         error("A cdf must be provided for a DistributedVariation.")
     end
-    return Statistics.quantile(dv.distribution, cdf)
+    return map(Base.Fix1(quantile, dv.distribution), cdf)
 end
 
 getVariationValues(av::AbstractVariation; cdf=missing) = error("getVariationValues not defined for $(typeof(av))")

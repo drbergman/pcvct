@@ -1,7 +1,5 @@
 using Test, pcvct
 
-include("./PrintHelpers.jl")
-
 filename = @__FILE__
 filename = split(filename, "/") |> last
 str = "TESTING WITH $(filename)"
@@ -16,9 +14,9 @@ hashBorderPrint("DATABASE SUCCESSFULLY INITIALIZED!")
 config_folder = "default"
 rulesets_collection_folder = "default"
 EV = ElementaryVariation[]
-push!(EV, ElementaryVariation(["overall","max_time"], [60.0]))
-push!(EV, ElementaryVariation(["save","full_data","interval"], [30.0]))
-push!(EV, ElementaryVariation(["save","SVG","interval"], [30.0]))
+push!(EV, ElementaryVariation(["overall","max_time"], [12.0]))
+push!(EV, ElementaryVariation(["save","full_data","interval"], [6.0]))
+push!(EV, ElementaryVariation(["save","SVG","interval"], [6.0]))
 
 config_variation_ids, rulesets_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, EV)
 
