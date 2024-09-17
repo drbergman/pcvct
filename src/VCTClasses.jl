@@ -197,7 +197,7 @@ function Monad(sampling::Sampling, index::Int)
     return Monad(sampling.monad_min_length, sampling.folder_ids, sampling.folder_names, sampling.variation_ids[index], sampling.rulesets_variation_ids[index])
 end
 
-function Sampling(monad_min_length::Int, config_id::Int, rulesets_collection_id::Int, ic_substrate_id::Int, ic_ecm_id::Int, custom_code_id::Int, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int})
+function Sampling(monad_min_length::Int, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, ic_substrate_id::Int, ic_ecm_id::Int, custom_code_id::Int, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int})
     folder_ids = AbstractSamplingIDs(config_id, rulesets_collection_id, ic_cell_id, ic_substrate_id, ic_ecm_id, custom_code_id)
     return Sampling(monad_min_length, folder_ids, variation_ids, rulesets_variation_ids)
 end
