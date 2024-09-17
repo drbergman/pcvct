@@ -38,6 +38,9 @@ end
 n_points = 2^4-1
 monad_min_length = 1
 folder_names = pcvct.AbstractSamplingFolders(config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder)
+folder_ids = pcvct.AbstractSamplingIDs(folder_names)
+
+@test folder_names == pcvct.AbstractSamplingFolders(folder_ids)
 
 gs_fn(simulation_id::Int) = finalPopulationCount(simulation_id)[0]
 

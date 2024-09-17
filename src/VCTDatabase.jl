@@ -259,15 +259,15 @@ end
 
 ################## DB Interface Functions ##################
 
-function getVariationDB(folder::String; type::Symbol = :config)
-    if type == :config
-        getConfigDB(folder)
-    elseif type == :rulesets_collection
-        getRulesetsCollectionDB(folder)
-    else
-        error("type must be :config or :rulesets_collection.")
-    end
-end
+# function getVariationDB(folder::String; type::Symbol = :config)
+#     if type == :config
+#         getConfigDB(folder)
+#     elseif type == :rulesets_collection
+#         getRulesetsCollectionDB(folder)
+#     else
+#         error("type must be :config or :rulesets_collection.")
+#     end
+# end
 
 getConfigDB(config_folder::String) = "$(data_dir)/inputs/configs/$(config_folder)/variations.db" |> SQLite.DB
 getConfigDB(config_id::Int) = getConfigFolder(config_id) |> getConfigDB

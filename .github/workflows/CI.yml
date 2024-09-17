@@ -61,6 +61,9 @@ jobs:
         mkdir -p ./test/test-project/data/inputs/rulesets_collections/default
         touch ./test/test-project/data/inputs/rulesets_collections/default/base_rulesets.csv
         echo "default,pressure,decreases,cycle entry,0,0.5,4,0" >> ./test/test-project/data/inputs/rulesets_collections/default/base_rulesets.csv
+        mkdir -p ./test/test-project/data/inputs/ics/cells/default
+        echo "x,y,z,type" >> ./test/test-project/data/inputs/ics/cells/default/cells.csv
+        echo "0,0,0,default" >> ./test/test-project/data/inputs/ics/cells/default/cells.csv
         echo "Template project files are in place within ./test/test-project/data/inputs"
     - uses: julia-actions/setup-julia@v2
       with:
