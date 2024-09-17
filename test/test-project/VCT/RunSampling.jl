@@ -1,7 +1,5 @@
 using Test, pcvct
 
-include("./PrintHelpers.jl")
-
 filename = @__FILE__
 filename = split(filename, "/") |> last
 str = "TESTING WITH $(filename)"
