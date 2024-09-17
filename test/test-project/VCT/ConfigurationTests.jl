@@ -61,7 +61,7 @@ for (i, xml_path) in enumerate(values(node_paths))
     end
 end
 
-push!(EV, ElementaryVariation(["overall", "max_time"], [1.0]))
+push!(EV, ElementaryVariation(["overall", "max_time"], [12.0]))
 
 config_variation_ids = addGridVariation(config_folder, EV)
 
