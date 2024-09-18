@@ -27,6 +27,11 @@ PHYSICELL_CPP::String = haskey(ENV, "PHYSICELL_CPP") ? ENV["PHYSICELL_CPP"] : "/
 
 ################## Initialization Functions ##################
 
+"""
+pcvctLogo() -> String
+
+Returns a string representation of the PCVCT logo.
+"""
 function pcvctLogo()
     return """
     \n
@@ -46,6 +51,15 @@ function pcvctLogo()
       """
 end
 
+"""
+initializeVCT(path_to_physicell::String, path_to_data::String)
+
+Initializes the VCT environment by setting the paths to PhysiCell and data directories, and initializing the database.
+
+# Arguments
+- `path_to_physicell::String`: Path to the PhysiCell directory.
+- `path_to_data::String`: Path to the data directory.
+"""
 function initializeVCT(path_to_physicell::String, path_to_data::String)
     # print big logo of PCVCT here
     println(pcvctLogo())
@@ -61,6 +75,17 @@ end
 
 ################## Selection Functions ##################
 
+"""
+readConstituentIDs(path_to_csv::String) -> Vector{Int}
+
+Reads constituent IDs from a CSV file.
+
+# Arguments
+- `path_to_csv::String`: Path to the CSV file.
+
+# Returns
+- `Vector{Int}`: A vector of constituent IDs.
+"""
 function readConstituentIDs(path_to_csv::String)
     if !isfile(path_to_csv)
         return Int[]
@@ -79,10 +104,37 @@ function readConstituentIDs(path_to_csv::String)
     return ids
 end
 
+
+"""
+constituentsType(T::AbstractTrial) -> Type
+
+Returns the type of constituents for a given AbstractTrial.
+
+# Arguments
+- `T::AbstractTrial`: An AbstractTrial object.
+
+# Returns
+- `Type`: The type of constituents.
+"""
 constituentsType(trial::Trial) = Sampling
 constituentsType(sampling::Sampling) = Monad
 constituentsType(monad::Monad) = Simulation
 
+"""
+    readConstituentIDs(T::AbstractTrial)
+
+Reads the constituent IDs for a given trial type `T`.
+
+# Arguments
+- `T::AbstractTrial`: An instance of a trial type.
+
+# Returns
+- A list of constituent IDs read from a CSV file.
+
+# Details
+The function constructs a file path based on the type and ID of the trial `T`. 
+It then reads the constituent IDs from a CSV file located at the constructed path.
+"""
 function readConstituentIDs(T::AbstractTrial)
     type_str = typeof(T) |> string |> lowercase
     path_to_folder = "$(data_dir)/outputs/$(type_str)s/$(T.id)"
