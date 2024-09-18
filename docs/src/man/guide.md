@@ -16,7 +16,7 @@ project-dir/
 └── VCT/
 ```
 
-## Setting up the `data/inputs/` directory
+## Setting up the inputs directory
 
 Within each of the terminal subdirectories above within `data/inputs/`, add a subdirectory with a user-defined name with content described below.
 We will use the name `"default"` for all as an example.

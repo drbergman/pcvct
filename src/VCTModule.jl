@@ -28,7 +28,7 @@ PHYSICELL_CPP::String = haskey(ENV, "PHYSICELL_CPP") ? ENV["PHYSICELL_CPP"] : "/
 ################## Initialization Functions ##################
 
 """
-pcvctLogo() -> String
+`pcvctLogo() -> String`
 
 Returns a string representation of the PCVCT logo.
 """

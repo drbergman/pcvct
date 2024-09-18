@@ -17,6 +17,10 @@ makedocs(;
         "Manual" => Any[
             "Guide" => "man/guide.md",
         ],
+        "Documentation" => map(
+            s -> "lib/$(s)",
+            sort(readdir(joinpath(@__DIR__, "src/lib")))
+        ),
     ],
 )
 

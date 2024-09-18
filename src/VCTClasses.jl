@@ -10,6 +10,19 @@ Base.length(T::AbstractTrial) = getSimulations(T) |> length
 ########   AbstractSamplingIDs   #########
 ##########################################
 
+"""
+`struct AbstractSamplingIDs`
+
+A struct representing various IDs used for sampling in the VCT environment.
+
+# Fields
+- `config_id::Int`: Integer identifying the base configuration folder ID for lookup in the database.
+- `rulesets_collection_id::Int`: Integer identifying which rulesets collection to use as a framework.
+- `ic_cell_id::Int`: Integer identifying the initial condition cells folder for lookup in the database.
+- `ic_substrate_id::Int`: Integer identifying the initial condition substrate folder for lookup in the database.
+- `ic_ecm_id::Int`: Integer identifying the initial condition extracellular matrix folder for lookup in the database.
+- `custom_code_id::Int`: Integer identifying the custom code folder (with `{main.cpp, Makefile, custom_modules/{custom.cpp, custom.h}}` as folder structure) for lookup in the database.
+"""
 struct AbstractSamplingIDs
     config_id::Int # integer identifying the base configuration folder id for lookup in the db (config_$(config_id)/)
     rulesets_collection_id::Int # integer identifying which rulesets collection to use as a framework
@@ -23,13 +36,26 @@ end
 ######   AbstractSamplingFolders   #######
 ##########################################
 
+"""
+`AbstractSamplingFolders`
+
+A structure representing the folders used for sampling in a VCT (Virtual Cell Technology) environment.
+
+# Fields
+- `config_folder::String`: Name of the configuration folder.
+- `rulesets_collection_folder::String`: Name of the rulesets collection folder.
+- `ic_cell_folder::String`: Name of the initial condition (IC) cells folder.
+- `ic_substrate_folder::String`: Name of the initial condition (IC) substrate folder.
+- `ic_ecm_folder::String`: Name of the initial condition (IC) extracellular matrix (ECM) folder.
+- `custom_code_folder::String`: Name of the custom code folder.
+"""
 struct AbstractSamplingFolders
-    config_folder::String # path to config folder
-    rulesets_collection_folder::String # path to rulesets collection folder
-    ic_cell_folder::String # path to ic cells folder
-    ic_substrate_folder::String # path to ic substrate folder
-    ic_ecm_folder::String # path to ic ecm folder
-    custom_code_folder::String # path to custom code folder
+    config_folder::String # name of config folder
+    rulesets_collection_folder::String # name of rulesets collection folder
+    ic_cell_folder::String # name of ic cells folder
+    ic_substrate_folder::String # name of ic substrate folder
+    ic_ecm_folder::String # name of ic ecm folder
+    custom_code_folder::String # name of custom code folder
 end
 
 function AbstractSamplingFolders(ids::AbstractSamplingIDs)
