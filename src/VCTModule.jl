@@ -52,7 +52,7 @@ function pcvctLogo()
 end
 
 """
-initializeVCT(path_to_physicell::String, path_to_data::String)
+`initializeVCT(path_to_physicell::String, path_to_data::String)`
 
 Initializes the VCT environment by setting the paths to PhysiCell and data directories, and initializing the database.
 
@@ -76,7 +76,7 @@ end
 ################## Selection Functions ##################
 
 """
-readConstituentIDs(path_to_csv::String) -> Vector{Int}
+`readConstituentIDs(path_to_csv::String) -> Vector{Int}`
 
 Reads constituent IDs from a CSV file.
 
@@ -106,7 +106,7 @@ end
 
 
 """
-constituentsType(T::AbstractTrial) -> Type
+`constituentsType(T::AbstractTrial) -> Type`
 
 Returns the type of constituents for a given AbstractTrial.
 
@@ -121,7 +121,7 @@ constituentsType(sampling::Sampling) = Monad
 constituentsType(monad::Monad) = Simulation
 
 """
-    readConstituentIDs(T::AbstractTrial)
+`readConstituentIDs(T::AbstractTrial)`
 
 Reads the constituent IDs for a given trial type `T`.
 
