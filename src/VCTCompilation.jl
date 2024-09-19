@@ -1,3 +1,30 @@
+
+"""
+`loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)`
+
+Load and compile custom code for a given sampling instance.
+
+# Arguments
+- `S::AbstractSampling`: An instance of `AbstractSampling` containing the necessary folder names and IDs for custom code compilation.
+- `force_recompile::Bool=false`: A boolean flag to force recompilation of the custom code regardless of the current state.
+
+# Description
+This function performs the following steps:
+1. Retrieves compiler flags and determines if recompilation is necessary.
+2. If recompilation is not required and `force_recompile` is false, the function returns immediately.
+3. If recompilation is required, it optionally cleans the build directory.
+4. Copies custom module files, `main.cpp`, and `Makefile` from the source directory to the target directory.
+5. Compiles the custom code using the `make` command with appropriate flags.
+6. Logs the compilation output and errors to specified files.
+7. Deletes the error log file if it is empty.
+8. Cleans up by removing copied files and restoring the default `Makefile`.
+9. Moves the compiled project to the designated folder.
+
+# Notes
+- The function assumes the presence of specific directory structures and file names.
+- On macOS, the `-j` flag is used to parallelize the compilation process.
+- The function logs compilation output and errors to files in the source directory.
+"""
 function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
     cflags, recompile, clean = getCompilerFlags(S)
 
@@ -46,6 +73,27 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
     return 
 end
 
+"""
+`getCompilerFlags(S::AbstractSampling) -> Tuple{String, Bool, Bool}`
+
+Generate the compiler flags for the given sampling object `S`.
+
+# Arguments
+- `S::AbstractSampling`: The sampling object for which to generate compiler flags.
+
+# Returns
+- `cflags::String`: The compiler flags as a string.
+- `recompile::Bool`: A boolean indicating whether recompilation is needed.
+- `clean::Bool`: A boolean indicating whether cleaning is needed.
+
+# Description
+This function generates the necessary compiler flags based on the system and the macros defined in the sampling object `S`. It checks if the system is macOS and adjusts the flags accordingly. It also compares the current macros with the updated macros to determine if recompilation and cleaning are needed.
+
+# Notes
+- On macOS, it checks if the system architecture is `arm64` and adjusts the `-mfpmath` flag accordingly.
+- It reads the current macros from a file and compares them with the updated macros to decide if recompilation and cleaning are necessary.
+- If the project file does not exist in the specified directory, it sets `recompile` to `true`.
+"""
 function getCompilerFlags(S::AbstractSampling)
     recompile = false # only recompile if need is found
     clean = false # only clean if need is found
@@ -64,7 +112,8 @@ function getCompilerFlags(S::AbstractSampling)
     end
 
     current_macros = readMacrosFile(S) # this will get all macros already in the macros file
-    updated_macros = getMacroFlags(S) # this will get all macros already in the macros file
+    addMacrosIfNeeded(S)
+    updated_macros = readMacrosFile(S) # this will get all macros already in the macros file
 
     if length(updated_macros) != length(current_macros)
         recompile = true
@@ -82,24 +131,11 @@ function getCompilerFlags(S::AbstractSampling)
     return cflags, recompile, clean
 end
 
-function getMacroFlags(S::AbstractSampling)
-    initializeMacros(S)
-    return readMacrosFile(S)
-end
-
-function getMacroFlags(trial::Trial)
-    for i in eachindex(trial.sampling_ids)
-        sampling = Sampling(trial, i) # instantiate a sampling with the variation_ids and the simulation ids already found
-        initializeMacros(sampling)
-    end
-end
-
-function initializeMacros(S::AbstractSampling)
+function addMacrosIfNeeded(S::AbstractSampling)
     # else get the macros neeeded
-    checkPhysiECMMacro(S)
+    addPhysiECMIfNeeded(S)
 
     # check others...
-    return
 end
 
 function addMacro(S::AbstractSampling, macro_name::String)
@@ -107,41 +143,42 @@ function addMacro(S::AbstractSampling, macro_name::String)
     open(path_to_macros, "a") do f
         println(f, macro_name)
     end
-    return
 end
 
-function checkPhysiECMMacro(S::AbstractSampling)
+function addPhysiECMIfNeeded(S::AbstractSampling)
     if "ADDON_PHYSIECM" in readMacrosFile(S)
         # if the custom codes folder for the sampling already has the macro, then we don't need to do anything
         return
     end
     if S.folder_ids.ic_ecm_id != -1
         # if this sampling is providing an ic file for ecm, then we need to add the macro
-        return addMacro(S, "ADDON_PHYSIECM")
+        addMacro(S, "ADDON_PHYSIECM")
+        return
     end
     # check if ecm_setup element has enabled="true" in config files
     loadConfiguration(S)
-    return checkPhysiECMInConfig(S)
+    if isPhysiECMInConfig(S)
+        # if the base config file says that the ecm is enabled, then we need to add the macro
+        addMacro(M, "ADDON_PHYSIECM")
+    end
 end
 
-function checkPhysiECMInConfig(M::AbstractMonad)
+function isPhysiECMInConfig(M::AbstractMonad)
     path_to_xml = "$(data_dir)/inputs/configs/$(M.folder_names.config_folder)/variations/variation_$(M.variation_id).xml"
     xml_path = ["microenvironment_setup", "ecm_setup"]
     ecm_setup_element = retrieveElement(path_to_xml, xml_path; required=false)
     if !isnothing(ecm_setup_element) && attribute(ecm_setup_element, "enabled") == "true" # note: attribute returns nothing if the attribute does not exist
-        # if the base config file says that the ecm is enabled, then we need to add the macro
-        addMacro(M, "ADDON_PHYSIECM")
         return true
     end
     return false
 end
 
-function checkPhysiECMInConfig(sampling::Sampling)
+function isPhysiECMInConfig(sampling::Sampling)
     # otherwise, no previous sampling saying to use the macro, no ic file for ecm, and the base config file does not have ecm enabled,
     # now just check that the variation is not enabling the ecm
     for index in eachindex(sampling.variation_ids)
         monad = Monad(sampling, index) # instantiate a monad with the variation_id and the simulation ids already found
-        if checkPhysiECMInConfig(monad)
+        if isPhysiECMInConfig(monad)
             return true
         end
     end

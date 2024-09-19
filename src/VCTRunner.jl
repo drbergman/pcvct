@@ -114,8 +114,6 @@ collectSimulationTasks(trial::Trial; use_previous_sims::Bool=false, force_recomp
 function runAbstractTrial(T::AbstractTrial; use_previous_sims::Bool=false, force_recompile::Bool=true)
     cd(()->run(pipeline(`make clean`; stdout=devnull)), physicell_dir) # remove all *.o files so that a future recompile will re-compile all the files
 
-    getMacroFlags(T) # make sure all the macros files are up-to-date
-
     simulation_tasks = collectSimulationTasks(T; use_previous_sims=use_previous_sims, force_recompile=force_recompile)
     n_ran = Threads.Atomic{Int}(0)
     n_success = Threads.Atomic{Int}(0)
