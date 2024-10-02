@@ -4,7 +4,7 @@ abstract type AbstractTrial end
 abstract type AbstractSampling <: AbstractTrial end
 abstract type AbstractMonad <: AbstractSampling end
 
-Base.length(T::AbstractTrial) = getSimulations(T) |> length
+Base.length(T::AbstractTrial) = getSimulationIDs(T) |> length
 
 ##########################################
 ########   AbstractSamplingIDs   #########
@@ -30,6 +30,11 @@ struct AbstractSamplingIDs
     ic_substrate_id::Int # integer identifying the ic substrate folder for lookup in the db
     ic_ecm_id::Int # integer identifying the ic ecm folder for lookup in the db
     custom_code_id::Int # integer identifyng the custom code folder (with {main.cpp,Makefile,custom_modules/{custom.cpp,custom.h}} as folder structure) for lookup in the db
+
+    function AbstractSamplingIDs(config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, ic_substrate_id::Int, ic_ecm_id::Int, custom_code_id::Int)
+        @assert config_id > 0 "config_id must be positive"
+        return new(config_id, rulesets_collection_id, ic_cell_id, ic_substrate_id, ic_ecm_id, custom_code_id)
+    end
 end
 
 ##########################################
@@ -56,6 +61,11 @@ struct AbstractSamplingFolders
     ic_substrate_folder::String # name of ic substrate folder
     ic_ecm_folder::String # name of ic ecm folder
     custom_code_folder::String # name of custom code folder
+
+    function AbstractSamplingFolders(config_folder::String, rulesets_collection_folder::String, ic_cell_folder::String, ic_substrate_folder::String, ic_ecm_folder::String, custom_code_folder::String)
+        @assert config_folder != "" "config_folder must be provided"
+        return new(config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder)
+    end
 end
 
 function AbstractSamplingFolders(ids::AbstractSamplingIDs)
@@ -79,6 +89,21 @@ struct Simulation <: AbstractMonad
     
     variation_id::Int # integer identifying which variation on the base config file to use (variations.db)
     rulesets_variation_id::Int # integer identifying which variation on the ruleset file to use (rulesets_variations.db)
+
+    function Simulation(id::Int, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_id::Int, rulesets_variation_id::Int)
+        @assert id > 0 "id must be positive"
+        @assert variation_id >= 0 "variation_id must be non-negative"
+        @assert rulesets_variation_id >= -1 "rulesets_variation_id must be non-negative or -1 (indicating no rules)"
+        if rulesets_variation_id != -1
+            @assert folder_names.rulesets_collection_folder != "" "rulesets_collection_folder must be provided if rulesets_variation_id is not -1 (indicating that the rules are in use)"
+        end
+        return new(id, folder_ids, folder_names, variation_id, rulesets_variation_id)
+    end
+end
+
+function Simulation(folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_id::Int, rulesets_variation_id::Int) 
+    simulation_id = DBInterface.execute(db, "INSERT INTO simulations (config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id,variation_id,rulesets_variation_id,status_code_id) VALUES($(folder_ids.config_id),$(folder_ids.rulesets_collection_id),$(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),$(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id),$(variation_id),$(rulesets_variation_id),'$(getStatusCodeID("Not Started"))') RETURNING simulation_id;") |> DataFrame |> x -> x.simulation_id[1]
+    return Simulation(simulation_id, folder_ids, folder_names, variation_id, rulesets_variation_id)
 end
 
 function Simulation(folder_ids::AbstractSamplingIDs, variation_id::Int, rulesets_variation_id::Int)
@@ -98,15 +123,16 @@ function Simulation(config_folder::String, rulesets_collection_folder::String, i
     return Simulation(folder_ids, folder_names, variation_id, rulesets_variation_id)
 end
 
-function Simulation(folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_id::Int, rulesets_variation_id::Int) 
-    simulation_id = DBInterface.execute(db, "INSERT INTO simulations (config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id,variation_id,rulesets_variation_id) VALUES($(folder_ids.config_id),$(folder_ids.rulesets_collection_id),$(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),$(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id),$(variation_id),$(rulesets_variation_id)) RETURNING simulation_id;") |> DataFrame |> x -> x.simulation_id[1]
-    return Simulation(simulation_id, folder_ids, folder_names, variation_id, rulesets_variation_id)
+function Simulation(; config_folder::String="", rulesets_collection_folder::String="", ic_cell_folder::String="", ic_substrate_folder::String="", ic_ecm_folder::String="", custom_code_folder::String="", variation_id::Int=-1, rulesets_variation_id::Int=-1)
+    folder_names = AbstractSamplingFolders(config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder)
+    folder_ids = AbstractSamplingIDs(folder_names)
+    return Simulation(folder_ids, folder_names, variation_id, rulesets_variation_id)
 end
 
 function getSimulation(simulation_id::Int)
     df = constructSelectQuery("simulations", "WHERE simulation_id=$(simulation_id);") |> queryToDataFrame
     if isempty(df)
-        error("No simulations found for simulation_id=$simulation_id. This simulation did not run.")
+        error("No simulations found for simulation_id=$simulation_id. This simulation has not been created yet.")
     end
     folder_ids = AbstractSamplingIDs(df.config_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1], df.custom_code_id[1])
     folder_names = AbstractSamplingFolders(folder_ids)
@@ -134,13 +160,26 @@ struct Monad <: AbstractMonad
 
     variation_id::Int # integer identifying which variation on the base config file to use (variations_$(config_id).db)
     rulesets_variation_id::Int # integer identifying which variation on the ruleset file to use (rulesets_variations_$(ruleset_id).db)
+
+    function Monad(id::Int, min_length::Int, simulation_ids::Vector{Int}, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_id::Int, rulesets_variation_id::Int)
+        @assert id > 0 "id must be positive"
+        @assert min_length >= 0 "min_length must be non-negative"
+        @assert all(simulation_id -> simulation_id > 0, simulation_ids) "simulation_ids must all be positive"
+        @assert variation_id >= 0 "variation_id must be non-negative"
+        @assert rulesets_variation_id >= -1 "rulesets_variation_id must be non-negative or -1 (indicating no rules)"
+        if rulesets_variation_id != -1
+            @assert folder_names.rulesets_collection_folder != "" "rulesets_collection_folder must be provided if rulesets_variation_id is not -1 (indicating that the rules are in use)"
+        end
+
+        # this could be done when adding new simulation ids to save some fie I/O
+        # doing it here just to make sure it is always up to date (and for consistency across classes)
+        recordSimulationIDs(id, simulation_ids) # record the simulation ids in a .csv file
+
+        return new(id, min_length, simulation_ids, folder_ids, folder_names, variation_id, rulesets_variation_id)
+    end
 end
 
-function Simulation(monad::Monad)
-    return Simulation(monad.folder_ids, monad.folder_names, monad.variation_id, monad.rulesets_variation_id)
-end
-
-function Monad(min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_id::Int, rulesets_variation_id::Int) 
+function Monad(min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_id::Int, rulesets_variation_id::Int; use_previous_simulations::Bool=true) 
     monad_ids = DBInterface.execute(db, "INSERT OR IGNORE INTO monads (config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id,variation_id,rulesets_variation_id) VALUES($(folder_ids.config_id),$(folder_ids.rulesets_collection_id),$(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),$(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id),$(variation_id),$(rulesets_variation_id)) RETURNING monad_id;") |> DataFrame |> x -> x.monad_id
     if isempty(monad_ids) # if monad insert command was ignored, then the monad already exists
         monad_id = constructSelectQuery(
@@ -156,23 +195,49 @@ function Monad(min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::A
     else # if monad insert command was successful, then the monad is new
         monad_id = monad_ids[1] # get the monad_id
     end
-    simulation_ids = readMonadSimulations(monad_id) # get the simulation ids belonging to this monad
+    simulation_ids = use_previous_simulations ? readMonadSimulationIDs(monad_id) : Int[]
+    if min_length - length(simulation_ids) > 0
+        for _ = 1:(min_length - length(simulation_ids))
+            simulation = Simulation(folder_ids, folder_names, variation_id, rulesets_variation_id) # create a new simulation
+            push!(simulation_ids, simulation.id) # add the simulation id to the monad
+        end
+    end
     return Monad(monad_id, min_length, simulation_ids, folder_ids, folder_names, variation_id, rulesets_variation_id) # return the monad
 end
 
-function Monad(min_length::Int, folder_names::AbstractSamplingFolders, variation_id::Int, rulesets_variation_id::Int) 
-    folder_ids = AbstractSamplingIDs(folder_names)
-    return Monad(min_length, folder_ids, folder_names, variation_id, rulesets_variation_id)
+function Monad(min_length::Int, folder_ids::AbstractSamplingIDs, variation_id::Int, rulesets_variation_id::Int; use_previous_simulations::Bool=true)
+    folder_names = AbstractSamplingFolders(folder_ids)
+    return Monad(min_length, folder_ids, folder_names, variation_id, rulesets_variation_id; use_previous_simulations=use_previous_simulations)
 end
 
-function Monad(folder_names::AbstractSamplingFolders, variation_id::Int, rulesets_variation_id::Int)
+function Monad(min_length::Int, folder_names::AbstractSamplingFolders, variation_id::Int, rulesets_variation_id::Int; use_previous_simulations::Bool=true) 
+    folder_ids = AbstractSamplingIDs(folder_names)
+    return Monad(min_length, folder_ids, folder_names, variation_id, rulesets_variation_id; use_previous_simulations=use_previous_simulations)
+end
+
+function Monad(folder_names::AbstractSamplingFolders, variation_id::Int, rulesets_variation_id::Int; use_previous_simulations::Bool=true)
     min_length = 0 # not making a monad to run if not supplying the min_length info
-    Monad(min_length, folder_names, variation_id, rulesets_variation_id)
+    Monad(min_length, folder_names, variation_id, rulesets_variation_id; use_previous_simulations=use_previous_simulations)
+end
+
+function Monad(min_length::Int, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, ic_substrate_id::Int, ic_ecm_id::Int, custom_code_id::Int, variation_id::Int, rulesets_variation_id::Int; use_previous_simulations::Bool=true)
+    folder_ids = AbstractSamplingIDs(config_id, rulesets_collection_id, ic_cell_id, ic_substrate_id, ic_ecm_id, custom_code_id)
+    return Monad(min_length, folder_ids, variation_id, rulesets_variation_id; use_previous_simulations=use_previous_simulations)
+end
+
+function Monad(min_length::Int, config_folder::String, rulesets_collection_folder::String, ic_cell_folder::String, ic_substrate_folder::String, ic_ecm_folder::String, custom_code_folder::String, variation_id::Int, rulesets_variation_id::Int; use_previous_simulations::Bool=true)
+    folder_names = AbstractSamplingFolders(config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder)
+    return Monad(min_length, folder_names, variation_id, rulesets_variation_id; use_previous_simulations=use_previous_simulations)
+end
+
+function Monad(; min_length::Int=0, config_folder::String="", rulesets_collection_folder::String="", ic_cell_folder::String="", ic_substrate_folder::String="", ic_ecm_folder::String="", custom_code_folder::String="", variation_id::Int=-1, rulesets_variation_id::Int=-1, use_previous_simulations::Bool=true)
+    folder_names = AbstractSamplingFolders(config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder)
+    return Monad(min_length, folder_names, variation_id, rulesets_variation_id; use_previous_simulations=use_previous_simulations)
 end
 
 function getMonad(monad_id::Int)
     df = constructSelectQuery("monads", "WHERE monad_id=$(monad_id);") |> queryToDataFrame
-    simulation_ids = readMonadSimulations(monad_id)
+    simulation_ids = readMonadSimulationIDs(monad_id)
     if isempty(df) || isempty(simulation_ids)
         error("No monads found for monad_id=$monad_id. This monad did not run.")
     end
@@ -185,6 +250,26 @@ function getMonad(monad_id::Int)
 end
 
 Monad(monad_id::Int) = getMonad(monad_id)
+
+function Simulation(monad::Monad)
+    return Simulation(monad.folder_ids, monad.folder_names, monad.variation_id, monad.rulesets_variation_id)
+end
+
+function Monad(simulation::Simulation)
+    min_length = 0 # do not impose a min length on this monad
+    monad = Monad(min_length, simulation.folder_ids, simulation.folder_names, simulation.variation_id, simulation.rulesets_variation_id)
+    addSimulationID!(monad, simulation.id)
+    return monad
+end
+
+function addSimulationID!(monad::Monad, simulation_id::Int)
+    if simulation_id in monad.simulation_ids
+        return monad
+    end
+    push!(monad.simulation_ids, simulation_id)
+    recordSimulationIDs(monad.id, monad.simulation_ids)
+    return
+end
 
 ##########################################
 ##############   Sampling   ##############
@@ -203,6 +288,14 @@ struct Sampling <: AbstractSampling
     rulesets_variation_ids::Array{Int} # rulesets_variation_id associated with each monad
 
     function Sampling(id, monad_min_length, monad_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
+        @assert id > 0 "id must be positive"
+        @assert monad_min_length >= 0 "monad_min_length must be non-negative"
+        @assert all(monad_id -> monad_id > 0, monad_ids) "monad_ids must all be positive"
+        @assert all(variation_id -> variation_id >= 0, variation_ids) "variation_ids must all be non-negative integers"
+        @assert all(rulesets_variation_id -> rulesets_variation_id >= -1, rulesets_variation_ids) "rulesets_variation_ids must all be non-negative integers or -1 (indicating no rules)"
+        if folder_names.rulesets_collection_folder == ""
+            @assert all(rulesets_variation_id -> rulesets_variation_id == -1, rulesets_variation_ids) "rulesets_collection_folder must be provided if any rulesets_variation_id is not -1 (indicating that the rules are in use)"
+        end
         n_monads = length(monad_ids)
         n_variations = length(variation_ids)
         n_rulesets_variations = length(rulesets_variation_ids)
@@ -215,45 +308,12 @@ struct Sampling <: AbstractSampling
             """
             throw(ArgumentError(error_message))
         end
+        recordMonadIDs(id, monad_ids) # record the monad ids in a .csv file
         return new(id, monad_min_length, monad_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
     end
 end
 
-function Monad(sampling::Sampling, index::Int)
-    return Monad(sampling.monad_min_length, sampling.folder_ids, sampling.folder_names, sampling.variation_ids[index], sampling.rulesets_variation_ids[index])
-end
-
-function Sampling(monad_min_length::Int, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, ic_substrate_id::Int, ic_ecm_id::Int, custom_code_id::Int, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int})
-    folder_ids = AbstractSamplingIDs(config_id, rulesets_collection_id, ic_cell_id, ic_substrate_id, ic_ecm_id, custom_code_id)
-    return Sampling(monad_min_length, folder_ids, variation_ids, rulesets_variation_ids)
-end
-
-function Sampling(monad_min_length::Int, folder_ids::AbstractSamplingIDs, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int})
-    folder_names = AbstractSamplingFolders(folder_ids)
-    return Sampling(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
-end
-
-function Sampling(monad_min_length::Int, config_folder::String, rulesets_collection_folder::String, ic_cell_folder::String, ic_substrate_folder::String, ic_ecm_folder::String, custom_code_folder::String, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int})
-    folder_names = AbstractSamplingFolders(config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder)
-    return Sampling(monad_min_length, folder_names, variation_ids, rulesets_variation_ids)
-end
-
-function Sampling(monad_min_length::Int, folder_names::AbstractSamplingFolders, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int})
-    folder_ids = AbstractSamplingIDs(folder_names)
-    return Sampling(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
-end
-
-function Sampling(id::Int, monad_min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int})
-    monad_ids = createMonadIDs(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
-    return Sampling(id, monad_min_length, monad_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
-end
-
-function Sampling(monad_min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int})
-    monad_ids = createMonadIDs(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
-    return Sampling(monad_min_length, monad_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
-end
-
-function Sampling(monad_min_length::Int, monad_ids::Array{Int}, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int})
+function Sampling(monad_min_length::Int, monad_ids::Array{Int}, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int}; use_previous_simulations::Bool=true)
     id = -1
     sampling_ids = constructSelectQuery(
         "samplings",
@@ -267,7 +327,7 @@ function Sampling(monad_min_length::Int, monad_ids::Array{Int}, folder_ids::Abst
     ) |> queryToDataFrame |> x -> x.sampling_id
     if !isempty(sampling_ids) # if there are previous samplings with the same parameters
         for sampling_id in sampling_ids # check if the monad_ids are the same with any previous monad_ids
-            monad_ids_in_db = readSamplingMonads(sampling_id) # get the monad_ids belonging to this sampling
+            monad_ids_in_db = readSamplingMonadIDs(sampling_id) # get the monad_ids belonging to this sampling
             if symdiff(monad_ids_in_db, monad_ids) |> isempty # if the monad_ids are the same
                 id = sampling_id # use the existing sampling_id
                 break
@@ -279,6 +339,42 @@ function Sampling(monad_min_length::Int, monad_ids::Array{Int}, folder_ids::Abst
         id = DBInterface.execute(db, "INSERT INTO samplings (config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id) VALUES($(folder_ids.config_id),$(folder_ids.rulesets_collection_id),$(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),$(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id)) RETURNING sampling_id;") |> DataFrame |> x -> x.sampling_id[1] # get the sampling_id
     end
     return Sampling(id, monad_min_length, monad_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
+end
+
+function Sampling(id::Int, monad_min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int}; use_previous_simulations::Bool=true)
+    monad_ids = createMonadIDs(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids; use_previous_simulations=use_previous_simulations)
+    return Sampling(id, monad_min_length, monad_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
+end
+
+function Sampling(monad_min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int}; use_previous_simulations::Bool=true)
+    monad_ids = createMonadIDs(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids; use_previous_simulations=use_previous_simulations)
+    return Sampling(monad_min_length, monad_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
+end
+
+function Sampling(monad_min_length::Int, folder_ids::AbstractSamplingIDs, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int}; use_previous_simulations::Bool=true)
+    folder_names = AbstractSamplingFolders(folder_ids)
+    return Sampling(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids; use_previous_simulations=use_previous_simulations)
+end
+
+function Sampling(monad_min_length::Int, folder_names::AbstractSamplingFolders, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int}; use_previous_simulations::Bool=true)
+    folder_ids = AbstractSamplingIDs(folder_names)
+    return Sampling(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids; use_previous_simulations=use_previous_simulations)
+end
+
+function Sampling(monad_min_length::Int, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, ic_substrate_id::Int, ic_ecm_id::Int, custom_code_id::Int, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int}; use_previous_simulations::Bool=true)
+    folder_ids = AbstractSamplingIDs(config_id, rulesets_collection_id, ic_cell_id, ic_substrate_id, ic_ecm_id, custom_code_id)
+    return Sampling(monad_min_length, folder_ids, variation_ids, rulesets_variation_ids; use_previous_simulations=use_previous_simulations)
+end
+
+function Sampling(monad_min_length::Int, config_folder::String, rulesets_collection_folder::String, ic_cell_folder::String, ic_substrate_folder::String, ic_ecm_folder::String, custom_code_folder::String, variation_ids::Array{Int}, rulesets_variation_ids::Array{Int}; use_previous_simulations::Bool=true)
+    folder_names = AbstractSamplingFolders(config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder)
+    return Sampling(monad_min_length, folder_names, variation_ids, rulesets_variation_ids; use_previous_simulations=use_previous_simulations)
+end
+
+function Sampling(; monad_min_length::Int=0, config_folder::String="", rulesets_collection_folder::String="", ic_cell_folder::String="", ic_substrate_folder::String="", ic_ecm_folder::String="", custom_code_folder::String="", variation_ids::Array{Int}=[], rulesets_variation_ids::Array{Int}=fill(-1, size(variation_ids)), use_previous_simulations::Bool=true)
+    folder_names = AbstractSamplingFolders(config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder)
+    folder_ids = AbstractSamplingIDs(folder_names)
+    return Sampling(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids; use_previous_simulations=use_previous_simulations)
 end
 
 function Sampling(monad_min_length::Int, monads::Array{<:AbstractMonad})
@@ -296,12 +392,12 @@ function Sampling(monad_min_length::Int, monads::Array{<:AbstractMonad})
     return Sampling(monad_min_length, monad_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
 end
 
-function createMonadIDs(monad_min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_ids::Vector{Int}, rulesets_variation_ids::Vector{Int})
+function createMonadIDs(monad_min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_ids::Vector{Int}, rulesets_variation_ids::Vector{Int}; use_previous_simulations::Bool=true)
     _size = size(variation_ids)
     monad_ids = -ones(Int, _size)
     
     for i in eachindex(monad_ids)
-        monad = Monad(monad_min_length, folder_ids, folder_names, variation_ids[i], rulesets_variation_ids[i])
+        monad = Monad(monad_min_length, folder_ids, folder_names, variation_ids[i], rulesets_variation_ids[i]; use_previous_simulations=use_previous_simulations)
         monad_ids[i] = monad.id
     end
     return monad_ids
@@ -309,7 +405,7 @@ end
 
 function getSampling(sampling_id::Int)
     df = constructSelectQuery("samplings", "WHERE sampling_id=$(sampling_id);") |> queryToDataFrame
-    monad_ids = readSamplingMonads(sampling_id)
+    monad_ids = readSamplingMonadIDs(sampling_id)
     if isempty(df) || isempty(monad_ids)
         error("No samplings found for sampling_id=$sampling_id. This sampling did not run.")
     end
@@ -324,6 +420,10 @@ function getSampling(sampling_id::Int)
 end
 
 Sampling(sampling_id::Int) = getSampling(sampling_id)
+
+function Monad(sampling::Sampling, index::Int; use_previous_simulations::Bool=true)
+    return Monad(sampling.monad_min_length, sampling.folder_ids, sampling.folder_names, sampling.variation_ids[index], sampling.rulesets_variation_ids[index]; use_previous_simulations=use_previous_simulations)
+end
 
 ##########################################
 ###############   Trial   ################
@@ -342,6 +442,16 @@ struct Trial <: AbstractTrial
     rulesets_variation_ids::Vector{Vector{Int}} # rulesets_variation_id associated with each monad for each sampling
 
     function Trial(id::Int, monad_min_length::Int, sampling_ids::Vector{Int}, folder_ids::Vector{AbstractSamplingIDs}, folder_names::Vector{AbstractSamplingFolders}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}})
+        @assert id > 0 "id must be positive"
+        @assert monad_min_length >= 0 "monad_min_length must be non-negative"
+        @assert all(sampling_id -> sampling_id > 0, sampling_ids) "sampling_ids must all be positive"
+        @assert all(variation_id -> variation_id >= 0, vcat(variation_ids...)) "variation_ids must all be non-negative integers"
+        @assert all(rulesets_variation_id -> rulesets_variation_id >= -1, vcat(rulesets_variation_ids...)) "rulesets_variation_ids must all be non-negative integers or -1 (indicating no rules)"
+        for fn in folder_names
+            if fn.rulesets_collection_folder == ""
+                @assert all(rulesets_variation_id -> rulesets_variation_id == -1, vcat(rulesets_variation_ids...)) "rulesets_collection_folder must be provided if any rulesets_variation_id is not -1 (indicating that the rules are in use)"
+            end
+        end
         n_samplings = length(sampling_ids)
         n_folder_ids = length(folder_ids)
         n_folder_names = length(folder_names)
@@ -351,58 +461,56 @@ struct Trial <: AbstractTrial
             throw(ArgumentError("Number of samplings, folder ids, folder names, variations, and rulesets variations must be the same"))
         end
 
+        recordSamplingIDs(id, sampling_ids) # record the sampling ids in a .csv file
+
         return new(id, monad_min_length, sampling_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
     end
 end
 
-function Sampling(trial::Trial, index::Int)
-    return Sampling(trial.sampling_ids[index], trial.monad_min_length, trial.folder_ids[index], trial.folder_names[index], trial.variation_ids[index], trial.rulesets_variation_ids[index])
-end
-
-function Trial(monad_min_length::Int, config_ids::Vector{Int}, rulesets_collection_ids::Vector{Int}, ic_cell_ids::Vector{Int}, ic_substrate_ids::Vector{Int}, ic_ecm_ids::Vector{Int}, custom_code_ids::Vector{Int}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}})
-    folder_ids = [AbstractSamplingIDs(config_id, rulesets_collection_id, ic_cell_id, ic_substrate_id, ic_ecm_id, custom_code_id) for (config_id, rulesets_collection_id, ic_cell_id, ic_substrate_id, ic_ecm_id, custom_code_id) in zip(config_ids, rulesets_collection_ids, ic_cell_ids, ic_substrate_ids, ic_ecm_ids, custom_code_ids)]
-    return Trial(monad_min_length, folder_ids, variation_ids, rulesets_variation_ids)
-end
-
-function Trial(monad_min_length::Int, folder_ids::Vector{AbstractSamplingIDs}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}})
-    folder_names = [AbstractSamplingFolders(folder_id) for folder_id in folder_ids]
-    return Trial(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
-end
-
-function Trial(monad_min_length::Int, config_folders::Vector{String}, rulesets_collection_folders::Vector{String}, ic_cell_folders::Vector{String}, ic_substrate_folders::Vector{String}, ic_ecm_folders::Vector{String}, custom_code_folders::Vector{String}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}})
-    folder_names = [AbstractSamplingFolders(config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder) for (config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder) in zip(config_folders, rulesets_collection_folders, ic_cell_folders, ic_substrate_folders, ic_ecm_folders, custom_code_folders)]
-    return Trial(monad_min_length, folder_names, variation_ids, rulesets_variation_ids)
-end
-
-function Trial(id::Int, monad_min_length::Int, folder_names::Vector{AbstractSamplingFolders}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}})
-    folder_ids = [AbstractSamplingIDs(folder_name) for folder_name in folder_names]
-    return Trial(id, monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids) # DOES NOT EXIST!!
-end
-
-function Trial(monad_min_length::Int, folder_ids, folder_names, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}})
-    sampling_ids = createSamplingIDs(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
-    id = getTrialId(sampling_ids)
-
+function Trial(monad_min_length::Int, folder_ids::Vector{AbstractSamplingIDs}, folder_names::Vector{AbstractSamplingFolders}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}}; use_previous_simulations::Bool=true)
+    sampling_ids = createSamplingIDs(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids; use_previous_simulations=use_previous_simulations)
+    id = getTrialID(sampling_ids)
+    
     return Trial(id, monad_min_length, sampling_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
 end
 
-function createSamplingIDs(monad_min_length::Int, folder_ids::Vector{AbstractSamplingIDs}, folder_names::Vector{AbstractSamplingFolders}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}})
+function Trial(monad_min_length::Int, folder_ids::Vector{AbstractSamplingIDs}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}}; use_previous_simulations::Bool=true)
+    folder_names = [AbstractSamplingFolders(folder_id) for folder_id in folder_ids]
+    return Trial(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids; use_previous_simulations=use_previous_simulations)
+end
+
+function Trial(monad_min_length::Int, config_ids::Vector{Int}, rulesets_collection_ids::Vector{Int}, ic_cell_ids::Vector{Int}, ic_substrate_ids::Vector{Int}, ic_ecm_ids::Vector{Int}, custom_code_ids::Vector{Int}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}}; use_previous_simulations::Bool=true)
+    folder_ids = [AbstractSamplingIDs(config_id, rulesets_collection_id, ic_cell_id, ic_substrate_id, ic_ecm_id, custom_code_id) for (config_id, rulesets_collection_id, ic_cell_id, ic_substrate_id, ic_ecm_id, custom_code_id) in zip(config_ids, rulesets_collection_ids, ic_cell_ids, ic_substrate_ids, ic_ecm_ids, custom_code_ids)]
+    return Trial(monad_min_length, folder_ids, variation_ids, rulesets_variation_ids; use_previous_simulations=use_previous_simulations)
+end
+
+function Trial(monad_min_length::Int, config_folders::Vector{String}, rulesets_collection_folders::Vector{String}, ic_cell_folders::Vector{String}, ic_substrate_folders::Vector{String}, ic_ecm_folders::Vector{String}, custom_code_folders::Vector{String}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}}; use_previous_simulations::Bool=true)
+    folder_names = [AbstractSamplingFolders(config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder) for (config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder) in zip(config_folders, rulesets_collection_folders, ic_cell_folders, ic_substrate_folders, ic_ecm_folders, custom_code_folders)]
+    return Trial(monad_min_length, folder_names, variation_ids, rulesets_variation_ids; use_previous_simulations=use_previous_simulations)
+end
+
+function createSamplingIDs(monad_min_length::Int, folder_ids::Vector{AbstractSamplingIDs}, folder_names::Vector{AbstractSamplingFolders}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}}; use_previous_simulations::Bool=true)
     _size = size(folder_ids)
     sampling_ids = -ones(Int, _size)
     
     for i in eachindex(sampling_ids)
-        sampling = Sampling(monad_min_length, folder_ids[i], folder_names[i], variation_ids[i], rulesets_variation_ids[i])
+        sampling = Sampling(monad_min_length, folder_ids[i], folder_names[i], variation_ids[i], rulesets_variation_ids[i]; use_previous_simulations=use_previous_simulations)
         sampling_ids[i] = sampling.id
     end
     return sampling_ids
 end
 
-function getTrialId(sampling_ids::Vector{Int})
+function Trial(monad_min_length::Int, sampling_ids::Vector{Int}, folder_ids::Vector{AbstractSamplingIDs}, folder_names::Vector{AbstractSamplingFolders}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}}; use_previous_simulations::Bool=true)
+    id = getTrialID(sampling_ids)
+    return Trial(id, monad_min_length, sampling_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
+end
+
+function getTrialID(sampling_ids::Vector{Int})
     id = -1
     trial_ids = constructSelectQuery("trials", "", selection="trial_id") |> queryToDataFrame |> x -> x.trial_id
     if !isempty(trial_ids) # if there are previous trials
         for trial_id in trial_ids # check if the sampling_ids are the same with any previous sampling_ids
-            sampling_ids_in_db = readTrialSamplings(trial_id) # get the sampling_ids belonging to this trial
+            sampling_ids_in_db = readTrialSamplingIDs(trial_id) # get the sampling_ids belonging to this trial
             if symdiff(sampling_ids_in_db, sampling_ids) |> isempty # if the sampling_ids are the same
                 id = trial_id # use the existing trial_id
                 break
@@ -427,20 +535,21 @@ function Trial(samplings::Vector{Sampling})
     return Trial(monad_min_length, sampling_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
 end
 
-function Trial(monad_min_length::Int, sampling_ids::Vector{Int}, folder_ids::Vector{AbstractSamplingIDs}, folder_names::Vector{AbstractSamplingFolders}, variation_ids::Vector{Vector{Int}}, rulesets_variation_ids::Vector{Vector{Int}})
-    id = getTrialId(sampling_ids)
-    return Trial(id, monad_min_length, sampling_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids)
+function Trial(; monad_min_length::Int=0, sampling_ids::Vector{Int}=Int[], config_folders::Vector{String}=String[], rulesets_collection_folders::Vector{String}=String[], ic_cell_folders::Vector{String}=String[], ic_substrate_folders::Vector{String}=String[], ic_ecm_folders::Vector{String}=String[], custom_code_folders::Vector{String}=String[], variation_ids::Vector{Vector{Int}}=Vector{Int}[], rulesets_variation_ids::Vector{Vector{Int}}=Vector{Int}[], use_previous_simulations::Bool=true)
+    folder_names = [AbstractSamplingFolders(config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder) for (config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder) in zip(config_folders, rulesets_collection_folders, ic_cell_folders, ic_substrate_folders, ic_ecm_folders, custom_code_folders)]
+    folder_ids = [AbstractSamplingIDs(folder_name) for folder_name in folder_names]
+    return Trial(monad_min_length, sampling_ids, folder_ids, folder_names, variation_ids, rulesets_variation_ids; use_previous_simulations=use_previous_simulations)
 end
 
 function getTrial(trial_id::Int; full_initialization::Bool=false)
     df = constructSelectQuery("trials", "WHERE trial_id=$(trial_id);") |> queryToDataFrame
-    if isempty(df) || isempty(readTrialSamplings(trial_id))
+    if isempty(df) || isempty(readTrialSamplingIDs(trial_id))
         error("No samplings found for trial_id=$trial_id. This trial did not run.")
     end
     if full_initialization
         error("Full initialization of Trials from trial_id not yet implemented")
-        sampling_ids = readTrialSamplings(trial_id)
-        monad_min_length = minimum([readSamplingMonads(sampling_id) for sampling_id in sampling_ids])
+        sampling_ids = readTrialSamplingIDs(trial_id)
+        monad_min_length = minimum([readSamplingMonadIDs(sampling_id) for sampling_id in sampling_ids])
         sampling_df = constructSelectQuery("samplings", "WHERE sampling_id IN ($(join(sampling_ids,",")))") |> queryToDataFrame
         folder_ids = [getSamplingFolderIDs(sampling_id) for sampling_id in sampling_ids]
         folder_names = [getSamplingFolderNames(sampling_id) for sampling_id in sampling_ids]
@@ -458,6 +567,10 @@ function getTrial(trial_id::Int; full_initialization::Bool=false)
 end
 
 Trial(trial_id::Int) = getTrial(trial_id; full_initialization=false)
+
+function Sampling(trial::Trial, index::Int)
+    return Sampling(trial.sampling_ids[index], trial.monad_min_length, trial.folder_ids[index], trial.folder_names[index], trial.variation_ids[index], trial.rulesets_variation_ids[index])
+end
 
 ##########################################
 #############   VCTClassID   #############

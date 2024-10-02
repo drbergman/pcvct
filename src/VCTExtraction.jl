@@ -157,7 +157,7 @@ end
 
 function loadCellDataTimeSeries(trial_id::Int, label::String)
     # for each sim, have a named tuple (id = sim_id, data = [tuples] from above)
-    simulation_ids = getSimulations((Trial,trial_id))
+    simulation_ids = getSimulationIDs((Trial,trial_id))
     return [(simulation_id = simulation_id, data = loadCellDataTimeSeries(data_dir * "/outputs/simulations/" * string(simulation_id) * "/output/", label)) for simulation_id in simulation_ids]
 end
 

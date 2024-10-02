@@ -1,22 +1,27 @@
 # each file (includes below) has their own export statements
-export initializeVCT, resetDatabase, addGridVariation, addGridRulesetsVariation, runAbstractTrial, readTrialSamplings, getSimulations, deleteSimulation
+export initializeVCT, resetDatabase, addGridVariation, addGridRulesetsVariation, runAbstractTrial, readTrialSamplingIDs, getSimulationIDs, deleteSimulation
 export addLHSVariation, addLHSRulesetsVariation
 export GridVariation, LHSVariation, addVariations
 
 using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables, Distributions, Statistics, Random, QuasiMonteCarlo, Sobol
 using MAT # files for VCTLoader.jl
 
+# put these first as they define classes the rest rely on
 include("VCTClasses.jl")
+include("VCTPruner.jl")
 include("VCTVariations.jl")
-include("VCTDatabase.jl") 
+
+include("VCTCompilation.jl")
 include("VCTConfiguration.jl")
+include("VCTCreation.jl")
+include("VCTDatabase.jl") 
+include("VCTDeletion.jl")
 include("VCTExtraction.jl")
 include("VCTLoader.jl")
-include("VCTSensitivity.jl")
-include("VCTCompilation.jl")
-include("VCTDeletion.jl")
+include("VCTMovie.jl")
 include("VCTRunner.jl")
 include("VCTRecorder.jl")
+include("VCTSensitivity.jl")
 
 include("../PhysiCell-XMLRules/src/PhysiCell_XMLRules.jl")
 using .PhysiCell_XMLRules
@@ -142,35 +147,45 @@ function readConstituentIDs(T::AbstractTrial)
     return readConstituentIDs("$(path_to_folder)/$(filename).csv")
 end
 
-readMonadSimulations(monad_id::Int) = readConstituentIDs("$(data_dir)/outputs/monads/$(monad_id)/simulations.csv")
-readMonadSimulations(monad::Monad) = readMonadSimulations(monad.id)
-readSamplingMonads(sampling_id::Int) = readConstituentIDs("$(data_dir)/outputs/samplings/$(sampling_id)/monads.csv")
-readSamplingMonads(sampling::Sampling) = readSamplingMonads(sampling.id)
-readTrialSamplings(trial_id::Int) = readConstituentIDs("$(data_dir)/outputs/trials/$(trial_id)/samplings.csv")
-readTrialSamplings(trial::Trial) = readTrialSamplings(trial.id)
+readMonadSimulationIDs(monad_id::Int) = readConstituentIDs("$(data_dir)/outputs/monads/$(monad_id)/simulations.csv")
+readMonadSimulationIDs(monad::Monad) = readMonadSimulationIDs(monad.id)
+readSamplingMonadIDs(sampling_id::Int) = readConstituentIDs("$(data_dir)/outputs/samplings/$(sampling_id)/monads.csv")
+readSamplingMonadIDs(sampling::Sampling) = readSamplingMonadIDs(sampling.id)
+readTrialSamplingIDs(trial_id::Int) = readConstituentIDs("$(data_dir)/outputs/trials/$(trial_id)/samplings.csv")
+readTrialSamplingIDs(trial::Trial) = readTrialSamplingIDs(trial.id)
 
 function getSamplingSimulations(sampling_id::Int)
-    monad_ids = readSamplingMonads(sampling_id)
-    return vcat([readMonadSimulations(monad_id) for monad_id in monad_ids]...)
+    monad_ids = readSamplingMonadIDs(sampling_id)
+    return vcat([readMonadSimulationIDs(monad_id) for monad_id in monad_ids]...)
 end
 
 function getTrialSimulations(trial_id::Int)
-    sampling_ids = readTrialSamplings(trial_id)
+    sampling_ids = readTrialSamplingIDs(trial_id)
     return vcat([getSamplingSimulations(sampling_id) for sampling_id in sampling_ids]...)
 end
 
-getSimulations() = constructSelectQuery("simulations", "", selection="simulation_id") |> queryToDataFrame |> x -> x.simulation_id
-getSimulations(simulation::Simulation) = [simulation.id]
-getSimulations(monad::Monad) = readMonadSimulations(monad.id)
-getSimulations(sampling::Sampling) = getSamplingSimulations(sampling.id)
-getSimulations(trial::Trial) = getTrialSimulations(trial.id)
+getSimulationIDs() = constructSelectQuery("simulations", "", selection="simulation_id") |> queryToDataFrame |> x -> x.simulation_id
+getSimulationIDs(simulation::Simulation) = [simulation.id]
+getSimulationIDs(monad::Monad) = readMonadSimulationIDs(monad.id)
+getSimulationIDs(sampling::Sampling) = getSamplingSimulations(sampling.id)
+getSimulationIDs(trial::Trial) = getTrialSimulations(trial.id)
 
-function getSimulations(class_id::VCTClassID) 
+function getTrialMonads(trial_id::Int)
+    sampling_ids = readTrialSamplingIDs(trial_id)
+    return vcat([readSamplingMonadIDs(sampling_id) for sampling_id in sampling_ids]...)
+end
+
+getMonadIDs() = constructSelectQuery("monads", "", selection="monad_id") |> queryToDataFrame |> x -> x.monad_id
+getMonadIDs(monad::Monad) = [monad.id]
+getMonadIDs(sampling::Sampling) = readSamplingMonadIDs(sampling.id)
+getMonadIDs(trial::Trial) = getTrialMonads(trial.id)
+
+function getSimulationIDs(class_id::VCTClassID) 
     class_id_type = getVCTClassIDType(class_id)
     if class_id_type == Simulation
         return [class_id.id]
     elseif class_id_type == Monad
-        return readMonadSimulations(class_id.id)
+        return readMonadSimulationIDs(class_id.id)
     elseif class_id_type == Sampling
         return getSamplingSimulations(class_id.id)
     elseif class_id_type == Trial

@@ -34,7 +34,7 @@ function deleteSimulation(simulation_ids::Vector{Int}; delete_supers::Bool=true,
     monad_ids = constructSelectQuery("monads", "", selection="monad_id") |> queryToDataFrame |> x -> x.monad_id
     monad_ids_to_delete = Int[]
     for monad_id in monad_ids
-        monad_simulation_ids = readMonadSimulations(monad_id)
+        monad_simulation_ids = readMonadSimulationIDs(monad_id)
         if !any(x -> x in simulation_ids, monad_simulation_ids) # if none of the monad simulation ids are among those to be deleted, then nothing to do here
             continue
         end
@@ -52,14 +52,14 @@ function deleteSimulation(simulation_ids::Vector{Int}; delete_supers::Bool=true,
 end
 
 deleteSimulation(simulation_id::Int; delete_supers::Bool=true, and_constraints::String="") = deleteSimulation([simulation_id]; delete_supers=delete_supers, and_constraints=and_constraints)
-deleteAllSimulations(; delete_supers::Bool=true, and_constraints::String="") = getSimulations() |> x -> deleteSimulation(x; delete_supers=delete_supers, and_constraints=and_constraints)
+deleteAllSimulations(; delete_supers::Bool=true, and_constraints::String="") = getSimulationIDs() |> x -> deleteSimulation(x; delete_supers=delete_supers, and_constraints=and_constraints)
 
 function deleteMonad(monad_ids::Vector{Int}; delete_subs::Bool=true, delete_supers::Bool=true)
     DBInterface.execute(db,"DELETE FROM monads WHERE monad_id IN ($(join(monad_ids,",")));")
     simulation_ids_to_delete = Int[]
     for monad_id in monad_ids
         if delete_subs
-            append!(simulation_ids_to_delete, readMonadSimulations(monad_id))
+            append!(simulation_ids_to_delete, readMonadSimulationIDs(monad_id))
         end
         rm("$(data_dir)/outputs/monads/$(monad_id)"; force=true, recursive=true)
     end
@@ -74,7 +74,7 @@ function deleteMonad(monad_ids::Vector{Int}; delete_subs::Bool=true, delete_supe
     sampling_ids = constructSelectQuery("samplings", "", selection="sampling_id") |> queryToDataFrame |> x -> x.sampling_id
     sampling_ids_to_delete = Int[]
     for sampling_id in sampling_ids
-        sampling_monad_ids = readSamplingMonads(sampling_id)
+        sampling_monad_ids = readSamplingMonadIDs(sampling_id)
         if !any(x -> x in monad_ids, sampling_monad_ids) # if none of the sampling monad ids are among those to be deleted, then nothing to do here
             continue
         end
@@ -98,7 +98,7 @@ function deleteSampling(sampling_ids::Vector{Int}; delete_subs::Bool=true, delet
     monad_ids_to_delete = Int[]
     for sampling_id in sampling_ids
         if delete_subs
-            append!(monad_ids_to_delete, readSamplingMonads(sampling_id))
+            append!(monad_ids_to_delete, readSamplingMonadIDs(sampling_id))
         end
         rm("$(data_dir)/outputs/samplings/$(sampling_id)"; force=true, recursive=true)
     end
@@ -109,7 +109,7 @@ function deleteSampling(sampling_ids::Vector{Int}; delete_subs::Bool=true, delet
                 continue # skip the samplings to be deleted (we want to delete their monads)
             end
             # this is then a sampling that we are not deleting, do not delete their monads!!
-            monad_ids = readSamplingMonads(sampling_id)
+            monad_ids = readSamplingMonadIDs(sampling_id)
             filter!(x -> !(x in monad_ids), monad_ids_to_delete) # if a monad to delete is in the sampling to keep, then do not delete it!! (or more in line with logic here: if a monad marked for deletion is not in this sampling we are keeping, then leave it in the deletion list)
         end
         deleteMonad(monad_ids_to_delete; delete_subs=true, delete_supers=false)
@@ -122,7 +122,7 @@ function deleteSampling(sampling_ids::Vector{Int}; delete_subs::Bool=true, delet
     trial_ids = constructSelectQuery("trials", "", selection="trial_id") |> queryToDataFrame |> x -> x.trial_id
     trial_ids_to_delete = Int[]
     for trial_id in trial_ids
-        trial_sampling_ids = readTrialSamplings(trial_id)
+        trial_sampling_ids = readTrialSamplingIDs(trial_id)
         if !any(x -> x in sampling_ids, trial_sampling_ids) # if none of the trial sampling ids are among those to be deleted, then nothing to do here
             continue
         end
@@ -146,7 +146,7 @@ function deleteTrial(trial_ids::Vector{Int}; delete_subs::Bool=true)
     sampling_ids_to_delete = Int[]
     for trial_id in trial_ids
         if delete_subs
-            append!(sampling_ids_to_delete, readTrialSamplings(trial_id))
+            append!(sampling_ids_to_delete, readTrialSamplingIDs(trial_id))
         end
         rm("$(data_dir)/outputs/trials/$(trial_id)"; force=true, recursive=true)
     end
@@ -157,7 +157,7 @@ function deleteTrial(trial_ids::Vector{Int}; delete_subs::Bool=true)
                 continue # skip the trials to be deleted (we want to delete their samplings)
             end
             # this is then a trial that we are not deleting, do not delete their samplings!!
-            sampling_ids = readTrialSamplings(trial_id)
+            sampling_ids = readTrialSamplingIDs(trial_id)
             filter!(x -> !(x in sampling_ids), sampling_ids_to_delete) # if a sampling to delete is in the trial to keep, then do not delete it!! (or more in line with logic here: if a sampling marked for deletion is not in this trial we are keeping, then leave it in the deletion list)
         end
         deleteSampling(sampling_ids_to_delete; delete_subs=true, delete_supers=false)
@@ -247,36 +247,67 @@ function resetRulesetsCollectionFolder(path_to_rulesets_collection_folder::Strin
     rm("$(path_to_rulesets_collection_folder)/rulesets_collections_variations"; force=true, recursive=true)
 end
 
-function deleteStalledSimulations(; user_check::Bool=true)
-    if user_check
-        println("Are you sure you want to delete all unfinished simulations? This could delete queued simulations as well. (y/n)")
-        response = readline()
-        if response != "y" # make user be very specific about resetting
-            println("You entered '$response'.\n\tDeleting unfinished simulations has been cancelled.")
-            return
+function deleteStalledSimulations(status_codes_to_delete::Vector{String}=["Failed"]; user_check::Bool=true)
+    df = """
+        SELECT simulations.simulation_id, simulations.status_code_id, status_codes.status_code
+        FROM simulations
+        JOIN status_codes
+        ON simulations.status_code_id = status_codes.status_code_id;
+    """ |> queryToDataFrame
+
+    for status_code in status_codes_to_delete
+        simulation_ids = df.simulation_id[df.status_code .== status_code]
+        if isempty(simulation_ids)
+            continue
         end
+        if user_check
+            println("Are you sure you want to delete all $(length(simulation_ids)) simulations with status code '$status_code'? (y/n)")
+            response = readline()
+            if response != "y" # make user be very specific about resetting
+                println("You entered '$response'.\n\tDeleting simulations with status code '$status_code' has been cancelled.")
+                continue
+            else
+                println("You entered '$response'.")
+            end
+        end
+        println("\tDeleting $(length(simulation_ids)) simulations with status code '$status_code'.")
+        deleteSimulation(simulation_ids)
     end
-
-    # simulation folder OR in the database
-    all_simulation_ids = (readdir("$(data_dir)/outputs/simulations", join=true) |> filter(x->isdir(x)) .|> x->parse(Int,basename(x))) ∪ getSimulations()
-
-    id_check_fn(id) = getStatus(VCTClassID{Simulation}(id)) == :finished && !isfile("$(data_dir)/outputs/simulations/$(id)/output/final.xml")
-    stalled_simulation_ids = [id for id in all_simulation_ids if id_check_fn(id)]
-
-    deleteSimulation(stalled_simulation_ids)
 end
 
 function getStatus(class_id::VCTClassID)
     class_id_type = getVCTClassIDType(class_id)
     if class_id_type == Simulation
-        return :finished
-        # simulation_id = class_id.id
-        # if !isdir("$(data_dir)/outputs/simulations/$(simulation_id)/output")
-        #     return :queued
-        # else
-        #     return :finished
-        # end
+        simulation_id = class_id.id
+        if isfile("$(data_dir)/outputs/simulations/$(simulation_id)/output/final.xml")
+            return :finished
+        else
+            return :unfinished
+        end
     else
         error("Only Simulation class ids are supported for calling getStatus on.")
     end
+end
+
+function eraseSimulationID(simulation_id::Int; monad_id::Union{Missing,Int}=missing, T::Union{Missing,AbstractTrial}=missing)
+    if ismissing(monad_id)
+        query = constructSelectQuery("simulations", "WHERE simulation_id = $(simulation_id);")
+        df = queryToDataFrame(query)
+        query = constructSelectQuery("monads", "WHERE (config_id, variation_id, rulesets_collection_id, rulesets_variation_id) = ($(df.config_id[1]), $(df.variation_id[1]), $(df.rulesets_collection_id[1]), $(df.rulesets_variation_id[1]));"; selection="monad_id")
+        df = queryToDataFrame(query)
+        monad_id = df.monad_id[1]
+    end
+    simulation_ids = readMonadSimulationIDs(monad_id)
+    index = findfirst(x->x==simulation_id, simulation_ids)
+    if isnothing(index)
+        return # maybe this could happen? so let's check just in case
+    end
+    if length(simulation_ids)==1
+        # then this was the only simulation in this monad; delete the monad and any samplings, etc. that depend on it
+        # do not delete the given simulation from the database so that we can check the output files
+        deleteMonad(monad_id; delete_subs=false, delete_supers=true)
+        return
+    end
+    deleteat!(simulation_ids, index)
+    recordSimulationIDs(monad_id, simulation_ids)
 end

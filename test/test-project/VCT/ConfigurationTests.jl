@@ -73,9 +73,8 @@ rulesets_variation_ids = zeros(Int, size(config_variation_ids))
 
 sampling = Sampling(monad_min_length, config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder, config_variation_ids, rulesets_variation_ids)
 
-n_ran, n_success = runAbstractTrial(sampling; force_recompile=false)
+n_success = runAbstractTrial(sampling; force_recompile=false)
 @test length(sampling) == length(config_variation_ids) * monad_min_length
-@test n_ran == n_success
 
 ## test the in place functions
 reference_config_variation_id = config_variation_ids[1] # just get one with the short max_time
@@ -105,8 +104,7 @@ append!(config_variation_ids, new_config_variation_ids)
 rulesets_variation_ids = zeros(Int, size(config_variation_ids))
 sampling = Sampling(monad_min_length, config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder, config_variation_ids, rulesets_variation_ids)
 
-n_ran, n_success = runAbstractTrial(sampling; force_recompile=false)
-@test n_ran == n_success
+n_success = runAbstractTrial(sampling; force_recompile=false)
 
 hashBorderPrint("SUCCESSFULLY VARIED CONFIG PARAMETERS!")
 
@@ -123,8 +121,7 @@ rulesets_variation_ids = addGridRulesetsVariation(rulesets_collection_folder, EV
 config_variation_ids = fill(reference_config_variation_id, size(rulesets_variation_ids))
 sampling = Sampling(monad_min_length, config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder, config_variation_ids, rulesets_variation_ids)
 
-n_ran, n_success = runAbstractTrial(sampling; force_recompile=false)
-@test n_ran == n_success
+n_success = runAbstractTrial(sampling; force_recompile=false)
 
 hashBorderPrint("SUCCESSFULLY VARIED RULESETS PARAMETERS!")
 
@@ -137,7 +134,6 @@ config_variation_ids, rulesets_variation_ids = addVariations(GridVariation(), co
 
 sampling = Sampling(monad_min_length, config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder, config_variation_ids, rulesets_variation_ids)
 
-n_ran, n_success = runAbstractTrial(sampling; force_recompile=false)
-@test n_ran == n_success
+n_success = runAbstractTrial(sampling; force_recompile=false)
 
 hashBorderPrint("SUCCESSFULLY VARIED CONFIG AND RULESETS PARAMETERS!")

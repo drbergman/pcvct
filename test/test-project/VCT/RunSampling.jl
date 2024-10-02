@@ -30,7 +30,7 @@ config_variation_id = config_variation_ids[1]
 rulesets_variation_id = rulesets_variation_ids[1]
 simulation = Simulation(config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder, config_variation_id, rulesets_variation_id)
 
-n_ran, n_success = runAbstractTrial(simulation)
+n_success = runAbstractTrial(simulation)
 if n_success == 0
     hashBorderPrint("Simulation failed...")
     # print out the compilation error file if exists
@@ -77,7 +77,7 @@ sampling = Sampling(monad_min_length, config_folder, rulesets_collection_folder,
 
 hashBorderPrint("SAMPLING SUCCESSFULLY CREATED!")
 
-n_ran, n_success = runAbstractTrial(sampling)
+n_success = runAbstractTrial(sampling)
 
 hashBorderPrint("SAMPLING SUCCESSFULLY RUN!")
 
@@ -91,25 +91,22 @@ n_variations = length(sampling.variation_ids)
 # make sure the number of simulations in this sampling is what we expected based on...
 @test n_simulations == n_expected_sims # the EVs...
 @test n_simulations == n_variations * monad_min_length # ...how many variation ids we recorded (number of rulesets_variations_ids must match variation_ids on construction of sampling)
-@test n_simulations == n_ran # ...how many simulations we started
 @test n_simulations == n_success # ...how many simulations succeeded
 
 hashBorderPrint("SAMPLING SUCCESSFULLY IN CSVS!")
 
-n_ran, n_success = runAbstractTrial(sampling; use_previous_sims=true, force_recompile=false)
+n_success = runAbstractTrial(sampling; force_recompile=false)
 
 # no new simulations should have been run
-@test n_ran == 0 
 @test n_success == 0
 
 hashBorderPrint("SUCCESSFULLY FOUND PREVIOUS SIMS!")
 
 trial = Trial([sampling])
 
-n_ran, n_success = runAbstractTrial(trial; use_previous_sims=true, force_recompile=false)
+n_success = runAbstractTrial(trial; force_recompile=false)
 
 # no new simulations should have been run
-@test n_ran == 0 
 @test n_success == 0
 
 hashBorderPrint("SUCCESSFULLY RAN TRIAL!")

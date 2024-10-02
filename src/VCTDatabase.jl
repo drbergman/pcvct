@@ -116,6 +116,7 @@ function createSchema()
         rulesets_collection_id INTEGER,
         variation_id INTEGER,
         rulesets_variation_id INTEGER,
+        status_code_id INTEGER,
         FOREIGN KEY (custom_code_id)
             REFERENCES custom_codes (custom_code_id),
         FOREIGN KEY (ic_cell_id)
@@ -125,9 +126,11 @@ function createSchema()
         FOREIGN KEY (ic_ecm_id)
             REFERENCES ic_ecms (ic_ecm_id),
         FOREIGN KEY (config_id)
-            REFERENCES configs (config_id)
+            REFERENCES configs (config_id),
         FOREIGN KEY (rulesets_collection_id)
-            REFERENCES rulesets_collections (rulesets_collection_id)
+            REFERENCES rulesets_collections (rulesets_collection_id),
+        FOREIGN KEY (status_code_id)
+            REFERENCES status_codes (status_code_id)
     """
     createPCVCTTable("simulations", simulations_schema)
 
@@ -189,6 +192,9 @@ function createSchema()
         description TEXT
     """
     createPCVCTTable("trials", trials_schema)
+
+    createDefaultStatusCodesTable()
+
     return
 end
 
@@ -257,17 +263,41 @@ function createPCVCTTable(table_name::String, schema::String; db::SQLite.DB=db)
     return
 end
 
-################## DB Interface Functions ##################
+function createDefaultStatusCodesTable()
+    status_codes_schema = """
+        status_code_id INTEGER PRIMARY KEY,
+        status_code TEXT UNIQUE
+    """
+    createPCVCTTable("status_codes", status_codes_schema)
+    status_codes = ["Not Started", "Queued", "Running", "Completed", "Failed"]
+    for status_code in status_codes
+        DBInterface.execute(db, "INSERT OR IGNORE INTO status_codes (status_code) VALUES ('$status_code');")
+    end
+end
 
-# function getVariationDB(folder::String; type::Symbol = :config)
-#     if type == :config
-#         getConfigDB(folder)
-#     elseif type == :rulesets_collection
-#         getRulesetsCollectionDB(folder)
-#     else
-#         error("type must be :config or :rulesets_collection.")
-#     end
-# end
+function getStatusCodeID(status_code::String)
+    query = constructSelectQuery("status_codes", "WHERE status_code='$status_code';"; selection="status_code_id")
+    return queryToDataFrame(query; is_row=true) |> x -> x[1,:status_code_id]
+end
+
+function isStarted(simulation_id::Int; new_status_code::Union{Missing,String}=missing)
+    query = constructSelectQuery("simulations", "WHERE simulation_id=$(simulation_id);"; selection="status_code_id")
+    mode = ismissing(new_status_code) ? "DEFERRED" : "EXCLUSIVE" # if we are possibly going to update, then set to exclusive mode
+    SQLite.transaction(db, mode)
+    status_code = queryToDataFrame(query; is_row=true) |> x -> x[1,:status_code_id]
+    is_started = status_code != getStatusCodeID("Not Started")
+    if !ismissing(new_status_code) && !is_started
+        query = "UPDATE simulations SET status_code_id=$(getStatusCodeID(new_status_code)) WHERE simulation_id=$(simulation_id);"
+        DBInterface.execute(db, query)
+    end
+    SQLite.commit(db)
+
+    return is_started
+end
+
+isStarted(simulation::Simulation; new_status_code::Union{Missing,String}=missing) = isStarted(simulation.id; new_status_code=new_status_code)
+
+################## DB Interface Functions ##################
 
 getConfigDB(config_folder::String) = "$(data_dir)/inputs/configs/$(config_folder)/variations.db" |> SQLite.DB
 getConfigDB(config_id::Int) = getConfigFolder(config_id) |> getConfigDB
@@ -307,10 +337,10 @@ getCustomCodesFolder(custom_code_id::Int) = getFolder("custom_codes", "custom_co
 
 function retrievePathInfo(config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, ic_substrate_id::Int, ic_ecm_id::Int, custom_code_id::Int)
     config_folder = getConfigFolder(config_id)
+    rulesets_collection_folder = getRulesetsCollectionFolder(rulesets_collection_id)
     ic_cell_folder = getICCellFolder(ic_cell_id)
     ic_substrate_folder = getICSubstrateFolder(ic_substrate_id)
     ic_ecm_folder = getICECMFolder(ic_ecm_id)
-    rulesets_collection_folder = getRulesetsCollectionFolder(rulesets_collection_id)
     custom_code_folder = getCustomCodesFolder(custom_code_id)
     return config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder
 end
@@ -453,7 +483,7 @@ function appendVariations(df::DataFrame, unique_tuples::Vector{Tuple{String, Int
 end
 
 function getSimulationsTable(T::AbstractTrial; remove_constants::Bool = true, sort_by::Vector{String}=String[], sort_ignore::Vector{String}=["SimID", "VarID", "RulesVarID"])
-    query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(getSimulations(T),",")));")
+    query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(getSimulationIDs(T),",")));")
     return getSimulationsTableFromQuery(query; remove_constants = remove_constants, sort_by = sort_by, sort_ignore = sort_ignore)
 end
 
@@ -468,7 +498,7 @@ function getSimulationsTable(; remove_constants::Bool = true, sort_by::Vector{St
 end
 
 function getSimulationsTable(class_id::VCTClassID; remove_constants::Bool = true, sort_by::Vector{String}=String[], sort_ignore::Vector{String}=["SimID", "VarID", "RulesVarID"])
-    query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(getSimulations(class_id),",")));")
+    query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(getSimulationIDs(class_id),",")));")
     return getSimulationsTableFromQuery(query; remove_constants = remove_constants, sort_by = sort_by, sort_ignore = sort_ignore)
 end
 
