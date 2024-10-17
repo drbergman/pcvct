@@ -96,13 +96,13 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         return
     end
     path_to_configs = "$(data_dir)/inputs/configs"
-    config_folder = template_as_default ? "\"0_template\" # this folder is located at $(path_to_configs)" : "default # add this folder with config file to $(path_to_configs)"
+    config_folder = template_as_default ? "\"0_template\" # this folder is located at $(path_to_configs)" : "\"default\" # add this folder with config file to $(path_to_configs)"
 
     path_to_rulesets_collections = "$(data_dir)/inputs/rulesets_collections"
     rulesets_collection_folder = template_as_default ? "\"0_template\" # this folder is located at $(path_to_rulesets_collections); a rule has been added for the sake of the example" : "\"\" # optionally add this folder with base_rulesets.csv to $(path_to_rulesets_collections)"
 
     path_to_custom_codes = "$(data_dir)/inputs/custom_codes"
-    custom_code_folder = template_as_default ? "\"0_template\" # this folder is located at $(path_to_custom_codes)" : "default # add this folder with main.cpp, Makefile, and custom_modules to $(path_to_custom_codes)"
+    custom_code_folder = template_as_default ? "\"0_template\" # this folder is located at $(path_to_custom_codes)" : "\"default\" # add this folder with main.cpp, Makefile, and custom_modules to $(path_to_custom_codes)"
 
     path_to_ics = "$(data_dir)/inputs/ics"
     path_to_ic_cells = "$(path_to_ics)/cells"
