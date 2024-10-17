@@ -29,6 +29,11 @@ using .PhysiCell_XMLRules
 physicell_dir::String = abspath("PhysiCell")
 data_dir::String = abspath("data")
 PHYSICELL_CPP::String = haskey(ENV, "PHYSICELL_CPP") ? ENV["PHYSICELL_CPP"] : "/opt/homebrew/bin/g++-14"
+if Sys.iswindows()
+    baseToExecutable(s::String) = "$(s).exe"
+else
+    baseToExecutable(s::String) = s
+end
 
 ################## Initialization Functions ##################
 

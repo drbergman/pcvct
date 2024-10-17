@@ -50,7 +50,8 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
     cp("$(path_to_folder)/main.cpp", "$(physicell_dir)/main.cpp", force=true)
     cp("$(path_to_folder)/Makefile", "$(physicell_dir)/Makefile", force=true)
 
-    cmd = `make CC=$(PHYSICELL_CPP) PROGRAM_NAME=project_ccid_$(S.folder_ids.custom_code_id) CFLAGS=$(cflags)`
+    executable_name = baseToExecutable("project_ccid_$(S.folder_ids.custom_code_id)")
+    cmd = `make CC=$(PHYSICELL_CPP) PROGRAM_NAME=$(executable_name) CFLAGS=$(cflags)`
     if Sys.isapple() # hacky way to say the -j flag works on my machine but not on the HPC
         cmd = `$cmd -j 20`
     end
@@ -69,7 +70,8 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
     rm("$(physicell_dir)/main.cpp"; force=true)
     run(`cp $(physicell_dir)/sample_projects/Makefile-default $(physicell_dir)/Makefile`)
 
-    mv("$(physicell_dir)/project_ccid_$(S.folder_ids.custom_code_id)", "$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)/project", force=true)
+    
+    mv("$(physicell_dir)/$(executable_name)", "$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)/$(baseToExecutable("project"))", force=true)
     return 
 end
 
@@ -124,7 +126,7 @@ function getCompilerFlags(S::AbstractSampling)
         cflags *= " -D $(macro_flag)"
     end
 
-    if !recompile && !isfile("$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)/project")
+    if !recompile && !isfile("$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)/$(baseToExecutable("project"))")
         recompile = true
     end
 

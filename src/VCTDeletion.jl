@@ -211,7 +211,7 @@ function resetDatabase(; force_reset::Bool=false, force_continue::Bool=false)
     end
 
     for custom_code_folder in (readdir("$(data_dir)/inputs/custom_codes/", sort=false, join=true) |> filter(x->isdir(x)))
-        rm("$(custom_code_folder)/project"; force=true)
+        rm("$(custom_code_folder)/$(baseToExecutable("project"))"; force=true)
         rm("$(custom_code_folder)/compilation.log"; force=true)
         rm("$(custom_code_folder)/compilation.err"; force=true)
         rm("$(custom_code_folder)/macros.txt"; force=true)
@@ -219,7 +219,7 @@ function resetDatabase(; force_reset::Bool=false, force_continue::Bool=false)
 
     custom_code_folders = constructSelectQuery("custom_codes", "", selection="folder_name") |> queryToDataFrame |> x -> x.folder_name
     for custom_code_folder in custom_code_folders
-        rm("$(data_dir)/inputs/custom_codes/$(custom_code_folder)/project"; force=true)
+        rm("$(data_dir)/inputs/custom_codes/$(custom_code_folder)/$(baseToExecutable("project"))"; force=true)
     end
 
     if db.file == ":memory:"
