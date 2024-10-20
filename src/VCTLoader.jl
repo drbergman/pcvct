@@ -38,7 +38,7 @@ function getLabels(xml_doc::XMLDocument)
     return labels
 end
 
-getLabels(folder::String) = "$(folder)/initial.xml" |> openXML |> getLabels
+getLabels(folder::String) = joinpath(folder, "initial.xml") |> openXML |> getLabels
 
 function getCellTypeToNameDict(xml_doc::XMLDocument)
     xml_path = ["cellular_information", "cell_populations", "cell_population", "custom", "simplified_data", "cell_types"]
@@ -53,7 +53,7 @@ function getCellTypeToNameDict(xml_doc::XMLDocument)
     return cell_type_to_name_dict
 end
 
-getCellTypeToNameDict(folder::String) = "$(folder)/initial.xml" |> openXML |> getCellTypeToNameDict
+getCellTypeToNameDict(folder::String) = joinpath(folder, "initial.xml") |> openXML |> getCellTypeToNameDict
 
 function indexToFilename(index::Symbol)
     @assert index in [:initial, :final] "The non-integer index must be either :initial or :final"
@@ -62,7 +62,7 @@ end
 indexToFilename(index::Int) = "output$(lpad(index,8,"0"))"
 
 function PhysiCellSnapshot(folder::String, index::Union{Int, Symbol}; cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}(), labels::Vector{String}=String[])
-    filepath_base = "$(folder)/$(indexToFilename(index))"
+    filepath_base = joinpath(folder, indexToFilename(index))
     xml_doc = openXML("$(filepath_base).xml")
     mat_file = "$(filepath_base)_cells.mat"
     time = getField(xml_doc, ["metadata","current_time"]) |> x->parse(Float64, x)
@@ -86,7 +86,7 @@ function PhysiCellSequence(folder::String)
     labels = getLabels(folder)
     snapshots = PhysiCellSnapshot[PhysiCellSnapshot(folder, 0; cell_type_to_name_dict=cell_type_to_name_dict, labels=labels)]
     index = 1
-    while isfile("$(folder)/output$(lpad(index,8,"0")).xml")
+    while isfile(joinpath(folder, "output$(lpad(index,8,"0")).xml"))
         push!(snapshots, PhysiCellSnapshot(folder, index; cell_type_to_name_dict=cell_type_to_name_dict, labels=labels))
         index += 1
     end
@@ -192,8 +192,7 @@ function populationTimeSeries(folder::String; include_dead::Bool=false)
 end
 
 function populationTimeSeries(simulation_id::Int; include_dead::Bool=false)
-    # return "$(data_dir)/outputs/simulations/$(simulation_id)/output" |> x -> populationTimeSeries(x; include_dead=include_dead)
-    df = "$(data_dir)/outputs/simulations/$(simulation_id)/output" |> x -> populationTimeSeries(x; include_dead=include_dead)
+    df = joinpath(data_dir, "outputs", "simulations", string(simulation_id), "output") |> x -> populationTimeSeries(x; include_dead=include_dead)
     println("Finished populationTimeSeries for simulation_id: $simulation_id")
     return df
 end
@@ -204,7 +203,7 @@ function finalPopulationCount(folder::String; include_dead::Bool=false)
 end
 
 function finalPopulationCount(simulation_id::Int; include_dead::Bool=false)
-    return "$(data_dir)/outputs/simulations/$(simulation_id)/output" |> x -> finalPopulationCount(x; include_dead=include_dead)
+    return joinpath(data_dir, "outputs", "simulations", string(simulation_id), "output") |> x -> finalPopulationCount(x; include_dead=include_dead)
 end
 
 # speed functions
@@ -255,7 +254,7 @@ function computeMeanSpeed(folder::String; direction=:any)::NTuple{3,Vector{Dict{
 end
 
 function computeMeanSpeed(simulation_id::Int; direction=:any)::NTuple{3,Vector{Dict{String,Float64}}}
-    return "$(data_dir)/outputs/simulations/$(simulation_id)/output" |> x -> computeMeanSpeed(x; direction=direction)
+    return joinpath(data_dir, "outputs", "simulations", string(simulation_id), "output") |> x -> computeMeanSpeed(x; direction=direction)
 end
 
 function computeMeanSpeed(class_id::Union{VCTClassID,AbstractTrial}; direction=:any)

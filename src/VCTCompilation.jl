@@ -38,17 +38,17 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
         cd(()->run(pipeline(`make clean`; stdout=devnull)), physicell_dir)
     end
 
-    path_to_folder = "$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)" # source dir needs to end in / or else the dir is copied into target, not the source files
-    for file in readdir("$(path_to_folder)/custom_modules", sort=false)
-        if !isfile("$(path_to_folder)/custom_modules/$(file)")
+    path_to_folder = joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder) # source dir needs to end in / or else the dir is copied into target, not the source files
+    for file in readdir(joinpath(path_to_folder, "custom_modules"), sort=false)
+        if !isfile(joinpath(path_to_folder, "custom_modules", file))
             continue
         end
-        src = "$(path_to_folder)/custom_modules/$(file)"
-        dst = "$(physicell_dir)/custom_modules/$(file)"
+        src = joinpath(path_to_folder, "custom_modules", file)
+        dst = joinpath(physicell_dir, "custom_modules", file)
         cp(src, dst, force=true)
     end
-    cp("$(path_to_folder)/main.cpp", "$(physicell_dir)/main.cpp", force=true)
-    cp("$(path_to_folder)/Makefile", "$(physicell_dir)/Makefile", force=true)
+    cp(joinpath(path_to_folder, "main.cpp"), joinpath(physicell_dir, "main.cpp"), force=true)
+    cp(joinpath(path_to_folder, "Makefile"), joinpath(physicell_dir, "Makefile"), force=true)
 
     executable_name = baseToExecutable("project_ccid_$(S.folder_ids.custom_code_id)")
     cmd = `make CC=$(PHYSICELL_CPP) PROGRAM_NAME=$(executable_name) CFLAGS=$(cflags)`
@@ -58,20 +58,20 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
 
     println("Compiling custom code for $(S.folder_names.custom_code_folder) with flags: $cflags")
 
-    cd(() -> run(pipeline(cmd; stdout="$(path_to_folder)/compilation.log", stderr="$(path_to_folder)/compilation.err")), physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory; make sure the macro ADDON_PHYSIECM is defined (should work even if multiply defined, e.g., by Makefile)
+    cd(() -> run(pipeline(cmd; stdout=joinpath(path_to_folder, "compilation.log"), stderr=joinpath(path_to_folder, "compilation.err"))), physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory; make sure the macro ADDON_PHYSIECM is defined (should work even if multiply defined, e.g., by Makefile)
     
     # check if the error file is empty, if it is, delete it
-    if filesize("$(path_to_folder)/compilation.err") == 0
-        rm("$(path_to_folder)/compilation.err"; force=true)
+    if filesize(joinpath(path_to_folder, "compilation.err")) == 0
+        rm(joinpath(path_to_folder, "compilation.err"); force=true)
     end
 
-    rm("$(physicell_dir)/custom_modules/custom.cpp"; force=true)
-    rm("$(physicell_dir)/custom_modules/custom.h"; force=true)
-    rm("$(physicell_dir)/main.cpp"; force=true)
-    run(`cp $(physicell_dir)/sample_projects/Makefile-default $(physicell_dir)/Makefile`)
+    rm(joinpath(physicell_dir, "custom_modules", "custom.cpp"); force=true)
+    rm(joinpath(physicell_dir, "custom_modules", "custom.h"); force=true)
+    rm(joinpath(physicell_dir, "main.cpp"); force=true)
+    run(`cp $(joinpath(physicell_dir, "sample_projects", "Makefile-default")) $(joinpath(physicell_dir, "Makefile"))`)
 
-    
-    mv("$(physicell_dir)/$(executable_name)", "$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)/$(baseToExecutable("project"))", force=true)
+
+    mv(joinpath(physicell_dir, executable_name), joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder, baseToExecutable("project")), force=true)
     return 
 end
 
@@ -126,7 +126,7 @@ function getCompilerFlags(S::AbstractSampling)
         cflags *= " -D $(macro_flag)"
     end
 
-    if !recompile && !isfile("$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)/$(baseToExecutable("project"))")
+    if !recompile && !isfile(joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder, baseToExecutable("project")))
         recompile = true
     end
 
@@ -141,7 +141,7 @@ function addMacrosIfNeeded(S::AbstractSampling)
 end
 
 function addMacro(S::AbstractSampling, macro_name::String)
-    path_to_macros = "$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)/macros.txt"
+    path_to_macros = joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder, "macros.txt")
     open(path_to_macros, "a") do f
         println(f, macro_name)
     end
@@ -166,7 +166,7 @@ function addPhysiECMIfNeeded(S::AbstractSampling)
 end
 
 function isPhysiECMInConfig(M::AbstractMonad)
-    path_to_xml = "$(data_dir)/inputs/configs/$(M.folder_names.config_folder)/variations/variation_$(M.variation_id).xml"
+    path_to_xml = joinpath(data_dir, "inputs", "configs", M.folder_names.config_folder, "variations", "variation_$(M.variation_id).xml")
     xml_path = ["microenvironment_setup", "ecm_setup"]
     ecm_setup_element = retrieveElement(path_to_xml, xml_path; required=false)
     if !isnothing(ecm_setup_element) && attribute(ecm_setup_element, "enabled") == "true" # note: attribute returns nothing if the attribute does not exist
@@ -188,7 +188,7 @@ function isPhysiECMInConfig(sampling::Sampling)
 end
 
 function readMacrosFile(S::AbstractSampling)
-    path_to_macros = "$(data_dir)/inputs/custom_codes/$(S.folder_names.custom_code_folder)/macros.txt"
+    path_to_macros = joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder, "macros.txt")
     if !isfile(path_to_macros)
         return []
     end

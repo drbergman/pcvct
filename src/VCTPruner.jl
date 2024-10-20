@@ -12,7 +12,7 @@ export PruneOptions
 end
 
 function pruneSimulationOutput(simulation::Simulation; prune_options::PruneOptions=PruneOptions())
-    path_to_output_folder = "$(data_dir)/outputs/simulations/$(simulation.id)/output"
+    path_to_output_folder = joinpath(data_dir, "outputs", "simulations", string(simulation.id), "output")
     if prune_options.prune_svg
         rm(glob("snapshot*.svg", path_to_output_folder), force=true)
         if prune_options.prune_initial

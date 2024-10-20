@@ -36,16 +36,16 @@ function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=miss
     flush(stdout)
     success = false # create this here so the return statement handles it correctly
     try
-        run(pipeline(cmd; stdout="$(path_to_simulation_folder)/output.log", stderr="$(path_to_simulation_folder)/output.err"); wait=true)
+        run(pipeline(cmd; stdout=joinpath(path_to_simulation_folder, "output.log"), stderr=joinpath(path_to_simulation_folder, "output.err")); wait=true)
     catch
         println("\tSimulation $(simulation.id) failed.")
         println("\tExecution command: $cmd")
-        println("\tCheck $(path_to_simulation_folder)/output.err for more information.")
+        println("\tCheck $(joinpath(path_to_simulation_folder, "output.err")) for more information.")
         DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Failed")) WHERE simulation_id=$(simulation.id);" )
         success = false
         eraseSimulationID(simulation.id; monad_id=monad_id)
     else
-        rm("$(path_to_simulation_folder)/output.err"; force=true)
+        rm(joinpath(path_to_simulation_folder, "output.err"); force=true)
         DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Completed")) WHERE simulation_id=$(simulation.id);" )
         success = true
     end
@@ -56,7 +56,7 @@ function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=miss
 end
 
 function runMonad(monad::Monad; do_full_setup::Bool=true, force_recompile::Bool=false, prune_options=PruneOptions())
-    mkpath("$(data_dir)/outputs/monads/$(monad.id)")
+    mkpath(joinpath(data_dir, "outputs", "monads", string(monad.id)))
 
     if do_full_setup
         loadCustomCode(monad; force_recompile=force_recompile)
@@ -78,7 +78,7 @@ function runMonad(monad::Monad; do_full_setup::Bool=true, force_recompile::Bool=
 end
 
 function runSampling(sampling::Sampling; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions())
-    mkpath("$(data_dir)/outputs/samplings/$(sampling.id)")
+    mkpath(joinpath(data_dir, "outputs", "samplings", string(sampling.id)))
 
     loadCustomCode(sampling; force_recompile=force_recompile)
     simulation_tasks = []
@@ -91,7 +91,7 @@ function runSampling(sampling::Sampling; force_recompile::Bool=false, prune_opti
 end
 
 function runTrial(trial::Trial; force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
-    mkpath("$(data_dir)/outputs/trials/$(trial.id)")
+    mkpath(joinpath(data_dir, "outputs", "trials", string(trial.id)))
 
     simulation_tasks = []
     for i in eachindex(trial.sampling_ids)
