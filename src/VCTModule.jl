@@ -23,6 +23,8 @@ include("VCTRunner.jl")
 include("VCTRecorder.jl")
 include("VCTSensitivity.jl")
 
+include("VCTAnalysis.jl")
+
 include("../PhysiCell-XMLRules/src/PhysiCell_XMLRules.jl")
 using .PhysiCell_XMLRules
 
