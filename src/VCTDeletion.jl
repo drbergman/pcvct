@@ -168,7 +168,6 @@ end
 deleteTrial(trial_id::Int; delete_subs::Bool=true) = deleteTrial([trial_id]; delete_subs=delete_subs)
 
 function resetDatabase(; force_reset::Bool=false, force_continue::Bool=false)
-
     if !force_reset
         # prompt user to confirm
         println("Are you sure you want to reset the database? (y/n)")
@@ -210,10 +209,10 @@ function resetDatabase(; force_reset::Bool=false, force_continue::Bool=false)
     end
     
     for custom_code_folder in (readdir(joinpath(data_dir, "inputs", "custom_codes"), sort=false, join=true) |> filter(x->isdir(x)))
-        rm(joinpath(custom_code_folder, baseToExecutable("project")); force=true)
-        rm(joinpath(custom_code_folder, "compilation.log"); force=true)
-        rm(joinpath(custom_code_folder, "compilation.err"); force=true)
-        rm(joinpath(custom_code_folder, "macros.txt"); force=true)
+        files = [baseToExecutable("project"), "compilation.log", "compilation.err", "macros.txt"]
+        for file in files
+            rm(joinpath(custom_code_folder, file); force=true)
+        end
     end
 
     custom_code_folders = constructSelectQuery("custom_codes", "", selection="folder_name") |> queryToDataFrame |> x -> x.folder_name
@@ -246,7 +245,28 @@ function resetRulesetsCollectionFolder(path_to_rulesets_collection_folder::Strin
     rm(joinpath(path_to_rulesets_collection_folder, "rulesets_collections_variations"); force=true, recursive=true)
 end
 
-function deleteStalledSimulations(status_codes_to_delete::Vector{String}=["Failed"]; user_check::Bool=true)
+"""
+    deleteStalledSimulationsByStatus(status_codes_to_delete::Vector{String}=["Failed"]; user_check::Bool=true)
+
+    Delete simulations from the database based on their status codes.
+
+    # Arguments
+    - `status_codes_to_delete::Vector{String}`: A vector of status codes for which simulations should be deleted. Default is `["Failed"]`.
+    - `user_check::Bool`: If `true`, prompts the user for confirmation before deleting simulations. Default is `true`.
+
+    # Description
+    This function performs the following steps:
+    1. Queries the database to retrieve simulation IDs and their corresponding status codes.
+    2. Iterates over the provided `status_codes_to_delete`.
+    3. For each status code, retrieves the simulation IDs that match the status code.
+    4. If no simulations match the status code, it continues to the next status code.
+    5. If `user_check` is `true`, prompts the user for confirmation before deleting the simulations.
+    6. If the user confirms, deletes the simulations with the matching status code.
+
+    # Returns
+    - Nothing. The function performs database operations and deletes records as needed.
+"""
+function deleteStalledSimulationsByStatus(status_codes_to_delete::Vector{String}=["Failed"]; user_check::Bool=true)
     df = """
         SELECT simulations.simulation_id, simulations.status_code_id, status_codes.status_code
         FROM simulations
@@ -274,20 +294,28 @@ function deleteStalledSimulations(status_codes_to_delete::Vector{String}=["Faile
     end
 end
 
-function getStatus(class_id::VCTClassID)
-    class_id_type = getVCTClassIDType(class_id)
-    if class_id_type == Simulation
-        simulation_id = class_id.id
-        if isfile(joinpath(data_dir, "outputs", "simulations", string(simulation_id), "output", "final.xml"))
-            return :finished
-        else
-            return :unfinished
-        end
-    else
-        error("Only Simulation class ids are supported for calling getStatus on.")
-    end
-end
+"""
+    eraseSimulationID(simulation_id::Int; monad_id::Union{Missing,Int}=missing, T::Union{Missing,AbstractTrial}=missing)
 
+    Erase a simulation ID from the monad(s) it belongs to. Used when a simulation fails to run and needs to be removed from the monad's `simulations.csv`.
+
+    # Arguments
+    - `simulation_id::Int`: The ID of the simulation to be erased.
+    - `monad_id::Union{Missing,Int}`: The ID of the monad associated with the simulation. If not provided, it will be inferred from the simulation ID. Default is `missing`.
+    - `T::Union{Missing,AbstractTrial}`: An optional parameter for additional context. Default is `missing`.
+
+    # Description
+    This function performs the following steps:
+    1. If `monad_id` is missing, it constructs a query to find the monad ID associated with the given `simulation_id`.
+    2. Retrieves the list of simulation IDs associated with the monad.
+    3. Finds the index of the given `simulation_id` in the list.
+    4. If the `simulation_id` is not found, the function returns early.
+    5. If the monad contains only the given `simulation_id`, it deletes the monad and any dependent records, but retains the simulation in the database for output file checks.
+    6. If the monad contains multiple simulations, it removes the given `simulation_id` from the list and updates the records.
+
+    # Returns
+    - Nothing. The function performs database operations and updates records as needed.
+"""
 function eraseSimulationID(simulation_id::Int; monad_id::Union{Missing,Int}=missing, T::Union{Missing,AbstractTrial}=missing)
     if ismissing(monad_id)
         query = constructSelectQuery("simulations", "WHERE simulation_id = $(simulation_id);")

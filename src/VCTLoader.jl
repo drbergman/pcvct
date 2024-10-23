@@ -1,6 +1,6 @@
 using DataFrames
 
-export PhysiCellSnapshot, PhysiCellSequence, getCellPositionSequence, getCellDataSequence, computeMeanSpeed, finalPopulationCount, populationTimeSeries
+export PhysiCellSnapshot, PhysiCellSequence, getCellPositionSequence, getCellDataSequence, computeMeanSpeed
 
 abstract type AbstractPhysiCellSequence end
 
@@ -150,60 +150,6 @@ function getCellDataSequence(sequence::PhysiCellSequence, labels::Vector{String}
         return hcat(v[temp_dict[label]]...)
     end
     return [ID => NamedTuple{(:time, labels...)}([[v.time]; [C(v,label) for label in labels]]) for (ID, v) in data] |> Dict
-end
-
-# population functions
-
-function populationCount(snapshot::PhysiCellSnapshot; include_dead::Bool=false, cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}())
-    data = Dict{String, Int}()
-    if include_dead
-        cell_df = snapshot.cells
-    else
-        cell_df = @view snapshot.cells[snapshot.cells.dead .== false, :]
-    end
-    if isempty(cell_type_to_name_dict)
-        cell_type_to_name_dict = getCellTypeToNameDict(snapshot.folder)
-    end
-    cell_type_names = values(cell_type_to_name_dict)
-    for cell_type_name in cell_type_names
-        data[cell_type_name] = count(x -> x == cell_type_name, cell_df.cell_type_name)
-    end
-    return data
-end
-
-function populationTimeSeries(sequence::PhysiCellSequence; include_dead::Bool=false)
-    df = DataFrame(time = [snapshot.time for snapshot in sequence.snapshots])
-    for (i, snapshot) in enumerate(sequence.snapshots)
-        population_count = populationCount(snapshot; include_dead=include_dead, cell_type_to_name_dict=sequence.cell_type_to_name_dict)
-        for (ID, count) in pairs(population_count)
-            if string(ID) in names(df)
-                df[i, Symbol(ID)] = count
-            else
-                df[!, Symbol(ID)] = zeros(Int, nrow(df))
-                df[i, Symbol(ID)] = count
-            end
-        end
-    end
-    return df
-end
-
-function populationTimeSeries(folder::String; include_dead::Bool=false)
-    return PhysiCellSequence(folder) |> x -> populationTimeSeries(x; include_dead=include_dead)
-end
-
-function populationTimeSeries(simulation_id::Int; include_dead::Bool=false)
-    df = joinpath(data_dir, "outputs", "simulations", string(simulation_id), "output") |> x -> populationTimeSeries(x; include_dead=include_dead)
-    println("Finished populationTimeSeries for simulation_id: $simulation_id")
-    return df
-end
-
-function finalPopulationCount(folder::String; include_dead::Bool=false)
-    final_snapshot = PhysiCellSnapshot(folder, :final)
-    return populationCount(final_snapshot; include_dead=include_dead)
-end
-
-function finalPopulationCount(simulation_id::Int; include_dead::Bool=false)
-    return joinpath(data_dir, "outputs", "simulations", string(simulation_id), "output") |> x -> finalPopulationCount(x; include_dead=include_dead)
 end
 
 # speed functions

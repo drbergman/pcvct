@@ -14,8 +14,9 @@ sequence = PhysiCellSequence(path_to_data_folder * "/outputs/simulations/1/outpu
 seq_dict = getCellDataSequence(sequence, "elapsed_time_in_phase"; include_dead=true)
 
 simulation_id = 1
-population_time_series_df = populationTimeSeries(simulation_id; include_dead=true)
-population_time_series_df = populationTimeSeries(simulation_id; include_dead=false)
+simulation = Simulation(simulation_id)
+simulation_population_time_series = populationTimeSeries(simulation; include_dead=true)
+simulation_population_time_series = populationTimeSeries(simulation; include_dead=false)
 
 for direction in [:x, :y, :z, :any]
     local mean_speed_dicts = computeMeanSpeed(simulation_id; direction=direction)
