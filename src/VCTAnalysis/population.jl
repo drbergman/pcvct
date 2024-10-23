@@ -69,40 +69,35 @@ struct MonadPopulationTimeSeries <: AbstractPopulationTimeSeries
     time::Vector{Real}
     cell_count_arrays::Dict{String, Array{Integer,2}}
     cell_count_means::Dict{String, Vector{Real}}
-    cell_count_sd::Dict{String, Vector{Real}}
+    cell_count_std::Dict{String, Vector{Real}}
 end
 
 function MonadPopulationTimeSeries(monad::Monad; include_dead::Bool=false)
     simulation_ids = getSimulationIDs(monad)
     monad_length = length(simulation_ids)
     time = Real[]
-    df_sim = Dict()
     cell_count_arrays = Dict{String, Array{Int,2}}()
     for (i, simulation_id) in enumerate(simulation_ids)
-        df_sim = SimulationPopulationTimeSeries(simulation_id; include_dead=include_dead)
+        spts = SimulationPopulationTimeSeries(simulation_id; include_dead=include_dead)
         if isempty(time)
-            time = df_sim.time
+            time = spts.time
         else
-            @assert time == df_sim.time "Simulations $(simulation_ids[1]) and $(simulation_id) in monad $(monad.id) have different times in their time series."
+            @assert time == spts.time "Simulations $(simulation_ids[1]) and $(simulation_id) in monad $(monad.id) have different times in their time series."
         end
-        for name in names(df_sim)
-            if name == :time
-                continue
+        for (name, cell_count) in pairs(spts.cell_count)
+            if !(name in keys(cell_count_arrays))
+                cell_count_arrays[name] = zeros(Int, length(time), monad_length)
             end
-            key = string(name)
-            if !(key in keys(cell_count_arrays))
-                cell_count_arrays[key] = zeros(Int, length(time), monad_length)
-            end
-            cell_count_arrays[key][:,i] = cell_count_arrays[key]
+            cell_count_arrays[name][:,i] = cell_count
         end
     end
     cell_count_means = Dict{String, Vector{Real}}()
-    cell_count_sd = Dict{String, Vector{Real}}()
-    for (key, array) in cell_count_arrays
-        cell_count_means[key] = mean(array, dims=2) |> vec
-        cell_count_sd[key] = std(array, dims=2) |> vec
+    cell_count_std = Dict{String, Vector{Real}}()
+    for (name, array) in cell_count_arrays
+        cell_count_means[name] = mean(array, dims=2) |> vec
+        cell_count_std[name] = std(array, dims=2) |> vec
     end
-    return MonadPopulationTimeSeries(monad.id, monad_length, time, cell_count_arrays, cell_count_means, cell_count_sd)
+    return MonadPopulationTimeSeries(monad.id, monad_length, time, cell_count_arrays, cell_count_means, cell_count_std)
 end
 
 function populationTimeSeries(M::AbstractMonad; include_dead::Bool=false)
