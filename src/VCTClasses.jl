@@ -371,9 +371,24 @@ function Sampling(monad_min_length::Int, config_folder::String, rulesets_collect
     return Sampling(monad_min_length, folder_names, variation_ids, rulesets_variation_ids; use_previous_simulations=use_previous_simulations)
 end
 
-function Sampling(; monad_min_length::Int=0, config_folder::String="", rulesets_collection_folder::String="", ic_cell_folder::String="", ic_substrate_folder::String="", ic_ecm_folder::String="", custom_code_folder::String="", variation_ids::Array{Int}=[], rulesets_variation_ids::Array{Int}=fill(-1, size(variation_ids)), use_previous_simulations::Bool=true)
+function Sampling(; monad_min_length::Int=0, config_folder::String="", rulesets_collection_folder::String="", ic_cell_folder::String="", ic_substrate_folder::String="", ic_ecm_folder::String="", custom_code_folder::String="", variation_ids::Union{Int,Array{Int}}=Int[], rulesets_variation_ids::Union{Int,Array{Int}}=fill(-1, size(variation_ids)), use_previous_simulations::Bool=true)
     folder_names = AbstractSamplingFolders(config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder)
     folder_ids = AbstractSamplingIDs(folder_names)
+    # allow for passing in a single variation_id and/or rulesets_variation_id
+    # later, can support passing in (for example) a 3x6 variation_ids and a 3x1 rulesets_variation_ids and expanding the rulesets_variation_ids to 3x6, but that can get tricky fast
+    if variation_ids isa Int
+        if rulesets_variation_ids isa Int
+            variation_ids = [variation_ids]
+            rulesets_variation_ids = [rulesets_variation_ids]
+        else
+            variation_ids = fill(variation_ids, size(rulesets_variation_ids))
+        end
+    else
+        if rulesets_variation_ids isa Int
+            rulesets_variation_ids = fill(rulesets_variation_ids, size(variation_ids))
+        end
+        # when the new sampling is created, then we will assert that the arrays are the same size
+    end
     return Sampling(monad_min_length, folder_ids, folder_names, variation_ids, rulesets_variation_ids; use_previous_simulations=use_previous_simulations)
 end
 

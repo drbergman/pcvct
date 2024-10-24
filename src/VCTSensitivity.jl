@@ -339,7 +339,7 @@ end
 
 function recordSensitivityScheme(gsa_sampling::GSASampling)
     method = methodString(gsa_sampling)
-    path_to_csv = "$(getOutputFolder(gsa_sampling.sampling))/$(method)_scheme.csv"
+    path_to_csv = joinpath(getOutputFolder(gsa_sampling.sampling), "$(method)_scheme.csv")
     return CSV.write(path_to_csv, getMonadIDDataFrame(gsa_sampling); header=true)
 end
 

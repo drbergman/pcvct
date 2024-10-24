@@ -99,7 +99,7 @@ end
 function addVariationColumns(config_id::Int, xml_paths::Vector{Vector{String}}, variable_types::Vector{DataType})
     config_folder = getConfigFolder(config_id)
     db_columns = getConfigDB(config_folder)
-    path_to_xml = "$(data_dir)/inputs/configs/$(config_folder)/PhysiCell_settings.xml"
+    path_to_xml = joinpath(data_dir, "inputs", "configs", config_folder, "PhysiCell_settings.xml")
     dataTypeRulesFn = (i, _) -> begin
         if variable_types[i] == Bool
             "TEXT"
@@ -117,10 +117,10 @@ end
 function addRulesetsVariationsColumns(rulesets_collection_id::Int, xml_paths::Vector{Vector{String}})
     rulesets_collection_folder = getRulesetsCollectionFolder(rulesets_collection_id)
     db_columns = getRulesetsCollectionDB(rulesets_collection_folder)
-    path_to_rulesets_collection_folder = "$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)"
-    path_to_base_xml = "$(path_to_rulesets_collection_folder)/base_rulesets.xml"
+    path_to_rulesets_collection_folder = joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder)
+    path_to_base_xml = joinpath(path_to_rulesets_collection_folder, "base_rulesets.xml")
     if !isfile(path_to_base_xml)
-        writeRules(path_to_base_xml, "$(path_to_rulesets_collection_folder)/base_rulesets.csv")
+        writeRules(path_to_base_xml, joinpath(path_to_rulesets_collection_folder, "base_rulesets.csv"))
     end
     dataTypeRulesFn = (_, name) -> occursin("applies_to_dead", name) ? "INT" : "REAL"
     return addColumns(xml_paths, "rulesets_variations", "rulesets_variation_id", db_columns, path_to_base_xml, dataTypeRulesFn)

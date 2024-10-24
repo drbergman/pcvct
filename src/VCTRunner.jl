@@ -5,8 +5,8 @@ function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=miss
         monad = Monad(simulation)
         monad_id = monad.id
     end
-    path_to_simulation_folder = "$(data_dir)/outputs/simulations/$(simulation.id)"
-    path_to_simulation_output = "$(path_to_simulation_folder)/output"
+    path_to_simulation_folder = joinpath(data_dir, "outputs", "simulations", string(simulation.id))
+    path_to_simulation_output = joinpath(path_to_simulation_folder, "output")
     mkpath(path_to_simulation_output)
 
     if do_full_setup
@@ -15,20 +15,20 @@ function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=miss
         loadCustomCode(simulation; force_recompile=force_recompile)
     end
 
-    executable_str = "$(data_dir)/inputs/custom_codes/$(simulation.folder_names.custom_code_folder)/project" # path to executable
-    config_str =  "$(data_dir)/inputs/configs/$(simulation.folder_names.config_folder)/variations/variation_$(simulation.variation_id).xml" # path to config file
+    executable_str = joinpath(data_dir, "inputs", "custom_codes", simulation.folder_names.custom_code_folder, baseToExecutable("project")) # path to executable
+    config_str = joinpath(data_dir, "inputs", "configs", simulation.folder_names.config_folder, "variations", "variation_$(simulation.variation_id).xml")
     flags = ["-o", path_to_simulation_output]
     if simulation.folder_ids.ic_cell_id != -1
-        append!(flags, ["-i", "$(data_dir)/inputs/ics/cells/$(simulation.folder_names.ic_cell_folder)/cells.csv"]) # if ic file included (id != -1), then include this in the command
+        append!(flags, ["-i", joinpath(data_dir, "inputs", "ics", "cells", simulation.folder_names.ic_cell_folder, "cells.csv")]) # if ic file included (id != -1), then include this in the command
     end
     if simulation.folder_ids.ic_substrate_id != -1
-        append!(flags, ["-s", "$(data_dir)/inputs/ics/substrates/$(simulation.folder_names.ic_substrate_folder)/substrates.csv"]) # if ic file included (id != -1), then include this in the command
+        append!(flags, ["-s", joinpath(data_dir, "inputs", "ics", "substrates", simulation.folder_names.ic_substrate_folder, "substrates.csv")]) # if ic file included (id != -1), then include this in the command
     end
     if simulation.folder_ids.ic_ecm_id != -1
-        append!(flags, ["-e", "$(data_dir)/inputs/ics/ecms/$(simulation.folder_names.ic_ecm_folder)/ecm.csv"]) # if ic file included (id != -1), then include this in the command
+        append!(flags, ["-e", joinpath(data_dir, "inputs", "ics", "ecms", simulation.folder_names.ic_ecm_folder, "ecm.csv")]) # if ic file included (id != -1), then include this in the command
     end
     if simulation.rulesets_variation_id != -1
-        path_to_rules_file = "$(data_dir)/inputs/rulesets_collections/$(simulation.folder_names.rulesets_collection_folder)/rulesets_collections_variations/rulesets_variation_$(simulation.rulesets_variation_id).xml"
+        path_to_rules_file = joinpath(data_dir, "inputs", "rulesets_collections", simulation.folder_names.rulesets_collection_folder, "rulesets_collections_variations", "rulesets_variation_$(simulation.rulesets_variation_id).xml")
         append!(flags, ["-r", path_to_rules_file])
     end
     cmd = `$executable_str $config_str $flags`
@@ -36,16 +36,16 @@ function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=miss
     flush(stdout)
     success = false # create this here so the return statement handles it correctly
     try
-        run(pipeline(cmd; stdout="$(path_to_simulation_folder)/output.log", stderr="$(path_to_simulation_folder)/output.err"); wait=true)
+        run(pipeline(cmd; stdout=joinpath(path_to_simulation_folder, "output.log"), stderr=joinpath(path_to_simulation_folder, "output.err")); wait=true)
     catch
         println("\tSimulation $(simulation.id) failed.")
-        println("\tCompile command: $cmd")
-        println("\tCheck $(path_to_simulation_folder)/output.err for more information.")
+        println("\tExecution command: $cmd")
+        println("\tCheck $(joinpath(path_to_simulation_folder, "output.err")) for more information.")
         DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Failed")) WHERE simulation_id=$(simulation.id);" )
         success = false
         eraseSimulationID(simulation.id; monad_id=monad_id)
     else
-        rm("$(path_to_simulation_folder)/output.err"; force=true)
+        rm(joinpath(path_to_simulation_folder, "output.err"); force=true)
         DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Completed")) WHERE simulation_id=$(simulation.id);" )
         success = true
     end
@@ -56,7 +56,7 @@ function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=miss
 end
 
 function runMonad(monad::Monad; do_full_setup::Bool=true, force_recompile::Bool=false, prune_options=PruneOptions())
-    mkpath("$(data_dir)/outputs/monads/$(monad.id)")
+    mkpath(joinpath(data_dir, "outputs", "monads", string(monad.id)))
 
     if do_full_setup
         loadCustomCode(monad; force_recompile=force_recompile)
@@ -78,7 +78,7 @@ function runMonad(monad::Monad; do_full_setup::Bool=true, force_recompile::Bool=
 end
 
 function runSampling(sampling::Sampling; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions())
-    mkpath("$(data_dir)/outputs/samplings/$(sampling.id)")
+    mkpath(joinpath(data_dir, "outputs", "samplings", string(sampling.id)))
 
     loadCustomCode(sampling; force_recompile=force_recompile)
     simulation_tasks = []
@@ -91,7 +91,7 @@ function runSampling(sampling::Sampling; force_recompile::Bool=false, prune_opti
 end
 
 function runTrial(trial::Trial; force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
-    mkpath("$(data_dir)/outputs/trials/$(trial.id)")
+    mkpath(joinpath(data_dir, "outputs", "trials", string(trial.id)))
 
     simulation_tasks = []
     for i in eachindex(trial.sampling_ids)

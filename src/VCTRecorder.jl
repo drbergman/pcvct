@@ -1,30 +1,30 @@
 function recordIDs(path_to_folder::String, filename::String, ids::Array{Int})
     mkpath(path_to_folder)
-    path_to_csv = "$(path_to_folder)/$(filename).csv"
+    path_to_csv = joinpath(path_to_folder, "$(filename).csv")
     lines_table = compressIDs(ids)
     CSV.write(path_to_csv, lines_table; header=false)
 end
 
 function recordSimulationIDs(monad_id::Int, simulation_ids::Array{Int})
-    path_to_folder = "$(data_dir)/outputs/monads/$(monad_id)/"
+    path_to_folder = joinpath(data_dir, "outputs", "monads", string(monad_id))
     recordIDs(path_to_folder, "simulations", simulation_ids)
 end
 
 recordSimulationIDs(monad::Monad) = recordSimulationIDs(monad.id, monad.simulation_ids)
 
 function recordMonadIDs(sampling_id::Int, monad_ids::Array{Int})
-    path_to_folder = "$(data_dir)/outputs/samplings/$(sampling_id)/"
+    path_to_folder = joinpath(data_dir, "outputs", "samplings", string(sampling_id))
     recordIDs(path_to_folder, "monads", monad_ids)
 end
 
 recordMonadIDs(sampling::Sampling) = recordMonadIDs(sampling.id, sampling.monad_ids)
 
 function recordSamplingIDs(trial_id::Int, sampling_ids::Array{Int})
-    recordSamplingIDs("$(data_dir)/outputs/trials/$(trial_id)", sampling_ids)
+    recordSamplingIDs(joinpath(data_dir, "outputs", "trials", string(trial_id)), sampling_ids)
 end
 
 function recordSamplingIDs(trial::Trial)
-    recordSamplingIDs("$(data_dir)/outputs/trials/$(trial.id)", trial.sampling_ids)
+    recordSamplingIDs(joinpath(data_dir, "outputs", "trials", string(trial.id)), trial.sampling_ids)
 end
 
 function recordSamplingIDs(path_to_folder::String, sampling_ids::Array{Int})

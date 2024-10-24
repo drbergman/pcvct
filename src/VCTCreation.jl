@@ -3,14 +3,14 @@ using Downloads
 function createProject(; project_dir::String=".", clone_physicell::Bool=true, template_as_default::Bool=true, terse::Bool=false)
     mkpath(project_dir)
     physicell_dir = setUpPhysiCell(project_dir, clone_physicell)
-    data_dir = "$(project_dir)/data"
+    data_dir = joinpath(project_dir, "data")
 
     setUpInputs(data_dir, physicell_dir, template_as_default)
     setUpVCT(project_dir, physicell_dir, data_dir, template_as_default, terse)
 end
 
 function setUpPhysiCell(project_dir::String, clone_physicell::Bool)
-    physicell_dir = "$(project_dir)/PhysiCell"
+    physicell_dir = joinpath(project_dir, "PhysiCell")
     if isdir(physicell_dir)
         println("PhysiCell directory already exists ($(physicell_dir)). Hopefully it's the pcvct-compatible version!")
         return physicell_dir
@@ -29,14 +29,14 @@ function setUpPhysiCell(project_dir::String, clone_physicell::Bool)
         # download drbergman/Pysicell main branch
         println("Downloading PhysiCell repository")
         url = "https://codeload.github.com/drbergman/PhysiCell/zip/refs/heads/my-physicell"
-        zip_path = "$(project_dir)/PhysiCell.zip"
+        zip_path = joinpath(project_dir, "PhysiCell.zip")
         Downloads.download(url, zip_path)
-        extract_path = "$(project_dir)/PhysiCell_extract"
+        extract_path = joinpath(project_dir, "PhysiCell_extract")
         run(`unzip $zip_path -d $extract_path`)
         rm(zip_path)
         @assert (readdir(extract_path) |> length) == 1
         path_to_extracted_physicell = readdir(extract_path; join=true)[1]
-        mv("$path_to_extracted_physicell", physicell_dir)
+        mv(path_to_extracted_physicell, physicell_dir)
         rm(extract_path; recursive=false)
     end
     return physicell_dir
@@ -47,15 +47,15 @@ function setUpInputs(data_dir::String, physicell_dir::String, template_as_defaul
         println("Data directory already exists ($(data_dir)). Skipping setup of data directory.")
         return
     end
-    inputs_dir = "$(data_dir)/inputs"
+    inputs_dir = joinpath(data_dir, "inputs")
     mkpath(inputs_dir)
 
-    mkpath("$(inputs_dir)/configs")
-    mkpath("$(inputs_dir)/custom_codes")
+    mkpath(joinpath(inputs_dir, "configs"))
+    mkpath(joinpath(inputs_dir, "custom_codes"))
     for ic in ["cells","substrates","ecms"]
-        mkpath("$(inputs_dir)/ics/$(ic)")
+        mkpath(joinpath(inputs_dir, "ics", ic))
     end
-    mkpath("$(inputs_dir)/rulesets_collections")
+    mkpath(joinpath(inputs_dir, "rulesets_collections"))
 
     if template_as_default
         setUpTemplate(physicell_dir, inputs_dir)
@@ -63,49 +63,49 @@ function setUpInputs(data_dir::String, physicell_dir::String, template_as_defaul
 end
 
 function setUpTemplate(physicell_dir::String, inputs_dir::String)
-    path_to_template = "$(physicell_dir)/sample_projects/template"
+    path_to_template = joinpath(physicell_dir, "sample_projects", "template")
 
-    config_folder = "$(inputs_dir)/configs/0_template"
+    config_folder = joinpath(inputs_dir, "configs", "0_template")
     mkpath(config_folder)
-    cp("$(path_to_template)/config/PhysiCell_settings.xml", "$(config_folder)/PhysiCell_settings.xml")
+    cp(joinpath(path_to_template, "config", "PhysiCell_settings.xml"), joinpath(config_folder, "PhysiCell_settings.xml"))
 
-    rulesets_collection_folder = "$(inputs_dir)/rulesets_collections/0_template"
+    rulesets_collection_folder = joinpath(inputs_dir, "rulesets_collections", "0_template")
     mkpath(rulesets_collection_folder)
-    open("$(rulesets_collection_folder)/base_rulesets.csv", "w") do f
+    open(joinpath(rulesets_collection_folder, "base_rulesets.csv"), "w") do f
         write(f, "default,pressure,decreases,cycle entry,0.0,0.5,4,0") # actually add a rule for example's sake
     end
 
-    custom_codes_folder = "$(inputs_dir)/custom_codes/0_template"
+    custom_codes_folder = joinpath(inputs_dir, "custom_codes", "0_template")
     mkpath(custom_codes_folder)
-    cp("$(path_to_template)/custom_modules", "$(custom_codes_folder)/custom_modules")
-    cp("$(path_to_template)/main.cpp", "$(custom_codes_folder)/main.cpp")
-    cp("$(path_to_template)/Makefile", "$(custom_codes_folder)/Makefile")
+    cp(joinpath(path_to_template, "custom_modules"), joinpath(custom_codes_folder, "custom_modules"))
+    cp(joinpath(path_to_template, "main.cpp"), joinpath(custom_codes_folder, "main.cpp"))
+    cp(joinpath(path_to_template, "Makefile"), joinpath(custom_codes_folder, "Makefile"))
 
-    ic_cells_folder = "$(inputs_dir)/ics/cells/0_template"
+    ic_cells_folder = joinpath(inputs_dir, "ics", "cells", "0_template")
     mkpath(ic_cells_folder)
-    cp("$(path_to_template)/config/cells.csv", "$(ic_cells_folder)/cells.csv")
+    cp(joinpath(path_to_template, "config", "cells.csv"), joinpath(ic_cells_folder, "cells.csv"))
 end
 
 function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, template_as_default::Bool, terse::Bool)
-    path_to_vct = "$(project_dir)/VCT"
+    path_to_vct = joinpath(project_dir, "VCT")
     mkpath(path_to_vct)
 
-    path_to_generate_data = "$(path_to_vct)/GenerateData.jl"
+    path_to_generate_data = joinpath(path_to_vct, "GenerateData.jl")
     if isfile(path_to_generate_data)
-        println("GenerateData.jl already exists ($(path_to_vct)/GenerateData.jl). Skipping creation of this starter file.")
+        println("GenerateData.jl already exists ($(joinpath(path_to_vct,"GenerateData.jl"))). Skipping creation of this starter file.")
         return
     end
-    path_to_configs = "$(data_dir)/inputs/configs"
+    path_to_configs = joinpath(data_dir, "inputs", "configs")
     config_folder = template_as_default ? "\"0_template\" # this folder is located at $(path_to_configs)" : "\"default\" # add this folder with config file to $(path_to_configs)"
 
-    path_to_rulesets_collections = "$(data_dir)/inputs/rulesets_collections"
+    path_to_rulesets_collections = joinpath(data_dir, "inputs", "rulesets_collections")
     rulesets_collection_folder = template_as_default ? "\"0_template\" # this folder is located at $(path_to_rulesets_collections); a rule has been added for the sake of the example" : "\"\" # optionally add this folder with base_rulesets.csv to $(path_to_rulesets_collections)"
 
-    path_to_custom_codes = "$(data_dir)/inputs/custom_codes"
+    path_to_custom_codes = joinpath(data_dir, "inputs", "custom_codes")
     custom_code_folder = template_as_default ? "\"0_template\" # this folder is located at $(path_to_custom_codes)" : "\"default\" # add this folder with main.cpp, Makefile, and custom_modules to $(path_to_custom_codes)"
 
-    path_to_ics = "$(data_dir)/inputs/ics"
-    path_to_ic_cells = "$(path_to_ics)/cells"
+    path_to_ics = joinpath(data_dir, "inputs", "ics")
+    path_to_ic_cells = joinpath(path_to_ics, "cells")
     ic_cell_folder = template_as_default ? "\"0_template\" # this folder is located at $(path_to_ic_cells)" : "\"\" # optionally add this folder with cells.csv to $(path_to_ic_cells)"
 
     tersify(s::String) = (terse ? "" : s)
@@ -120,8 +120,8 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         custom_code_folder = $(custom_code_folder)
         
         ic_cell_folder = $(ic_cell_folder)
-        ic_substrate_folder = \"\" # optionally add this folder with substrates.csv to $(path_to_ics)/substrates
-        ic_ecm_folder = \"\" # optionally add this folder with ecms.csv to $(path_to_ics)/ecms
+        ic_substrate_folder = \"\" # optionally add this folder with substrates.csv to $(joinpath(path_to_ics, "substrates"))
+        ic_ecm_folder = \"\" # optionally add this folder with ecms.csv to $(joinpath(path_to_ics, "ecms"))
 
         ############ make the simulations short ############
 
@@ -220,7 +220,7 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         # ...check this value with Threads.nthreads()...
         # Note: this depends on if you run from the REPL or a script
         # running from a script, just add the -t flag:
-        # julia -t 4 ./data/
+        # julia -t 4 joinpath("data", "GenerateData.jl")
         """))\
         runAbstractTrial(sampling; force_recompile=force_recompile)
     """

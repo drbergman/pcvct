@@ -16,12 +16,14 @@ include("VCTConfiguration.jl")
 include("VCTCreation.jl")
 include("VCTDatabase.jl") 
 include("VCTDeletion.jl")
-include("VCTExtraction.jl")
+# include("VCTExtraction.jl")
 include("VCTLoader.jl")
 include("VCTMovie.jl")
 include("VCTRunner.jl")
 include("VCTRecorder.jl")
 include("VCTSensitivity.jl")
+
+include("VCTAnalysis.jl")
 
 include("../PhysiCell-XMLRules/src/PhysiCell_XMLRules.jl")
 using .PhysiCell_XMLRules
@@ -29,6 +31,11 @@ using .PhysiCell_XMLRules
 physicell_dir::String = abspath("PhysiCell")
 data_dir::String = abspath("data")
 PHYSICELL_CPP::String = haskey(ENV, "PHYSICELL_CPP") ? ENV["PHYSICELL_CPP"] : "/opt/homebrew/bin/g++-14"
+if Sys.iswindows()
+    baseToExecutable(s::String) = "$(s).exe"
+else
+    baseToExecutable(s::String) = s
+end
 
 ################## Initialization Functions ##################
 
@@ -73,7 +80,7 @@ function initializeVCT(path_to_physicell::String, path_to_data::String)
     global data_dir = abspath(path_to_data)
     println(rpad("Path to PhysiCell:", 20, ' ') * physicell_dir)
     println(rpad("Path to data:", 20, ' ') * data_dir)
-    initializeDatabase("$(data_dir)/vct.db")
+    initializeDatabase(joinpath(data_dir, "vct.db"))
     println(rpad("Compiler:", 20, ' ') * PHYSICELL_CPP)
     flush(stdout)
 end
@@ -142,16 +149,16 @@ It then reads the constituent IDs from a CSV file located at the constructed pat
 """
 function readConstituentIDs(T::AbstractTrial)
     type_str = typeof(T) |> string |> lowercase
-    path_to_folder = "$(data_dir)/outputs/$(type_str)s/$(T.id)"
+    path_to_folder = joinpath(data_dir, "outputs", type_str * "s", string(T.id))
     filename = lowercase(string(constituentsType(T))) * "s"
-    return readConstituentIDs("$(path_to_folder)/$(filename).csv")
+    return readConstituentIDs(joinpath(path_to_folder, filename * ".csv"))
 end
 
-readMonadSimulationIDs(monad_id::Int) = readConstituentIDs("$(data_dir)/outputs/monads/$(monad_id)/simulations.csv")
+readMonadSimulationIDs(monad_id::Int) = readConstituentIDs(joinpath(data_dir, "outputs", "monads", string(monad_id), "simulations.csv"))
 readMonadSimulationIDs(monad::Monad) = readMonadSimulationIDs(monad.id)
-readSamplingMonadIDs(sampling_id::Int) = readConstituentIDs("$(data_dir)/outputs/samplings/$(sampling_id)/monads.csv")
+readSamplingMonadIDs(sampling_id::Int) = readConstituentIDs(joinpath(data_dir, "outputs", "samplings", string(sampling_id), "monads.csv"))
 readSamplingMonadIDs(sampling::Sampling) = readSamplingMonadIDs(sampling.id)
-readTrialSamplingIDs(trial_id::Int) = readConstituentIDs("$(data_dir)/outputs/trials/$(trial_id)/samplings.csv")
+readTrialSamplingIDs(trial_id::Int) = readConstituentIDs(joinpath(data_dir, "outputs", "trials", string(trial_id), "samplings.csv"))
 readTrialSamplingIDs(trial::Trial) = readTrialSamplingIDs(trial.id)
 
 function getSamplingSimulations(sampling_id::Int)
@@ -200,5 +207,5 @@ end
 function getOutputFolder(T::AbstractTrial)
     name = typeof(T) |> string |> lowercase
     name = split(name, ".")[end] # remove module name that comes with the type, e.g. main.vctmodule.sampling -> sampling
-    return "$(data_dir)/outputs/$(name)s/$(T.id)"
+    return joinpath(data_dir, "outputs", name * "s", string(T.id))
 end

@@ -109,12 +109,12 @@ end
 ################## Configuration Functions ##################
 
 function loadConfiguration(M::AbstractMonad)
-    path_to_xml = "$(data_dir)/inputs/configs/$(M.folder_names.config_folder)/variations/variation_$(M.variation_id).xml"
+    path_to_xml = joinpath(data_dir, "inputs", "configs", M.folder_names.config_folder, "variations", "variation_$(M.variation_id).xml")
     if isfile(path_to_xml)
         return
     end
     mkpath(dirname(path_to_xml))
-    path_to_xml_src = "$(data_dir)/inputs/configs/$(M.folder_names.config_folder)/PhysiCell_settings.xml"
+    path_to_xml_src = joinpath(data_dir, "inputs", "configs", M.folder_names.config_folder, "PhysiCell_settings.xml")
     cp(path_to_xml_src, path_to_xml, force=true)
 
     xml_doc = openXML(path_to_xml)
@@ -143,18 +143,18 @@ function loadRulesets(M::AbstractMonad)
     if M.rulesets_variation_id == -1 # no rules being used
         return
     end
-    path_to_rulesets_collections_folder = "$(data_dir)/inputs/rulesets_collections/$(M.folder_names.rulesets_collection_folder)"
-    path_to_rulesets_xml = "$(path_to_rulesets_collections_folder)/rulesets_collections_variations/rulesets_variation_$(M.rulesets_variation_id).xml"
+    path_to_rulesets_collections_folder = joinpath(data_dir, "inputs", "rulesets_collections", M.folder_names.rulesets_collection_folder)
+    path_to_rulesets_xml = joinpath(path_to_rulesets_collections_folder, "rulesets_collections_variations", "rulesets_variation_$(M.rulesets_variation_id).xml")
     if isfile(path_to_rulesets_xml) # already have the rulesets variation created
         return
     end
     mkpath(dirname(path_to_rulesets_xml)) # ensure the directory exists
 
     # create xml file using LightXML
-    path_to_base_xml = "$(path_to_rulesets_collections_folder)/base_rulesets.xml"
+    path_to_base_xml = joinpath(path_to_rulesets_collections_folder, "base_rulesets.xml")
     if !isfile(path_to_base_xml)
         # this could happen if the rules are not being varied (so no call to addRulesetsVariationsColumns) and then a sim runs without the base_rulesets.xml being created yet
-        writeRules(path_to_base_xml, "$(path_to_rulesets_collections_folder)/base_rulesets.csv")
+        writeRules(path_to_base_xml, joinpath(path_to_rulesets_collections_folder, "base_rulesets.csv"))
     end
         
     xml_doc = parse_file(path_to_base_xml)

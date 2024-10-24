@@ -5,7 +5,7 @@ function deleteSimulation(simulation_ids::Vector{Int}; delete_supers::Bool=true,
     simulation_ids = sim_df.simulation_id # update based on the constraints added
     DBInterface.execute(db,"DELETE FROM simulations WHERE simulation_id IN ($(join(simulation_ids,",")));")
     for row in eachrow(sim_df)
-        rm("$(data_dir)/outputs/simulations/$(row.simulation_id)"; force=true, recursive=true)
+        rm(joinpath(data_dir, "outputs", "simulations", string(row.simulation_id)); force=true, recursive=true)
         config_folder = getConfigFolder(row.config_id)
         result_df = constructSelectQuery(
             "simulations",
@@ -13,7 +13,7 @@ function deleteSimulation(simulation_ids::Vector{Int}; delete_supers::Bool=true,
             selection="COUNT(*)"
         ) |> queryToDataFrame
         if result_df.var"COUNT(*)"[1] == 0
-            rm("$(data_dir)/inputs/configs/$(config_folder)/variations/variation_$(row.variation_id).xml"; force=true)
+            rm(joinpath(data_dir, "inputs", "configs", config_folder, "variations", "variation_$(row.variation_id).xml"); force=true)
         end
 
         rulesets_collection_folder = getRulesetsCollectionFolder(row.rulesets_collection_id)
@@ -23,7 +23,7 @@ function deleteSimulation(simulation_ids::Vector{Int}; delete_supers::Bool=true,
             selection="COUNT(*)"
         ) |> queryToDataFrame
         if result_df.var"COUNT(*)"[1] == 0
-            rm("$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)/rulesets_collections_variations/rulesets_variation_$(row.rulesets_variation_id).xml"; force=true)
+            rm(joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder, "rulesets_collections_variations", "rulesets_variation_$(row.rulesets_variation_id).xml"); force=true)
         end
     end
 
@@ -61,7 +61,7 @@ function deleteMonad(monad_ids::Vector{Int}; delete_subs::Bool=true, delete_supe
         if delete_subs
             append!(simulation_ids_to_delete, readMonadSimulationIDs(monad_id))
         end
-        rm("$(data_dir)/outputs/monads/$(monad_id)"; force=true, recursive=true)
+        rm(joinpath(data_dir, "outputs", "monads", string(monad_id)); force=true, recursive=true)
     end
     if !isempty(simulation_ids_to_delete)
         deleteSimulation(simulation_ids_to_delete; delete_supers=false)
@@ -100,7 +100,7 @@ function deleteSampling(sampling_ids::Vector{Int}; delete_subs::Bool=true, delet
         if delete_subs
             append!(monad_ids_to_delete, readSamplingMonadIDs(sampling_id))
         end
-        rm("$(data_dir)/outputs/samplings/$(sampling_id)"; force=true, recursive=true)
+        rm(joinpath(data_dir, "outputs", "samplings", string(sampling_id)); force=true, recursive=true)
     end
     if !isempty(monad_ids_to_delete)
         all_sampling_ids = constructSelectQuery("samplings", "", selection="sampling_id") |> queryToDataFrame |> x -> x.sampling_id
@@ -148,7 +148,7 @@ function deleteTrial(trial_ids::Vector{Int}; delete_subs::Bool=true)
         if delete_subs
             append!(sampling_ids_to_delete, readTrialSamplingIDs(trial_id))
         end
-        rm("$(data_dir)/outputs/trials/$(trial_id)"; force=true, recursive=true)
+        rm(joinpath(data_dir, "outputs", "trials", string(trial_id)); force=true, recursive=true)
     end
     if !isempty(sampling_ids_to_delete)
         all_trial_ids = constructSelectQuery("trials", "", selection="trial_id") |> queryToDataFrame |> x -> x.trial_id
@@ -187,37 +187,37 @@ function resetDatabase(; force_reset::Bool=false, force_continue::Bool=false)
         end
     end
     for folder in ["simulations", "monads", "samplings", "trials"]
-        rm("$(data_dir)/outputs/$(folder)"; force=true, recursive=true)
+        rm(joinpath(data_dir, "outputs", folder); force=true, recursive=true)
     end
 
-    for config_folder in (readdir("$(data_dir)/inputs/configs/", sort=false, join=true) |> filter(x->isdir(x)))
+        for config_folder in (readdir(joinpath(data_dir, "inputs", "configs"), sort=false, join=true) |> filter(x->isdir(x)))
         resetConfigFolder(config_folder)
     end
     
     config_folders = constructSelectQuery("configs", "", selection="folder_name") |> queryToDataFrame |> x -> x.folder_name
     for config_folder in config_folders
-        resetConfigFolder("$(data_dir)/inputs/configs/$(config_folder)")
+        resetConfigFolder(joinpath(data_dir, "inputs", "configs", config_folder))
     end
-
-    for path_to_rulesets_collection_folder in (readdir("$(data_dir)/inputs/rulesets_collections/", sort=false, join=true) |> filter(x->isdir(x)))
+    
+    for path_to_rulesets_collection_folder in (readdir(joinpath(data_dir, "inputs", "rulesets_collections"), sort=false, join=true) |> filter(x->isdir(x)))
         resetRulesetsCollectionFolder(path_to_rulesets_collection_folder)
     end
-
+    
     rulesets_collection_folders = constructSelectQuery("rulesets_collections", "", selection="folder_name") |> queryToDataFrame |> x -> x.folder_name
     for rulesets_collection_folder in rulesets_collection_folders
-        resetRulesetsCollectionFolder("$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)")
+        resetRulesetsCollectionFolder(joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder))
     end
-
-    for custom_code_folder in (readdir("$(data_dir)/inputs/custom_codes/", sort=false, join=true) |> filter(x->isdir(x)))
-        files = ["project", "compilation.log", "compilation.err", "macros.txt"]
+    
+    for custom_code_folder in (readdir(joinpath(data_dir, "inputs", "custom_codes"), sort=false, join=true) |> filter(x->isdir(x)))
+        files = [baseToExecutable("project"), "compilation.log", "compilation.err", "macros.txt"]
         for file in files
-            rm("$(custom_code_folder)/$(file)"; force=true)
+            rm(joinpath(custom_code_folder, file); force=true)
         end
     end
 
     custom_code_folders = constructSelectQuery("custom_codes", "", selection="folder_name") |> queryToDataFrame |> x -> x.folder_name
     for custom_code_folder in custom_code_folders
-        rm("$(data_dir)/inputs/custom_codes/$(custom_code_folder)/project"; force=true)
+        rm(joinpath(data_dir, "inputs", "custom_codes", custom_code_folder, baseToExecutable("project")); force=true)
     end
 
     if db.file == ":memory:"
@@ -231,18 +231,18 @@ end
 
 function resetConfigFolder(path_to_config_folder::String)
     if !isdir(path_to_config_folder)
-        return
+    return
     end
-    rm("$(path_to_config_folder)/variations.db"; force=true)
-    rm("$(path_to_config_folder)/variations"; force=true, recursive=true)
+    rm(joinpath(path_to_config_folder, "variations.db"); force=true)
+    rm(joinpath(path_to_config_folder, "variations"); force=true, recursive=true)
 end
 
 function resetRulesetsCollectionFolder(path_to_rulesets_collection_folder::String)
     if !isdir(path_to_rulesets_collection_folder)
         return
     end
-    rm("$(path_to_rulesets_collection_folder)/rulesets_variations.db"; force=true)
-    rm("$(path_to_rulesets_collection_folder)/rulesets_collections_variations"; force=true, recursive=true)
+    rm(joinpath(path_to_rulesets_collection_folder, "rulesets_variations.db"); force=true)
+    rm(joinpath(path_to_rulesets_collection_folder, "rulesets_collections_variations"); force=true, recursive=true)
 end
 
 """

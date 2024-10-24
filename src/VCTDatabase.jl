@@ -20,10 +20,10 @@ function patchBaseRulesetsVariationNotInDB(rulesets_collection_folder::String, d
     # then we are adding in this row after the db was made (so that means the db was made before this got patched)
     column_names = queryToDataFrame("PRAGMA table_info(rulesets_variations);"; db=db_rulesets_variations) |> x->x[!,:name]
     filter!(x -> x != "rulesets_variation_id", column_names) 
-    path_to_rulesets_collections_folder = "$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)"
-    path_to_xml = "$(path_to_rulesets_collections_folder)/base_rulesets.xml"
+    path_to_rulesets_collections_folder = joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder)
+    path_to_xml = joinpath(path_to_rulesets_collections_folder, "base_rulesets.xml")
     if !isfile(path_to_xml)
-        writeRules(path_to_xml, "$(path_to_rulesets_collections_folder)/base_rulesets.csv")
+        writeRules(path_to_xml, joinpath(path_to_rulesets_collections_folder, "base_rulesets.csv"))
     end
     xml_doc = openXML(path_to_xml)
     for column_name in column_names
@@ -36,12 +36,12 @@ end
 
 function createSchema()
     # make sure necessary directories are present
-    data_dir_contents = readdir("$(data_dir)/inputs/"; sort=false)
+    data_dir_contents = readdir(joinpath(data_dir, "inputs"); sort=false)
     if !("custom_codes" in data_dir_contents)
-        error("No $(data_dir)/inputs/custom_codes found. This is where to put the folders for custom_modules, main.cpp, and Makefile.")
+        error("No $(joinpath(data_dir, "inputs", "custom_codes")) found. This is where to put the folders for custom_modules, main.cpp, and Makefile.")
     end
     if !("configs" in data_dir_contents)
-        error("No $(data_dir)/inputs/configs found. This is where to put the folders for config files and rules files.")
+        error("No $(joinpath(data_dir, "inputs", "configs")) found. This is where to put the folders for config files and rules files.")
     end
 
     # initialize and populate custom_codes table
@@ -52,9 +52,9 @@ function createSchema()
     """
     createPCVCTTable("custom_codes", custom_codes_schema)
         
-    custom_codes_folders = readdir("$(data_dir)/inputs/custom_codes"; sort=false) |> filter(x->isdir("$(data_dir)/inputs/custom_codes/$(x)"))
+    custom_codes_folders = readdir(joinpath(data_dir, "inputs", "custom_codes"); sort=false) |> filter(x->isdir(joinpath(data_dir, "inputs", "custom_codes", x)))
     if isempty(custom_codes_folders)
-        error("No folders in $(data_dir)/inputs/custom_codes found. Add custom_modules, main.cpp, and Makefile to a folder here to move forward.")
+        error("No folders in $(joinpath(data_dir, "inputs", "custom_codes")) found. Add custom_modules, main.cpp, and Makefile to a folder here to move forward.")
     end
     for custom_codes_folder in custom_codes_folders
         DBInterface.execute(db, "INSERT OR IGNORE INTO custom_codes (folder_name) VALUES ('$(custom_codes_folder)');")
@@ -73,13 +73,13 @@ function createSchema()
     """
     createPCVCTTable("configs", configs_schema)
         
-    config_folders = readdir("$(data_dir)/inputs/configs"; sort=false) |> filter(x->isdir("$(data_dir)/inputs/configs/$(x)"))
+    config_folders = readdir(joinpath(data_dir, "inputs", "configs"); sort=false) |> filter(x -> isdir(joinpath(data_dir, "inputs", "configs", x)))
     if isempty(config_folders)
-        error("No folders in $(data_dir)/inputs/configs found. Add PhysiCell_settings.xml and rules files here.")
+        error("No folders in $(joinpath(data_dir, "inputs", "configs")) found. Add PhysiCell_settings.xml and rules files here.")
     end
     for config_folder in config_folders
         DBInterface.execute(db, "INSERT OR IGNORE INTO configs (folder_name) VALUES ('$(config_folder)');")
-        db_config_variations = "$(data_dir)/inputs/configs/$(config_folder)/variations.db" |> SQLite.DB
+        db_config_variations = joinpath(data_dir, "inputs", "configs", config_folder, "variations.db") |> SQLite.DB
         createPCVCTTable("variations", "variation_id INTEGER PRIMARY KEY"; db=db_config_variations)
         DBInterface.execute(db_config_variations, "INSERT OR IGNORE INTO variations (variation_id) VALUES(0);")
     end
@@ -93,10 +93,10 @@ function createSchema()
     createPCVCTTable("rulesets_collections", rulesets_collections_schema)
 
     if "rulesets_collections" in data_dir_contents
-        rulesets_collections_folders = readdir("$(data_dir)/inputs/rulesets_collections"; sort=false) |> filter(x -> isdir("$(data_dir)/inputs/rulesets_collections/$(x)"))
+        rulesets_collections_folders = readdir(joinpath(data_dir, "inputs", "rulesets_collections"); sort=false) |> filter(x -> isdir(joinpath(data_dir, "inputs", "rulesets_collections", x)))
         for rulesets_collection_folder in rulesets_collections_folders
             DBInterface.execute(db, "INSERT OR IGNORE INTO rulesets_collections (folder_name) VALUES ('$(rulesets_collection_folder)');")
-            db_rulesets_variations = "$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)/rulesets_variations.db" |> SQLite.DB
+            db_rulesets_variations = joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder, "rulesets_variations.db") |> SQLite.DB
             createPCVCTTable("rulesets_variations", "rulesets_variation_id INTEGER PRIMARY KEY"; db=db_rulesets_variations)
             df = DBInterface.execute(db_rulesets_variations, "INSERT OR IGNORE INTO rulesets_variations (rulesets_variation_id) VALUES(0) RETURNING rulesets_variation_id;") |> DataFrame
             if !isempty(df)
@@ -206,15 +206,15 @@ function createICTable(ic_name::String; data_dir_contents=String[])
         description TEXT
     """
     createPCVCTTable(table_name, schema)
-    if "ics" in data_dir_contents && ic_name in readdir("$(data_dir)/inputs/ics", sort=false)
-        ic_folders = readdir("$(data_dir)/inputs/ics/$(ic_name)", sort=false) |> filter(x->isdir("$(data_dir)/inputs/ics/$(ic_name)/$(x)"))
+    if "ics" in data_dir_contents && ic_name in readdir(joinpath(data_dir, "inputs", "ics"), sort=false)
+        ic_folders = readdir(joinpath(data_dir, "inputs", "ics", ic_name), sort=false) |> filter(x -> isdir(joinpath(data_dir, "inputs", "ics", ic_name, x)))
         if !isempty(ic_folders)
             for ic_folder in ic_folders
-                if !isfile("$(data_dir)/inputs/ics/$(ic_name)/$(ic_folder)/$(icFilename(ic_name))")
+                if !isfile(joinpath(data_dir, "inputs", "ics", ic_name, ic_folder, icFilename(ic_name)))
                     continue
                 end
-                if isfile("$(data_dir)/inputs/ics/$(ic_name)/$(ic_folder)/metadata.xml")
-                    metadata = parse_file("$(data_dir)/inputs/ics/$(ic_name)/$(ic_folder)/metadata.xml") |> root
+                if isfile(joinpath(data_dir, "inputs", "ics", ic_name, ic_folder, "metadata.xml"))
+                    metadata = parse_file(joinpath(data_dir, "inputs", "ics", ic_name, ic_folder, "metadata.xml")) |> root
                     description = content(find_element(metadata, "description"))
                 else
                     description = ""
@@ -299,11 +299,11 @@ isStarted(simulation::Simulation; new_status_code::Union{Missing,String}=missing
 
 ################## DB Interface Functions ##################
 
-getConfigDB(config_folder::String) = "$(data_dir)/inputs/configs/$(config_folder)/variations.db" |> SQLite.DB
+getConfigDB(config_folder::String) = joinpath(data_dir, "inputs", "configs", config_folder, "variations.db") |> SQLite.DB
 getConfigDB(config_id::Int) = getConfigFolder(config_id) |> getConfigDB
 getConfigDB(S::AbstractSampling) = getConfigDB(S.folder_names.config_folder)
 
-getRulesetsCollectionDB(rulesets_collection_folder::String) = "$(data_dir)/inputs/rulesets_collections/$(rulesets_collection_folder)/rulesets_variations.db" |> SQLite.DB
+getRulesetsCollectionDB(rulesets_collection_folder::String) = joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder, "rulesets_variations.db") |> SQLite.DB
 getRulesetsCollectionDB(M::AbstractMonad) = getRulesetsCollectionDB(M.folder_names.rulesets_collection_folder)
 getRulesetsCollectionDB(rulesets_collection_id::Int) = getRulesetsCollectionFolder(rulesets_collection_id) |> getRulesetsCollectionDB
 

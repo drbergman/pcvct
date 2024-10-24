@@ -1,4 +1,4 @@
-using MAT
+# using MAT
 
 # function loadVCT(path_to_data)
 #     global db, _ = initializeDatabase(path_to_data * "/vct.db")
@@ -6,34 +6,34 @@ using MAT
 
 ############# Helper functions #############
 
-function getOutputFiles(path_to_output_folder::String, filename_suffix::String)
-    return path_to_output_folder .* ["initial" * filename_suffix
-        readdir(path_to_output_folder) |> x -> filter!(endswith(filename_suffix), x) |> x -> filter!(startswith("output"), x)
-        "final" * filename_suffix]
-end
+# function getOutputFiles(path_to_output_folder::String, filename_suffix::String)
+#     return path_to_output_folder .* ["initial" * filename_suffix
+#         readdir(path_to_output_folder) |> x -> filter!(endswith(filename_suffix), x) |> x -> filter!(startswith("output"), x)
+#         "final" * filename_suffix]
+# end
 
-function getLabelIndex(path_to_xml::String, labels::Vector{String})
-    xml_path = ["cellular_information", "cell_populations", "cell_population", "custom", "simplified_data", "labels"]
-    xml_doc = openXML(path_to_xml)
-    labels_element = retrieveElement(xml_doc, xml_path; required=true)
-    index = UnitRange{Int64}[]
-    for label in labels # obviously, would be more efficient to flip these loops to only read the indices in the file once
-        for label_element in child_elements(labels_element)
-            if content(label_element) == label
-                label_ind_start = attribute(label_element, "index"; required=true) |> x -> parse(Int, x)
-                label_ind_width = attribute(label_element, "size"; required=true) |> x -> parse(Int, x)
-                push!(index, label_ind_start .+ (1:label_ind_width))
-                break
-            end
-        end
-    end
-    closeXML(xml_doc)
-    return index
-end
+# function getLabelIndex(path_to_xml::String, labels::Vector{String})
+#     xml_path = ["cellular_information", "cell_populations", "cell_population", "custom", "simplified_data", "labels"]
+#     xml_doc = openXML(path_to_xml)
+#     labels_element = retrieveElement(xml_doc, xml_path; required=true)
+#     index = UnitRange{Int64}[]
+#     for label in labels # obviously, would be more efficient to flip these loops to only read the indices in the file once
+#         for label_element in child_elements(labels_element)
+#             if content(label_element) == label
+#                 label_ind_start = attribute(label_element, "index"; required=true) |> x -> parse(Int, x)
+#                 label_ind_width = attribute(label_element, "size"; required=true) |> x -> parse(Int, x)
+#                 push!(index, label_ind_start .+ (1:label_ind_width))
+#                 break
+#             end
+#         end
+#     end
+#     closeXML(xml_doc)
+#     return index
+# end
 
-function getLabelIndex(path_to_xml::String, label::String)
-    return getLabelIndex(path_to_xml, [label])[1]
-end
+# function getLabelIndex(path_to_xml::String, label::String)
+#     return getLabelIndex(path_to_xml, [label])[1]
+# end
 
 # function getSubstrateID(path_to_xml::String, name::String)
 #     xml_path = ["microenvironment","domain","variables"]
@@ -55,26 +55,26 @@ end
 
 # ############# Atomic extraction functions #############
 
-function extractTime(path_to_output_file::String)
-    xml_path = ["metadata", "current_time"]
-    xml_doc = openXML(path_to_output_file)
-    t = getField(xml_doc, xml_path) |> x -> parse(Float64, x)
-    closeXML(xml_doc)
-    return t
-end
+# function extractTime(path_to_output_file::String)
+#     xml_path = ["metadata", "current_time"]
+#     xml_doc = openXML(path_to_output_file)
+#     t = getField(xml_doc, xml_path) |> x -> parse(Float64, x)
+#     closeXML(xml_doc)
+#     return t
+# end
 
 # function extractCellCount(path_to_output_file::String)
 #     return matread(path_to_output_file)["cell"] |> x -> size(x, 2)
 # end
 
-function extractCellData(path_to_output_file::String, label_inds::Vector{UnitRange{Int}})
-    M = matread(path_to_output_file)["cell"]
-    return [M[label_ind, :] for label_ind in label_inds]
-end
+# function extractCellData(path_to_output_file::String, label_inds::Vector{UnitRange{Int}})
+#     M = matread(path_to_output_file)["cell"]
+#     return [M[label_ind, :] for label_ind in label_inds]
+# end
 
-function extractCellData(path_to_output_file::String, label_ind::UnitRange{Int})
-    return extractCellData(path_to_output_file, [label_ind])[1]
-end
+# function extractCellData(path_to_output_file::String, label_ind::UnitRange{Int})
+#     return extractCellData(path_to_output_file, [label_ind])[1]
+# end
 
 # function extractCellTypeCount(path_to_output_file::String, cell_type_id::Vector{Int}, label_ind::UnitRange{Int})
 #     return extractCellData(path_to_output_file, label_ind) |> vec |> (x -> x .== (cell_type_id')) |> x -> sum(x; dims=1)
@@ -128,25 +128,25 @@ end
 #     return selectSimulations(; patient_id, variation_id, cohort_id) |> loadCellCountTimeSeries
 # end
 
-function loadCellDataTimeSeries(path_to_output_folder::String, label::String)
-    # load each file output as df
-    # for each file in sim, add a named tuple (t = time, data = df)
-    xml_files = getOutputFiles(path_to_output_folder, ".xml")
-    cell_files = getOutputFiles(path_to_output_folder, "_cells.mat")
-    id_ind, label_ind = getLabelIndex(path_to_output_folder * "initial.xml", ["ID"; label])
-    if label=="position"
-        label_col_names = ["x", "y", "z"]
-    else
-        label_col_names = length(label_ind) == 1 ? [label] : [label * "_$i" for i in 1:length(label_ind)]
-    end
-    col_names = ["ID", label_col_names...]
-    f(cell_file) = begin
-        data = extractCellData(cell_file, [id_ind, label_ind]) # list of arrays, one for id and one for label
-        data = vcat(data...) # concatenate into single array (so that any labels with multiple columns are in the same array)
-        data = [name => col for (name, col) in zip(col_names, eachrow(data))] |> DataFrame # convert to named dataframe
-    end
-    return [(t = extractTime(xml_file), data = f(cell_file)) for (xml_file, cell_file) in zip(xml_files, cell_files)]
-end
+# function loadCellDataTimeSeries(path_to_output_folder::String, label::String)
+#     # load each file output as df
+#     # for each file in sim, add a named tuple (t = time, data = df)
+#     xml_files = getOutputFiles(path_to_output_folder, ".xml")
+#     cell_files = getOutputFiles(path_to_output_folder, "_cells.mat")
+#     id_ind, label_ind = getLabelIndex(path_to_output_folder * "initial.xml", ["ID"; label])
+#     if label=="position"
+#         label_col_names = ["x", "y", "z"]
+#     else
+#         label_col_names = length(label_ind) == 1 ? [label] : [label * "_$i" for i in 1:length(label_ind)]
+#     end
+#     col_names = ["ID", label_col_names...]
+#     f(cell_file) = begin
+#         data = extractCellData(cell_file, [id_ind, label_ind]) # list of arrays, one for id and one for label
+#         data = vcat(data...) # concatenate into single array (so that any labels with multiple columns are in the same array)
+#         data = [name => col for (name, col) in zip(col_names, eachrow(data))] |> DataFrame # convert to named dataframe
+#     end
+#     return [(t = extractTime(xml_file), data = f(cell_file)) for (xml_file, cell_file) in zip(xml_files, cell_files)]
+# end
 
 # function loadCellDataTimeSeries(label::String)
 #     simulation_ids = DBInterface.execute(db, "SELECT simulation_id FROM simulations;") |> DataFrame |> x->x.simulation_id
@@ -155,11 +155,11 @@ end
 #     return DataFrame("simulation_id" => simulation_ids, label => all_cell_data)
 # end
 
-function loadCellDataTimeSeries(trial_id::Int, label::String)
-    # for each sim, have a named tuple (id = sim_id, data = [tuples] from above)
-    simulation_ids = getSimulationIDs((Trial,trial_id))
-    return [(simulation_id = simulation_id, data = loadCellDataTimeSeries(data_dir * "/outputs/simulations/" * string(simulation_id) * "/output/", label)) for simulation_id in simulation_ids]
-end
+# function loadCellDataTimeSeries(trial_id::Int, label::String)
+#     # for each sim, have a named tuple (id = sim_id, data = [tuples] from above)
+#     simulation_ids = getSimulationIDs((Trial,trial_id))
+#     return [(simulation_id = simulation_id, data = loadCellDataTimeSeries(data_dir * "/outputs/simulations/" * string(simulation_id) * "/output/", label)) for simulation_id in simulation_ids]
+# end
 
 # function loadCellTypeCountTimeSeries(path_to_output_folder::String, cell_type_id::Union{Int,Vector{Int}})
 #     files = getOutputFiles(path_to_output_folder, "_cells.mat")
