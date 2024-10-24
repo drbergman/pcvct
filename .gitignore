@@ -1,6 +1,7 @@
 .DS_Store
 test.jl
 *.db
+.vscode
 
 # from PkgTemplate.jl
 *.jl.*.cov

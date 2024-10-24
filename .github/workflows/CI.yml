@@ -26,8 +26,7 @@ jobs:
       fail-fast: false
       matrix:
         julia-version:
-          - '1.9.2' # the one currently (2024/10/24) available on JHPCE
-          - '1.10.4' # the one I have been developing with
+          - 'lts' # long-term support
           - '1' # to check the latest v1 version
           - 'pre' # check upcoming releases
         os: ["ubuntu-latest"]
@@ -37,6 +36,11 @@ jobs:
         include:
           - os: "macOS-latest"
             julia-version: '1'
+            shell: "bash"
+            compiler: "g++-13"
+            arch: "arm64"
+          - os: "macOS-latest"
+            julia-version: 'lts'
             shell: "bash"
             compiler: "g++-13"
             arch: "arm64"
