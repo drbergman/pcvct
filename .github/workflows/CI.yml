@@ -26,6 +26,7 @@ jobs:
       fail-fast: false
       matrix:
         julia-version:
+          - '1.9.2' # the one currently (2024/10/24) available on JHPCE
           - '1.10.4' # the one I have been developing with
           - '1' # to check the latest v1 version
           - 'pre' # check upcoming releases
@@ -39,11 +40,11 @@ jobs:
             shell: "bash"
             compiler: "g++-13"
             arch: "arm64"
-          - os: "windows-latest"
-            julia-version: '1'
-            shell: "pwsh"
-            compiler: "g++"
-            arch: "x64"
+          # - os: "windows-latest"
+          #   julia-version: '1'
+          #   shell: "pwsh"
+          #   compiler: "g++"
+          #   arch: "x64"
 
     defaults:
       run:

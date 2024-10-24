@@ -34,6 +34,8 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
         return
     end
 
+    # at some point, should "lock" this function until any other compilations are complete...ideally a way that is independent of the current runtime
+
     if clean
         cd(()->run(pipeline(`make clean`; stdout=devnull)), physicell_dir)
     end
@@ -68,8 +70,7 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
     rm(joinpath(physicell_dir, "custom_modules", "custom.cpp"); force=true)
     rm(joinpath(physicell_dir, "custom_modules", "custom.h"); force=true)
     rm(joinpath(physicell_dir, "main.cpp"); force=true)
-    run(`cp $(joinpath(physicell_dir, "sample_projects", "Makefile-default")) $(joinpath(physicell_dir, "Makefile"))`)
-
+    cp(joinpath(physicell_dir, "sample_projects", "Makefile-default"), joinpath(physicell_dir, "Makefile"), force=true)
 
     mv(joinpath(physicell_dir, executable_name), joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder, baseToExecutable("project")), force=true)
     return 
