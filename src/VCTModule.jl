@@ -3,8 +3,6 @@ export initializeVCT, resetDatabase, addGridVariation, addGridRulesetsVariation,
 export addLHSVariation, addLHSRulesetsVariation
 export GridVariation, LHSVariation, addVariations
 
-VERSION >= v"1.11" && include("public.jl")
-
 using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables, Distributions, Statistics, Random, QuasiMonteCarlo, Sobol
 using MAT # files for VCTLoader.jl
 
@@ -30,6 +28,9 @@ include("VCTAnalysis.jl")
 include("VCTPhysiCellStudio.jl")
 
 include("../PhysiCell-XMLRules/src/PhysiCell_XMLRules.jl")
+
+VERSION >= v"1.11" && include("public.jl")
+
 using .PhysiCell_XMLRules
 
 physicell_dir::String = abspath("PhysiCell")
