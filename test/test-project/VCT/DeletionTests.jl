@@ -14,5 +14,5 @@ pcvct.deleteMonad(1:10 |> collect)
 pcvct.deleteSampling(1)
 pcvct.deleteTrial(1)
 
-pcvct.deleteStalledSimulationsByStatus(; user_check=false)
+pcvct.deleteSimulationsByStatus(; user_check=false)
 resetDatabase(; force_reset=true)

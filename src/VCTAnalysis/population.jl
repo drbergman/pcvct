@@ -48,10 +48,24 @@ function SimulationPopulationTimeSeries(folder::String; include_dead::Bool=false
 end
 
 function SimulationPopulationTimeSeries(simulation_id::Int; include_dead::Bool=false)
-    # return "$(data_dir)/outputs/simulations/$(simulation_id)/output" |> x -> SimulationPopulationTimeSeries(x; include_dead=include_dead)
-    df = joinpath(data_dir, "outputs", "simulations", string(simulation_id), "output") |> x -> SimulationPopulationTimeSeries(x; include_dead=include_dead)
-    println("Finished SimulationPopulationTimeSeries for simulation_id: $simulation_id")
-    return df
+    print("Computing SimulationPopulationTimeSeries for Simulation $simulation_id...")
+    simulation_folder = joinpath(data_dir, "outputs", "simulations", string(simulation_id))
+    path_to_summary = joinpath(simulation_folder, "summary")
+    path_to_file = joinpath(path_to_summary, "population_time_series$(include_dead ? "_include_dead" : "").csv")
+    if isfile(path_to_file)
+        df = CSV.read(path_to_file, DataFrame)
+        spts = SimulationPopulationTimeSeries(simulation_folder, df.time, Dict{String, Vector{Integer}}(name => df[!, Symbol(name)] for name in names(df) if name != "time"))
+    else
+        mkpath(path_to_summary)
+        spts = joinpath(simulation_folder, "output") |> x -> SimulationPopulationTimeSeries(x; include_dead=include_dead)
+        df = DataFrame(time=spts.time)
+        for (name, counts) in pairs(spts.cell_count)
+            df[!, Symbol(name)] = counts
+        end
+        CSV.write(path_to_file, df)
+    end
+    println("done.")
+    return spts
 end
 
 SimulationPopulationTimeSeries(simulation::Simulation; include_dead::Bool=false) = SimulationPopulationTimeSeries(simulation.id; include_dead=include_dead)
@@ -102,11 +116,11 @@ function MonadPopulationTimeSeries(monad::Monad; include_dead::Bool=false)
     return MonadPopulationTimeSeries(monad.id, monad_length, time, cell_count_arrays, cell_count_means, cell_count_std)
 end
 
-function populationTimeSeries(M::AbstractMonad; include_dead::Bool=false)
-    if M isa Monad
-        return MonadPopulationTimeSeries(M; include_dead=include_dead)
-    else
+function populationTimeSeries(M::AbstractMonad; include_dead::Bool=false, cell_types = :all)
+    if M isa Simulation
         return SimulationPopulationTimeSeries(M; include_dead=include_dead)
+    else
+        return MonadPopulationTimeSeries(M; include_dead=include_dead)
     end
 end
 
@@ -115,9 +129,17 @@ end
 getMeanCounts(s::SimulationPopulationTimeSeries) = s.cell_count
 getMeanCounts(m::MonadPopulationTimeSeries) = m.cell_count_means
 
-@recipe function f(M::AbstractMonad)
-    pts = populationTimeSeries(M)
+@recipe function f(M::AbstractMonad; include_dead=false, include_cell_types=:all, exclude_cell_types=String[])
+    pts = populationTimeSeries(M; include_dead=include_dead)
+    # allow for single string input for either of these
+    include_cell_types = include_cell_types == :all ? :all : (include_cell_types isa String ? [include_cell_types] : include_cell_types)
+    exclude_cell_types = exclude_cell_types isa String ? [exclude_cell_types] : exclude_cell_types
     for (name, counts) in pairs(getMeanCounts(pts))
+        skip = include_cell_types != :all && !(name in include_cell_types) # skip this cell type as only a subset was requested and this was not in it
+        skip |= name in exclude_cell_types # skip this cell type as it was requested to be excluded
+        if skip
+            continue 
+        end
         @series begin
             label --> name
             x = pts.time
@@ -126,6 +148,38 @@ getMeanCounts(m::MonadPopulationTimeSeries) = m.cell_count_means
                 ribbon := pts.cell_count_std[name]
             end
             x, y
+        end
+    end
+end
+
+@recipe function f(sampling::Sampling; include_dead=false)
+    df = pcvct.getSimulationsTable(sampling)
+    monads = []
+    title_tuples = []
+    for monad_id in sampling.monad_ids
+        monad = Monad(monad_id)
+        push!(monads, monad)
+        sim_id = monad.simulation_ids[1]
+        row_ind = findfirst(df[!, :SimID] .== sim_id)
+        row = df[row_ind, :]
+        title_tuple = [row[name] for name in names(row) if !(name in ["SimID", "VarID", "RulesVarID"])]
+        push!(title_tuples, title_tuple)
+    end
+    
+    order = sortperm(title_tuples)
+    title_tuples = title_tuples[order]
+    monads = monads[order]
+
+    layout  --> (length(monads), 1) # easy room for improvement here
+
+    for (i, (monad, title_tuple)) in enumerate(zip(monads, title_tuples))
+
+        @series begin
+            title --> "(" * join(title_tuple, ", ") * ")"
+            subplot := i
+            legend := false
+            include_dead --> include_dead
+            monad
         end
     end
 end

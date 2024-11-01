@@ -25,6 +25,8 @@ include("VCTSensitivity.jl")
 
 include("VCTAnalysis.jl")
 
+include("VCTPhysiCellStudio.jl")
+
 include("../PhysiCell-XMLRules/src/PhysiCell_XMLRules.jl")
 using .PhysiCell_XMLRules
 

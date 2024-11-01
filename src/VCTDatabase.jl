@@ -7,7 +7,6 @@ db::SQLite.DB = SQLite.DB()
 function initializeDatabase(path_to_database::String)
     println(rpad("Path to database:", 20, ' ') * path_to_database)
     global db = SQLite.DB(path_to_database)
-    println("Successfully loaded database.")
     return createSchema()
 end
 

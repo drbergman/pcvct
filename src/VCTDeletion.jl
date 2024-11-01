@@ -1,5 +1,6 @@
+public deleteSimulation
 
-function deleteSimulation(simulation_ids::Vector{Int}; delete_supers::Bool=true, and_constraints::String="")
+function deleteSimulation(simulation_ids::AbstractVector{<:Integer}; delete_supers::Bool=true, and_constraints::String="")
     where_stmt = "WHERE simulation_id IN ($(join(simulation_ids,","))) $(and_constraints);"
     sim_df = constructSelectQuery("simulations", where_stmt) |> queryToDataFrame
     simulation_ids = sim_df.simulation_id # update based on the constraints added
@@ -54,7 +55,7 @@ end
 deleteSimulation(simulation_id::Int; delete_supers::Bool=true, and_constraints::String="") = deleteSimulation([simulation_id]; delete_supers=delete_supers, and_constraints=and_constraints)
 deleteAllSimulations(; delete_supers::Bool=true, and_constraints::String="") = getSimulationIDs() |> x -> deleteSimulation(x; delete_supers=delete_supers, and_constraints=and_constraints)
 
-function deleteMonad(monad_ids::Vector{Int}; delete_subs::Bool=true, delete_supers::Bool=true)
+function deleteMonad(monad_ids::AbstractVector{<:Integer}; delete_subs::Bool=true, delete_supers::Bool=true)
     DBInterface.execute(db,"DELETE FROM monads WHERE monad_id IN ($(join(monad_ids,",")));")
     simulation_ids_to_delete = Int[]
     for monad_id in monad_ids
@@ -93,7 +94,7 @@ end
 
 deleteMonad(monad_id::Int; delete_subs::Bool=true, delete_supers::Bool=true) = deleteMonad([monad_id]; delete_subs=delete_subs, delete_supers=delete_supers)
 
-function deleteSampling(sampling_ids::Vector{Int}; delete_subs::Bool=true, delete_supers::Bool=true)
+function deleteSampling(sampling_ids::AbstractVector{<:Integer}; delete_subs::Bool=true, delete_supers::Bool=true)
     DBInterface.execute(db,"DELETE FROM samplings WHERE sampling_id IN ($(join(sampling_ids,",")));")
     monad_ids_to_delete = Int[]
     for sampling_id in sampling_ids
@@ -141,7 +142,7 @@ end
 
 deleteSampling(sampling_id::Int; delete_subs::Bool=true, delete_supers::Bool=true) = deleteSampling([sampling_id]; delete_subs=delete_subs, delete_supers=delete_supers)
 
-function deleteTrial(trial_ids::Vector{Int}; delete_subs::Bool=true)
+function deleteTrial(trial_ids::AbstractVector{<:Integer}; delete_subs::Bool=true)
     DBInterface.execute(db,"DELETE FROM trials WHERE trial_id IN ($(join(trial_ids,",")));")
     sampling_ids_to_delete = Int[]
     for trial_id in trial_ids
@@ -246,7 +247,7 @@ function resetRulesetsCollectionFolder(path_to_rulesets_collection_folder::Strin
 end
 
 """
-    deleteStalledSimulationsByStatus(status_codes_to_delete::Vector{String}=["Failed"]; user_check::Bool=true)
+    deleteSimulationsByStatus(status_codes_to_delete::Vector{String}=["Failed"]; user_check::Bool=true)
 
     Delete simulations from the database based on their status codes.
 
@@ -266,7 +267,7 @@ end
     # Returns
     - Nothing. The function performs database operations and deletes records as needed.
 """
-function deleteStalledSimulationsByStatus(status_codes_to_delete::Vector{String}=["Failed"]; user_check::Bool=true)
+function deleteSimulationsByStatus(status_codes_to_delete::Vector{String}=["Failed"]; user_check::Bool=true)
     df = """
         SELECT simulations.simulation_id, simulations.status_code_id, status_codes.status_code
         FROM simulations

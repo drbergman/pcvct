@@ -279,7 +279,7 @@ function simpleVariationNames(name::String)
     elseif name == "save/SVG/interval"
         return "SVG Save Interval"
     elseif startswith(name, "cell_definitions")
-        return getCellParameter(name)
+        return getCellParameterName(name)
     else
         return name
     end
@@ -288,14 +288,41 @@ end
 function simpleRulesetsVariationNames(name::String)
     if name == "rulesets_variation_id"
         return "RulesVarID"
+    elseif startswith(name, "hypothesis_ruleset")
+        return getRuleParameterName(name)
     else
         return name
     end
 end
 
-function getCellParameter(column_name::String)
+function getCellParameterName(column_name::String)
     xml_path = split(column_name, "/") .|> string
     cell_def = split(xml_path[2], ":")[3]
-    par_name = xml_path[end]
-    return replace("$(cell_def): $(par_name)", '_' => ' ')
+    target_name = ""
+    for component in xml_path[3:end]
+        if occursin(":name:", component)
+            target_name = split(component, ":")[3]
+            break
+        end
+    end
+    suffix = xml_path[end]
+    if target_name != ""
+        suffix = "$(target_name) $(suffix)"
+    end
+    return replace("$(cell_def): $(suffix)", '_' => ' ')
+end
+
+function getRuleParameterName(name::String)
+    xml_path = split(name, "/") .|> string
+    cell_def = split(xml_path[1], ":")[3]
+    behavior = split(xml_path[2], ":")[3]
+    is_decreasing = xml_path[3] == "decreasing_signals"
+    if xml_path[4] == "max_response"
+        ret_val = "$(cell_def): $(behavior) $(is_decreasing ? "min" : "max")"
+    else
+        response = is_decreasing ? "decreases" : "increases"
+        signal = split(xml_path[4], ":")[3]
+        ret_val = "$(cell_def): $(signal) $(response) $(behavior) $(xml_path[5])"
+    end
+    return ret_val |> x->replace(x, '_' => ' ')
 end

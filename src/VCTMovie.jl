@@ -9,9 +9,9 @@ function makeMovie(simulation_id::Int)
     env = copy(ENV)
     env["PATH"] = "/opt/homebrew/bin:$(env["PATH"])"
     cmd = Cmd(`make jpeg OUTPUT=$(path_to_output_folder)`; env=env)
-    cd(()->run(cmd), physicell_dir)
+    cd(() -> run(pipeline(cmd; stdout=devnull, stderr=devnull)), physicell_dir)
     cmd = Cmd(`make movie OUTPUT=$(path_to_output_folder)`; env=env)
-    cd(()->run(cmd), physicell_dir)
+    cd(() -> run(pipeline(cmd; stdout=devnull, stderr=devnull)), physicell_dir)
     movie_generated = true
     jpgs = readdir(joinpath(data_dir, "outputs", "simulations", string(simulation_id), "output"), sort=false)
     filter!(f -> endswith(f, ".jpg"), jpgs)
@@ -23,7 +23,10 @@ end
 
 function makeMovie(T::AbstractTrial)
     simulation_ids = getSimulationIDs(T)
+    println("Making movies for $(typeof(T)) $(T.id) with $(length(simulation_ids)) simulations...")
     for simulation_id in simulation_ids
+        print("\tMaking movie for simulation $simulation_id...")
         makeMovie(simulation_id)
+        println("done.")
     end
 end

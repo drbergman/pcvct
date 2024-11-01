@@ -14,30 +14,30 @@ end
 function pruneSimulationOutput(simulation::Simulation; prune_options::PruneOptions=PruneOptions())
     path_to_output_folder = joinpath(data_dir, "outputs", "simulations", string(simulation.id), "output")
     if prune_options.prune_svg
-        rm(glob("snapshot*.svg", path_to_output_folder), force=true)
+        glob("snapshot*.svg", path_to_output_folder) .|> x->rm(x, force=true)
         if prune_options.prune_initial
-            rm(glob("initial*.svg", path_to_output_folder), force=true)
+            glob("initial*.svg", path_to_output_folder) .|> x->rm(x, force=true)
         end
         if prune_options.prune_final
-            rm(glob("final*.svg", path_to_output_folder), force=true)
+            glob("final*.svg", path_to_output_folder) .|> x->rm(x, force=true)
         end
     end
     if prune_options.prune_txt
-        rm(glob("output*.txt", path_to_output_folder), force=true)
+        glob("output*.txt", path_to_output_folder) .|> x->rm(x, force=true)
         if prune_options.prune_initial
-            rm(glob("initial*.txt", path_to_output_folder), force=true)
+            glob("initial*.txt", path_to_output_folder) .|> x->rm(x, force=true)
         end
         if prune_options.prune_final
-            rm(glob("final*.txt", path_to_output_folder), force=true)
+            glob("final*.txt", path_to_output_folder) .|> x->rm(x, force=true)
         end
     end
     if prune_options.prune_mat
-        rm(glob("output*.mat", path_to_output_folder), force=true)
+        glob("output*.mat", path_to_output_folder) .|> x->rm(x, force=true)
         if prune_options.prune_initial
-            rm(glob("initial*.mat", path_to_output_folder), force=true)
+            glob("initial*.mat", path_to_output_folder) .|> x->rm(x, force=true)
         end
         if prune_options.prune_final
-            rm(glob("final*.mat", path_to_output_folder), force=true)
+            glob("final*.mat", path_to_output_folder) .|> x->rm(x, force=true)
         end
     end
 end
