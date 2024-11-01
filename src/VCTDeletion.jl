@@ -1,5 +1,3 @@
-public deleteSimulation
-
 function deleteSimulation(simulation_ids::AbstractVector{<:Integer}; delete_supers::Bool=true, and_constraints::String="")
     where_stmt = "WHERE simulation_id IN ($(join(simulation_ids,","))) $(and_constraints);"
     sim_df = constructSelectQuery("simulations", where_stmt) |> queryToDataFrame
