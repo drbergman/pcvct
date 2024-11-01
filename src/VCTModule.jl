@@ -28,6 +28,9 @@ include("VCTAnalysis.jl")
 include("VCTPhysiCellStudio.jl")
 
 include("../PhysiCell-XMLRules/src/PhysiCell_XMLRules.jl")
+
+VERSION >= v"1.11" && include("public.julia")
+
 using .PhysiCell_XMLRules
 
 physicell_dir::String = abspath("PhysiCell")
