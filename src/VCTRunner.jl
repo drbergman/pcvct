@@ -39,7 +39,22 @@ function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=miss
         run(pipeline(cmd; stdout=joinpath(path_to_simulation_folder, "output.log"), stderr=joinpath(path_to_simulation_folder, "output.err")); wait=true)
     catch
         println("\tSimulation $(simulation.id) failed.")
-        println("\tExecution command: $cmd")
+        # write the execution command to output.err
+        open(joinpath(path_to_simulation_folder, "output.err"), "w+") do io
+            # read the lines of the output.err file
+            println(io, "Execution command: $cmd\n")
+            println(io, "Error: $(e.message)\n")
+            println(io, "Stacktrace:")
+            for (i, line) in enumerate(stacktrace(e))
+                println(io, "$i: $line")
+            end
+            println()
+            lines = readlines(joinpath(path_to_simulation_folder, "output.err"))
+            println(io, "Execution command: $cmd")
+            for line in lines
+                println(io, line)
+            end
+        end
         println("\tCheck $(joinpath(path_to_simulation_folder, "output.err")) for more information.")
         DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Failed")) WHERE simulation_id=$(simulation.id);" )
         success = false
@@ -131,7 +146,7 @@ function runAbstractTrial(T::AbstractTrial; force_recompile::Bool=true, prune_op
     print(  "\t- Scheduled $(length(simulation_tasks)) simulations to complete this $(typeof(T)).")
     print_low_schedule_message = length(simulation_tasks) < size_T
     if print_low_schedule_message
-        println(" ($(repeat("*", n_asterisks))).")
+        println(" ($(repeat("*", n_asterisks)))")
         asterisks["low_schedule_message"] = n_asterisks
         n_asterisks += 1
     else
@@ -140,7 +155,7 @@ function runAbstractTrial(T::AbstractTrial; force_recompile::Bool=true, prune_op
     print(  "\t- Successful completion of $(n_success[]) simulations.")
     print_low_success_warning = n_success[] < length(simulation_tasks)
     if print_low_success_warning
-        println(" ($(repeat("*", n_asterisks))).")
+        println(" ($(repeat("*", n_asterisks)))")
         asterisks["low_success_warning"] = n_asterisks
         n_asterisks += 1 # in case something gets added later
     else
