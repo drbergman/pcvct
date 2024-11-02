@@ -13,6 +13,7 @@ hashBorderPrint("DATABASE SUCCESSFULLY INITIALIZED!")
 
 config_folder = "default"
 rulesets_collection_folder = "default"
+ic_cell_folder = ""
 EV = ElementaryVariation[]
 push!(EV, ElementaryVariation(["overall","max_time"], [12.0]))
 push!(EV, ElementaryVariation(["save","full_data","interval"], [6.0]))
