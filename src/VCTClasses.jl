@@ -784,6 +784,14 @@ function Trial(; monad_min_length::Int=0, sampling_ids::AbstractVector{<:Integer
                 ic_cell_variation_ids::AbstractVector{<:AbstractVector{<:Integer}}=AbstractVector{<:Integer}[],
                 use_previous_simulations::Bool=true)
 
+function Trial(; monad_min_length::Int=0, sampling_ids::AbstractVector{<:Integer}=Int[], config_folders::Vector{String}=String[],
+                rulesets_collection_folders::Vector{String}=String[], ic_cell_folders::Vector{String}=String[], 
+                ic_substrate_folders::Vector{String}=String[], ic_ecm_folders::Vector{String}=String[], custom_code_folders::Vector{String}=String[],
+                config_variation_ids::AbstractVector{<:AbstractVector{<:Integer}}=AbstractVector{<:Integer}[],
+                rulesets_variation_ids::AbstractVector{<:AbstractVector{<:Integer}}=AbstractVector{<:Integer}[],
+                ic_cell_variation_ids::AbstractVector{<:AbstractVector{<:Integer}}=AbstractVector{<:Integer}[],
+                use_previous_simulations::Bool=true)
+
     folder_names = [AbstractSamplingFolders(config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder) for (config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder) in zip(config_folders, rulesets_collection_folders, ic_cell_folders, ic_substrate_folders, ic_ecm_folders, custom_code_folders)]
     folder_ids = [AbstractSamplingIDs(folder_name) for folder_name in folder_names]
     variation_ids = [VariationIDs(config_variation_ids[i], rulesets_variation_ids[i], ic_cell_variation_ids[i]) for i in 1:length(config_variation_ids)]
