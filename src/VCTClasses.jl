@@ -82,9 +82,9 @@ end
 ##########################################
 
 struct VariationIDs
-    config_variation_id::Int # integer identifying which variation on the base config file to use (variations.db)
+    config_variation_id::Int # integer identifying which variation on the base config file to use (config_variations.db)
     rulesets_variation_id::Int # integer identifying which variation on the ruleset file to use (rulesets_variations.db)
-    ic_cell_variation_id::Int # integer identifying which variation on the ic cell file to use (ic_cells_variations.db) (only used if cells.xml, not used for cells.csv)
+    ic_cell_variation_id::Int # integer identifying which variation on the ic cell file to use (ic_cell_variations.db) (only used if cells.xml, not used for cells.csv)
 end
 
 ##########################################

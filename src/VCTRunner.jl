@@ -12,6 +12,7 @@ function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=miss
     if do_full_setup
         loadConfiguration(simulation)
         loadRulesets(simulation)
+        loadICCells(simulation)
         loadCustomCode(simulation; force_recompile=force_recompile)
     end
 
@@ -19,7 +20,7 @@ function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=miss
     config_str = joinpath(data_dir, "inputs", "configs", simulation.folder_names.config_folder, "config_variations", "config_variation_$(simulation.variation_ids.config_variation_id).xml")
     flags = ["-o", path_to_simulation_output]
     if simulation.folder_ids.ic_cell_id != -1
-        append!(flags, ["-i", joinpath(data_dir, "inputs", "ics", "cells", simulation.folder_names.ic_cell_folder, "cells.csv")]) # if ic file included (id != -1), then include this in the command
+        append!(flags, ["-i", pathToICCell(simulation)])
     end
     if simulation.folder_ids.ic_substrate_id != -1
         append!(flags, ["-s", joinpath(data_dir, "inputs", "ics", "substrates", simulation.folder_names.ic_substrate_folder, "substrates.csv")]) # if ic file included (id != -1), then include this in the command
@@ -78,6 +79,7 @@ function runMonad(monad::Monad; do_full_setup::Bool=true, force_recompile::Bool=
     end
     loadConfiguration(monad)
     loadRulesets(monad)
+    loadICCells(monad)
 
     simulation_tasks = Task[]
     for simulation_id in monad.simulation_ids

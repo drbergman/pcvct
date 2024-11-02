@@ -23,9 +23,10 @@ EV_save_full_data_interval = ElementaryVariation(["save", "full_data", "interval
 EV_save_svg_data_interval = ElementaryVariation(["save","SVG","interval"], [6.0])
 EV = [EV_max_time, EV_save_full_data_interval, EV_save_svg_data_interval]
 
-reference_config_variation_id, reference_rulesets_variation_id = addVariations(GridVariation(), config_folder, rulesets_collection_folder, EV)
+reference_config_variation_id, reference_rulesets_variation_id, reference_ic_cell_variation_id = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, EV)
 reference_config_variation_id = reference_config_variation_id[1]
 reference_rulesets_variation_id = reference_rulesets_variation_id[1]
+reference_ic_cell_variation_id = reference_ic_cell_variation_id[1]
 
 DV = DistributedVariation[]
 for index in 0:3
@@ -44,6 +45,6 @@ folder_ids = pcvct.AbstractSamplingIDs(folder_names)
 
 gs_fn(simulation_id::Int) = finalPopulationCount(simulation_id)["default"]
 
-moat_sampling = sensitivitySampling(MOAT(n_points), monad_min_length, folder_names, DV; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, functions=[gs_fn])
-sobol_sampling = sensitivitySampling(Sobolʼ(n_points), monad_min_length, folder_names, DV; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, functions=[gs_fn])
-rbd_sampling = sensitivitySampling(RBD(n_points), monad_min_length, folder_names, DV; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, functions=[gs_fn])
+moat_sampling = sensitivitySampling(MOAT(n_points), monad_min_length, folder_names, DV; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
+sobol_sampling = sensitivitySampling(Sobolʼ(n_points), monad_min_length, folder_names, DV; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
+rbd_sampling = sensitivitySampling(RBD(n_points), monad_min_length, folder_names, DV; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])

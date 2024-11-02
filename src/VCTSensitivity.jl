@@ -14,8 +14,8 @@ function methodString(gsa_sampling::GSASampling)
     return endswith(method, "sampling") ? method[1:end-8] : method
 end
 
-function sensitivitySampling(method::GSAMethod, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, ignore_indices::Vector{Int}=Int[], functions::Vector{<:Function}=Function[], force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
-    gsa_sampling = _runSensitivitySampling(method, monad_min_length, folder_names, AV; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, ignore_indices=ignore_indices, force_recompile=force_recompile, prune_options=prune_options)
+function sensitivitySampling(method::GSAMethod, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=folder_names.ic_cell_folder=="" ? -1 : 0, ignore_indices::Vector{Int}=Int[], functions::Vector{<:Function}=Function[], force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
+    gsa_sampling = _runSensitivitySampling(method, monad_min_length, folder_names, AV; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, ignore_indices=ignore_indices, force_recompile=force_recompile, prune_options=prune_options)
     sensitivityResults!(gsa_sampling, functions)
     return gsa_sampling
 end
@@ -42,18 +42,19 @@ end
 
 MOATSampling(sampling::Sampling, monad_ids_df::DataFrame) = MOATSampling(sampling, monad_ids_df, Dict{Function, GlobalSensitivity.MorrisResult}())
 
-function _runSensitivitySampling(method::MOAT, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, ignore_indices::Vector{Int}=Int[], force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
-    return moatSensitivity(method, monad_min_length, folder_names, AV; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, ignore_indices=ignore_indices, force_recompile=force_recompile, prune_options=prune_options)
+function _runSensitivitySampling(method::MOAT, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=folder_names.ic_cell_folder=="" ? -1 : 0, ignore_indices::Vector{Int}=Int[], force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
+    return moatSensitivity(method, monad_min_length, folder_names, AV; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, ignore_indices=ignore_indices, force_recompile=force_recompile, prune_options=prune_options)
 end
 
-function moatSensitivity(method::MOAT, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, ignore_indices::Vector{Int}=Int[], force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
+function moatSensitivity(method::MOAT, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=folder_names.ic_cell_folder=="" ? -1 : 0, ignore_indices::Vector{Int}=Int[], force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
     if !isempty(ignore_indices)
         error("MOAT does not support ignoring indices...yet? Only Sobolʼ does for now.")
     end
-    config_variation_ids, rulesets_variation_ids = addVariations(method.lhs_variation, folder_names.config_folder, folder_names.rulesets_collection_folder, AV; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
+    config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(method.lhs_variation, folder_names.config_folder, folder_names.rulesets_collection_folder, folder_names.ic_cell_folder, AV; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id)
     perturbed_config_variation_ids = repeat(config_variation_ids, 1, length(AV))
     perturbed_rulesets_variation_ids = repeat(rulesets_variation_ids, 1, length(AV))
-    for (base_point_ind, (config_variation_id, rulesets_variation_id)) in enumerate(zip(config_variation_ids, rulesets_variation_ids)) # for each base point in the LHS
+    perturbed_ic_cell_variation_ids = repeat(ic_cell_variation_ids, 1, length(AV))
+    for (base_point_ind, (config_variation_id, rulesets_variation_id, ic_cell_variation_id)) in enumerate(zip(config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids)) # for each base point in the LHS
         for (par_ind, av) in enumerate(AV) # perturb each parameter one time
             variation_target = variationTarget(av)
             if variation_target == :config
@@ -61,7 +62,7 @@ function moatSensitivity(method::MOAT, monad_min_length::Int, folder_names::Abst
             elseif variation_target == :rulesets
                 perturbed_rulesets_variation_ids[base_point_ind, par_ind] = perturbRulesetsVariation(av, rulesets_variation_id, folder_names.rulesets_collection_folder)
             elseif variation_target == :ic_cell
-                throw("Varying ic cell parameters for MOAT not yet supported.")
+                perturbed_ic_cell_variation_ids[base_point_ind, par_ind] = perturbICCellVariation(av, ic_cell_variation_id, folder_names.ic_cell_folder)
             else
                 error("Unknown variation target: $variation_target")
             end
@@ -69,7 +70,8 @@ function moatSensitivity(method::MOAT, monad_min_length::Int, folder_names::Abst
     end
     all_config_variation_ids = hcat(config_variation_ids, perturbed_config_variation_ids)
     all_rulesets_variation_ids = hcat(rulesets_variation_ids, perturbed_rulesets_variation_ids)
-    monad_dict, monad_ids = variationsToMonads(folder_names, all_config_variation_ids, all_rulesets_variation_ids)
+    all_ic_cell_variation_ids = hcat(ic_cell_variation_ids, perturbed_ic_cell_variation_ids)
+    monad_dict, monad_ids = variationsToMonads(folder_names, all_config_variation_ids, all_rulesets_variation_ids, all_ic_cell_variation_ids)
     header_line = ["base", [variationColumnName(av) for av in AV]...]
     monad_ids_df = DataFrame(monad_ids, header_line)
     sampling = Sampling(monad_min_length, monad_dict |> values |> collect)
@@ -77,9 +79,9 @@ function moatSensitivity(method::MOAT, monad_min_length::Int, folder_names::Abst
     return MOATSampling(sampling, monad_ids_df)
 end
 
-function moatSensitivity(n_points::Int, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG, orthogonalize::Bool=true, ignore_indices::Vector{Int}=Int[], force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
+function moatSensitivity(n_points::Int, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=folder_names.ic_cell_folder=="" ? -1 : 0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG, orthogonalize::Bool=true, ignore_indices::Vector{Int}=Int[], force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
     lhs_variation = LHSVariation(n_points; add_noise=add_noise, rng=rng, orthogonalize=orthogonalize)
-    return moatSensitivity(lhs_variation, monad_min_length, folder_names, AV; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, ignore_indices=ignore_indices, force_recompile=force_recompile, prune_options=prune_options)
+    return moatSensitivity(lhs_variation, monad_min_length, folder_names, AV; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, ignore_indices=ignore_indices, force_recompile=force_recompile, prune_options=prune_options)
 end
 
 function perturbConfigVariation(av::AbstractVariation, config_variation_id::Int, folder::String)
@@ -91,6 +93,12 @@ end
 function perturbRulesetsVariation(av::AbstractVariation, rulesets_variation_id::Int, folder::String)
     base_value = getRulesetsBaseValue(variationColumnName(av), rulesets_variation_id, folder)
     addFn = (ev) -> addGridRulesetsVariation(folder, ev; reference_rulesets_variation_id=rulesets_variation_id)
+    return makePerturbation(av, base_value, addFn)
+end
+
+function perturbICCellVariation(av::AbstractVariation, ic_cell_variation_id::Int, folder::String)
+    base_value = getICCellBaseValue(variationColumnName(av), ic_cell_variation_id, folder)
+    addFn = (ev) -> addGridICCellVariation(folder, ev; reference_ic_cell_variation_id=ic_cell_variation_id)
     return makePerturbation(av, base_value, addFn)
 end
 
@@ -128,6 +136,17 @@ function getRulesetsBaseValue(column_name::String, rulesets_variation_id::Int, f
     return variation_value_df[1,1]
 end
 
+function getICCellBaseValue(av::AbstractVariation, ic_cell_variation_id::Int, folder::String)
+    column_name = variationColumnName(av)
+    return getICCellBaseValue(column_name, ic_cell_variation_id, folder)
+end
+
+function getICCellBaseValue(column_name::String, ic_cell_variation_id::Int, folder::String)
+    query = constructSelectQuery("ic_cell_variations", "WHERE ic_cell_variation_id=$ic_cell_variation_id;"; selection="\"$(column_name)\"")
+    variation_value_df = queryToDataFrame(query; db=getICCellDB(folder), is_row=true)
+    return variation_value_df[1,1]
+end
+
 function getBaseValue(av::AbstractVariation, variation_id::Int, folder_names::AbstractSamplingFolders)
     variation_target = variationTarget(av)
     if variation_target == :config
@@ -135,7 +154,7 @@ function getBaseValue(av::AbstractVariation, variation_id::Int, folder_names::Ab
     elseif variation_target == :rulesets
         return getRulesetsBaseValue(av, variation_id, folder_names.rulesets_collection_folder)
     elseif variation_target == :ic_cell
-        throw("Varying ic cell parameters for getBaseValue not yet supported.")
+        return getICCellBaseValue(av, variation_id, folder_names.ic_cell_folder)
     else
         error("Unknown variation target: $variation_target")
     end
@@ -181,38 +200,48 @@ end
 
 SobolSampling(sampling::Sampling, monad_ids_df::DataFrame; sobol_index_methods::NamedTuple{(:first_order, :total_order), Tuple{Symbol, Symbol}}=(first_order=:Jansen1999, total_order=:Jansen1999)) = SobolSampling(sampling, monad_ids_df, Dict{Function, GlobalSensitivity.SobolResult}(), sobol_index_methods)
 
-function _runSensitivitySampling(method::Sobolʼ, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, ignore_indices::Vector{Int}=Int[], force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
-    return sobolSensitivity(method, monad_min_length, folder_names, AV; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, ignore_indices=ignore_indices, force_recompile=force_recompile, prune_options=prune_options)
+function _runSensitivitySampling(method::Sobolʼ, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=folder_names.ic_cell_folder=="" ? -1 : 0, ignore_indices::Vector{Int}=Int[], force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
+    return sobolSensitivity(method, monad_min_length, folder_names, AV; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, ignore_indices=ignore_indices, force_recompile=force_recompile, prune_options=prune_options)
 end
 
-function sobolSensitivity(method::Sobolʼ, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, ignore_indices::Vector{Int}=Int[], force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
+function sobolSensitivity(method::Sobolʼ, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=folder_names.ic_cell_folder=="" ? -1 : 0, ignore_indices::Vector{Int}=Int[], force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
     config_id = retrieveID("configs", folder_names.config_folder)
     rulesets_collection_id = retrieveID("rulesets_collections", folder_names.rulesets_collection_folder)
-    config_variation_ids, rulesets_variation_ids, cdfs, parsed_variations = addVariations(method.sobol_variation, config_id, rulesets_collection_id, AV; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
+    ic_cell_id = retrieveID("ic_cells", folder_names.ic_cell_folder)
+    config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids, cdfs, parsed_variations = addVariations(method.sobol_variation, config_id, rulesets_collection_id, ic_cell_id, AV; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id)
     d_config = length(parsed_variations.config_variations)
     d_rulesets = length(parsed_variations.rulesets_variations)
-    d = d_config + d_rulesets
+    d_ic_cell = length(parsed_variations.ic_cell_variations)
+    d = d_config + d_rulesets + d_ic_cell
     focus_indices = [i for i in 1:d if !(i in ignore_indices)]
     config_variation_ids_A = config_variation_ids[:,1]
     rulesets_variation_ids_A = rulesets_variation_ids[:,1]
+    ic_cell_variation_ids_A = ic_cell_variation_ids[:,1]
     A = cdfs[:,1,:] # cdfs is of size (d, 2, n)
     config_variation_ids_B = config_variation_ids[:,2]
     rulesets_variation_ids_B = rulesets_variation_ids[:,2]
+    ic_cell_variation_ids_B = ic_cell_variation_ids[:,2]
     B = cdfs[:,2,:]
     Aᵦ = [i => copy(A) for i in focus_indices] |> Dict
     config_variation_ids_Aᵦ = [i => copy(config_variation_ids_A) for i in focus_indices] |> Dict
     rulesets_variation_ids_Aᵦ = [i => copy(rulesets_variation_ids_A) for i in focus_indices] |> Dict
+    ic_cell_variation_ids_Aᵦ = [i => copy(ic_cell_variation_ids_A) for i in focus_indices] |> Dict
     for i in focus_indices
         Aᵦ[i][i,:] .= B[i,:]
         if i in parsed_variations.config_variation_indices
             config_variation_ids_Aᵦ[i][:] .= cdfsToVariations(Aᵦ[i][parsed_variations.config_variation_indices,:]', parsed_variations.config_variations, prepareConfigVariationFunctions(config_id, parsed_variations.config_variations; reference_config_variation_id=reference_config_variation_id)...)
-        else
+        elseif i in parsed_variations.rulesets_variation_indices
             rulesets_variation_ids_Aᵦ[i][:] .= cdfsToVariations(Aᵦ[i][parsed_variations.rulesets_variation_indices,:]', parsed_variations.rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)...)
+        elseif i in parsed_variations.ic_cell_variation_indices
+            ic_cell_variation_ids_Aᵦ[i][:] .= cdfsToVariations(Aᵦ[i][parsed_variations.ic_cell_variation_indices,:]', parsed_variations.ic_cell_variations, prepareICCellVariationFunctions(ic_cell_id; reference_ic_cell_variation_id=reference_ic_cell_variation_id)...)
+        else
+            throw(ArgumentError("Unknown variation index: $i"))
         end
     end
     all_config_variation_ids = hcat(config_variation_ids_A, config_variation_ids_B, [config_variation_ids_Aᵦ[i] for i in focus_indices]...) # make sure to the values from the dict in the expected order
     all_rulesets_variation_ids = hcat(rulesets_variation_ids_A, rulesets_variation_ids_B, [rulesets_variation_ids_Aᵦ[i] for i in focus_indices]...)
-    monad_dict, monad_ids = variationsToMonads(folder_names, all_config_variation_ids, all_rulesets_variation_ids)
+    all_ic_cell_variation_ids = hcat(ic_cell_variation_ids_A, ic_cell_variation_ids_B, [ic_cell_variation_ids_Aᵦ[i] for i in focus_indices]...)
+    monad_dict, monad_ids = variationsToMonads(folder_names, all_config_variation_ids, all_rulesets_variation_ids, all_ic_cell_variation_ids)
     monads = monad_dict |> values |> collect
     header_line = ["A", "B", [variationColumnName(av) for av in AV[focus_indices]]...]
     monad_ids_df = DataFrame(monad_ids, header_line)
@@ -221,8 +250,8 @@ function sobolSensitivity(method::Sobolʼ, monad_min_length::Int, folder_names::
     return SobolSampling(sampling, monad_ids_df; sobol_index_methods=method.sobol_index_methods)
 end
 
-function sobolSensitivity(n_points::Int, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, sobol_index_methods::NamedTuple{(:first_order, :total_order), Tuple{Symbol, Symbol}}=(first_order=:Jansen1999, total_order=:Jansen1999), ignore_indices::Vector{Int}=Int[], force_recompile::Bool = true, prune_options::PruneOptions=PruneOptions())
-    return sobolSensitivity(Sobolʼ(n_points; sobol_index_methods=sobol_index_methods), monad_min_length, folder_names, AV; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, sobol_index_methods=sobol_index_methods, ignore_indices=ignore_indices, force_recompile=force_recompile, prune_options=prune_options)
+function sobolSensitivity(n_points::Int, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=folder_names.ic_cell_folder=="" ? -1 : 0, sobol_index_methods::NamedTuple{(:first_order, :total_order), Tuple{Symbol, Symbol}}=(first_order=:Jansen1999, total_order=:Jansen1999), ignore_indices::Vector{Int}=Int[], force_recompile::Bool = true, prune_options::PruneOptions=PruneOptions())
+    return sobolSensitivity(Sobolʼ(n_points; sobol_index_methods=sobol_index_methods), monad_min_length, folder_names, AV; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, sobol_index_methods=sobol_index_methods, ignore_indices=ignore_indices, force_recompile=force_recompile, prune_options=prune_options)
 end
 
 function calculateGSA!(sobol_sampling::SobolSampling, functions::Vector{<:Function})
@@ -293,16 +322,16 @@ end
 
 RBDSampling(sampling::Sampling, monad_ids_df::DataFrame, num_cycles; num_harmonics::Int=6) = RBDSampling(sampling, monad_ids_df, Dict{Function, GlobalSensitivity.SobolResult}(), num_harmonics, num_cycles)
 
-function _runSensitivitySampling(method::RBD, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, ignore_indices::Vector{Int}=Int[], force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
-    return rbdSensitivity(method, monad_min_length, folder_names, AV; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, ignore_indices=ignore_indices, force_recompile=force_recompile, prune_options=prune_options)
+function _runSensitivitySampling(method::RBD, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=folder_names.ic_cell_folder=="" ? -1 : 0, ignore_indices::Vector{Int}=Int[], force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
+    return rbdSensitivity(method, monad_min_length, folder_names, AV; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, ignore_indices=ignore_indices, force_recompile=force_recompile, prune_options=prune_options)
 end
 
-function rbdSensitivity(method::RBD, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, ignore_indices::Vector{Int}=Int[], force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
+function rbdSensitivity(method::RBD, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=folder_names.ic_cell_folder=="" ? -1 : 0, ignore_indices::Vector{Int}=Int[], force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
     if !isempty(ignore_indices)
         error("RBD does not support ignoring indices...yet? Only Sobolʼ does for now.")
     end
-    config_variation_ids, rulesets_variation_ids, variations_matrix, rulesets_variations_matrix = addVariations(method.rbd_variation, folder_names.config_folder, folder_names.rulesets_collection_folder, AV; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
-    monad_dict, monad_ids = variationsToMonads(folder_names, variations_matrix, rulesets_variations_matrix)
+    config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids, config_variations_matrix, rulesets_variations_matrix, ic_cell_variations_matrix = addVariations(method.rbd_variation, folder_names.config_folder, folder_names.rulesets_collection_folder, folder_names.ic_cell_folder, AV; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id)
+    monad_dict, monad_ids = variationsToMonads(folder_names, config_variations_matrix, rulesets_variations_matrix, ic_cell_variations_matrix)
     monads = monad_dict |> values |> collect
     header_line = [variationColumnName(av) for av in AV]
     monad_ids_df = DataFrame(monad_ids, header_line)
@@ -311,9 +340,9 @@ function rbdSensitivity(method::RBD, monad_min_length::Int, folder_names::Abstra
     return RBDSampling(sampling, monad_ids_df, method.rbd_variation.num_cycles; num_harmonics=method.num_harmonics)
 end
 
-function rbdSensitivity(n_points::Int, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true, num_harmonics::Int=6, num_cycles::Int=missing, force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
+function rbdSensitivity(n_points::Int, monad_min_length::Int, folder_names::AbstractSamplingFolders, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=folder_names.ic_cell_folder=="" ? -1 : 0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true, num_harmonics::Int=6, num_cycles::Int=missing, force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
     method = RBD(n_points; rng=rng, use_sobol=use_sobol, num_harmonics=num_harmonics, num_cycles=num_cycles)
-    return rbdSensitivity(method, monad_min_length, folder_names, AV; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, force_recompile=force_recompile, prune_options=prune_options)
+    return rbdSensitivity(method, monad_min_length, folder_names, AV; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, force_recompile=force_recompile, prune_options=prune_options)
 end
 
 function calculateGSA!(rbd_sampling::RBDSampling, functions::Vector{<:Function})

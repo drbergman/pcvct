@@ -70,8 +70,9 @@ ic_substrate_folder = ""
 ic_ecm_folder = ""
 custom_code_folder = "default"
 rulesets_variation_ids = zeros(Int, size(config_variation_ids))
+ic_cell_variation_ids = -ones(Int, size(config_variation_ids))
 
-sampling = Sampling(monad_min_length, config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder, config_variation_ids, rulesets_variation_ids)
+sampling = Sampling(monad_min_length, config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder, config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids)
 
 n_success = runAbstractTrial(sampling; force_recompile=false)
 @test length(sampling) == length(config_variation_ids) * monad_min_length
@@ -109,7 +110,6 @@ n_success = runAbstractTrial(sampling; force_recompile=false)
 hashBorderPrint("SUCCESSFULLY VARIED CONFIG PARAMETERS!")
 
 EV = ElementaryVariation[]
-"default,pressure,decreases,cycle entry,0,0.5,4,0"
 
 xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","max_response"]
 push!(EV, ElementaryVariation(xml_path, [0.0, 1e-8]))
@@ -130,9 +130,9 @@ addMotilityVariationDimension!(EV, "default", "speed", [0.1, 1.0])
 xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","signal:name:pressure","half_max"]
 push!(EV, ElementaryVariation(xml_path, [0.25, 0.75]))
 
-config_variation_ids, rulesets_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, EV; reference_variation_id=reference_config_variation_id, reference_rulesets_variation_id=0)
+config_variation_ids, rulesets_variation_ids, ic_cell_variation_id = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, EV; reference_variation_id=reference_config_variation_id, reference_rulesets_variation_id=0, reference_ic_cell_variation_id=0)
 
-sampling = Sampling(monad_min_length, config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder, config_variation_ids, rulesets_variation_ids)
+sampling = Sampling(monad_min_length, config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder, config_variation_ids, rulesets_variation_ids, ic_cell_variation_id)
 
 n_success = runAbstractTrial(sampling; force_recompile=false)
 

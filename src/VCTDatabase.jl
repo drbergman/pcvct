@@ -78,7 +78,7 @@ function createSchema()
     end
     for config_folder in config_folders
         DBInterface.execute(db, "INSERT OR IGNORE INTO configs (folder_name) VALUES ('$(config_folder)');")
-        db_config_variations = joinpath(data_dir, "inputs", "configs", config_folder, "variations.db") |> SQLite.DB
+        db_config_variations = joinpath(data_dir, "inputs", "configs", config_folder, "config_variations.db") |> SQLite.DB
         createPCVCTTable("config_variations", "config_variation_id INTEGER PRIMARY KEY"; db=db_config_variations)
         DBInterface.execute(db_config_variations, "INSERT OR IGNORE INTO config_variations (config_variation_id) VALUES(0);")
     end
@@ -103,6 +103,25 @@ function createSchema()
             end
         end
     end
+
+    # initialize and populate ic_cells variations dbs
+    path_to_ics = joinpath(data_dir, "inputs", "ics")
+    path_to_ic_cells = joinpath(path_to_ics, "cells")
+    if "ics" in data_dir_contents && "cells" in readdir(path_to_ics, sort=false)
+        ic_cells_folders = readdir(path_to_ic_cells, sort=false) |> filter(x -> isdir(joinpath(path_to_ic_cells, x)))
+        for ic_cell_folder in ic_cells_folders
+            # ⊻ = XOR (make sure exactly one of the files is present)
+            path_to_folder = joinpath(path_to_ic_cells, ic_cell_folder)
+            is_csv = isfile(joinpath(path_to_folder, "cells.csv"))
+            @assert is_csv ⊻ isfile(joinpath(path_to_folder, "cells.xml")) "Must have one of cells.csv or cells.xml in $(joinpath(path_to_folder))" 
+            if is_csv
+                continue # no variations allowed on csv files
+            end
+            db_ic_cell = joinpath(path_to_folder, "ic_cell_variations.db") |> SQLite.DB
+            createPCVCTTable("ic_cell_variations", "ic_cell_variation_id INTEGER PRIMARY KEY"; db=db_ic_cell)
+            DBInterface.execute(db_ic_cell, "INSERT OR IGNORE INTO ic_cell_variations (ic_cell_variation_id) VALUES(0) RETURNING ic_cell_variation_id;")
+        end
+    end
             
     # initialize simulations table
     simulations_schema = """
@@ -115,6 +134,7 @@ function createSchema()
         rulesets_collection_id INTEGER,
         config_variation_id INTEGER,
         rulesets_variation_id INTEGER,
+        ic_cell_variation_id INTEGER,
         status_code_id INTEGER,
         FOREIGN KEY (custom_code_id)
             REFERENCES custom_codes (custom_code_id),
@@ -144,6 +164,7 @@ function createSchema()
         rulesets_collection_id INTEGER,
         config_variation_id INTEGER,
         rulesets_variation_id INTEGER,
+        ic_cell_variation_id INTEGER,
         FOREIGN KEY (custom_code_id)
             REFERENCES custom_codes (custom_code_id),
         FOREIGN KEY (ic_cell_id)
@@ -156,7 +177,7 @@ function createSchema()
             REFERENCES configs (config_id),
         FOREIGN KEY (rulesets_collection_id)
             REFERENCES rulesets_collections (rulesets_collection_id),
-        UNIQUE (custom_code_id,ic_cell_id,ic_substrate_id,ic_ecm_id,config_id,rulesets_collection_id,config_variation_id,rulesets_variation_id)
+        UNIQUE (custom_code_id,ic_cell_id,ic_substrate_id,ic_ecm_id,config_id,rulesets_collection_id,config_variation_id,rulesets_variation_id,ic_cell_variation_id)
     """
     createPCVCTTable("monads", monads_schema)
 
@@ -306,6 +327,10 @@ getRulesetsCollectionDB(rulesets_collection_folder::String) = joinpath(data_dir,
 getRulesetsCollectionDB(M::AbstractMonad) = getRulesetsCollectionDB(M.folder_names.rulesets_collection_folder)
 getRulesetsCollectionDB(rulesets_collection_id::Int) = getRulesetsCollectionFolder(rulesets_collection_id) |> getRulesetsCollectionDB
 
+getICCellDB(ic_cell_folder::String) = joinpath(data_dir, "inputs", "ics", "cells", ic_cell_folder, "ic_cell_variations.db") |> SQLite.DB
+getICCellDB(ic_cell_id::Int) = getICCellFolder(ic_cell_id) |> getICCellDB
+getICCellDB(S::AbstractSampling) = getICCellDB(S.folder_names.ic_cell_folder)
+
 ########### Retrieving Database Information Functions ###########
 
 vctDBQuery(query::String; db::SQLite.DB=db) = DBInterface.execute(db, query)
@@ -370,6 +395,9 @@ getConfigVariationIDs(sampling::Sampling) = [vid.config_variation_ids for vid in
 getRulesetsVariationIDs(M::AbstractMonad) = [M.variation_ids.rulesets_variation_id]
 getRulesetsVariationIDs(sampling::Sampling) = [vid.rulesets_variation_ids for vid in sampling.variation_ids]
 
+getICCellVariationIDs(M::AbstractMonad) = [M.variation_ids.ic_cell_variation_id]
+getICCellVariationIDs(sampling::Sampling) = [vid.ic_cell_variation_ids for vid in sampling.variation_ids]
+
 getAbstractTrial(class_id::VCTClassID) = class_id.id |> getVCTClassIDType(class_id)
 
 function getVariationsTable(query::String, db::SQLite.DB; remove_constants::Bool = false, simpleVariationNames=simpleVariationNames)
@@ -402,6 +430,16 @@ end
 getRulesetsVariationsTable(S::AbstractSampling; remove_constants::Bool=false) = getRulesetsVariationsTable(getRulesetsCollectionDB(S), getRulesetsVariationIDs(S); remove_constants = remove_constants)
 getRulesetsVariationsTable(class_id::VCTClassID{<:AbstractSampling}; remove_constants::Bool = false) = getAbstractTrial(class_id) |> x -> getRulesetsVariationsTable(x; remove_constants = remove_constants)
 
+function getICCellVariationsTable(ic_cell_variations_db::SQLite.DB, ic_cell_variation_ids::Vector{Int}; remove_constants::Bool = false)
+    query = constructSelectQuery("ic_cell_variations", "WHERE ic_cell_variation_id IN ($(join(ic_cell_variation_ids,",")));")
+    df = getVariationsTable(query, ic_cell_variations_db; remove_constants = remove_constants)
+    rename!(simpleICCellVariationNames, df)
+    return df
+end
+
+getICCellVariationsTable(S::AbstractSampling; remove_constants::Bool=false) = getICCellVariationsTable(getICCellDB(S), getICCellVariationIDs(S); remove_constants = remove_constants)
+getICCellVariationsTable(class_id::VCTClassID{<:AbstractSampling}; remove_constants::Bool = false) = getAbstractTrial(class_id) |> x -> getICCellVariationsTable(x; remove_constants = remove_constants)
+
 function getVariationsTableFromSimulations(query::String, id_name::Symbol, getVariationsTableFn::Function; remove_constants::Bool = false)
     df = queryToDataFrame(query)
     unique_tuples = [(row[1], row[2]) for row in eachrow(df)] |> unique
@@ -420,7 +458,7 @@ end
 function getConfigVariationsTable(simulation_ids::Vector{Int}; remove_constants::Bool = false)
     query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(simulation_ids,",")));", selection="config_id, config_variation_id")
     getVariationsTableFn = x -> getConfigVariationsTable(getConfigDB(x[1]), [x[2]]; remove_constants = false)
-    return getVariationsTableFromSimulations(query, :VarID, getVariationsTableFn)
+    return getVariationsTableFromSimulations(query, :ConfigVarID, getVariationsTableFn)
 end
 
 
@@ -428,6 +466,12 @@ function getRulesetsVariationsTable(simulation_ids::Vector{Int}; remove_constant
     query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(simulation_ids,",")));", selection="rulesets_collection_id, rulesets_variation_id")
     getVariationsTableFn = x -> getRulesetsVariationsTable(getRulesetsCollectionDB(x[1]), [x[2]]; remove_constants = false)
     return getVariationsTableFromSimulations(query, :RulesVarID, getVariationsTableFn)
+end
+
+function getICCellVariationsTable(simulation_ids::Vector{Int}; remove_constants::Bool = false)
+    query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(simulation_ids,",")));", selection="ic_cell_id, ic_cell_variation_id")
+    getVariationsTableFn = x -> getICCellVariationsTable(getICCellDB(x[1]), [x[2]]; remove_constants = false)
+    return getVariationsTableFromSimulations(query, :ICCellVarID, getVariationsTableFn)
 end
 
 function addFolderColumns!(df::DataFrame)
@@ -447,17 +491,19 @@ function addFolderColumns!(df::DataFrame)
     return df
 end
 
-function getSimulationsTableFromQuery(query::String; remove_constants::Bool=true, sort_by::Vector{String}=String[], sort_ignore::Vector{String}=["SimID", "VarID", "RulesVarID"])
+function getSimulationsTableFromQuery(query::String; remove_constants::Bool=true, sort_by::Vector{String}=String[], sort_ignore::Vector{String}=["SimID", "ConfigVarID", "RulesVarID", "ICCellVarID"])
     df = queryToDataFrame(query)
     id_col_names_to_remove = names(df) # a bunch of ids that we don't want to show
-    filter!(n -> !(n in ["simulation_id", "config_variation_id", "rulesets_variation_id"]), id_col_names_to_remove) # keep the simulation_id and config_variation_id columns
+    filter!(n -> !(n in ["simulation_id", "config_variation_id", "ic_cell_id", "rulesets_variation_id", "ic_cell_variation_id"]), id_col_names_to_remove) # keep the simulation_id and config_variation_id columns
     addFolderColumns!(df) # add the folder columns
     select!(df, Not(id_col_names_to_remove)) # remove the id columns
     unique_tuples = [(row.config_folder, row.config_variation_id) for row in eachrow(df)] |> unique
     df = appendVariations(df, unique_tuples, getConfigDB, getConfigVariationsTable, :config_folder => :folder_name, :config_variation_id => :ConfigVarID)
     unique_tuples = [(row.rulesets_collection_folder, row.rulesets_variation_id) for row in eachrow(df)] |> unique
     df = appendVariations(df, unique_tuples, getRulesetsCollectionDB, getRulesetsVariationsTable, :rulesets_collection_folder => :folder_name, :rulesets_variation_id => :RulesVarID)
-    rename!(df, [:simulation_id => :SimID, :config_variation_id => :ConfigVarID, :rulesets_variation_id => :RulesVarID])
+    unique_tuples = [(row.ic_cell_folder, row.ic_cell_variation_id) for row in eachrow(df)] |> unique
+    df = appendVariations(df, unique_tuples, getICCellDB, getICCellVariationsTable, :ic_cell_folder => :folder_name, :ic_cell_variation_id => :ICCellVarID)
+    rename!(df, [:simulation_id => :SimID, :config_variation_id => :ConfigVarID, :rulesets_variation_id => :RulesVarID, :ic_cell_variation_id => :ICCellVarID])
     col_names = names(df)
     if remove_constants && size(df, 1) > 1
         filter!(n -> length(unique(df[!, n])) > 1, col_names)
@@ -481,22 +527,22 @@ function appendVariations(df::DataFrame, unique_tuples::Vector{Tuple{String, Int
     return outerjoin(df, var_df, on = [folder_pair, id_pair])
 end
 
-function getSimulationsTable(T::AbstractTrial; remove_constants::Bool = true, sort_by::Vector{String}=String[], sort_ignore::Vector{String}=["SimID", "VarID", "RulesVarID"])
+function getSimulationsTable(T::AbstractTrial; remove_constants::Bool = true, sort_by::Vector{String}=String[], sort_ignore::Vector{String}=["SimID", "ConfigVarID", "RulesVarID", "ICCellVarID"])
     query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(getSimulationIDs(T),",")));")
     return getSimulationsTableFromQuery(query; remove_constants = remove_constants, sort_by = sort_by, sort_ignore = sort_ignore)
 end
 
-function getSimulationsTable(simulation_ids::Vector{Int}; remove_constants::Bool = true, sort_by::Vector{String}=String[], sort_ignore::Vector{String}=["SimID", "VarID", "RulesVarID"])
+function getSimulationsTable(simulation_ids::Vector{Int}; remove_constants::Bool = true, sort_by::Vector{String}=String[], sort_ignore::Vector{String}=["SimID", "ConfigVarID", "RulesVarID", "ICCellVarID"])
     query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(simulation_ids,",")));")
     return getSimulationsTableFromQuery(query; remove_constants = remove_constants, sort_by = sort_by, sort_ignore = sort_ignore)
 end
 
-function getSimulationsTable(; remove_constants::Bool = true, sort_by::Vector{String}=String[], sort_ignore::Vector{String}=["SimID", "VarID", "RulesVarID"])
+function getSimulationsTable(; remove_constants::Bool = true, sort_by::Vector{String}=String[], sort_ignore::Vector{String}=["SimID", "ConfigVarID", "RulesVarID", "ICCellVarID"])
     query = constructSelectQuery("simulations", "")
     return getSimulationsTableFromQuery(query; remove_constants = remove_constants, sort_by = sort_by, sort_ignore = sort_ignore)
 end
 
-function getSimulationsTable(class_id::VCTClassID; remove_constants::Bool = true, sort_by::Vector{String}=String[], sort_ignore::Vector{String}=["SimID", "VarID", "RulesVarID"])
+function getSimulationsTable(class_id::VCTClassID; remove_constants::Bool = true, sort_by::Vector{String}=String[], sort_ignore::Vector{String}=["SimID", "ConfigVarID", "RulesVarID", "ICCellVarID"])
     query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(getSimulationIDs(class_id),",")));")
     return getSimulationsTableFromQuery(query; remove_constants = remove_constants, sort_by = sort_by, sort_ignore = sort_ignore)
 end

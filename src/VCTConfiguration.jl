@@ -174,6 +174,51 @@ function loadRulesets(M::AbstractMonad)
     return
 end
 
+function loadICCells(M::AbstractMonad)
+    if M.folder_ids.ic_cell_id == -1 # no ic cells being used
+        return
+    end
+    path_to_ic_cells_folder = joinpath(data_dir, "inputs", "ics", "cells", M.folder_names.ic_cell_folder)
+    if isfile(joinpath(path_to_ic_cells_folder, "cells.csv")) # ic already given by cells.csv
+        return
+    end
+    path_to_ic_cells_xml = joinpath(path_to_ic_cells_folder, "ic_cells_variations", "ic_cell_variation_$(M.variation_ids.ic_cell_variation_id).xml")
+    if isfile(path_to_ic_cells_xml) # already have the ic cell variation created
+        return
+    end
+    mkpath(dirname(path_to_ic_cells_xml))
+
+    path_to_base_xml = joinpath(path_to_ic_cells_folder, "cells.xml")
+    xml_doc = parse_file(path_to_base_xml)
+    if M.variation_ids.ic_cell_variation_id != 0 # only update if not using the base variation for the ic cells
+        query = constructSelectQuery("ic_cell_variations", "WHERE ic_cell_variation_id=$(M.variation_ids.ic_cell_variation_id);")
+        variation_row = queryToDataFrame(query; db=getICCellsDB(M.folder_names.ic_cell_folder), is_row=true)
+        for column_name in names(variation_row)
+            if column_name == "ic_cell_variation_id"
+                continue
+            end
+            xml_path = split(column_name, "/") .|> string
+            updateField(xml_doc, xml_path, variation_row[1, column_name])
+        end
+    end
+    save_file(xml_doc, path_to_ic_cells_xml)
+    closeXML(xml_doc)
+    return
+end
+
+function pathToICCell(simulation::Simulation)
+    @assert simulation.folder_ids.ic_cell_id != -1 "No IC cell variation being used" # we should have already checked this before calling this function
+    path_to_ic_cell_folder = joinpath(data_dir, "inputs", "ics", "cells", simulation.folder_names.ic_cell_folder)
+    if isfile(joinpath(path_to_ic_cell_folder, "cells.csv")) # ic already given by cells.csv
+        return joinpath(path_to_ic_cell_folder, "cells.csv")
+    end
+    path_to_ic_cell_variations = joinpath(path_to_ic_cell_folder, "ic_cells_variations")
+    path_to_ic_cell_xml = joinpath(path_to_ic_cell_variations, "ic_cell_variation_$(simulation.variation_ids.ic_cell_variation_id).xml")
+    path_to_ic_cell_file = joinpath(path_to_ic_cell_variations, "ic_cell_variation_$(simulation.variation_ids.ic_cell_variation_id)_s$(simulation.id).csv")
+    generateICCell(path_to_ic_cell_xml, path_to_ic_cell_file)
+    return path_to_ic_cell_file
+end
+
 ################## XML Path Helper Functions ##################
 
 # can I define my own macro that takes all these functions and adds methods for FN(cell_def, node::String) and FN(cell_def, path_suffix::Vector{String})??
@@ -295,9 +340,19 @@ function simpleRulesetsVariationNames(name::String)
     end
 end
 
+function simpleICCellVariationNames(name::String)
+    if name == "ic_cell_variation_id"
+        return "ICCellVarID"
+    elseif startswith(name, "cell_patches")
+        return getICCellParameterName(name)
+    else
+        return name
+    end
+end
+
 function getCellParameterName(column_name::String)
     xml_path = split(column_name, "/") .|> string
-    cell_def = split(xml_path[2], ":")[3]
+    cell_type = split(xml_path[2], ":")[3]
     target_name = ""
     for component in xml_path[3:end]
         if occursin(":name:", component)
@@ -309,20 +364,29 @@ function getCellParameterName(column_name::String)
     if target_name != ""
         suffix = "$(target_name) $(suffix)"
     end
-    return replace("$(cell_def): $(suffix)", '_' => ' ')
+    return replace("$(cell_type): $(suffix)", '_' => ' ')
 end
 
 function getRuleParameterName(name::String)
     xml_path = split(name, "/") .|> string
-    cell_def = split(xml_path[1], ":")[3]
+    cell_type = split(xml_path[1], ":")[3]
     behavior = split(xml_path[2], ":")[3]
     is_decreasing = xml_path[3] == "decreasing_signals"
     if xml_path[4] == "max_response"
-        ret_val = "$(cell_def): $(behavior) $(is_decreasing ? "min" : "max")"
+        ret_val = "$(cell_type): $(behavior) $(is_decreasing ? "min" : "max")"
     else
         response = is_decreasing ? "decreases" : "increases"
         signal = split(xml_path[4], ":")[3]
-        ret_val = "$(cell_def): $(signal) $(response) $(behavior) $(xml_path[5])"
+        ret_val = "$(cell_type): $(signal) $(response) $(behavior) $(xml_path[5])"
     end
     return ret_val |> x->replace(x, '_' => ' ')
+end
+
+function getICCellParameterName(name::String)
+    xml_path = split(name, "/") .|> string
+    cell_type = split(xml_path[1], ":")[3]
+    patch_type = split(xml_path[2], ":")[3]
+    id = split(xml_path[3], ":")[3]
+    parameter = xml_path[4]
+    return "$(cell_type) IC: $(patch_type)[$(id)] $(parameter)" |> x->replace(x, '_' => ' ')
 end

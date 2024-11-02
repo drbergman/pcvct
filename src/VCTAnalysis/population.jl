@@ -162,7 +162,7 @@ end
         sim_id = monad.simulation_ids[1]
         row_ind = findfirst(df[!, :SimID] .== sim_id)
         row = df[row_ind, :]
-        title_tuple = [row[name] for name in names(row) if !(name in ["SimID", "VarID", "RulesVarID"])]
+        title_tuple = [row[name] for name in names(row) if !(name in ["SimID", "ConfigVarID", "RulesVarID"])]
         push!(title_tuples, title_tuple)
     end
     

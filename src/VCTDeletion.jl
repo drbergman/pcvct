@@ -5,6 +5,7 @@ function deleteSimulation(simulation_ids::AbstractVector{<:Integer}; delete_supe
     DBInterface.execute(db,"DELETE FROM simulations WHERE simulation_id IN ($(join(simulation_ids,",")));")
     for row in eachrow(sim_df)
         rm(joinpath(data_dir, "outputs", "simulations", string(row.simulation_id)); force=true, recursive=true)
+
         config_folder = getConfigFolder(row.config_id)
         result_df = constructSelectQuery(
             "simulations",
@@ -23,6 +24,16 @@ function deleteSimulation(simulation_ids::AbstractVector{<:Integer}; delete_supe
         ) |> queryToDataFrame
         if result_df.var"COUNT(*)"[1] == 0
             rm(joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder, "rulesets_collections_variations", "rulesets_variation_$(row.rulesets_variation_id).xml"); force=true)
+        end
+
+        ic_cell_folder = getICCellFolder(row.ic_cell_id)
+        result_df = constructSelectQuery(
+            "simulations",
+            "WHERE ic_cell_id = $(row.ic_cell_id) AND ic_cell_variation_id = $(row.ic_cell_variation_id);";
+            selection="COUNT(*)"
+        ) |> queryToDataFrame
+        if result_df.var"COUNT(*)"[1] == 0
+            rm(joinpath(data_dir, "inputs", "ic_cells", ic_cell_folder, "ic_cell_variations", "ic_cell_variation_$(row.ic_cell_variation_id).xml"); force=true)
         end
     end
 
@@ -189,10 +200,10 @@ function resetDatabase(; force_reset::Bool=false, force_continue::Bool=false)
         rm(joinpath(data_dir, "outputs", folder); force=true, recursive=true)
     end
 
-        for config_folder in (readdir(joinpath(data_dir, "inputs", "configs"), sort=false, join=true) |> filter(x->isdir(x)))
+    for config_folder in (readdir(joinpath(data_dir, "inputs", "configs"), sort=false, join=true) |> filter(x -> isdir(x)))
         resetConfigFolder(config_folder)
     end
-    
+
     config_folders = constructSelectQuery("configs", "", selection="folder_name") |> queryToDataFrame |> x -> x.folder_name
     for config_folder in config_folders
         resetConfigFolder(joinpath(data_dir, "inputs", "configs", config_folder))
@@ -205,6 +216,15 @@ function resetDatabase(; force_reset::Bool=false, force_continue::Bool=false)
     rulesets_collection_folders = constructSelectQuery("rulesets_collections", "", selection="folder_name") |> queryToDataFrame |> x -> x.folder_name
     for rulesets_collection_folder in rulesets_collection_folders
         resetRulesetsCollectionFolder(joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder))
+    end
+
+    for ic_cell_folder in (readdir(joinpath(data_dir, "inputs", "ics", "cells"), sort=false, join=true) |> filter(x -> isdir(x)))
+        resetICCellFolder(config_folder)
+    end
+
+    ic_cell_folders = constructSelectQuery("ic_cells", "", selection="folder_name") |> queryToDataFrame |> x -> x.folder_name
+    for ic_cell_folder in ic_cell_folders
+        resetICCellFolder(joinpath(data_dir, "inputs", "ics", "cells", ic_cell_folder))
     end
     
     for custom_code_folder in (readdir(joinpath(data_dir, "inputs", "custom_codes"), sort=false, join=true) |> filter(x->isdir(x)))
@@ -242,6 +262,14 @@ function resetRulesetsCollectionFolder(path_to_rulesets_collection_folder::Strin
     end
     rm(joinpath(path_to_rulesets_collection_folder, "rulesets_variations.db"); force=true)
     rm(joinpath(path_to_rulesets_collection_folder, "rulesets_collections_variations"); force=true, recursive=true)
+end
+
+function resetICCellFolder(path_to_ic_cell_folder::String)
+    if !isdir(path_to_ic_cell_folder) || !isfile(joinpath(path_to_ic_cell_folder, "cells.xml"))
+        return
+    end
+    rm(joinpath(path_to_ic_cell_folder, "ic_cell_variations.db"); force=true)
+    rm(joinpath(path_to_ic_cell_folder, "ic_cell_variations"); force=true, recursive=true)
 end
 
 """
@@ -319,7 +347,7 @@ function eraseSimulationID(simulation_id::Int; monad_id::Union{Missing,Int}=miss
     if ismissing(monad_id)
         query = constructSelectQuery("simulations", "WHERE simulation_id = $(simulation_id);")
         df = queryToDataFrame(query)
-        query = constructSelectQuery("monads", "WHERE (config_id, config_variation_id, rulesets_collection_id, rulesets_variation_id) = ($(df.config_id[1]), $(df.config_variation_id[1]), $(df.rulesets_collection_id[1]), $(df.rulesets_variation_id[1]));"; selection="monad_id")
+        query = constructSelectQuery("monads", "WHERE (config_id, config_variation_id, rulesets_collection_id, rulesets_variation_id, ic_cell_id, ic_cell_variation_id) = ($(df.config_id[1]), $(df.config_variation_id[1]), $(df.rulesets_collection_id[1]), $(df.rulesets_variation_id[1]), $(df.ic_cell_id[1]), $(df.ic_cell_variation_id[1]));"; selection="monad_id")
         df = queryToDataFrame(query)
         monad_id = df.monad_id[1]
     end
