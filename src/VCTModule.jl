@@ -27,7 +27,7 @@ include("VCTPhysiCellStudio.jl")
 
 include("../PhysiCell-XMLRules/src/PhysiCell_XMLRules.jl")
 
-VERSION >= v"1.11" && include("public.jl")
+VERSION >= v"1.11" && include("public.julia")
 
 using .PhysiCell_XMLRules
 
