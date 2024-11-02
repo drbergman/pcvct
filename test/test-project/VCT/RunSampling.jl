@@ -29,7 +29,9 @@ rulesets_variation_id = rulesets_variation_ids[1]
 ic_cell_variation_id = ic_cell_variation_ids[1]
 simulation = Simulation(config_folder, custom_code_folder;
     rulesets_collection_folder=rulesets_collection_folder,
-    variation_ids=variation_ids
+    config_variation_id=config_variation_id,
+    rulesets_variation_id=rulesets_variation_id,
+    ic_cell_variation_id=ic_cell_variation_id
 )
 
 n_success = runAbstractTrial(simulation)
@@ -79,7 +81,9 @@ variation_ids = [pcvct.VariationIDs(config_variation_id, rulesets_variation_id, 
 sampling = Sampling(config_folder, custom_code_folder;
     monad_min_length=monad_min_length,
     rulesets_collection_folder=rulesets_collection_folder,
-    variation_ids=variation_ids
+    config_variation_ids=config_variation_ids,
+    rulesets_variation_ids=rulesets_variation_ids,
+    ic_cell_variation_ids=ic_cell_variation_ids
 )
 
 hashBorderPrint("SAMPLING SUCCESSFULLY CREATED!")
