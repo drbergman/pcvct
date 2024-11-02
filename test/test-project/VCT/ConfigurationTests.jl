@@ -116,7 +116,7 @@ push!(EV, ElementaryVariation(xml_path, [0.0, 1e-8]))
 xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","signal:name:pressure","half_max"]
 push!(EV, ElementaryVariation(xml_path, [0.25, 0.75]))
 
-rulesets_variation_ids = addGridRulesetsVariation(rulesets_collection_folder, EV)
+rulesets_variation_ids = pcvct.addGridRulesetsVariation(rulesets_collection_folder, EV)
 
 config_variation_ids = fill(reference_config_variation_id, size(rulesets_variation_ids))
 sampling = Sampling(monad_min_length, config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder, config_variation_ids, rulesets_variation_ids)

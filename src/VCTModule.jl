@@ -1,7 +1,5 @@
 # each file (includes below) has their own export statements
-export initializeVCT, resetDatabase, addGridVariation, addGridRulesetsVariation, runAbstractTrial, readTrialSamplingIDs, getSimulationIDs, deleteSimulation
-export addLHSVariation, addLHSRulesetsVariation
-export GridVariation, LHSVariation, addVariations
+export initializeVCT, resetDatabase, runAbstractTrial, readTrialSamplingIDs, getSimulationIDs, deleteSimulation
 
 using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables, Distributions, Statistics, Random, QuasiMonteCarlo, Sobol
 using MAT # files for VCTLoader.jl

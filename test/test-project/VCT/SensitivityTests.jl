@@ -44,6 +44,6 @@ folder_ids = pcvct.AbstractSamplingIDs(folder_names)
 
 gs_fn(simulation_id::Int) = finalPopulationCount(simulation_id)["default"]
 
-moat_sampling = sensitivitySampling(MOAT(n_points), monad_min_length, folder_names, DV; force_recompile=force_recompile, reference_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, functions=[gs_fn])
-sobol_sampling = sensitivitySampling(Sobolʼ(n_points), monad_min_length, folder_names, DV; force_recompile=force_recompile, reference_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, functions=[gs_fn])
-rbd_sampling = sensitivitySampling(RBD(n_points), monad_min_length, folder_names, DV; force_recompile=force_recompile, reference_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, functions=[gs_fn])
+moat_sampling = sensitivitySampling(MOAT(n_points), monad_min_length, folder_names, DV; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, functions=[gs_fn])
+sobol_sampling = sensitivitySampling(Sobolʼ(n_points), monad_min_length, folder_names, DV; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, functions=[gs_fn])
+rbd_sampling = sensitivitySampling(RBD(n_points), monad_min_length, folder_names, DV; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, functions=[gs_fn])

@@ -109,7 +109,7 @@ end
 ################## Configuration Functions ##################
 
 function loadConfiguration(M::AbstractMonad)
-    path_to_xml = joinpath(data_dir, "inputs", "configs", M.folder_names.config_folder, "variations", "variation_$(M.variation_id).xml")
+    path_to_xml = joinpath(data_dir, "inputs", "configs", M.folder_names.config_folder, "config_variations", "config_variation_$(M.variation_ids.config_variation_id).xml")
     if isfile(path_to_xml)
         return
     end
@@ -118,14 +118,14 @@ function loadConfiguration(M::AbstractMonad)
     cp(path_to_xml_src, path_to_xml, force=true)
 
     xml_doc = openXML(path_to_xml)
-    query = constructSelectQuery("variations", "WHERE variation_id=$(M.variation_id);")
+    query = constructSelectQuery("config_variations", "WHERE config_variation_id=$(M.variation_ids.config_variation_id);")
     variation_row = queryToDataFrame(query; db=getConfigDB(M.folder_names.config_folder), is_row=true)
     for column_name in names(variation_row)
-        if column_name == "variation_id"
+        if column_name == "config_variation_id"
             continue
         end
         xml_path = split(column_name,"/") .|> string
-        updateField(xml_doc, xml_path,variation_row[1,column_name])
+        updateField(xml_doc, xml_path, variation_row[1, column_name])
     end
     save_file(xml_doc, path_to_xml)
     closeXML(xml_doc)
@@ -140,11 +140,11 @@ function loadConfiguration(sampling::Sampling)
 end
 
 function loadRulesets(M::AbstractMonad)
-    if M.rulesets_variation_id == -1 # no rules being used
+    if M.variation_ids.rulesets_variation_id == -1 # no rules being used
         return
     end
     path_to_rulesets_collections_folder = joinpath(data_dir, "inputs", "rulesets_collections", M.folder_names.rulesets_collection_folder)
-    path_to_rulesets_xml = joinpath(path_to_rulesets_collections_folder, "rulesets_collections_variations", "rulesets_variation_$(M.rulesets_variation_id).xml")
+    path_to_rulesets_xml = joinpath(path_to_rulesets_collections_folder, "rulesets_collections_variations", "rulesets_variation_$(M.variation_ids.rulesets_variation_id).xml")
     if isfile(path_to_rulesets_xml) # already have the rulesets variation created
         return
     end
@@ -158,8 +158,8 @@ function loadRulesets(M::AbstractMonad)
     end
         
     xml_doc = parse_file(path_to_base_xml)
-    if M.rulesets_variation_id != 0 # only update if not using the base variation for the ruleset
-        query = constructSelectQuery("rulesets_variations", "WHERE rulesets_variation_id=$(M.rulesets_variation_id);")
+    if M.variation_ids.rulesets_variation_id != 0 # only update if not using the base variation for the ruleset
+        query = constructSelectQuery("rulesets_variations", "WHERE rulesets_variation_id=$(M.variation_ids.rulesets_variation_id);")
         variation_row = queryToDataFrame(query; db=getRulesetsCollectionDB(M), is_row=true)
         for column_name in names(variation_row)
             if column_name == "rulesets_variation_id"
@@ -270,8 +270,8 @@ end
 ################## Simplify Name Functions ##################
 
 function simpleVariationNames(name::String)
-    if name == "variation_id"
-        return "VarID"
+    if name == "config_variation_id"
+        return "ConfigVarID"
     elseif name == "overall/max_time"
         return "Max Time"
     elseif name == "save/full_data/interval"

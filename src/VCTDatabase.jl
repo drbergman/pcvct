@@ -79,8 +79,8 @@ function createSchema()
     for config_folder in config_folders
         DBInterface.execute(db, "INSERT OR IGNORE INTO configs (folder_name) VALUES ('$(config_folder)');")
         db_config_variations = joinpath(data_dir, "inputs", "configs", config_folder, "variations.db") |> SQLite.DB
-        createPCVCTTable("variations", "variation_id INTEGER PRIMARY KEY"; db=db_config_variations)
-        DBInterface.execute(db_config_variations, "INSERT OR IGNORE INTO variations (variation_id) VALUES(0);")
+        createPCVCTTable("config_variations", "config_variation_id INTEGER PRIMARY KEY"; db=db_config_variations)
+        DBInterface.execute(db_config_variations, "INSERT OR IGNORE INTO config_variations (config_variation_id) VALUES(0);")
     end
 
     # initialize and populate rulesets_collections table
@@ -113,7 +113,7 @@ function createSchema()
         ic_ecm_id INTEGER,
         config_id INTEGER,
         rulesets_collection_id INTEGER,
-        variation_id INTEGER,
+        config_variation_id INTEGER,
         rulesets_variation_id INTEGER,
         status_code_id INTEGER,
         FOREIGN KEY (custom_code_id)
@@ -142,7 +142,7 @@ function createSchema()
         ic_ecm_id INTEGER,
         config_id INTEGER,
         rulesets_collection_id INTEGER,
-        variation_id INTEGER,
+        config_variation_id INTEGER,
         rulesets_variation_id INTEGER,
         FOREIGN KEY (custom_code_id)
             REFERENCES custom_codes (custom_code_id),
@@ -156,7 +156,7 @@ function createSchema()
             REFERENCES configs (config_id),
         FOREIGN KEY (rulesets_collection_id)
             REFERENCES rulesets_collections (rulesets_collection_id),
-        UNIQUE (custom_code_id,ic_cell_id,ic_substrate_id,ic_ecm_id,config_id,rulesets_collection_id,variation_id,rulesets_variation_id)
+        UNIQUE (custom_code_id,ic_cell_id,ic_substrate_id,ic_ecm_id,config_id,rulesets_collection_id,config_variation_id,rulesets_variation_id)
     """
     createPCVCTTable("monads", monads_schema)
 
@@ -298,7 +298,7 @@ isStarted(simulation::Simulation; new_status_code::Union{Missing,String}=missing
 
 ################## DB Interface Functions ##################
 
-getConfigDB(config_folder::String) = joinpath(data_dir, "inputs", "configs", config_folder, "variations.db") |> SQLite.DB
+getConfigDB(config_folder::String) = joinpath(data_dir, "inputs", "configs", config_folder, "config_variations.db") |> SQLite.DB
 getConfigDB(config_id::Int) = getConfigFolder(config_id) |> getConfigDB
 getConfigDB(S::AbstractSampling) = getConfigDB(S.folder_names.config_folder)
 
@@ -364,11 +364,11 @@ end
 
 ########### Summarizing Database Functions ###########
 
-getConfigVariationIDs(M::AbstractMonad) = [M.variation_id]
-getConfigVariationIDs(sampling::Sampling) = sampling.variation_ids
+getConfigVariationIDs(M::AbstractMonad) = [M.variation_ids.config_variation_id]
+getConfigVariationIDs(sampling::Sampling) = [vid.config_variation_ids for vid in sampling.variation_ids]
 
-getRulesetsVariationIDs(M::AbstractMonad) = [M.rulesets_variation_id]
-getRulesetsVariationIDs(sampling::Sampling) = sampling.rulesets_variation_ids
+getRulesetsVariationIDs(M::AbstractMonad) = [M.variation_ids.rulesets_variation_id]
+getRulesetsVariationIDs(sampling::Sampling) = [vid.rulesets_variation_ids for vid in sampling.variation_ids]
 
 getAbstractTrial(class_id::VCTClassID) = class_id.id |> getVCTClassIDType(class_id)
 
@@ -382,9 +382,9 @@ function getVariationsTable(query::String, db::SQLite.DB; remove_constants::Bool
     return df
 end
 
-function getConfigVariationsTable(variations_db::SQLite.DB, variation_ids::Vector{Int}; remove_constants::Bool = false)
-    query = constructSelectQuery("variations", "WHERE variation_id IN ($(join(variation_ids,",")));")
-    df = getVariationsTable(query, variations_db; remove_constants = remove_constants)
+function getConfigVariationsTable(config_variations_db::SQLite.DB, config_variation_ids::Vector{Int}; remove_constants::Bool = false)
+    query = constructSelectQuery("config_variations", "WHERE config_variation_id IN ($(join(config_variation_ids,",")));")
+    df = getVariationsTable(query, config_variations_db; remove_constants = remove_constants)
     rename!(simpleVariationNames, df)
     return df
 end
@@ -418,7 +418,7 @@ function getVariationsTableFromSimulations(query::String, id_name::Symbol, getVa
 end
 
 function getConfigVariationsTable(simulation_ids::Vector{Int}; remove_constants::Bool = false)
-    query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(simulation_ids,",")));", selection="config_id, variation_id")
+    query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(simulation_ids,",")));", selection="config_id, config_variation_id")
     getVariationsTableFn = x -> getConfigVariationsTable(getConfigDB(x[1]), [x[2]]; remove_constants = false)
     return getVariationsTableFromSimulations(query, :VarID, getVariationsTableFn)
 end
@@ -450,14 +450,14 @@ end
 function getSimulationsTableFromQuery(query::String; remove_constants::Bool=true, sort_by::Vector{String}=String[], sort_ignore::Vector{String}=["SimID", "VarID", "RulesVarID"])
     df = queryToDataFrame(query)
     id_col_names_to_remove = names(df) # a bunch of ids that we don't want to show
-    filter!(n -> !(n in ["simulation_id", "variation_id", "rulesets_variation_id"]), id_col_names_to_remove) # keep the simulation_id and variation_id columns
+    filter!(n -> !(n in ["simulation_id", "config_variation_id", "rulesets_variation_id"]), id_col_names_to_remove) # keep the simulation_id and config_variation_id columns
     addFolderColumns!(df) # add the folder columns
     select!(df, Not(id_col_names_to_remove)) # remove the id columns
-    unique_tuples = [(row.config_folder, row.variation_id) for row in eachrow(df)] |> unique
-    df = appendVariations(df, unique_tuples, getConfigDB, getConfigVariationsTable, :config_folder => :folder_name, :variation_id => :VarID)
+    unique_tuples = [(row.config_folder, row.config_variation_id) for row in eachrow(df)] |> unique
+    df = appendVariations(df, unique_tuples, getConfigDB, getConfigVariationsTable, :config_folder => :folder_name, :config_variation_id => :ConfigVarID)
     unique_tuples = [(row.rulesets_collection_folder, row.rulesets_variation_id) for row in eachrow(df)] |> unique
     df = appendVariations(df, unique_tuples, getRulesetsCollectionDB, getRulesetsVariationsTable, :rulesets_collection_folder => :folder_name, :rulesets_variation_id => :RulesVarID)
-    rename!(df, [:simulation_id => :SimID, :variation_id => :VarID, :rulesets_variation_id => :RulesVarID])
+    rename!(df, [:simulation_id => :SimID, :config_variation_id => :ConfigVarID, :rulesets_variation_id => :RulesVarID])
     col_names = names(df)
     if remove_constants && size(df, 1) > 1
         filter!(n -> length(unique(df[!, n])) > 1, col_names)

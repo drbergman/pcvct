@@ -200,7 +200,7 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         config_variation_ids, rulesets_variation_ids = 
         \taddVariations(GridVariation(), config_folder, rulesets_collection_folder,
         \telementary_variations;
-        \treference_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
+        \treference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
 
         $(tersify("""
         # now we create the sampling, which will add the sampling, monads, and simulations to the database

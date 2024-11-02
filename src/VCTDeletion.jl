@@ -8,11 +8,11 @@ function deleteSimulation(simulation_ids::AbstractVector{<:Integer}; delete_supe
         config_folder = getConfigFolder(row.config_id)
         result_df = constructSelectQuery(
             "simulations",
-            "WHERE config_id = $(row.config_id) AND variation_id = $(row.variation_id);";
+            "WHERE config_id = $(row.config_id) AND config_variation_id = $(row.config_variation_id);";
             selection="COUNT(*)"
         ) |> queryToDataFrame
         if result_df.var"COUNT(*)"[1] == 0
-            rm(joinpath(data_dir, "inputs", "configs", config_folder, "variations", "variation_$(row.variation_id).xml"); force=true)
+            rm(joinpath(data_dir, "inputs", "configs", config_folder, "config_variations", "config_variation_$(row.config_variation_id).xml"); force=true)
         end
 
         rulesets_collection_folder = getRulesetsCollectionFolder(row.rulesets_collection_id)
@@ -232,8 +232,8 @@ function resetConfigFolder(path_to_config_folder::String)
     if !isdir(path_to_config_folder)
     return
     end
-    rm(joinpath(path_to_config_folder, "variations.db"); force=true)
-    rm(joinpath(path_to_config_folder, "variations"); force=true, recursive=true)
+    rm(joinpath(path_to_config_folder, "config_variations.db"); force=true)
+    rm(joinpath(path_to_config_folder, "config_variations"); force=true, recursive=true)
 end
 
 function resetRulesetsCollectionFolder(path_to_rulesets_collection_folder::String)
@@ -319,7 +319,7 @@ function eraseSimulationID(simulation_id::Int; monad_id::Union{Missing,Int}=miss
     if ismissing(monad_id)
         query = constructSelectQuery("simulations", "WHERE simulation_id = $(simulation_id);")
         df = queryToDataFrame(query)
-        query = constructSelectQuery("monads", "WHERE (config_id, variation_id, rulesets_collection_id, rulesets_variation_id) = ($(df.config_id[1]), $(df.variation_id[1]), $(df.rulesets_collection_id[1]), $(df.rulesets_variation_id[1]));"; selection="monad_id")
+        query = constructSelectQuery("monads", "WHERE (config_id, config_variation_id, rulesets_collection_id, rulesets_variation_id) = ($(df.config_id[1]), $(df.config_variation_id[1]), $(df.rulesets_collection_id[1]), $(df.rulesets_variation_id[1]));"; selection="monad_id")
         df = queryToDataFrame(query)
         monad_id = df.monad_id[1]
     end
