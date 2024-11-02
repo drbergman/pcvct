@@ -410,7 +410,7 @@ function getVariationsTable(query::String, db::SQLite.DB; remove_constants::Bool
     return df
 end
 
-function getConfigVariationsTable(config_variations_db::SQLite.DB, config_variation_ids::Vector{Int}; remove_constants::Bool = false)
+function getConfigVariationsTable(config_variations_db::SQLite.DB, config_variation_ids::AbstractVector{<:Integer}; remove_constants::Bool = false)
     query = constructSelectQuery("config_variations", "WHERE config_variation_id IN ($(join(config_variation_ids,",")));")
     df = getVariationsTable(query, config_variations_db; remove_constants = remove_constants)
     rename!(simpleVariationNames, df)
@@ -420,7 +420,7 @@ end
 getConfigVariationsTable(S::AbstractSampling; remove_constants::Bool=false) = getConfigVariationsTable(getConfigDB(S), getConfigVariationIDs(S); remove_constants = remove_constants)
 getConfigVariationsTable(class_id::VCTClassID{<:AbstractSampling}; remove_constants::Bool = false) = getAbstractTrial(class_id) |> x -> getConfigVariationsTable(x; remove_constants = remove_constants)
 
-function getRulesetsVariationsTable(rulesets_variations_db::SQLite.DB, rulesets_variation_ids::Vector{Int}; remove_constants::Bool = false)
+function getRulesetsVariationsTable(rulesets_variations_db::SQLite.DB, rulesets_variation_ids::AbstractVector{<:Integer}; remove_constants::Bool = false)
     query = constructSelectQuery("rulesets_variations", "WHERE rulesets_variation_id IN ($(join(rulesets_variation_ids,",")));")
     df = getVariationsTable(query, rulesets_variations_db; remove_constants = remove_constants)
     rename!(simpleRulesetsVariationNames, df)
@@ -430,7 +430,7 @@ end
 getRulesetsVariationsTable(S::AbstractSampling; remove_constants::Bool=false) = getRulesetsVariationsTable(getRulesetsCollectionDB(S), getRulesetsVariationIDs(S); remove_constants = remove_constants)
 getRulesetsVariationsTable(class_id::VCTClassID{<:AbstractSampling}; remove_constants::Bool = false) = getAbstractTrial(class_id) |> x -> getRulesetsVariationsTable(x; remove_constants = remove_constants)
 
-function getICCellVariationsTable(ic_cell_variations_db::SQLite.DB, ic_cell_variation_ids::Vector{Int}; remove_constants::Bool = false)
+function getICCellVariationsTable(ic_cell_variations_db::SQLite.DB, ic_cell_variation_ids::AbstractVector{<:Integer}; remove_constants::Bool = false)
     query = constructSelectQuery("ic_cell_variations", "WHERE ic_cell_variation_id IN ($(join(ic_cell_variation_ids,",")));")
     df = getVariationsTable(query, ic_cell_variations_db; remove_constants = remove_constants)
     rename!(simpleICCellVariationNames, df)
@@ -455,20 +455,20 @@ function getVariationsTableFromSimulations(query::String, id_name::Symbol, getVa
     return var_df
 end
 
-function getConfigVariationsTable(simulation_ids::Vector{Int}; remove_constants::Bool = false)
+function getConfigVariationsTable(simulation_ids::AbstractVector{<:Integer}; remove_constants::Bool = false)
     query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(simulation_ids,",")));", selection="config_id, config_variation_id")
     getVariationsTableFn = x -> getConfigVariationsTable(getConfigDB(x[1]), [x[2]]; remove_constants = false)
     return getVariationsTableFromSimulations(query, :ConfigVarID, getVariationsTableFn)
 end
 
 
-function getRulesetsVariationsTable(simulation_ids::Vector{Int}; remove_constants::Bool = false)
+function getRulesetsVariationsTable(simulation_ids::AbstractVector{<:Integer}; remove_constants::Bool = false)
     query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(simulation_ids,",")));", selection="rulesets_collection_id, rulesets_variation_id")
     getVariationsTableFn = x -> getRulesetsVariationsTable(getRulesetsCollectionDB(x[1]), [x[2]]; remove_constants = false)
     return getVariationsTableFromSimulations(query, :RulesVarID, getVariationsTableFn)
 end
 
-function getICCellVariationsTable(simulation_ids::Vector{Int}; remove_constants::Bool = false)
+function getICCellVariationsTable(simulation_ids::AbstractVector{<:Integer}; remove_constants::Bool = false)
     query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(simulation_ids,",")));", selection="ic_cell_id, ic_cell_variation_id")
     getVariationsTableFn = x -> getICCellVariationsTable(getICCellDB(x[1]), [x[2]]; remove_constants = false)
     return getVariationsTableFromSimulations(query, :ICCellVarID, getVariationsTableFn)
@@ -532,7 +532,7 @@ function getSimulationsTable(T::AbstractTrial; remove_constants::Bool = true, so
     return getSimulationsTableFromQuery(query; remove_constants = remove_constants, sort_by = sort_by, sort_ignore = sort_ignore)
 end
 
-function getSimulationsTable(simulation_ids::Vector{Int}; remove_constants::Bool = true, sort_by::Vector{String}=String[], sort_ignore::Vector{String}=["SimID", "ConfigVarID", "RulesVarID", "ICCellVarID"])
+function getSimulationsTable(simulation_ids::AbstractVector{<:Integer}; remove_constants::Bool = true, sort_by::Vector{String}=String[], sort_ignore::Vector{String}=["SimID", "ConfigVarID", "RulesVarID", "ICCellVarID"])
     query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(simulation_ids,",")));")
     return getSimulationsTableFromQuery(query; remove_constants = remove_constants, sort_by = sort_by, sort_ignore = sort_ignore)
 end

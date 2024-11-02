@@ -459,7 +459,7 @@ function Sampling(config_folder::String, custom_code_folder::String; monad_min_l
     return Sampling(monad_min_length, folder_ids, folder_names, variation_ids; use_previous_simulations=use_previous_simulations) 
 end
 
-function Sampling(monad_min_length::Int, monads::Array{<:AbstractMonad})
+function Sampling(monad_min_length::Int, monads::AbstractArray{<:AbstractMonad})
     folder_ids = monads[1].folder_ids
     for monad in monads
         if monad.folder_ids != folder_ids

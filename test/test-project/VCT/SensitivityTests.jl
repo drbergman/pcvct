@@ -13,9 +13,6 @@ force_recompile = false
 
 config_folder = "default"
 rulesets_collection_folder = "default"
-ic_cell_folder = ""
-ic_substrate_folder = ""
-ic_ecm_folder = ""
 custom_code_folder = "default"
 
 EV_max_time = ElementaryVariation(["overall", "max_time"], [12.0])

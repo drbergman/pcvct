@@ -74,7 +74,7 @@ function moatSensitivity(method::MOAT, monad_min_length::Int, folder_names::Abst
     monad_dict, monad_ids = variationsToMonads(folder_names, all_config_variation_ids, all_rulesets_variation_ids, all_ic_cell_variation_ids)
     header_line = ["base", [variationColumnName(av) for av in AV]...]
     monad_ids_df = DataFrame(monad_ids, header_line)
-    sampling = Sampling(monad_min_length, monad_dict |> values |> collect)
+    sampling = Sampling(monad_min_length, monad_dict |> values)
     n_success = runAbstractTrial(sampling; force_recompile=force_recompile, prune_options=PruneOptions())
     return MOATSampling(sampling, monad_ids_df)
 end
@@ -242,7 +242,7 @@ function sobolSensitivity(method::Sobolʼ, monad_min_length::Int, folder_names::
     all_rulesets_variation_ids = hcat(rulesets_variation_ids_A, rulesets_variation_ids_B, [rulesets_variation_ids_Aᵦ[i] for i in focus_indices]...)
     all_ic_cell_variation_ids = hcat(ic_cell_variation_ids_A, ic_cell_variation_ids_B, [ic_cell_variation_ids_Aᵦ[i] for i in focus_indices]...)
     monad_dict, monad_ids = variationsToMonads(folder_names, all_config_variation_ids, all_rulesets_variation_ids, all_ic_cell_variation_ids)
-    monads = monad_dict |> values |> collect
+    monads = monad_dict |> values
     header_line = ["A", "B", [variationColumnName(av) for av in AV[focus_indices]]...]
     monad_ids_df = DataFrame(monad_ids, header_line)
     sampling = Sampling(monad_min_length, monads)
@@ -332,7 +332,7 @@ function rbdSensitivity(method::RBD, monad_min_length::Int, folder_names::Abstra
     end
     config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids, config_variations_matrix, rulesets_variations_matrix, ic_cell_variations_matrix = addVariations(method.rbd_variation, folder_names.config_folder, folder_names.rulesets_collection_folder, folder_names.ic_cell_folder, AV; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id)
     monad_dict, monad_ids = variationsToMonads(folder_names, config_variations_matrix, rulesets_variations_matrix, ic_cell_variations_matrix)
-    monads = monad_dict |> values |> collect
+    monads = monad_dict |> values
     header_line = [variationColumnName(av) for av in AV]
     monad_ids_df = DataFrame(monad_ids, header_line)
     sampling = Sampling(monad_min_length, monads)

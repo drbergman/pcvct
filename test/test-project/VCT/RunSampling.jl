@@ -13,23 +13,23 @@ hashBorderPrint("DATABASE SUCCESSFULLY INITIALIZED!")
 
 config_folder = "default"
 rulesets_collection_folder = "default"
-ic_cell_folder = ""
 EV = ElementaryVariation[]
 push!(EV, ElementaryVariation(["overall","max_time"], [12.0]))
 push!(EV, ElementaryVariation(["save","full_data","interval"], [6.0]))
 push!(EV, ElementaryVariation(["save","SVG","interval"], [6.0]))
 
 config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, EV)
-
+variation_ids = [pcvct.VariationIDs(config_variation_id, rulesets_variation_id, ic_cell_variation_id) for (config_variation_id, rulesets_variation_id, ic_cell_variation_id) in zip(config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids)]
 hashBorderPrint("DATABASE SUCCESSFULLY UPDATED!")
 
-ic_substrate_folder = ""
-ic_ecm_folder = ""
 custom_code_folder = "default"
 config_variation_id = config_variation_ids[1]
 rulesets_variation_id = rulesets_variation_ids[1]
 ic_cell_variation_id = ic_cell_variation_ids[1]
-simulation = Simulation(config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder, config_variation_id, rulesets_variation_id, ic_cell_variation_id)
+simulation = Simulation(config_folder, custom_code_folder;
+    rulesets_collection_folder=rulesets_collection_folder,
+    variation_ids=variation_ids
+)
 
 n_success = runAbstractTrial(simulation)
 if n_success == 0
@@ -74,7 +74,12 @@ xml_path = [pcvct.cyclePath("default"); "phase_durations"; "duration:index:3"]
 push!(EV, ElementaryVariation(xml_path, [7.0, 8.0]))
 
 config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, EV; reference_variation_id=config_variation_id, reference_rulesets_variation_id=rulesets_variation_id, reference_ic_cell_variation_id=ic_cell_variation_id)
-sampling = Sampling(monad_min_length, config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder, config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids)
+variation_ids = [pcvct.VariationIDs(config_variation_id, rulesets_variation_id, ic_cell_variation_id) for (config_variation_id, rulesets_variation_id, ic_cell_variation_id) in zip(config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids)]
+sampling = Sampling(config_folder, custom_code_folder;
+    monad_min_length=monad_min_length,
+    rulesets_collection_folder=rulesets_collection_folder,
+    variation_ids=variation_ids
+)
 
 hashBorderPrint("SAMPLING SUCCESSFULLY CREATED!")
 
