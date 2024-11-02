@@ -110,9 +110,10 @@ function createSchema()
     if "ics" in data_dir_contents && "cells" in readdir(path_to_ics, sort=false)
         ic_cells_folders = readdir(path_to_ic_cells, sort=false) |> filter(x -> isdir(joinpath(path_to_ic_cells, x)))
         for ic_cell_folder in ic_cells_folders
-            # ⊻ = XOR (make sure exactly one of the files is present)
+            DBInterface.execute(db, "INSERT OR IGNORE INTO ic_cells (folder_name) VALUES ('$(ic_cell_folder)');")
             path_to_folder = joinpath(path_to_ic_cells, ic_cell_folder)
             is_csv = isfile(joinpath(path_to_folder, "cells.csv"))
+            # ⊻ = XOR (make sure exactly one of the files is present)
             @assert is_csv ⊻ isfile(joinpath(path_to_folder, "cells.xml")) "Must have one of cells.csv or cells.xml in $(joinpath(path_to_folder))" 
             if is_csv
                 continue # no variations allowed on csv files
@@ -374,7 +375,7 @@ function retrieveID(table_name::String, folder_name::String; db::SQLite.DB=db)
         return -1
     end
     primary_key_string = "$(rstrip(table_name,'s'))_id"
-    return constructSelectQuery(table_name, "WHERE folder_name='$(folder_name)'"; selection=primary_key_string) |> queryToDataFrame |> x -> x[1,primary_key_string]
+    return constructSelectQuery(table_name, "WHERE folder_name='$(folder_name)'"; selection=primary_key_string) |> queryToDataFrame |> x -> x[1, primary_key_string]
 end
 
 function retrieveID(folder_names::AbstractSamplingFolders)

@@ -215,7 +215,7 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         \tic_cell_folder=ic_cell_folder,
         \tic_substrate_folder=ic_substrate_folder,
         \tic_ecm_folder=ic_ecm_folder, 
-        \tconfig_variation_ids, rulesets_variation_ids;
+        \tconfig_variation_ids, rulesets_variation_ids,
         \tuse_previous_simulations=use_previous_simulations) # use_previous_simulations defaults to true, so you can omit it if you want to reuse simulations
 
         $(tersify("""
