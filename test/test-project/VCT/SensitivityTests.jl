@@ -13,10 +13,9 @@ force_recompile = false
 
 config_folder = "default"
 rulesets_collection_folder = "default"
-ic_cell_folder = ""
+custom_code_folder = "default"
 ic_substrate_folder = ""
 ic_ecm_folder = ""
-custom_code_folder = "default"
 
 EV_max_time = ElementaryVariation(["overall", "max_time"], [12.0])
 EV_save_full_data_interval = ElementaryVariation(["save", "full_data", "interval"], [6.0])

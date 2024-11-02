@@ -132,9 +132,10 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         xml_path = [\"overall\"; \"max_time\"]
         values = [60.0]
         ev_max_time = ElementaryVariation(xml_path, values)
-        config_variation_ids, rulesets_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, [ev_max_time])
+        config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, [ev_max_time])
         reference_config_variation_id = config_variation_ids[1]
         reference_rulesets_variation_id = rulesets_variation_ids[1]
+        reference_ic_cell_variation_id = ic_cell_variation_ids[1]
 
         ############ set up variables to control running simulations ############
 
@@ -197,19 +198,26 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         # ...but you can specify values from a previous variation using the keywords seen at the end...
         # ...Here, we are using the variations with short max time from above.
         """))\
-        config_variation_ids, rulesets_variation_ids = 
-        \taddVariations(GridVariation(), config_folder, rulesets_collection_folder,
+        config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = 
+        \taddVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder,
         \telementary_variations;
-        \treference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id)
+        \treference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id
+        )
 
         $(tersify("""
         # now we create the sampling, which will add the sampling, monads, and simulations to the database
         # Note: all these entries can be keyword arguments, so you can specify only the ones you want to change
         # monad_min_length defaults to 0 (which means no new simulations will be created)
         """))\
-        sampling = Sampling(monad_min_length, config_folder, rulesets_collection_folder,
-        \tic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder,
-        \tconfig_variation_ids, rulesets_variation_ids;
+        sampling = Sampling(config_folder, custom_code_folder;
+        \tmonad_min_length=monad_min_length,
+        \trulesets_collection_folder=rulesets_collection_folder,
+        \tic_cell_folder=ic_cell_folder,
+        \tic_substrate_folder=ic_substrate_folder,
+        \tic_ecm_folder=ic_ecm_folder, 
+        \tconfig_variation_ids=config_variation_ids,
+        \trulesets_variation_ids=rulesets_variation_ids,
+        \tic_cell_variation_ids=ic_cell_variation_ids,
         \tuse_previous_simulations=use_previous_simulations) # use_previous_simulations defaults to true, so you can omit it if you want to reuse simulations
 
         $(tersify("""

@@ -585,9 +585,21 @@ function addSobolCombo(sobol_variation::SobolVariation, config_id::Int, rulesets
     cdfs = generateSobolCDFs(sobol_variation, d) # cdfs is (d, sobol_variation.n_matrices, sobol_variation.n)
     cdfs_reshaped = reshape(cdfs, (d, sobol_variation.n_matrices * sobol_variation.n)) # reshape to (d, sobol_variation.n_matrices * sobol_variation.n) so that each column is a sobol sample
     cdfs_reshaped = cdfs_reshaped' # transpose so that each row is a sobol sample
-    config_variation_ids = cdfsToVariations(cdfs_reshaped[:,1:length(pv.config_variations)], pv.config_variations, prepareConfigVariationFunctions(config_id, pv.config_variations; reference_config_variation_id=reference_config_variation_id)...)
-    rulesets_variation_ids = cdfsToVariations(cdfs_reshaped[:,length(pv.config_variations)+1:end], pv.rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)...)
-    ic_cell_variation_ids = cdfsToVariations(cdfs_reshaped[:,length(pv.config_variations)+length(pv.rulesets_variations)+1:end], pv.ic_cell_variations, prepareICCellVariationFunctions(ic_cell_id; reference_ic_cell_variation_id=reference_ic_cell_variation_id)...)
+    if isempty(pv.config_variations)
+        config_variation_ids = fill(reference_config_variation_id, size(cdfs_reshaped,1))
+    else
+        config_variation_ids = cdfsToVariations(cdfs_reshaped[:,1:length(pv.config_variations)], pv.config_variations, prepareConfigVariationFunctions(config_id, pv.config_variations; reference_config_variation_id=reference_config_variation_id)...)
+    end
+    if isempty(pv.rulesets_variations)
+        rulesets_variation_ids = fill(reference_rulesets_variation_id, size(cdfs_reshaped,1))
+    else
+        rulesets_variation_ids = cdfsToVariations(cdfs_reshaped[:,length(pv.config_variations)+1:end], pv.rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)...)
+    end
+    if isempty(pv.ic_cell_variations)
+        ic_cell_variation_ids = fill(reference_ic_cell_variation_id, size(cdfs_reshaped,1))
+    else
+        ic_cell_variation_ids = cdfsToVariations(cdfs_reshaped[:,length(pv.config_variations)+length(pv.rulesets_variations)+1:end], pv.ic_cell_variations, prepareICCellVariationFunctions(ic_cell_id; reference_ic_cell_variation_id=reference_ic_cell_variation_id)...)
+    end
     config_variation_ids = reshape(config_variation_ids, (sobol_variation.n_matrices, sobol_variation.n))' # first, each sobol matrix variation indices goes into a row so that each column is the kth sample for each matrix; take the transpose so that each column corresponds to a matrix
     rulesets_variation_ids = reshape(rulesets_variation_ids, (sobol_variation.n_matrices, sobol_variation.n))'
     ic_cell_variation_ids = reshape(ic_cell_variation_ids, (sobol_variation.n_matrices, sobol_variation.n))'
@@ -672,9 +684,21 @@ end
 function addRBDCombo(rbd_variation::RBDVariation, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, pv::ParsedVariations; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=ic_cell_id==-1 ? -1 : 0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true)
     d = length(pv.config_variations) + length(pv.rulesets_variations) + length(pv.ic_cell_variations)
     cdfs, S = generateRBDCDFs(rbd_variation, d)
-    config_variation_ids = cdfsToVariations(cdfs[:, 1:length(pv.config_variations)], pv.config_variations, prepareConfigVariationFunctions(config_id, pv.config_variations; reference_config_variation_id=reference_config_variation_id)...)
-    rulesets_variation_ids = cdfsToVariations(cdfs[:, length(pv.config_variations)+1:end], pv.rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)...)
-    ic_cell_variation_ids = cdfsToVariations(cdfs[:, length(pv.config_variations)+length(pv.rulesets_variations)+1:end], pv.ic_cell_variations, prepareICCellVariationFunctions(ic_cell_id; reference_ic_cell_variation_id=reference_ic_cell_variation_id)...)
+    if isempty(pv.config_variations)
+        config_variation_ids = fill(reference_config_variation_id, size(cdfs,1))
+    else
+        config_variation_ids = cdfsToVariations(cdfs[:,1:length(pv.config_variations)], pv.config_variations, prepareConfigVariationFunctions(config_id, pv.config_variations; reference_config_variation_id=reference_config_variation_id)...)
+    end
+    if isempty(pv.rulesets_variations)
+        rulesets_variation_ids = fill(reference_rulesets_variation_id, size(cdfs,1))
+    else
+        rulesets_variation_ids = cdfsToVariations(cdfs[:,length(pv.config_variations)+1:end], pv.rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)...)
+    end
+    if isempty(pv.ic_cell_variations)
+        ic_cell_variation_ids = fill(reference_ic_cell_variation_id, size(cdfs,1))
+    else
+        ic_cell_variation_ids = cdfsToVariations(cdfs[:,length(pv.config_variations)+length(pv.rulesets_variations)+1:end], pv.ic_cell_variations, prepareICCellVariationFunctions(ic_cell_id; reference_ic_cell_variation_id=reference_ic_cell_variation_id)...)
+    end
     config_variations_matrix = createSortedRBDMatrix(config_variation_ids, S)
     rulesets_variations_matrix = createSortedRBDMatrix(rulesets_variation_ids, S)
     ic_cell_variations_matrix = createSortedRBDMatrix(ic_cell_variation_ids, S)
@@ -716,7 +740,7 @@ function prepareRulesetsVariationFunctions(rulesets_collection_id::Int; referenc
     return addColumnsByPathsFn, prepareAddNewFn, addRowFn
 end
 
-function prepareICCellVariationFunctions(ic_cell_id::Int; reference_ic_cell_variation_id=0)
+function prepareICCellVariationFunctions(ic_cell_id::Int; reference_ic_cell_variation_id::Int=0)
     addColumnsByPathsFn = (paths) -> addICCellVariationColumns(ic_cell_id, paths)
     prepareAddNewFn = (static_column_names, varied_column_names) -> prepareAddNewICCellVariations(ic_cell_id, static_column_names, varied_column_names; reference_ic_cell_variation_id=reference_ic_cell_variation_id)
     addRowFn = (features, static_values, varied_values) -> addICCellVariationRow(ic_cell_id, features, static_values, varied_values)

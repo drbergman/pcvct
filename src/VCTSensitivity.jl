@@ -86,7 +86,7 @@ end
 
 function perturbConfigVariation(av::AbstractVariation, config_variation_id::Int, folder::String)
     base_value = getConfigBaseValue(variationColumnName(av), config_variation_id, folder)
-    addFn = (ev) -> addGridVariation(folder, ev; reference_config_variation_id=config_variation_id)
+    addFn = (ev) -> addGridConfigVariation(folder, ev; reference_config_variation_id=config_variation_id)
     return makePerturbation(av, base_value, addFn)
 end
 

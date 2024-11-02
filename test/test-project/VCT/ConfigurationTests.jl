@@ -61,18 +61,18 @@ end
 
 push!(EV, ElementaryVariation(["overall", "max_time"], [12.0]))
 
-config_variation_ids = addGridVariation(config_folder, EV)
 
 monad_min_length = 2
 rulesets_collection_folder = "default"
-ic_cell_folder = ""
-ic_substrate_folder = ""
-ic_ecm_folder = ""
 custom_code_folder = "default"
-rulesets_variation_ids = zeros(Int, size(config_variation_ids))
-ic_cell_variation_ids = -ones(Int, size(config_variation_ids))
-
-sampling = Sampling(monad_min_length, config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder, config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids)
+config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, EV)
+sampling = Sampling(config_folder, custom_code_folder;
+    monad_min_length=monad_min_length,
+    rulesets_collection_folder=rulesets_collection_folder,
+    config_variation_ids=config_variation_ids,
+    rulesets_variation_ids=rulesets_variation_ids,
+    ic_cell_variation_ids=ic_cell_variation_ids
+)
 
 n_success = runAbstractTrial(sampling; force_recompile=false)
 @test length(sampling) == length(config_variation_ids) * monad_min_length
@@ -82,28 +82,30 @@ reference_config_variation_id = config_variation_ids[1] # just get one with the 
 config_variation_ids = Int[]
 EV = ElementaryVariation[]
 addDomainVariationDimension!(EV, (-78.0, 78.0, -30.0, 30.0, -10.0, 10.0))
-new_config_variation_ids = addGridVariation(config_folder, EV; reference_variation_id=reference_config_variation_id)
+new_config_variation_ids = pcvct.addGridConfigVariation(config_folder, EV; reference_config_variation_id=reference_config_variation_id)
 append!(config_variation_ids, new_config_variation_ids)
 
 
 EV = ElementaryVariation[]
 addDomainVariationDimension!(EV, (x_min=-78.1, x_max=78.1, y_min=-30.1, y_max=30.1, z_min=-10.1, z_max=10.1))
-new_config_variation_ids = addGridVariation(config_folder, EV; reference_variation_id=reference_config_variation_id)
+new_config_variation_ids = pcvct.addGridConfigVariation(config_folder, EV; reference_config_variation_id=reference_config_variation_id)
 append!(config_variation_ids, new_config_variation_ids)
 
 EV = ElementaryVariation[]
 addDomainVariationDimension!(EV, (min_x=-78.2, maxy=30.2))
-new_config_variation_ids = addGridVariation(config_folder, EV; reference_variation_id=reference_config_variation_id)
+new_config_variation_ids = pcvct.addGridConfigVariation(config_folder, EV; reference_config_variation_id=reference_config_variation_id)
 append!(config_variation_ids, new_config_variation_ids)
 
 EV = ElementaryVariation[]
 addMotilityVariationDimension!(EV, "default", "speed", [0.1, 1.0])
 addCustomDataVariationDimension!(EV, "default", "sample", [0.1, 1.0])
-new_config_variation_ids = addGridVariation(config_folder, EV; reference_variation_id=reference_config_variation_id)
+new_config_variation_ids = pcvct.addGridConfigVariation(config_folder, EV; reference_config_variation_id=reference_config_variation_id)
 append!(config_variation_ids, new_config_variation_ids)
 
-rulesets_variation_ids = zeros(Int, size(config_variation_ids))
-sampling = Sampling(monad_min_length, config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder, config_variation_ids, rulesets_variation_ids)
+sampling = Sampling(config_folder, custom_code_folder;
+    monad_min_length=monad_min_length,
+    config_variation_ids=config_variation_ids
+)
 
 n_success = runAbstractTrial(sampling; force_recompile=false)
 
@@ -118,8 +120,13 @@ push!(EV, ElementaryVariation(xml_path, [0.25, 0.75]))
 
 rulesets_variation_ids = pcvct.addGridRulesetsVariation(rulesets_collection_folder, EV)
 
-config_variation_ids = fill(reference_config_variation_id, size(rulesets_variation_ids))
-sampling = Sampling(monad_min_length, config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder, config_variation_ids, rulesets_variation_ids)
+sampling = Sampling(config_folder, custom_code_folder;
+    monad_min_length=monad_min_length,
+    rulesets_collection_folder=rulesets_collection_folder,
+    config_variation_ids=reference_config_variation_id,
+    rulesets_variation_ids=rulesets_variation_ids,
+    ic_cell_variation_ids=-1
+)
 
 n_success = runAbstractTrial(sampling; force_recompile=false)
 
@@ -130,9 +137,14 @@ addMotilityVariationDimension!(EV, "default", "speed", [0.1, 1.0])
 xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","signal:name:pressure","half_max"]
 push!(EV, ElementaryVariation(xml_path, [0.25, 0.75]))
 
-config_variation_ids, rulesets_variation_ids, ic_cell_variation_id = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, EV; reference_variation_id=reference_config_variation_id, reference_rulesets_variation_id=0, reference_ic_cell_variation_id=0)
-
-sampling = Sampling(monad_min_length, config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder, config_variation_ids, rulesets_variation_ids, ic_cell_variation_id)
+config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, EV; reference_config_variation_id=reference_config_variation_id)
+sampling = Sampling(config_folder, custom_code_folder;
+    monad_min_length=monad_min_length,
+    rulesets_collection_folder=rulesets_collection_folder,
+    config_variation_ids=config_variation_ids,
+    rulesets_variation_ids=rulesets_variation_ids,
+    ic_cell_variation_ids=ic_cell_variation_ids
+)
 
 n_success = runAbstractTrial(sampling; force_recompile=false)
 

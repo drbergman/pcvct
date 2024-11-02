@@ -219,7 +219,7 @@ function resetDatabase(; force_reset::Bool=false, force_continue::Bool=false)
     end
 
     for ic_cell_folder in (readdir(joinpath(data_dir, "inputs", "ics", "cells"), sort=false, join=true) |> filter(x -> isdir(x)))
-        resetICCellFolder(config_folder)
+        resetICCellFolder(ic_cell_folder)
     end
 
     ic_cell_folders = constructSelectQuery("ic_cells", "", selection="folder_name") |> queryToDataFrame |> x -> x.folder_name

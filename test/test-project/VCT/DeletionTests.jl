@@ -10,7 +10,7 @@ path_to_data_folder = "./test-project/data" # path to data folder
 initializeVCT(path_to_physicell_folder, path_to_data_folder)
 
 deleteSimulation(1)
-pcvct.deleteMonad(1:10 |> collect)
+pcvct.deleteMonad(1:10)
 pcvct.deleteSampling(1)
 pcvct.deleteTrial(1)
 
