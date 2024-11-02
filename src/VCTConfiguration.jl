@@ -182,7 +182,7 @@ function loadICCells(M::AbstractMonad)
     if isfile(joinpath(path_to_ic_cells_folder, "cells.csv")) # ic already given by cells.csv
         return
     end
-    path_to_ic_cells_xml = joinpath(path_to_ic_cells_folder, "ic_cells_variations", "ic_cell_variation_$(M.variation_ids.ic_cell_variation_id).xml")
+    path_to_ic_cells_xml = joinpath(path_to_ic_cells_folder, "ic_cell_variations", "ic_cell_variation_$(M.variation_ids.ic_cell_variation_id).xml")
     if isfile(path_to_ic_cells_xml) # already have the ic cell variation created
         return
     end
@@ -192,7 +192,7 @@ function loadICCells(M::AbstractMonad)
     xml_doc = parse_file(path_to_base_xml)
     if M.variation_ids.ic_cell_variation_id != 0 # only update if not using the base variation for the ic cells
         query = constructSelectQuery("ic_cell_variations", "WHERE ic_cell_variation_id=$(M.variation_ids.ic_cell_variation_id);")
-        variation_row = queryToDataFrame(query; db=getICCellsDB(M.folder_names.ic_cell_folder), is_row=true)
+        variation_row = queryToDataFrame(query; db=getICCellDB(M.folder_names.ic_cell_folder), is_row=true)
         for column_name in names(variation_row)
             if column_name == "ic_cell_variation_id"
                 continue
@@ -212,7 +212,7 @@ function pathToICCell(simulation::Simulation)
     if isfile(joinpath(path_to_ic_cell_folder, "cells.csv")) # ic already given by cells.csv
         return joinpath(path_to_ic_cell_folder, "cells.csv")
     end
-    path_to_ic_cell_variations = joinpath(path_to_ic_cell_folder, "ic_cells_variations")
+    path_to_ic_cell_variations = joinpath(path_to_ic_cell_folder, "ic_cell_variations")
     path_to_ic_cell_xml = joinpath(path_to_ic_cell_variations, "ic_cell_variation_$(simulation.variation_ids.ic_cell_variation_id).xml")
     path_to_ic_cell_file = joinpath(path_to_ic_cell_variations, "ic_cell_variation_$(simulation.variation_ids.ic_cell_variation_id)_s$(simulation.id).csv")
     generateICCell(path_to_ic_cell_xml, path_to_ic_cell_file)

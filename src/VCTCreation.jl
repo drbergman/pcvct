@@ -135,7 +135,7 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, [ev_max_time])
         reference_config_variation_id = config_variation_ids[1]
         reference_rulesets_variation_id = rulesets_variation_ids[1]
-        ic_cell_variation_id = ic_cell_variation_ids[1]
+        reference_ic_cell_variation_id = ic_cell_variation_ids[1]
 
         ############ set up variables to control running simulations ############
 
@@ -215,7 +215,9 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         \tic_cell_folder=ic_cell_folder,
         \tic_substrate_folder=ic_substrate_folder,
         \tic_ecm_folder=ic_ecm_folder, 
-        \tconfig_variation_ids, rulesets_variation_ids,
+        \tconfig_variation_ids=config_variation_ids,
+        \trulesets_variation_ids=rulesets_variation_ids,
+        \tic_cell_variation_ids=ic_cell_variation_ids,
         \tuse_previous_simulations=use_previous_simulations) # use_previous_simulations defaults to true, so you can omit it if you want to reuse simulations
 
         $(tersify("""
