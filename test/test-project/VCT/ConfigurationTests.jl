@@ -66,10 +66,12 @@ monad_min_length = 2
 rulesets_collection_folder = "default"
 custom_code_folder = "default"
 config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, EV)
-variation_ids = [pcvct.VariationIDs(config_variation_ids[i], rulesets_variation_ids[i], ic_cell_variation_ids[i]) for i in eachindex(config_variation_ids)]
 sampling = Sampling(config_folder, custom_code_folder;
     monad_min_length=monad_min_length,
-    variation_ids=variation_ids
+    rulesets_collection_folder=rulesets_collection_folder,
+    config_variation_ids=config_variation_ids,
+    rulesets_variation_ids=rulesets_variation_ids,
+    ic_cell_variation_ids=ic_cell_variation_ids
 )
 
 n_success = runAbstractTrial(sampling; force_recompile=false)
@@ -100,10 +102,9 @@ addCustomDataVariationDimension!(EV, "default", "sample", [0.1, 1.0])
 new_config_variation_ids = addGridVariation(config_folder, EV; reference_config_variation_id=reference_config_variation_id)
 append!(config_variation_ids, new_config_variation_ids)
 
-variation_ids = [pcvct.VariationIDs(config_variation_id, 0, -1) for config_variation_id in config_variation_ids]
 sampling = Sampling(config_folder, custom_code_folder;
     monad_min_length=monad_min_length,
-    variation_ids=variation_ids
+    config_variation_ids=config_variation_ids
 )
 
 n_success = runAbstractTrial(sampling; force_recompile=false)
@@ -119,10 +120,11 @@ push!(EV, ElementaryVariation(xml_path, [0.25, 0.75]))
 
 rulesets_variation_ids = pcvct.addGridRulesetsVariation(rulesets_collection_folder, EV)
 
-variation_ids = [pcvct.VariationIDs(reference_config_variation_id, rulesets_variation_id, -1) for rulesets_variation_id in rulesets_variation_ids]
 sampling = Sampling(config_folder, custom_code_folder;
     monad_min_length=monad_min_length,
-    variation_ids=variation_ids
+    rulesets_collection_folder=rulesets_collection_folder,
+    config_variation_ids=reference_config_variation_id,
+    rulesets_variation_ids=rulesets_variation_ids
 )
 
 n_success = runAbstractTrial(sampling; force_recompile=false)
