@@ -77,8 +77,26 @@ function createSchema()
         error("No folders in $(joinpath(data_dir, "inputs", "configs")) found. Add PhysiCell_settings.xml and rules files here.")
     end
     for config_folder in config_folders
+        patch_to_003 = false
         DBInterface.execute(db, "INSERT OR IGNORE INTO configs (folder_name) VALUES ('$(config_folder)');")
+        if isfile(joinpath(data_dir, "inputs", "configs", config_folder, "variations.db"))
+            # patch for 0.0.2 to 0.0.3
+            mv(joinpath(data_dir, "inputs", "configs", config_folder, "variations.db"), joinpath(data_dir, "inputs", "configs", config_folder, "config_variations.db"))
+            patch_to_003 = true
+        end
         db_config_variations = joinpath(data_dir, "inputs", "configs", config_folder, "config_variations.db") |> SQLite.DB
+        if patch_to_003
+            # rename table from variations to config_variations
+            DBInterface.execute(db_config_variations, "ALTER TABLE variations RENAME TO config_variations;")
+            # rename column from variation_id to config_variation_id
+            DBInterface.execute(db_config_variations, "ALTER TABLE config_variations RENAME COLUMN variation_id TO config_variation_id;")
+            if isdir(joinpath(data_dir, "inputs", "configs", config_folder, "variations"))
+                mv(joinpath(data_dir, "inputs", "configs", config_folder, "variations"), joinpath(data_dir, "inputs", "configs", config_folder, "config_variations"))
+                for file in readdir(joinpath(data_dir, "inputs", "configs", config_folder, "config_variations"))
+                    mv(joinpath(data_dir, "inputs", "configs", config_folder, "config_variations", file), joinpath(data_dir, "inputs", "configs", config_folder, "config_variations", "config_$(file)"))
+                end
+            end
+        end
         createPCVCTTable("config_variations", "config_variation_id INTEGER PRIMARY KEY"; db=db_config_variations)
         DBInterface.execute(db_config_variations, "INSERT OR IGNORE INTO config_variations (config_variation_id) VALUES(0);")
     end
