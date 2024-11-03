@@ -124,7 +124,8 @@ sampling = Sampling(config_folder, custom_code_folder;
     monad_min_length=monad_min_length,
     rulesets_collection_folder=rulesets_collection_folder,
     config_variation_ids=reference_config_variation_id,
-    rulesets_variation_ids=rulesets_variation_ids
+    rulesets_variation_ids=rulesets_variation_ids,
+    ic_cell_variation_ids=-1
 )
 
 n_success = runAbstractTrial(sampling; force_recompile=false)

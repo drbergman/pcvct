@@ -92,6 +92,7 @@ function createSchema()
                 DBInterface.execute(db, "ALTER TABLE monads ADD COLUMN ic_cell_variation_id INTEGER;")
                 # drop the previous unique constraint on monads
                 DBInterface.execute(db, "CREATE TABLE monads_temp AS SELECT * FROM monads;")
+                DBInterface.execute(db, "DROP TABLE monads;")
                 patched_variation_id_to_config_variation_id = true
             end
         end
@@ -213,7 +214,8 @@ function createSchema()
 
     if patched_variation_id_to_config_variation_id
         # drop the previous unique constraint on monads
-        DBInterface.execute(db, "INSERT INTO monads SELECT * FROM monads_temp;")
+        # insert from monads_temp all values except ic_cell_variation_id (set that to -1 if ic_cell_id is -1 and to 0 if ic_cell_id is not -1)
+        DBInterface.execute(db, "INSERT INTO monads SELECT monad_id, custom_code_id, ic_cell_id, ic_substrate_id, ic_ecm_id, config_id, rulesets_collection_id, config_variation_id, rulesets_variation_id, CASE WHEN ic_cell_id=-1 THEN -1 ELSE 0 END FROM monads_temp;")
         DBInterface.execute(db, "DROP TABLE monads_temp;")
     end
 
