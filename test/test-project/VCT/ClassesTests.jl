@@ -31,7 +31,9 @@ ic_cell_variation_ids = [0, 0]
 sampling = Sampling(config_folder, custom_code_folder;
     monad_min_length=monad_min_length,
     ic_cell_folder=ic_cell_folder,
-    variation_ids=variation_ids
+    config_variation_ids=config_variation_ids,
+    rulesets_variation_ids=rulesets_variation_ids,
+    ic_cell_variation_ids=ic_cell_variation_ids
 )
 
 trial = Trial(1)
