@@ -295,10 +295,11 @@ end
 #     return Monad(min_length, folder_ids, folder_names, config_variation_id, rulesets_variation_id; use_previous_simulations=use_previous_simulations)
 # end
 
-# function Monad(folder_names::AbstractSamplingFolders, config_variation_id::Int, rulesets_variation_id::Int; use_previous_simulations::Bool=true)
-#     min_length = 0 # not making a monad to run if not supplying the min_length info
-#     Monad(min_length, folder_names, config_variation_id, rulesets_variation_id; use_previous_simulations=use_previous_simulations)
-# end
+function Monad(folder_names::AbstractSamplingFolders, variation_ids::VariationIDs; use_previous_simulations::Bool=true)
+    min_length = 0 # not making a monad to run if not supplying the min_length info
+    folder_ids = AbstractSamplingIDs(folder_names)
+    Monad(min_length, folder_names, folder_ids, variation_ids; use_previous_simulations=use_previous_simulations)
+end
 
 # function Monad(min_length::Int, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, ic_substrate_id::Int, ic_ecm_id::Int, custom_code_id::Int, config_variation_id::Int, rulesets_variation_id::Int; use_previous_simulations::Bool=true)
 #     folder_ids = AbstractSamplingIDs(config_id, rulesets_collection_id, ic_cell_id, ic_substrate_id, ic_ecm_id, custom_code_id)
