@@ -140,6 +140,7 @@ push!(EV, ElementaryVariation(xml_path, [0.25, 0.75]))
 config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, EV; reference_config_variation_id=reference_config_variation_id)
 sampling = Sampling(config_folder, custom_code_folder;
     monad_min_length=monad_min_length,
+    rulesets_collection_folder=rulesets_collection_folder,
     config_variation_ids=config_variation_ids,
     rulesets_variation_ids=rulesets_variation_ids,
     ic_cell_variation_ids=ic_cell_variation_ids
