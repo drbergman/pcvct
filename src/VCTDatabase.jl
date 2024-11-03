@@ -89,6 +89,8 @@ function createSchema()
                 DBInterface.execute(db, "ALTER TABLE simulations RENAME COLUMN variation_id TO config_variation_id;")
                 DBInterface.execute(db, "ALTER TABLE monads RENAME COLUMN variation_id TO config_variation_id;")
                 DBInterface.execute(db, "ALTER TABLE simulations ADD COLUMN ic_cell_variation_id INTEGER;")
+                # set all these new columns to -1 if ic_cell_id is -1 and to 0 if ic_cell_id is not -1
+                DBInterface.execute(db, "UPDATE simulations SET ic_cell_variation_id=CASE WHEN ic_cell_id=-1 THEN -1 ELSE 0 END;")
                 DBInterface.execute(db, "ALTER TABLE monads ADD COLUMN ic_cell_variation_id INTEGER;")
                 # drop the previous unique constraint on monads
                 DBInterface.execute(db, "CREATE TABLE monads_temp AS SELECT * FROM monads;")
