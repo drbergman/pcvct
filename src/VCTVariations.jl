@@ -194,7 +194,6 @@ function setUpColumns(AV::Vector{<:AbstractVariation}, addColumnsByPathsFn::Func
     xml_paths = [getVariationXMLPath(av) for av in AV]
 
     static_column_names, varied_column_names = addColumnsByPathsFn(xml_paths)
-    println("Static column names: $static_column_names")
     return prepareAddNewFn(static_column_names, varied_column_names)
 end
 
@@ -586,9 +585,21 @@ function addSobolCombo(sobol_variation::SobolVariation, config_id::Int, rulesets
     cdfs = generateSobolCDFs(sobol_variation, d) # cdfs is (d, sobol_variation.n_matrices, sobol_variation.n)
     cdfs_reshaped = reshape(cdfs, (d, sobol_variation.n_matrices * sobol_variation.n)) # reshape to (d, sobol_variation.n_matrices * sobol_variation.n) so that each column is a sobol sample
     cdfs_reshaped = cdfs_reshaped' # transpose so that each row is a sobol sample
-    config_variation_ids = cdfsToVariations(cdfs_reshaped[:,1:length(pv.config_variations)], pv.config_variations, prepareConfigVariationFunctions(config_id, pv.config_variations; reference_config_variation_id=reference_config_variation_id)...)
-    rulesets_variation_ids = cdfsToVariations(cdfs_reshaped[:,length(pv.config_variations)+1:end], pv.rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)...)
-    ic_cell_variation_ids = cdfsToVariations(cdfs_reshaped[:,length(pv.config_variations)+length(pv.rulesets_variations)+1:end], pv.ic_cell_variations, prepareICCellVariationFunctions(ic_cell_id; reference_ic_cell_variation_id=reference_ic_cell_variation_id)...)
+    if isempty(pv.config_variations)
+        config_variation_ids = fill(reference_config_variation_id, size(cdfs_reshaped,1))
+    else
+        config_variation_ids = cdfsToVariations(cdfs_reshaped[:,1:length(pv.config_variations)], pv.config_variations, prepareConfigVariationFunctions(config_id, pv.config_variations; reference_config_variation_id=reference_config_variation_id)...)
+    end
+    if isempty(pv.rulesets_variations)
+        rulesets_variation_ids = fill(reference_rulesets_variation_id, size(cdfs_reshaped,1))
+    else
+        rulesets_variation_ids = cdfsToVariations(cdfs_reshaped[:,length(pv.config_variations)+1:end], pv.rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)...)
+    end
+    if isempty(pv.ic_cell_variations)
+        ic_cell_variation_ids = fill(reference_ic_cell_variation_id, size(cdfs_reshaped,1))
+    else
+        ic_cell_variation_ids = cdfsToVariations(cdfs_reshaped[:,length(pv.config_variations)+length(pv.rulesets_variations)+1:end], pv.ic_cell_variations, prepareICCellVariationFunctions(ic_cell_id; reference_ic_cell_variation_id=reference_ic_cell_variation_id)...)
+    end
     config_variation_ids = reshape(config_variation_ids, (sobol_variation.n_matrices, sobol_variation.n))' # first, each sobol matrix variation indices goes into a row so that each column is the kth sample for each matrix; take the transpose so that each column corresponds to a matrix
     rulesets_variation_ids = reshape(rulesets_variation_ids, (sobol_variation.n_matrices, sobol_variation.n))'
     ic_cell_variation_ids = reshape(ic_cell_variation_ids, (sobol_variation.n_matrices, sobol_variation.n))'
