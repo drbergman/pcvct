@@ -423,11 +423,6 @@ function Sampling(monad_min_length::Int, monad_ids::AbstractVector{<:Integer}, f
     return Sampling(id, monad_min_length, monad_ids, folder_ids, folder_names, variation_ids)
 end
 
-# function Sampling(id::Int, monad_min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, config_variation_ids::Array{Int}, rulesets_variation_ids::Array{Int}; use_previous_simulations::Bool=true)
-#     monad_ids = createMonadIDs(monad_min_length, folder_ids, folder_names, config_variation_ids, rulesets_variation_ids; use_previous_simulations=use_previous_simulations)
-#     return Sampling(id, monad_min_length, monad_ids, folder_ids, folder_names, config_variation_ids, rulesets_variation_ids)
-# end 
-
 function Sampling(monad_min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_ids::AbstractArray{VariationIDs}; use_previous_simulations::Bool=true)
     monad_ids = createMonadIDs(monad_min_length, folder_ids, folder_names, variation_ids; use_previous_simulations=use_previous_simulations)
     return Sampling(monad_min_length, monad_ids, folder_ids, folder_names, variation_ids)
@@ -613,6 +608,11 @@ function getTrial(trial_id::Int)
 end
 
 Trial(trial_id::Int) = getTrial(trial_id)
+
+function Sampling(id::Int, monad_min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_ids::Vector{VariationIDs}; use_previous_simulations::Bool=true)
+    monad_ids = createMonadIDs(monad_min_length, folder_ids, folder_names, variation_ids; use_previous_simulations=use_previous_simulations)
+    return Sampling(id, monad_min_length, monad_ids, folder_ids, folder_names, variation_ids)
+end 
 
 function Sampling(trial::Trial, index::Int)
     return Sampling(trial.sampling_ids[index], trial.monad_min_length, trial.folder_ids[index], trial.folder_names[index], trial.variation_ids[index])
