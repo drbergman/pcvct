@@ -363,11 +363,20 @@ getConfigDB(config_folder::String) = joinpath(data_dir, "inputs", "configs", con
 getConfigDB(config_id::Int) = getConfigFolder(config_id) |> getConfigDB
 getConfigDB(S::AbstractSampling) = getConfigDB(S.folder_names.config_folder)
 
-getRulesetsCollectionDB(rulesets_collection_folder::String) = joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder, "rulesets_variations.db") |> SQLite.DB
+function getRulesetsCollectionDB(rulesets_collection_folder::String)
+    if rulesets_collection_folder == ""
+        return missing
+    end
+    path_to_folder = joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder)
+    return joinpath(path_to_folder, "rulesets_variations.db") |> SQLite.DB
+end
 getRulesetsCollectionDB(M::AbstractMonad) = getRulesetsCollectionDB(M.folder_names.rulesets_collection_folder)
 getRulesetsCollectionDB(rulesets_collection_id::Int) = getRulesetsCollectionFolder(rulesets_collection_id) |> getRulesetsCollectionDB
 
 function getICCellDB(ic_cell_folder::String)
+    if ic_cell_folder == ""
+        return missing
+    end
     path_to_folder = joinpath(data_dir, "inputs", "ics", "cells", ic_cell_folder)
     if isfile(joinpath(path_to_folder, "cells.csv"))
         return missing
@@ -472,6 +481,11 @@ function getRulesetsVariationsTable(rulesets_variations_db::SQLite.DB, rulesets_
     df = getVariationsTable(query, rulesets_variations_db; remove_constants = remove_constants)
     rename!(simpleRulesetsVariationNames, df)
     return df
+end
+
+function getRulesetsVariationsTable(::Missing, rulesets_variation_ids::AbstractVector{<:Integer}; remove_constants::Bool = false)
+    @assert all(x -> x == -1, rulesets_variation_ids) "If the rulesets_variation_id is missing, then all rulesets_variation_ids must be -1."
+    return DataFrame(RulesVarID=rulesets_variation_ids)
 end
 
 getRulesetsVariationsTable(S::AbstractSampling; remove_constants::Bool=false) = getRulesetsVariationsTable(getRulesetsCollectionDB(S), getRulesetsVariationIDs(S); remove_constants = remove_constants)
