@@ -684,9 +684,6 @@ end
 function addRBDCombo(rbd_variation::RBDVariation, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, pv::ParsedVariations; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=ic_cell_id==-1 ? -1 : 0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true)
     d = length(pv.config_variations) + length(pv.rulesets_variations) + length(pv.ic_cell_variations)
     cdfs, S = generateRBDCDFs(rbd_variation, d)
-    config_variation_ids = cdfsToVariations(cdfs[:, 1:length(pv.config_variations)], pv.config_variations, prepareConfigVariationFunctions(config_id, pv.config_variations; reference_config_variation_id=reference_config_variation_id)...)
-    rulesets_variation_ids = cdfsToVariations(cdfs[:, length(pv.config_variations)+1:end], pv.rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)...)
-    ic_cell_variation_ids = cdfsToVariations(cdfs[:, length(pv.config_variations)+length(pv.rulesets_variations)+1:end], pv.ic_cell_variations, prepareICCellVariationFunctions(ic_cell_id; reference_ic_cell_variation_id=reference_ic_cell_variation_id)...)
     if isempty(pv.config_variations)
         config_variation_ids = fill(reference_config_variation_id, size(cdfs,1))
     else
