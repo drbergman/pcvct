@@ -76,7 +76,7 @@ push!(EV, ElementaryVariation(xml_path, [5.0, 6.0]))
 xml_path = [pcvct.cyclePath("default"); "phase_durations"; "duration:index:3"]
 push!(EV, ElementaryVariation(xml_path, [7.0, 8.0]))
 
-config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, EV; reference_variation_id=config_variation_id, reference_rulesets_variation_id=rulesets_variation_id, reference_ic_cell_variation_id=ic_cell_variation_id)
+config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, EV; reference_config_variation_id=config_variation_id, reference_rulesets_variation_id=rulesets_variation_id, reference_ic_cell_variation_id=ic_cell_variation_id)
 variation_ids = [pcvct.VariationIDs(config_variation_id, rulesets_variation_id, ic_cell_variation_id) for (config_variation_id, rulesets_variation_id, ic_cell_variation_id) in zip(config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids)]
 sampling = Sampling(config_folder, custom_code_folder;
     monad_min_length=monad_min_length,
