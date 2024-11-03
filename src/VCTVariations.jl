@@ -194,6 +194,7 @@ function setUpColumns(AV::Vector{<:AbstractVariation}, addColumnsByPathsFn::Func
     xml_paths = [getVariationXMLPath(av) for av in AV]
 
     static_column_names, varied_column_names = addColumnsByPathsFn(xml_paths)
+    println("Static column names: $static_column_names")
     return prepareAddNewFn(static_column_names, varied_column_names)
 end
 
@@ -716,7 +717,7 @@ function prepareRulesetsVariationFunctions(rulesets_collection_id::Int; referenc
     return addColumnsByPathsFn, prepareAddNewFn, addRowFn
 end
 
-function prepareICCellVariationFunctions(ic_cell_id::Int; reference_ic_cell_variation_id=0)
+function prepareICCellVariationFunctions(ic_cell_id::Int; reference_ic_cell_variation_id::Int=0)
     addColumnsByPathsFn = (paths) -> addICCellVariationColumns(ic_cell_id, paths)
     prepareAddNewFn = (static_column_names, varied_column_names) -> prepareAddNewICCellVariations(ic_cell_id, static_column_names, varied_column_names; reference_ic_cell_variation_id=reference_ic_cell_variation_id)
     addRowFn = (features, static_values, varied_values) -> addICCellVariationRow(ic_cell_id, features, static_values, varied_values)
