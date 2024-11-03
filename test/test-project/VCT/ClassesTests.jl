@@ -30,6 +30,7 @@ rulesets_variation_ids = [1, 1]
 ic_cell_variation_ids = [0, 0]
 sampling = Sampling(config_folder, custom_code_folder;
     monad_min_length=monad_min_length,
+    rulesets_collection_folder=rulesets_collection_folder,
     ic_cell_folder=ic_cell_folder,
     config_variation_ids=config_variation_ids,
     rulesets_variation_ids=rulesets_variation_ids,
