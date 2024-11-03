@@ -367,7 +367,13 @@ getRulesetsCollectionDB(rulesets_collection_folder::String) = joinpath(data_dir,
 getRulesetsCollectionDB(M::AbstractMonad) = getRulesetsCollectionDB(M.folder_names.rulesets_collection_folder)
 getRulesetsCollectionDB(rulesets_collection_id::Int) = getRulesetsCollectionFolder(rulesets_collection_id) |> getRulesetsCollectionDB
 
-getICCellDB(ic_cell_folder::String) = joinpath(data_dir, "inputs", "ics", "cells", ic_cell_folder, "ic_cell_variations.db") |> SQLite.DB
+function getICCellDB(ic_cell_folder::String)
+    path_to_folder = joinpath(data_dir, "inputs", "ics", "cells", ic_cell_folder)
+    if isfile(joinpath(path_to_folder, "cells.csv"))
+        return missing
+    end
+    return joinpath(path_to_folder, "ic_cell_variations.db") |> SQLite.DB
+end
 getICCellDB(ic_cell_id::Int) = getICCellFolder(ic_cell_id) |> getICCellDB
 getICCellDB(S::AbstractSampling) = getICCellDB(S.folder_names.ic_cell_folder)
 
@@ -461,9 +467,8 @@ getConfigVariationsTable(S::AbstractSampling; remove_constants::Bool=false) = ge
 getConfigVariationsTable(class_id::VCTClassID{<:AbstractSampling}; remove_constants::Bool = false) = getAbstractTrial(class_id) |> x -> getConfigVariationsTable(x; remove_constants = remove_constants)
 
 function getRulesetsVariationsTable(rulesets_variations_db::SQLite.DB, rulesets_variation_ids::AbstractVector{<:Integer}; remove_constants::Bool = false)
+    rulesets_variation_ids = filter(x -> x != -1, rulesets_variation_ids) # rulesets_variation_id = -1 means no ruleset being used
     query = constructSelectQuery("rulesets_variations", "WHERE rulesets_variation_id IN ($(join(rulesets_variation_ids,",")));")
-    println("query = $query")
-    println("rulesets_variations_db = $rulesets_variations_db")
     df = getVariationsTable(query, rulesets_variations_db; remove_constants = remove_constants)
     rename!(simpleRulesetsVariationNames, df)
     return df
@@ -477,6 +482,11 @@ function getICCellVariationsTable(ic_cell_variations_db::SQLite.DB, ic_cell_vari
     df = getVariationsTable(query, ic_cell_variations_db; remove_constants = remove_constants)
     rename!(simpleICCellVariationNames, df)
     return df
+end
+
+function getICCellVariationsTable(::Missing, ic_cell_variation_ids::AbstractVector{<:Integer}; remove_constants::Bool = false)
+    @assert all(x -> x == -1, ic_cell_variation_ids) "If the ic_cell_variation_id is missing, then all ic_cell_variation_ids must be -1."
+    return DataFrame(ICCellVarID=ic_cell_variation_ids)
 end
 
 getICCellVariationsTable(S::AbstractSampling; remove_constants::Bool=false) = getICCellVariationsTable(getICCellDB(S), getICCellVariationIDs(S); remove_constants = remove_constants)
