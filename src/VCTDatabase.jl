@@ -76,6 +76,7 @@ function createSchema()
     if isempty(config_folders)
         error("No folders in $(joinpath(data_dir, "inputs", "configs")) found. Add PhysiCell_settings.xml and rules files here.")
     end
+    patched_variation_id_to_config_variation_id = false
     for config_folder in config_folders
         patch_to_003 = false
         DBInterface.execute(db, "INSERT OR IGNORE INTO configs (folder_name) VALUES ('$(config_folder)');")
@@ -83,6 +84,11 @@ function createSchema()
             # patch for 0.0.2 to 0.0.3
             mv(joinpath(data_dir, "inputs", "configs", config_folder, "variations.db"), joinpath(data_dir, "inputs", "configs", config_folder, "config_variations.db"))
             patch_to_003 = true
+            if !patched_variation_id_to_config_variation_id
+                # rename column from variation_id to config_variation_id
+                DBInterface.execute(db, "ALTER TABLE simulations RENAME COLUMN variation_id TO config_variation_id;")
+                patched_variation_id_to_config_variation_id = true
+            end
         end
         db_config_variations = joinpath(data_dir, "inputs", "configs", config_folder, "config_variations.db") |> SQLite.DB
         if patch_to_003
