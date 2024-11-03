@@ -314,7 +314,7 @@ end
 
 ################## Simplify Name Functions ##################
 
-function simpleVariationNames(name::String)
+function simpleConfigVariationNames(name::String)
     if name == "config_variation_id"
         return "ConfigVarID"
     elseif name == "overall/max_time"

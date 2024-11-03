@@ -440,7 +440,7 @@ getICCellVariationIDs(sampling::Sampling) = [vid.ic_cell_variation_ids for vid i
 
 getAbstractTrial(class_id::VCTClassID) = class_id.id |> getVCTClassIDType(class_id)
 
-function getVariationsTable(query::String, db::SQLite.DB; remove_constants::Bool = false, simpleVariationNames=simpleVariationNames)
+function getVariationsTable(query::String, db::SQLite.DB; remove_constants::Bool = false)
     df = queryToDataFrame(query, db=db)
     if remove_constants && size(df, 1) > 1
         col_names = names(df)
@@ -453,7 +453,7 @@ end
 function getConfigVariationsTable(config_variations_db::SQLite.DB, config_variation_ids::AbstractVector{<:Integer}; remove_constants::Bool = false)
     query = constructSelectQuery("config_variations", "WHERE config_variation_id IN ($(join(config_variation_ids,",")));")
     df = getVariationsTable(query, config_variations_db; remove_constants = remove_constants)
-    rename!(simpleVariationNames, df)
+    rename!(simpleConfigVariationNames, df)
     return df
 end
 
@@ -462,6 +462,8 @@ getConfigVariationsTable(class_id::VCTClassID{<:AbstractSampling}; remove_consta
 
 function getRulesetsVariationsTable(rulesets_variations_db::SQLite.DB, rulesets_variation_ids::AbstractVector{<:Integer}; remove_constants::Bool = false)
     query = constructSelectQuery("rulesets_variations", "WHERE rulesets_variation_id IN ($(join(rulesets_variation_ids,",")));")
+    println("query = $query")
+    println("rulesets_variations_db = $rulesets_variations_db")
     df = getVariationsTable(query, rulesets_variations_db; remove_constants = remove_constants)
     rename!(simpleRulesetsVariationNames, df)
     return df
