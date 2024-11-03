@@ -687,6 +687,21 @@ function addRBDCombo(rbd_variation::RBDVariation, config_id::Int, rulesets_colle
     config_variation_ids = cdfsToVariations(cdfs[:, 1:length(pv.config_variations)], pv.config_variations, prepareConfigVariationFunctions(config_id, pv.config_variations; reference_config_variation_id=reference_config_variation_id)...)
     rulesets_variation_ids = cdfsToVariations(cdfs[:, length(pv.config_variations)+1:end], pv.rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)...)
     ic_cell_variation_ids = cdfsToVariations(cdfs[:, length(pv.config_variations)+length(pv.rulesets_variations)+1:end], pv.ic_cell_variations, prepareICCellVariationFunctions(ic_cell_id; reference_ic_cell_variation_id=reference_ic_cell_variation_id)...)
+    if isempty(pv.config_variations)
+        config_variation_ids = fill(reference_config_variation_id, size(cdfs,1))
+    else
+        config_variation_ids = cdfsToVariations(cdfs[:,1:length(pv.config_variations)], pv.config_variations, prepareConfigVariationFunctions(config_id, pv.config_variations; reference_config_variation_id=reference_config_variation_id)...)
+    end
+    if isempty(pv.rulesets_variations)
+        rulesets_variation_ids = fill(reference_rulesets_variation_id, size(cdfs,1))
+    else
+        rulesets_variation_ids = cdfsToVariations(cdfs[:,length(pv.config_variations)+1:end], pv.rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)...)
+    end
+    if isempty(pv.ic_cell_variations)
+        ic_cell_variation_ids = fill(reference_ic_cell_variation_id, size(cdfs,1))
+    else
+        ic_cell_variation_ids = cdfsToVariations(cdfs[:,length(pv.config_variations)+length(pv.rulesets_variations)+1:end], pv.ic_cell_variations, prepareICCellVariationFunctions(ic_cell_id; reference_ic_cell_variation_id=reference_ic_cell_variation_id)...)
+    end
     config_variations_matrix = createSortedRBDMatrix(config_variation_ids, S)
     rulesets_variations_matrix = createSortedRBDMatrix(rulesets_variation_ids, S)
     ic_cell_variations_matrix = createSortedRBDMatrix(ic_cell_variation_ids, S)
