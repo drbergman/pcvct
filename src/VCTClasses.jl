@@ -527,7 +527,7 @@ struct Trial <: AbstractTrial
         n_samplings = length(sampling_ids)
         n_folder_ids = length(folder_ids)
         n_folder_names = length(folder_names)
-        n_variations = length(config_variation_ids)
+        n_variations = length(variation_ids)
         if n_samplings != n_folder_ids || n_samplings != n_folder_names || n_samplings != n_variations # the negation of this is n_samplings == n_folder_ids && n_samplings == n_folder_names && n_samplings == n_variations, which obviously means they're all the same
             throw(ArgumentError("Number of samplings, folder ids, folder names, and variations must be the same"))
         end
