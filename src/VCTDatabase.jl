@@ -593,7 +593,7 @@ function appendVariations(df::DataFrame, unique_tuples::Vector{Tuple{String, Int
     return outerjoin(df, var_df, on = [folder_pair, id_pair])
 end
 
-function getSimulationsTable(T::AbstractTrial; remove_constants::Bool = true, sort_by::Vector{String}=String[], sort_ignore::Vector{String}=["SimID", "ConfigVarID", "RulesVarID", "ICCellVarID"])
+function getSimulationsTable(T::Union{AbstractTrial,AbstractArray{<:AbstractTrial}}; remove_constants::Bool = true, sort_by::Vector{String}=String[], sort_ignore::Vector{String}=["SimID", "ConfigVarID", "RulesVarID", "ICCellVarID"])
     query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(getSimulationIDs(T),",")));")
     return getSimulationsTableFromQuery(query; remove_constants = remove_constants, sort_by = sort_by, sort_ignore = sort_ignore)
 end

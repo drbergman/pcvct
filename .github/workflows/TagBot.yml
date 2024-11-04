@@ -21,6 +21,12 @@ permissions:
   security-events: read
   statuses: read
 jobs:
+  PrintActor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print GitHub Actor
+        run: |
+         echo "GitHub Actor: ${{ github.actor }}"
   TagBot:
     if: github.event_name == 'workflow_dispatch' || github.actor == 'JuliaTagBot'
     runs-on: ubuntu-latest
