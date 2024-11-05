@@ -15,6 +15,7 @@ include("./test-project/VCT/PrintHelpers.jl")
     if Sys.isapple()
         include("./test-project/VCT/MovieTests.jl")
     end
+    include("./test-project/VCT/PopulationTests.jl")
 
     # probably want this one last (it deletes/resets things)
     include("./test-project/VCT/DeletionTests.jl")
