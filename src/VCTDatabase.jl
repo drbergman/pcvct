@@ -104,6 +104,13 @@ function createSchema()
             DBInterface.execute(db_config_variations, "ALTER TABLE variations RENAME TO config_variations;")
             # rename column from variation_id to config_variation_id
             DBInterface.execute(db_config_variations, "ALTER TABLE config_variations RENAME COLUMN variation_id TO config_variation_id;")
+            index_df = DBInterface.execute(db_config_variations, "SELECT type,name,tbl_name,sql FROM sqlite_master WHERE type = 'index';") |> DataFrame
+            variations_index = index_df[!, :name] .== "variations_index"
+            variations_sql = index_df[variations_index, :sql][1]
+            cols = split(variations_sql, "(")[2]
+            cols = split(cols, ")")[1]
+            cols = split(cols, ",") .|> string
+            SQLite.createindex!(db_config_variations, "config_variations", "config_variations_index", cols; unique=true, ifnotexists=false)
             if isdir(joinpath(data_dir, "inputs", "configs", config_folder, "variations"))
                 mv(joinpath(data_dir, "inputs", "configs", config_folder, "variations"), joinpath(data_dir, "inputs", "configs", config_folder, "config_variations"))
                 for file in readdir(joinpath(data_dir, "inputs", "configs", config_folder, "config_variations"))
@@ -593,7 +600,7 @@ function appendVariations(df::DataFrame, unique_tuples::Vector{Tuple{String, Int
     return outerjoin(df, var_df, on = [folder_pair, id_pair])
 end
 
-function getSimulationsTable(T::AbstractTrial; remove_constants::Bool = true, sort_by::Vector{String}=String[], sort_ignore::Vector{String}=["SimID", "ConfigVarID", "RulesVarID", "ICCellVarID"])
+function getSimulationsTable(T::Union{AbstractTrial,AbstractArray{<:AbstractTrial}}; remove_constants::Bool = true, sort_by::Vector{String}=String[], sort_ignore::Vector{String}=["SimID", "ConfigVarID", "RulesVarID", "ICCellVarID"])
     query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(getSimulationIDs(T),",")));")
     return getSimulationsTableFromQuery(query; remove_constants = remove_constants, sort_by = sort_by, sort_ignore = sort_ignore)
 end

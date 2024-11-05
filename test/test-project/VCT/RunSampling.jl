@@ -5,14 +5,14 @@ filename = split(filename, "/") |> last
 str = "TESTING WITH $(filename)"
 hashBorderPrint(str)
 
-path_to_physicell_folder = "./PhysiCell" # path to PhysiCell folder
+path_to_physicell_folder = "./test-project/PhysiCell" # path to PhysiCell folder
 path_to_data_folder = "./test-project/data" # path to data folder
 initializeVCT(path_to_physicell_folder, path_to_data_folder)
 
 hashBorderPrint("DATABASE SUCCESSFULLY INITIALIZED!")
 
-config_folder = "default"
-rulesets_collection_folder = "default"
+config_folder = "0_template"
+rulesets_collection_folder = "0_template"
 ic_cell_folder = ""
 EV = ElementaryVariation[]
 push!(EV, ElementaryVariation(["overall","max_time"], [12.0]))
@@ -23,7 +23,7 @@ config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariati
 variation_ids = [pcvct.VariationIDs(config_variation_id, rulesets_variation_id, ic_cell_variation_id) for (config_variation_id, rulesets_variation_id, ic_cell_variation_id) in zip(config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids)]
 hashBorderPrint("DATABASE SUCCESSFULLY UPDATED!")
 
-custom_code_folder = "default"
+custom_code_folder = "0_template"
 config_variation_id = config_variation_ids[1]
 rulesets_variation_id = rulesets_variation_ids[1]
 ic_cell_variation_id = ic_cell_variation_ids[1]
@@ -66,14 +66,16 @@ hashBorderPrint("SIMULATION SUCCESSFULLY IN DB!")
 
 monad_min_length = 2
 
+cell_type = "default"
+
 EV = ElementaryVariation[]
-xml_path = [pcvct.cyclePath("default"); "phase_durations"; "duration:index:0"]
+xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:0"]
 push!(EV, ElementaryVariation(xml_path, [1.0, 2.0]))
-xml_path = [pcvct.cyclePath("default"); "phase_durations"; "duration:index:1"]
+xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:1"]
 push!(EV, ElementaryVariation(xml_path, [3.0, 4.0]))
-xml_path = [pcvct.cyclePath("default"); "phase_durations"; "duration:index:2"]
+xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:2"]
 push!(EV, ElementaryVariation(xml_path, [5.0, 6.0]))
-xml_path = [pcvct.cyclePath("default"); "phase_durations"; "duration:index:3"]
+xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:3"]
 push!(EV, ElementaryVariation(xml_path, [7.0, 8.0]))
 
 config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, EV; reference_config_variation_id=config_variation_id, reference_rulesets_variation_id=rulesets_variation_id, reference_ic_cell_variation_id=ic_cell_variation_id)

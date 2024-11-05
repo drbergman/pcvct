@@ -38,7 +38,7 @@ function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=miss
     success = false # create this here so the return statement handles it correctly
     try
         run(pipeline(cmd; stdout=joinpath(path_to_simulation_folder, "output.log"), stderr=joinpath(path_to_simulation_folder, "output.err")); wait=true)
-    catch
+    catch e
         println("\tSimulation $(simulation.id) failed.")
         # write the execution command to output.err
         open(joinpath(path_to_simulation_folder, "output.err"), "w+") do io

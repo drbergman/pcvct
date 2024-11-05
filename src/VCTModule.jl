@@ -180,6 +180,7 @@ getSimulationIDs(simulation::Simulation) = [simulation.id]
 getSimulationIDs(monad::Monad) = readMonadSimulationIDs(monad.id)
 getSimulationIDs(sampling::Sampling) = getSamplingSimulations(sampling.id)
 getSimulationIDs(trial::Trial) = getTrialSimulations(trial.id)
+getSimulationIDs(Ts::AbstractArray{<:AbstractTrial}) = vcat([getSimulationIDs(T) for T in Ts]...)
 
 function getTrialMonads(trial_id::Int)
     sampling_ids = readTrialSamplingIDs(trial_id)

@@ -5,26 +5,28 @@ filename = split(filename, "/") |> last
 str = "TESTING WITH $(filename)"
 hashBorderPrint(str)
 
-path_to_physicell_folder = "./PhysiCell" # path to PhysiCell folder
+path_to_physicell_folder = "./test-project/PhysiCell" # path to PhysiCell folder
 path_to_data_folder = "./test-project/data" # path to data folder
 initializeVCT(path_to_physicell_folder, path_to_data_folder)
 
-config_folder = "default"
+config_folder = "0_template"
 path_to_xml = "$(path_to_data_folder)/inputs/configs/$(config_folder)/PhysiCell_settings.xml"
 
+cell_type = "default"
+
 element_paths = [
-"default_celltype_path" => pcvct.cellDefinitionPath("default")
-"phenotype_path" => pcvct.phenotypePath("default")
+"default_celltype_path" => pcvct.cellDefinitionPath(cell_type)
+"phenotype_path" => pcvct.phenotypePath(cell_type)
 
-"cycle_path" => pcvct.cyclePath("default")
-"death_path" => pcvct.deathPath("default")
-"apoptosis_path" => pcvct.apoptosisPath("default")
-"necrosis_path" => pcvct.necrosisPath("default")
+"cycle_path" => pcvct.cyclePath(cell_type)
+"death_path" => pcvct.deathPath(cell_type)
+"apoptosis_path" => pcvct.apoptosisPath(cell_type)
+"necrosis_path" => pcvct.necrosisPath(cell_type)
 
-"motility_path" => pcvct.motilityPath("default")
+"motility_path" => pcvct.motilityPath(cell_type)
 
-"cell_interactions_path" => pcvct.cellInteractionsPath("default")
-"attack_rates_path" => pcvct.attackRatesPath("default")
+"cell_interactions_path" => pcvct.cellInteractionsPath(cell_type)
+"attack_rates_path" => pcvct.attackRatesPath(cell_type)
 ]
 
 for ep in element_paths
@@ -33,16 +35,16 @@ for ep in element_paths
 end
 
 node_paths = [
-"speed_path" => pcvct.motilityPath("default", "speed")
-"persistence_time_path" => pcvct.motilityPath("default", "persistence_time")
-"migration_bias_path" => pcvct.motilityPath("default", "migration_bias")
+"speed_path" => pcvct.motilityPath(cell_type, "speed")
+"persistence_time_path" => pcvct.motilityPath(cell_type, "persistence_time")
+"migration_bias_path" => pcvct.motilityPath(cell_type, "migration_bias")
 
-"live_phagocytosis_rates_path" => pcvct.cellInteractionsPath("default", "live_phagocytosis_rates")
+"live_phagocytosis_rates_path" => pcvct.cellInteractionsPath(cell_type, "live_phagocytosis_rates")
 
-"attack_rate_default_path" => pcvct.attackRatesPath("default", "default")
+"attack_rate_default_path" => pcvct.attackRatesPath(cell_type, cell_type)
 
-"custom_data_path" => pcvct.customDataPath("default", "sample")
-"custom_data_paths" => pcvct.customDataPath("default", ["sample"])
+"custom_data_path" => pcvct.customDataPath(cell_type, "sample")
+"custom_data_paths" => pcvct.customDataPath(cell_type, ["sample"])
 
 "number_of_cells_path" => pcvct.userParameterPath("number_of_cells")
 "number_of_cells_paths" => pcvct.userParameterPath(["number_of_cells"])
@@ -63,8 +65,8 @@ push!(EV, ElementaryVariation(["overall", "max_time"], [12.0]))
 
 
 monad_min_length = 2
-rulesets_collection_folder = "default"
-custom_code_folder = "default"
+rulesets_collection_folder = "0_template"
+custom_code_folder = "0_template"
 config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, EV)
 sampling = Sampling(config_folder, custom_code_folder;
     monad_min_length=monad_min_length,
@@ -97,8 +99,8 @@ new_config_variation_ids = pcvct.addGridConfigVariation(config_folder, EV; refer
 append!(config_variation_ids, new_config_variation_ids)
 
 EV = ElementaryVariation[]
-addMotilityVariationDimension!(EV, "default", "speed", [0.1, 1.0])
-addCustomDataVariationDimension!(EV, "default", "sample", [0.1, 1.0])
+addMotilityVariationDimension!(EV, cell_type, "speed", [0.1, 1.0])
+addCustomDataVariationDimension!(EV, cell_type, "sample", [0.1, 1.0])
 new_config_variation_ids = pcvct.addGridConfigVariation(config_folder, EV; reference_config_variation_id=reference_config_variation_id)
 append!(config_variation_ids, new_config_variation_ids)
 
@@ -133,7 +135,7 @@ n_success = runAbstractTrial(sampling; force_recompile=false)
 hashBorderPrint("SUCCESSFULLY VARIED RULESETS PARAMETERS!")
 
 EV = ElementaryVariation[]
-addMotilityVariationDimension!(EV, "default", "speed", [0.1, 1.0])
+addMotilityVariationDimension!(EV, cell_type, "speed", [0.1, 1.0])
 xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","signal:name:pressure","half_max"]
 push!(EV, ElementaryVariation(xml_path, [0.25, 0.75]))
 

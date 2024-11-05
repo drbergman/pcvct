@@ -5,15 +5,15 @@ filename = split(filename, "/") |> last
 str = "TESTING WITH $(filename)"
 hashBorderPrint(str)
 
-path_to_physicell_folder = "./PhysiCell" # path to PhysiCell folder
+path_to_physicell_folder = "./test-project/PhysiCell" # path to PhysiCell folder
 path_to_data_folder = "./test-project/data" # path to data folder
 initializeVCT(path_to_physicell_folder, path_to_data_folder)
 
 force_recompile = false
 
-config_folder = "default"
-rulesets_collection_folder = "default"
-custom_code_folder = "default"
+config_folder = "0_template"
+rulesets_collection_folder = "0_template"
+custom_code_folder = "0_template"
 ic_substrate_folder = ""
 ic_ecm_folder = ""
 
@@ -27,9 +27,11 @@ reference_config_variation_id = reference_config_variation_id[1]
 reference_rulesets_variation_id = reference_rulesets_variation_id[1]
 reference_ic_cell_variation_id = reference_ic_cell_variation_id[1]
 
+cell_type = "default"
+
 DV = DistributedVariation[]
 for index in 0:3
-    local xml_path = [pcvct.cyclePath("default"); "phase_durations"; "duration:index:$(index)"]
+    local xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:$(index)"]
     lower_bound = 250.0 - index*50.0
     upper_bound = 350.0 + index*50.0
     push!(DV, UniformDistributedVariation(xml_path, lower_bound, upper_bound))
@@ -42,7 +44,7 @@ folder_ids = pcvct.AbstractSamplingIDs(folder_names)
 
 @test folder_names == pcvct.AbstractSamplingFolders(folder_ids)
 
-gs_fn(simulation_id::Int) = finalPopulationCount(simulation_id)["default"]
+gs_fn(simulation_id::Int) = finalPopulationCount(simulation_id)[cell_type]
 
 moat_sampling = sensitivitySampling(MOAT(n_points), monad_min_length, folder_names, DV; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
 sobol_sampling = sensitivitySampling(Sobolʼ(n_points), monad_min_length, folder_names, DV; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])

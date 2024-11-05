@@ -143,7 +143,7 @@ function addRow(db_columns::SQLite.DB, table_name::String, id_name::String, tabl
     new_added = length(new_id)==1
     if  !new_added
         query = constructSelectQuery(table_name, "WHERE ($(table_features))=($(values))"; selection=id_name)
-        new_id = queryToDataFrame(query, db=db_columns) |> x->x[!,1]
+        new_id = queryToDataFrame(query; db=db_columns, is_row=true) |> x->x[!,1]
     end
     return new_id[1]
 end
