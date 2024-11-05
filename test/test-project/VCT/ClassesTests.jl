@@ -7,14 +7,14 @@ hashBorderPrint(str)
 
 pcvct.initializeDatabase()
 
-path_to_physicell_folder = "./PhysiCell" # path to PhysiCell folder
+path_to_physicell_folder = "./test-project/PhysiCell" # path to PhysiCell folder
 path_to_data_folder = "./test-project/data" # path to data folder
 initializeVCT(path_to_physicell_folder, path_to_data_folder)
 
-config_folder = "default"
-custom_code_folder = "default"
-rulesets_collection_folder = "default"
-ic_cell_folder = "default"
+config_folder = "0_template"
+custom_code_folder = "0_template"
+rulesets_collection_folder = "0_template"
+ic_cell_folder = "0_template"
 config_variation_id = 0
 rulesets_variation_id = 0
 variation_ids = pcvct.VariationIDs(config_variation_id, rulesets_variation_id, ic_cell_variation_id)

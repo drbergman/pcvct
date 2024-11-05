@@ -52,7 +52,7 @@ function setUpInputs(data_dir::String, physicell_dir::String, template_as_defaul
 
     mkpath(joinpath(inputs_dir, "configs"))
     mkpath(joinpath(inputs_dir, "custom_codes"))
-    for ic in ["cells","substrates","ecms"]
+    for ic in ["cells", "substrates", "ecms"]
         mkpath(joinpath(inputs_dir, "ics", ic))
     end
     mkpath(joinpath(inputs_dir, "rulesets_collections"))

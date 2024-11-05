@@ -73,22 +73,6 @@ jobs:
       with:
         update: true
         install: mingw-w64-x86_64-binutils mingw-w64-x86_64-gcc mingw-w64-x86_64-headers-git mingw-w64-x86_64-gcc-libs mingw-w64-x86_64-libwinpthread-git mingw-w64-x86_64-lapack mingw-w64-x86_64-openblas mingw-w64-x86_64-libxml2 mingw-w64-x86_64-bzip2 mingw-w64-x86_64-python mingw-w64-x86_64-python-zstandard mingw-w64-x86_64-python-cffi make bison flex mingw-w64-x86_64-ca-certificates mingw-w64-x86_64-diffutils
-      
-    - name: Set up test project
-      run: |
-        mkdir -p ./test/test-project/data/inputs/configs/default
-        cp ./test/PhysiCell/sample_projects/template/config/PhysiCell_settings.xml ./test/test-project/data/inputs/configs/default/PhysiCell_settings.xml
-        mkdir -p ./test/test-project/data/inputs/custom_codes/default
-        cp ./test/PhysiCell/sample_projects/template/main.cpp ./test/test-project/data/inputs/custom_codes/default/main.cpp
-        cp ./test/PhysiCell/sample_projects/template/Makefile ./test/test-project/data/inputs/custom_codes/default/Makefile
-        cp -r ./test/PhysiCell/sample_projects/template/custom_modules ./test/test-project/data/inputs/custom_codes/default/custom_modules
-        mkdir -p ./test/test-project/data/inputs/rulesets_collections/default
-        touch ./test/test-project/data/inputs/rulesets_collections/default/base_rulesets.csv
-        echo 'default,pressure,decreases,cycle entry,0,0.5,4,0' >> ./test/test-project/data/inputs/rulesets_collections/default/base_rulesets.csv
-        mkdir -p ./test/test-project/data/inputs/ics/cells/default
-        echo 'x,y,z,type' >> ./test/test-project/data/inputs/ics/cells/default/cells.csv
-        echo '0,0,0,default' >> ./test/test-project/data/inputs/ics/cells/default/cells.csv
-        echo 'Template project files are in place within ./test/test-project/data/inputs'
     - uses: julia-actions/setup-julia@v2
       with:
         version: ${{ matrix.julia-version }}

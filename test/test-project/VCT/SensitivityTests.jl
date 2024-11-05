@@ -5,15 +5,15 @@ filename = split(filename, "/") |> last
 str = "TESTING WITH $(filename)"
 hashBorderPrint(str)
 
-path_to_physicell_folder = "./PhysiCell" # path to PhysiCell folder
+path_to_physicell_folder = "./test-project/PhysiCell" # path to PhysiCell folder
 path_to_data_folder = "./test-project/data" # path to data folder
 initializeVCT(path_to_physicell_folder, path_to_data_folder)
 
 force_recompile = false
 
-config_folder = "default"
-rulesets_collection_folder = "default"
-custom_code_folder = "default"
+config_folder = "0_template"
+rulesets_collection_folder = "0_template"
+custom_code_folder = "0_template"
 ic_substrate_folder = ""
 ic_ecm_folder = ""
 
