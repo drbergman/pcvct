@@ -111,6 +111,8 @@ jobs:
         with:
           version: '1'
       - uses: julia-actions/cache@v2
+      - name: Add PCVCTRegistry
+        run: julia -e 'import Pkg; Pkg.Registry.add("General"); Pkg.Registry.add(Pkg.RegistrySpec(url="https://github.com/drbergman/PCVCTRegistry.git"))'
       - name: Configure doc environment
         shell: julia --project=docs --color=yes {0}
         run: |
