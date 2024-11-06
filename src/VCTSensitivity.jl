@@ -102,12 +102,12 @@ function perturbICCellVariation(av::AbstractVariation, ic_cell_variation_id::Int
     return makePerturbation(av, base_value, addFn)
 end
 
-function makePerturbation(av::AbstractVariation, base_value, addFn::Function)
+function makePerturbation(av::AbstractVariation, base_value::Real, addFn::Function)
     cdf_at_base = variationCDF(av, base_value)
     dcdf = cdf_at_base < 0.5 ? 0.5 : -0.5
     new_value = getVariationValues(av; cdf=cdf_at_base + dcdf)
 
-    new_ev = ElementaryVariation(getVariationXMLPath(av), [new_value])
+    new_ev = ElementaryVariation(getVariationXMLPath(av), new_value)
 
     new_variation_id = addFn(new_ev)
     @assert length(new_variation_id) == 1 "Only doing one perturbation at a time"

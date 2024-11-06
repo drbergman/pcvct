@@ -58,16 +58,16 @@ end
 
 getVariationDataType(av::AbstractVariation) = error("getVariationDataType not defined for $(typeof(av))")
 
-function variationCDF(ev::ElementaryVariation, value)
+function variationCDF(ev::ElementaryVariation, value::Real)
     if !(value in ev.values)
         error("Value not in elementary variation values.")
     end
     return (findfirst(isequal(value), ev.values) - 1) / (length(ev.values) - 1)
 end
 
-variationCDF(dv::DistributedVariation, value) = cdf(dv.distribution, value)
+variationCDF(dv::DistributedVariation, value::Real) = cdf(dv.distribution, value)
 
-variationCDF(av::AbstractVariation, value) = error("variationCDF not defined for $(typeof(av))")
+variationCDF(av::AbstractVariation, value::Real) = error("variationCDF not defined for $(typeof(av))")
 
 ################## Database Interface Functions ##################
 
