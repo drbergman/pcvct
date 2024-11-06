@@ -14,6 +14,7 @@ force_recompile = false
 config_folder = "0_template"
 rulesets_collection_folder = "0_template"
 custom_code_folder = "0_template"
+ic_cell_folder = ""
 ic_substrate_folder = ""
 ic_ecm_folder = ""
 
@@ -29,7 +30,7 @@ reference_ic_cell_variation_id = reference_ic_cell_variation_id[1]
 
 cell_type = "default"
 
-AV = DistributedVariation[]
+AV = AbstractVariation[]
 for index in 0:1
     local xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:$(index)"]
     lower_bound = 250.0 - index * 50.0
