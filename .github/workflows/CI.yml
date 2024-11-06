@@ -80,6 +80,8 @@ jobs:
     - name: Set environment variable PHYSICELL_CPP
       run: echo "PHYSICELL_CPP=${{ matrix.compiler }}" >> $GITHUB_ENV
     - uses: julia-actions/cache@v2
+    - name: Add PCVCTRegistry
+      run: julia -e 'using Pkg; pkg"registry add General https://github.com/drbergman/PCVCTRegistry.git"'
     - uses: julia-actions/julia-buildpkg@v1
     - name: Run all tests
       uses: julia-actions/julia-runtest@v1
