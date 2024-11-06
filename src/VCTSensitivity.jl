@@ -105,7 +105,7 @@ end
 function makePerturbation(av::AbstractVariation, base_value::Real, addFn::Function)
     cdf_at_base = variationCDF(av, base_value)
     dcdf = cdf_at_base < 0.5 ? 0.5 : -0.5
-    new_value = getVariationValues(av; cdf=cdf_at_base + dcdf)
+    new_value = getVariationValues(av, cdf_at_base + dcdf) # note, this is a vector of values
 
     new_ev = ElementaryVariation(getVariationXMLPath(av), new_value)
 
