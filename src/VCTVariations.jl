@@ -31,8 +31,11 @@ function getVariationValues(ev::ElementaryVariation; cdf=missing)
     if ismissing(cdf)
         return ev.values
     end
+    if cdf isa Real
+        cdf = [cdf]
+    end
     index = floor.(Int, cdf * length(ev.values)) .+ 1
-    index[index .== length(ev.values)+1] .= length(ev.values) # if cdf = 1, index = length(ev.values)+1, so we set it to length(ev.values)
+    index[index.==(length(ev.values)+1)] .= length(ev.values) # if cdf = 1, index = length(ev.values)+1, so we set it to length(ev.values)
     return ev.values[index]
 end
 
