@@ -27,22 +27,23 @@ function NormalDistributedVariation(xml_path::Vector{String}, mu::T, sigma::T; l
     return DistributedVariation(xml_path, truncated(Normal(mu, sigma), lb, ub))
 end
 
-getVariationValues(ev::ElementaryVariation) = ev.values
-function getVariationValues(ev::ElementaryVariation, cdf::Vector{<:Real})
+function getVariationValues(ev::ElementaryVariation; cdf=missing)
+    if ismissing(cdf)
+        return ev.values
+    end
     index = floor.(Int, cdf * length(ev.values)) .+ 1
     index[index .== length(ev.values)+1] .= length(ev.values) # if cdf = 1, index = length(ev.values)+1, so we set it to length(ev.values)
     return ev.values[index]
 end
 
-getVariationValues(ev::ElementaryVariation, cdf::Real) = getVariationValues(ev, [cdf])
-
-function getVariationValues(dv::DistributedVariation, cdf::Vector{<:Real})
+function getVariationValues(dv::DistributedVariation; cdf=missing)
+    if ismissing(cdf)
+        error("A cdf must be provided for a DistributedVariation.")
+    end
     return map(Base.Fix1(quantile, dv.distribution), cdf)
 end
 
-getVariationValues(dv::DistributedVariation, cdf::Real) = getVariationValues(dv, [cdf])
-
-getVariationValues(av::AbstractVariation) = error("getVariationValues not defined for $(typeof(av))")
+getVariationValues(av::AbstractVariation; cdf=missing) = error("getVariationValues not defined for $(typeof(av))")
 
 function getVariationDataType(ev::ElementaryVariation)
     return typeof(ev).parameters[1] # typeof(ev).parameters[1] is the type parameter T in the definition of ElementaryVariation{T}
@@ -710,7 +711,7 @@ function cdfsToVariations(cdfs::AbstractMatrix{Float64}, AV::Vector{<:AbstractVa
     n = size(cdfs, 1)
     new_values = []
     for (i, av) in enumerate(AV)
-        new_value = getVariationValues(av, cdfs[:,i]) # ok, all the new values for the given parameter
+        new_value = getVariationValues(av; cdf=cdfs[:,i]) # ok, all the new values for the given parameter
         push!(new_values, new_value)
     end
 
