@@ -37,9 +37,9 @@ for index in 0:1
     upper_bound = 350.0 + index * 50.0
     push!(AV, UniformDistributedVariation(xml_path, lower_bound, upper_bound))
 end
-xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:2"]
-vals = [100.0, 200.0, 300.0]
-push!(AV, ElementaryVariation(xml_path, vals))
+# xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:2"]
+# vals = [100.0, 200.0, 300.0]
+# push!(AV, ElementaryVariation(xml_path, vals))
 
 xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:3"]
 mu = 300.0
