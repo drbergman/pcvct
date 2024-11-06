@@ -1,4 +1,4 @@
-export addLHSConfigVariation, addLHSRulesetsVariation
+export AbstractVariation, ElementaryVariation, DistributedVariation, addLHSConfigVariation, addLHSRulesetsVariation
 export GridVariation, LHSVariation, addVariations
 
 ################## Abstract Variations ##################
@@ -9,7 +9,7 @@ struct ElementaryVariation{T} <: AbstractVariation
     values::Vector{T}
 end
 
-ElementaryVariation{T}(xml_path::Vector{String}, value::T) where T = ElementaryVariation{T}(xml_path, [value])
+ElementaryVariation(xml_path::Vector{String}, value::T) where T = ElementaryVariation{T}(xml_path, [value])
 
 struct DistributedVariation <: AbstractVariation
     xml_path::Vector{String}
@@ -24,26 +24,25 @@ function UniformDistributedVariation(xml_path::Vector{String}, lb::T, ub::T) whe
 end
 
 function NormalDistributedVariation(xml_path::Vector{String}, mu::T, sigma::T; lb::Real=-Inf, ub::Real=Inf) where {T<:Real}
-    return DistributedVariation(xml_path, Truncated(Normal(mu, sigma), lb, ub))
+    return DistributedVariation(xml_path, truncated(Normal(mu, sigma), lb, ub))
 end
 
-function getVariationValues(ev::ElementaryVariation; cdf=missing)
-    if ismissing(cdf)
-        return ev.values
-    end
+getVariationValues(ev::ElementaryVariation) = ev.values
+function getVariationValues(ev::ElementaryVariation, cdf::Vector{<:Real})
     index = floor.(Int, cdf * length(ev.values)) .+ 1
     index[index .== length(ev.values)+1] .= length(ev.values) # if cdf = 1, index = length(ev.values)+1, so we set it to length(ev.values)
     return ev.values[index]
 end
 
-function getVariationValues(dv::DistributedVariation; cdf=missing)
-    if ismissing(cdf)
-        error("A cdf must be provided for a DistributedVariation.")
-    end
+getVariationValues(ev::ElementaryVariation, cdf::Real) = getVariationValues(ev, [cdf])
+
+function getVariationValues(dv::DistributedVariation, cdf::Vector{<:Real})
     return map(Base.Fix1(quantile, dv.distribution), cdf)
 end
 
-getVariationValues(av::AbstractVariation; cdf=missing) = error("getVariationValues not defined for $(typeof(av))")
+getVariationValues(dv::DistributedVariation, cdf::Real) = getVariationValues(dv, [cdf])
+
+getVariationValues(av::AbstractVariation) = error("getVariationValues not defined for $(typeof(av))")
 
 function getVariationDataType(ev::ElementaryVariation)
     return typeof(ev).parameters[1] # typeof(ev).parameters[1] is the type parameter T in the definition of ElementaryVariation{T}
@@ -106,7 +105,7 @@ function addConfigVariationColumns(config_id::Int, xml_paths::Vector{Vector{Stri
     dataTypeRulesFn = (i, _) -> begin
         if variable_types[i] == Bool
             "TEXT"
-        elseif variable_types[i] <: Int
+        elseif variable_types[i] <: Integer
             "INT"
         elseif variable_types[i] <: Real
             "REAL"
@@ -444,36 +443,36 @@ function orthogonalLHS(k::Int, d::Int)
     return lhs_inds
 end
 
-function orthogonalLHS_relaxed(k::Int, d::Int)
-    # I have this here because this technically gives all possible orthogonal lhs samples, but my orthogonalLHS gives a more uniform LHS
-    n = k^d
-    lhs_inds = zeros(Int, (n, d))
-    for i in 1:d
-        bin_size = n / (k^(i - 1)) |> ceil |> Int # number of sampled points grouped by all previous dims
-        n_bins = k^(i - 1) # number of bins in this dimension
-        if i == 1
-            lhs_inds[:, 1] = 1:n
-            continue
-        else
-            bin_inds_gps = [(j - 1) * bin_size .+ (1:bin_size) |> collect for j in 1:n_bins] # the indexes in y corresponding to each of the bins (this relies on the sorting step below to easily find which points are currently in the same box and need to be separated along the ith dimension)
-            for pt_ind = 1:k
-                y_vals = shuffle((pt_ind - 1) * Int(n / k) .+ (1:Int(n / k)))
-                inds = zeros(Int, Int(n / k))
-                for (j, bin_inds) in enumerate(bin_inds_gps)
-                    for s in 1:Int(n / k^(i))
-                        rand_ind_of_ind = rand(1:length(bin_inds))
-                        rand_ind = popat!(bin_inds, rand_ind_of_ind) # random value remaining in bin, remove it so we don't pick it again
-                        inds[(j-1)*Int(n / k^(i))+s] = rand_ind # record the index
-                    end
-                end
-                lhs_inds[inds, i] = y_vals
-            end
-        end
-        lhs_inds[:, 1:i] = sortslices(lhs_inds[:, 1:i], dims=1, by=x -> (x ./ (n / k) .|> ceil .|> Int)) # sort the found values so that sampled points in the same box upon projection into the 1:i dims are adjacent
-    end
-end
+# function orthogonalLHS_relaxed(k::Int, d::Int)
+#     # I have this here because this technically gives all possible orthogonal lhs samples, but my orthogonalLHS gives a more uniform LHS
+#     n = k^d
+#     lhs_inds = zeros(Int, (n, d))
+#     for i in 1:d
+#         bin_size = n / (k^(i - 1)) |> ceil |> Int # number of sampled points grouped by all previous dims
+#         n_bins = k^(i - 1) # number of bins in this dimension
+#         if i == 1
+#             lhs_inds[:, 1] = 1:n
+#             continue
+#         else
+#             bin_inds_gps = [(j - 1) * bin_size .+ (1:bin_size) |> collect for j in 1:n_bins] # the indexes in y corresponding to each of the bins (this relies on the sorting step below to easily find which points are currently in the same box and need to be separated along the ith dimension)
+#             for pt_ind = 1:k
+#                 y_vals = shuffle((pt_ind - 1) * Int(n / k) .+ (1:Int(n / k)))
+#                 inds = zeros(Int, Int(n / k))
+#                 for (j, bin_inds) in enumerate(bin_inds_gps)
+#                     for s in 1:Int(n / k^(i))
+#                         rand_ind_of_ind = rand(1:length(bin_inds))
+#                         rand_ind = popat!(bin_inds, rand_ind_of_ind) # random value remaining in bin, remove it so we don't pick it again
+#                         inds[(j-1)*Int(n / k^(i))+s] = rand_ind # record the index
+#                     end
+#                 end
+#                 lhs_inds[inds, i] = y_vals
+#             end
+#         end
+#         lhs_inds[:, 1:i] = sortslices(lhs_inds[:, 1:i], dims=1, by=x -> (x ./ (n / k) .|> ceil .|> Int)) # sort the found values so that sampled points in the same box upon projection into the 1:i dims are adjacent
+#     end
+# end
 
-function generateLHSCDFs(n::Int, d::Int; add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG=rng, orthogonalize::Bool=orthogonalize)
+function generateLHSCDFs(n::Int, d::Int; add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG=rng, orthogonalize::Bool=true)
     cdfs = (Float64.(1:n) .- (add_noise ? rand(rng, Float64, n) : 0.5)) / n # permute below for each parameter separately
     k = n ^ (1 / d) |> round |> Int
     if orthogonalize && (n == k^d)
@@ -711,7 +710,7 @@ function cdfsToVariations(cdfs::AbstractMatrix{Float64}, AV::Vector{<:AbstractVa
     n = size(cdfs, 1)
     new_values = []
     for (i, av) in enumerate(AV)
-        new_value = getVariationValues(av; cdf=cdfs[:,i]) # ok, all the new values for the given parameter
+        new_value = getVariationValues(av, cdfs[:,i]) # ok, all the new values for the given parameter
         push!(new_values, new_value)
     end
 

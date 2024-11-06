@@ -1,4 +1,4 @@
-export ElementaryVariation, DistributedVariation, addDomainVariationDimension!, addCustomDataVariationDimension!, addAttackRateVariationDimension!, addMotilityVariationDimension!
+export addDomainVariationDimension!, addCustomDataVariationDimension!, addAttackRateVariationDimension!, addMotilityVariationDimension!
 export UniformDistributedVariation, NormalDistributedVariation
 
 

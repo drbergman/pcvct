@@ -56,7 +56,7 @@ for (i, xml_path) in enumerate(values(node_paths))
         if xml_path[end] == "number_of_cells"
             push!(EV, ElementaryVariation(xml_path, [1, 2]))
         else
-            push!(EV, ElementaryVariation(xml_path, [float(i), float(i)+0.5]))
+            push!(EV, ElementaryVariation(xml_path, float(i)))
         end
     end
 end
