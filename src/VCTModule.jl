@@ -3,6 +3,7 @@ export initializeVCT, resetDatabase, runAbstractTrial, readTrialSamplingIDs, get
 
 using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables, Distributions, Statistics, Random, QuasiMonteCarlo, Sobol
 using MAT # files for VCTLoader.jl
+using PhysiCellXMLRules
 
 # put these first as they define classes the rest rely on
 include("VCTClasses.jl")
@@ -26,11 +27,7 @@ include("VCTAnalysis.jl")
 
 include("VCTPhysiCellStudio.jl")
 
-include("../PhysiCell-XMLRules/src/PhysiCell_XMLRules.jl")
-
 VERSION >= v"1.11" && include("public.julia")
-
-using .PhysiCell_XMLRules
 
 physicell_dir::String = abspath("PhysiCell")
 data_dir::String = abspath("data")

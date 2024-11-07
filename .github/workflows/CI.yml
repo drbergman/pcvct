@@ -80,6 +80,8 @@ jobs:
     - name: Set environment variable PHYSICELL_CPP
       run: echo "PHYSICELL_CPP=${{ matrix.compiler }}" >> $GITHUB_ENV
     - uses: julia-actions/cache@v2
+    - name: Add PCVCTRegistry
+      run: julia -e 'import Pkg; Pkg.Registry.add("General"); Pkg.Registry.add(Pkg.RegistrySpec(url="https://github.com/drbergman/PCVCTRegistry.git"))'
     - uses: julia-actions/julia-buildpkg@v1
     - name: Run all tests
       uses: julia-actions/julia-runtest@v1
@@ -109,6 +111,8 @@ jobs:
         with:
           version: '1'
       - uses: julia-actions/cache@v2
+      - name: Add PCVCTRegistry
+        run: julia -e 'import Pkg; Pkg.Registry.add("General"); Pkg.Registry.add(Pkg.RegistrySpec(url="https://github.com/drbergman/PCVCTRegistry.git"))'
       - name: Configure doc environment
         shell: julia --project=docs --color=yes {0}
         run: |
