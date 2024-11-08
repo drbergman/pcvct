@@ -116,7 +116,7 @@ function upgradeToV0_0_3(auto_upgrade::Bool)
     warning_msg = """
     \t- Upgrading to version 0.0.3...
     \nWARNING: Upgrading to version 0.0.3 will change the database schema.
-    See info at https://github.com/drbergman/pcvct?tab=readme-ov-file#to-v0.0.3
+    See info at https://github.com/drbergman/pcvct?tab=readme-ov-file#to-v003
 
     ------IF ANOTHER INSTANCE OF PCVCT IS USING THIS DATABASE, PLEASE CLOSE IT BEFORE PROCEEDING.------
 
