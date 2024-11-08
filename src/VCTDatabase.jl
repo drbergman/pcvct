@@ -6,41 +6,31 @@ db::SQLite.DB = SQLite.DB()
 
 function initializeDatabase(path_to_database::String)
     println(rpad("Path to database:", 20, ' ') * path_to_database)
+    is_new_db = !isfile(path_to_database)
     global db = SQLite.DB(path_to_database)
-    return createSchema()
+    SQLite.transaction(db, "EXCLUSIVE")
+    success = createSchema(is_new_db)
+    SQLite.commit(db)
+    return success
 end
 
 function initializeDatabase()
     global db = SQLite.DB()
-    return createSchema()
+    is_new_db = true
+    return createSchema(is_new_db)
 end
 
-function patchBaseRulesetsVariationNotInDB(rulesets_collection_folder::String, db_rulesets_variations::SQLite.DB)
-    # then we are adding in this row after the db was made (so that means the db was made before this got patched)
-    column_names = queryToDataFrame("PRAGMA table_info(rulesets_variations);"; db=db_rulesets_variations) |> x->x[!,:name]
-    filter!(x -> x != "rulesets_variation_id", column_names) 
-    path_to_rulesets_collections_folder = joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder)
-    path_to_xml = joinpath(path_to_rulesets_collections_folder, "base_rulesets.xml")
-    if !isfile(path_to_xml)
-        writeRules(path_to_xml, joinpath(path_to_rulesets_collections_folder, "base_rulesets.csv"))
-    end
-    xml_doc = openXML(path_to_xml)
-    for column_name in column_names
-        xml_path = columnNameToXMLPath(column_name)
-        base_value = getField(xml_doc, xml_path)
-        query = "UPDATE rulesets_variations SET '$(column_name)'=$(base_value) WHERE rulesets_variation_id=0;"
-        DBInterface.execute(db_rulesets_variations, query)
-    end
-end
-
-function createSchema()
+function createSchema(is_new_db::Bool)
     # make sure necessary directories are present
     data_dir_contents = readdir(joinpath(data_dir, "inputs"); sort=false)
-    if !("custom_codes" in data_dir_contents)
-        error("No $(joinpath(data_dir, "inputs", "custom_codes")) found. This is where to put the folders for custom_modules, main.cpp, and Makefile.")
+    if !necessaryInputsPresent(data_dir_contents)
+        return false
     end
-    if !("configs" in data_dir_contents)
-        error("No $(joinpath(data_dir, "inputs", "configs")) found. This is where to put the folders for config files and rules files.")
+
+    # start with pcvct version info
+    if !resolvePCVCTVersion(is_new_db)
+        println("Could not successfully upgrade database. Please check the logs for more information.")
+        return false
     end
 
     # initialize and populate custom_codes table
@@ -53,7 +43,8 @@ function createSchema()
         
     custom_codes_folders = readdir(joinpath(data_dir, "inputs", "custom_codes"); sort=false) |> filter(x->isdir(joinpath(data_dir, "inputs", "custom_codes", x)))
     if isempty(custom_codes_folders)
-        error("No folders in $(joinpath(data_dir, "inputs", "custom_codes")) found. Add custom_modules, main.cpp, and Makefile to a folder here to move forward.")
+        println("No folders in $(joinpath(data_dir, "inputs", "custom_codes")) found. Add custom_modules, main.cpp, and Makefile to a folder here to move forward.")
+        return false
     end
     for custom_codes_folder in custom_codes_folders
         DBInterface.execute(db, "INSERT OR IGNORE INTO custom_codes (folder_name) VALUES ('$(custom_codes_folder)');")
@@ -74,50 +65,12 @@ function createSchema()
         
     config_folders = readdir(joinpath(data_dir, "inputs", "configs"); sort=false) |> filter(x -> isdir(joinpath(data_dir, "inputs", "configs", x)))
     if isempty(config_folders)
-        error("No folders in $(joinpath(data_dir, "inputs", "configs")) found. Add PhysiCell_settings.xml and rules files here.")
+        println("No folders in $(joinpath(data_dir, "inputs", "configs")) found. Add PhysiCell_settings.xml and rules files here.")
+        return false
     end
-    patched_variation_id_to_config_variation_id = false
     for config_folder in config_folders
-        patch_to_003 = false
         DBInterface.execute(db, "INSERT OR IGNORE INTO configs (folder_name) VALUES ('$(config_folder)');")
-        if isfile(joinpath(data_dir, "inputs", "configs", config_folder, "variations.db"))
-            # patch for 0.0.2 to 0.0.3
-            mv(joinpath(data_dir, "inputs", "configs", config_folder, "variations.db"), joinpath(data_dir, "inputs", "configs", config_folder, "config_variations.db"))
-            patch_to_003 = true
-            if !patched_variation_id_to_config_variation_id
-                # rename column from variation_id to config_variation_id
-                DBInterface.execute(db, "ALTER TABLE simulations RENAME COLUMN variation_id TO config_variation_id;")
-                DBInterface.execute(db, "ALTER TABLE monads RENAME COLUMN variation_id TO config_variation_id;")
-                DBInterface.execute(db, "ALTER TABLE simulations ADD COLUMN ic_cell_variation_id INTEGER;")
-                # set all these new columns to -1 if ic_cell_id is -1 and to 0 if ic_cell_id is not -1
-                DBInterface.execute(db, "UPDATE simulations SET ic_cell_variation_id=CASE WHEN ic_cell_id=-1 THEN -1 ELSE 0 END;")
-                DBInterface.execute(db, "ALTER TABLE monads ADD COLUMN ic_cell_variation_id INTEGER;")
-                # drop the previous unique constraint on monads
-                DBInterface.execute(db, "CREATE TABLE monads_temp AS SELECT * FROM monads;")
-                DBInterface.execute(db, "DROP TABLE monads;")
-                patched_variation_id_to_config_variation_id = true
-            end
-        end
         db_config_variations = joinpath(data_dir, "inputs", "configs", config_folder, "config_variations.db") |> SQLite.DB
-        if patch_to_003
-            # rename table from variations to config_variations
-            DBInterface.execute(db_config_variations, "ALTER TABLE variations RENAME TO config_variations;")
-            # rename column from variation_id to config_variation_id
-            DBInterface.execute(db_config_variations, "ALTER TABLE config_variations RENAME COLUMN variation_id TO config_variation_id;")
-            index_df = DBInterface.execute(db_config_variations, "SELECT type,name,tbl_name,sql FROM sqlite_master WHERE type = 'index';") |> DataFrame
-            variations_index = index_df[!, :name] .== "variations_index"
-            variations_sql = index_df[variations_index, :sql][1]
-            cols = split(variations_sql, "(")[2]
-            cols = split(cols, ")")[1]
-            cols = split(cols, ",") .|> string
-            SQLite.createindex!(db_config_variations, "config_variations", "config_variations_index", cols; unique=true, ifnotexists=false)
-            if isdir(joinpath(data_dir, "inputs", "configs", config_folder, "variations"))
-                mv(joinpath(data_dir, "inputs", "configs", config_folder, "variations"), joinpath(data_dir, "inputs", "configs", config_folder, "config_variations"))
-                for file in readdir(joinpath(data_dir, "inputs", "configs", config_folder, "config_variations"))
-                    mv(joinpath(data_dir, "inputs", "configs", config_folder, "config_variations", file), joinpath(data_dir, "inputs", "configs", config_folder, "config_variations", "config_$(file)"))
-                end
-            end
-        end
         createPCVCTTable("config_variations", "config_variation_id INTEGER PRIMARY KEY"; db=db_config_variations)
         DBInterface.execute(db_config_variations, "INSERT OR IGNORE INTO config_variations (config_variation_id) VALUES(0);")
     end
@@ -136,10 +89,7 @@ function createSchema()
             DBInterface.execute(db, "INSERT OR IGNORE INTO rulesets_collections (folder_name) VALUES ('$(rulesets_collection_folder)');")
             db_rulesets_variations = joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder, "rulesets_variations.db") |> SQLite.DB
             createPCVCTTable("rulesets_variations", "rulesets_variation_id INTEGER PRIMARY KEY"; db=db_rulesets_variations)
-            df = DBInterface.execute(db_rulesets_variations, "INSERT OR IGNORE INTO rulesets_variations (rulesets_variation_id) VALUES(0) RETURNING rulesets_variation_id;") |> DataFrame
-            if !isempty(df)
-                patchBaseRulesetsVariationNotInDB(rulesets_collection_folder, db_rulesets_variations)
-            end
+            DBInterface.execute(db_rulesets_variations, "INSERT OR IGNORE INTO rulesets_variations (rulesets_variation_id) VALUES(0);")
         end
     end
 
@@ -194,39 +144,7 @@ function createSchema()
     createPCVCTTable("simulations", simulations_schema)
 
     # initialize monads table
-    monads_schema = """
-        monad_id INTEGER PRIMARY KEY,
-        custom_code_id INTEGER,
-        ic_cell_id INTEGER,
-        ic_substrate_id INTEGER,
-        ic_ecm_id INTEGER,
-        config_id INTEGER,
-        rulesets_collection_id INTEGER,
-        config_variation_id INTEGER,
-        rulesets_variation_id INTEGER,
-        ic_cell_variation_id INTEGER,
-        FOREIGN KEY (custom_code_id)
-            REFERENCES custom_codes (custom_code_id),
-        FOREIGN KEY (ic_cell_id)
-            REFERENCES ic_cells (ic_cell_id),
-        FOREIGN KEY (ic_substrate_id)
-            REFERENCES ic_substrates (ic_substrate_id),
-        FOREIGN KEY (ic_ecm_id)
-            REFERENCES ic_ecms (ic_ecm_id),
-        FOREIGN KEY (config_id)
-            REFERENCES configs (config_id),
-        FOREIGN KEY (rulesets_collection_id)
-            REFERENCES rulesets_collections (rulesets_collection_id),
-        UNIQUE (custom_code_id,ic_cell_id,ic_substrate_id,ic_ecm_id,config_id,rulesets_collection_id,config_variation_id,rulesets_variation_id,ic_cell_variation_id)
-    """
-    createPCVCTTable("monads", monads_schema)
-
-    if patched_variation_id_to_config_variation_id
-        # drop the previous unique constraint on monads
-        # insert from monads_temp all values except ic_cell_variation_id (set that to -1 if ic_cell_id is -1 and to 0 if ic_cell_id is not -1)
-        DBInterface.execute(db, "INSERT INTO monads SELECT monad_id, custom_code_id, ic_cell_id, ic_substrate_id, ic_ecm_id, config_id, rulesets_collection_id, config_variation_id, rulesets_variation_id, CASE WHEN ic_cell_id=-1 THEN -1 ELSE 0 END FROM monads_temp;")
-        DBInterface.execute(db, "DROP TABLE monads_temp;")
-    end
+    createPCVCTTable("monads", monadsSchema())
 
     # initialize samplings table
     samplings_schema = """
@@ -262,7 +180,48 @@ function createSchema()
 
     createDefaultStatusCodesTable()
 
-    return
+    return true
+end
+
+function necessaryInputsPresent(data_dir_contents::Vector{String})
+    success = true
+    if "custom_codes" ∉ data_dir_contents
+        println("No $(joinpath(data_dir, "inputs", "custom_codes")) found. This is where to put the folders for custom_modules, main.cpp, and Makefile.")
+        success = false
+    end
+    if "configs" ∉ data_dir_contents
+        println("No $(joinpath(data_dir, "inputs", "configs")) found. This is where to put the folders for config files and rules files.")
+        success = false
+    end
+    return success
+end
+
+function monadsSchema()
+    return """
+       monad_id INTEGER PRIMARY KEY,
+       custom_code_id INTEGER,
+       ic_cell_id INTEGER,
+       ic_substrate_id INTEGER,
+       ic_ecm_id INTEGER,
+       config_id INTEGER,
+       rulesets_collection_id INTEGER,
+       config_variation_id INTEGER,
+       rulesets_variation_id INTEGER,
+       ic_cell_variation_id INTEGER,
+       FOREIGN KEY (custom_code_id)
+           REFERENCES custom_codes (custom_code_id),
+       FOREIGN KEY (ic_cell_id)
+           REFERENCES ic_cells (ic_cell_id),
+       FOREIGN KEY (ic_substrate_id)
+           REFERENCES ic_substrates (ic_substrate_id),
+       FOREIGN KEY (ic_ecm_id)
+           REFERENCES ic_ecms (ic_ecm_id),
+       FOREIGN KEY (config_id)
+           REFERENCES configs (config_id),
+       FOREIGN KEY (rulesets_collection_id)
+           REFERENCES rulesets_collections (rulesets_collection_id),
+       UNIQUE (custom_code_id,ic_cell_id,ic_substrate_id,ic_ecm_id,config_id,rulesets_collection_id,config_variation_id,rulesets_variation_id,ic_cell_variation_id)
+   """
 end
 
 function createICTable(ic_name::String; data_dir_contents=String[])

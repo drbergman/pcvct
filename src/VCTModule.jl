@@ -22,6 +22,7 @@ include("VCTMovie.jl")
 include("VCTRunner.jl")
 include("VCTRecorder.jl")
 include("VCTSensitivity.jl")
+include("VCTVersion.jl")
 
 include("VCTAnalysis.jl")
 
@@ -81,8 +82,14 @@ function initializeVCT(path_to_physicell::String, path_to_data::String)
     global data_dir = abspath(path_to_data)
     println(rpad("Path to PhysiCell:", 20, ' ') * physicell_dir)
     println(rpad("Path to data:", 20, ' ') * data_dir)
-    initializeDatabase(joinpath(data_dir, "vct.db"))
+    success = initializeDatabase(joinpath(data_dir, "vct.db"))
+    if !success
+        global db = SQLite.DB()
+        println("Database initialization failed.")
+        return
+    end
     println(rpad("Compiler:", 20, ' ') * PHYSICELL_CPP)
+    println(rpad("pcvct version:", 20, ' ') * string(pcvctVersion()))
     flush(stdout)
 end
 

@@ -31,24 +31,23 @@ reference_ic_cell_variation_id = reference_ic_cell_variation_id[1]
 cell_type = "default"
 
 AV = AbstractVariation[]
-for index in 0:1
-    local xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:$(index)"]
-    lower_bound = 250.0 - index * 50.0
-    upper_bound = 350.0 + index * 50.0
-    push!(AV, UniformDistributedVariation(xml_path, lower_bound, upper_bound))
-end
-xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:2"]
+xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:0"]
+lower_bound = 250.0 - 50.0
+upper_bound = 350.0 + 50.0
+push!(AV, UniformDistributedVariation(xml_path, lower_bound, upper_bound))
+
+xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:1"]
 vals = [100.0, 200.0, 300.0]
 push!(AV, ElementaryVariation(xml_path, vals))
 
-xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:3"]
+xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:2"]
 mu = 300.0
 sigma = 50.0
 lb = 10.0
 ub = 1000.0
 push!(AV, NormalDistributedVariation(xml_path, mu, sigma; lb=lb, ub=ub))
 
-n_points = 2^4-1
+n_points = 2^3-1
 monad_min_length = 1
 folder_names = pcvct.AbstractSamplingFolders(config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder)
 folder_ids = pcvct.AbstractSamplingIDs(folder_names)
