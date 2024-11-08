@@ -74,7 +74,7 @@ Initializes the VCT environment by setting the paths to PhysiCell and data direc
 - `path_to_physicell::String`: Path to the PhysiCell directory.
 - `path_to_data::String`: Path to the data directory.
 """
-function initializeVCT(path_to_physicell::String, path_to_data::String)
+function initializeVCT(path_to_physicell::String, path_to_data::String; auto_upgrade::Bool=false)
     # print big logo of PCVCT here
     println(pcvctLogo())
     println("----------INITIALIZING----------")
@@ -82,7 +82,7 @@ function initializeVCT(path_to_physicell::String, path_to_data::String)
     global data_dir = abspath(path_to_data)
     println(rpad("Path to PhysiCell:", 20, ' ') * physicell_dir)
     println(rpad("Path to data:", 20, ' ') * data_dir)
-    success = initializeDatabase(joinpath(data_dir, "vct.db"))
+    success = initializeDatabase(joinpath(data_dir, "vct.db"); auto_upgrade=auto_upgrade)
     if !success
         global db = SQLite.DB()
         println("Database initialization failed.")

@@ -2,6 +2,9 @@ name: TagBot
 on:
   repository_dispatch: # I don't know what this is...but maybe one day I can duplicate what the HolyLab does?
   workflow_dispatch:
+    inputs:
+      lookback:
+        default: "3"
 permissions:
   actions: read
   checks: read
@@ -25,4 +28,3 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           ssh: ${{ secrets.DOCUMENTER_KEY }}
           registry: drbergman/PCVCTRegistry
-          lookback: 10

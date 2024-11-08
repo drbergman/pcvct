@@ -28,7 +28,7 @@ function createPCVCTVersionTable(is_new_db::Bool)
     DBInterface.execute(db, "INSERT INTO $(table_name) (version) VALUES ('$version');")
 end
 
-function resolvePCVCTVersion(is_new_db::Bool)
+function resolvePCVCTVersion(is_new_db::Bool, auto_upgrade::Bool)
     pcvct_version = pcvctVersion()
     pcvct_db_version = pcvctDBVersion(is_new_db)
 
@@ -49,57 +49,36 @@ function resolvePCVCTVersion(is_new_db::Bool)
         return success
     end
 
-    success = upgradePCVCT(pcvct_db_version::VersionNumber, pcvct_version::VersionNumber)
+    success = upgradePCVCT(pcvct_db_version, pcvct_version, auto_upgrade)
     return success
 end
 
-function upgradePCVCT(from_version, to_version)
+function upgradePCVCT(from_version::VersionNumber, to_version::VersionNumber, auto_upgrade::Bool)
     println("Upgrading pcvct from version $(from_version) to $(to_version)...")
     milestone_versions = [v"0.0.1", v"0.0.3"]
     next_milestones = milestone_versions[findfirst(x -> from_version < x, milestone_versions):end]
     success = true
     for next_milestone in next_milestones
-        upgrade_fn = Symbol("upgradeToV$(replace(string(next_milestone), "." => "_"))")
-        if !haskey(Main, upgrade_fn)
+        up_fn_symbol = Meta.parse("upgradeToV$(replace(string(next_milestone), "." => "_"))")
+        if !isdefined(pcvct, up_fn_symbol)
             throw(ArgumentError("Upgrade from version $(from_version) to $(next_milestone) not supported."))
         end
-        from_version = Main.upgrade_fn()
+        from_version = eval(up_fn_symbol)(auto_upgrade)
         if from_version == false
             success = false
             break
+        else
+            DBInterface.execute(db, "UPDATE pcvct_version SET version='$(next_milestone)';")
         end
     end
-    while from_version < to_version
-        from_version = upgradePCVCT(from_version)
-        if from_version == false
-            success = false
-            break
-        end
+    if success && to_version > next_milestones[end]
+        println("\t- Upgrading to version $(to_version)...")
+        DBInterface.execute(db, "UPDATE pcvct_version SET version='$(to_version)';")
     end
     return success
 end
 
-function upgradePCVCT(from_version::VersionNumber)
-    if from_version < v"0.0.1"
-        success = upgradeToV0_0_1()
-        new_version = v"0.0.1"
-    elseif from_version < v"0.0.3"
-        success = upgradeToV0_0_3()
-        new_version = v"0.0.3"
-    elseif from_version == v"0.0.3"
-        success = upgradeToV0_0_4()
-        new_version = v"0.0.4"
-    else
-        throw(ArgumentError("Upgrade from version $(from_version) not supported"))
-    end
-    if success
-        DBInterface.execute(db, "UPDATE pcvct_version SET version='$(new_version)';")
-        return new_version
-    end
-    return success
-end
-
-function upgradeToV0_0_1()
+function upgradeToV0_0_1(::Bool)
     println("\t- Upgrading to version 0.0.1...")
     data_dir_contents = readdir(joinpath(data_dir, "inputs"); sort=false)
     if "rulesets_collections" in data_dir_contents
@@ -133,7 +112,7 @@ function upgradeToV0_0_1()
     return true
 end
 
-function upgradeToV0_0_3()
+function upgradeToV0_0_3(auto_upgrade::Bool)
     warning_msg = """
     \t- Upgrading to version 0.0.3...
     \nWARNING: Upgrading to version 0.0.3 will change the database schema.
@@ -144,7 +123,7 @@ function upgradeToV0_0_3()
     Continue upgrading to version 0.0.3? (y/n):
     """
     println(warning_msg)
-    response = readline()
+    response = auto_upgrade ? "y" : readline()
     if response != "y"
         println("Upgrade to version 0.0.3 aborted.")
         return false
@@ -190,10 +169,5 @@ function upgradeToV0_0_3()
         end
     end
     return true
-end
-
-function upgradeToV0_0_4()
-    println("\t- Upgrading to version 0.0.4...")
-    return true # no upgrade necessary from 0.0.3 to 0.0.4
 end
 

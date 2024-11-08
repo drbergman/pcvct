@@ -4,12 +4,12 @@ db::SQLite.DB = SQLite.DB()
 
 ################## Database Initialization Functions ##################
 
-function initializeDatabase(path_to_database::String)
+function initializeDatabase(path_to_database::String; auto_upgrade::Bool=false)
     println(rpad("Path to database:", 20, ' ') * path_to_database)
     is_new_db = !isfile(path_to_database)
     global db = SQLite.DB(path_to_database)
     SQLite.transaction(db, "EXCLUSIVE")
-    success = createSchema(is_new_db)
+    success = createSchema(is_new_db; auto_upgrade=auto_upgrade)
     SQLite.commit(db)
     return success
 end
@@ -20,7 +20,7 @@ function initializeDatabase()
     return createSchema(is_new_db)
 end
 
-function createSchema(is_new_db::Bool)
+function createSchema(is_new_db::Bool; auto_upgrade::Bool=false)
     # make sure necessary directories are present
     data_dir_contents = readdir(joinpath(data_dir, "inputs"); sort=false)
     if !necessaryInputsPresent(data_dir_contents)
@@ -28,7 +28,7 @@ function createSchema(is_new_db::Bool)
     end
 
     # start with pcvct version info
-    if !resolvePCVCTVersion(is_new_db)
+    if !resolvePCVCTVersion(is_new_db, auto_upgrade)
         println("Could not successfully upgrade database. Please check the logs for more information.")
         return false
     end
