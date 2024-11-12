@@ -56,7 +56,7 @@ end
 function upgradePCVCT(from_version::VersionNumber, to_version::VersionNumber, auto_upgrade::Bool)
     println("Upgrading pcvct from version $(from_version) to $(to_version)...")
     milestone_versions = [v"0.0.1", v"0.0.3"]
-    next_milestones = milestone_versions[findfirst(x -> from_version < x, milestone_versions):end]
+    next_milestones = findall(x -> from_version < x, milestone_versions) # this could be simplified to take advantage of this list being sorted, but who cares? It's already so fast
     success = true
     for next_milestone in next_milestones
         up_fn_symbol = Meta.parse("upgradeToV$(replace(string(next_milestone), "." => "_"))")
@@ -71,7 +71,7 @@ function upgradePCVCT(from_version::VersionNumber, to_version::VersionNumber, au
             DBInterface.execute(db, "UPDATE pcvct_version SET version='$(next_milestone)';")
         end
     end
-    if success && to_version > next_milestones[end]
+    if success && to_version > milestone_versions[end]
         println("\t- Upgrading to version $(to_version)...")
         DBInterface.execute(db, "UPDATE pcvct_version SET version='$(to_version)';")
     end
@@ -130,11 +130,19 @@ function upgradeToV0_0_3(auto_upgrade::Bool)
     end
     println("\t- Upgrading to version 0.0.3...")
     # first get vct.db right changing simulations and monads tables
-    DBInterface.execute(db, "ALTER TABLE simulations RENAME COLUMN variation_id TO config_variation_id;")
-    DBInterface.execute(db, "ALTER TABLE monads RENAME COLUMN variation_id TO config_variation_id;")
-    DBInterface.execute(db, "ALTER TABLE simulations ADD COLUMN ic_cell_variation_id INTEGER;")
-    DBInterface.execute(db, "UPDATE simulations SET ic_cell_variation_id=CASE WHEN ic_cell_id=-1 THEN -1 ELSE 0 END;")
-    DBInterface.execute(db, "ALTER TABLE monads ADD COLUMN ic_cell_variation_id INTEGER;")
+    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('simulations') WHERE name='config_variation_id';") |> DataFrame |> isempty
+        DBInterface.execute(db, "ALTER TABLE simulations RENAME COLUMN variation_id TO config_variation_id;")
+    end
+    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('monads') WHERE name='config_variation_id';") |> DataFrame |> isempty
+        DBInterface.execute(db, "ALTER TABLE monads RENAME COLUMN variation_id TO config_variation_id;")
+    end
+    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('simulations') WHERE name='ic_cell_variation_id';") |> DataFrame |> isempty
+        DBInterface.execute(db, "ALTER TABLE simulations ADD COLUMN ic_cell_variation_id INTEGER;")
+        DBInterface.execute(db, "UPDATE simulations SET ic_cell_variation_id=CASE WHEN ic_cell_id=-1 THEN -1 ELSE 0 END;")
+    end
+    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('monads') WHERE name='ic_cell_variation_id';") |> DataFrame |> isempty
+        DBInterface.execute(db, "ALTER TABLE monads ADD COLUMN ic_cell_variation_id INTEGER;")
+    end
     DBInterface.execute(db, "CREATE TABLE monads_temp AS SELECT * FROM monads;")
     DBInterface.execute(db, "DROP TABLE monads;")
     createPCVCTTable("monads", monadsSchema())
