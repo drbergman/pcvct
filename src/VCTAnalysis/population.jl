@@ -9,9 +9,7 @@ function populationCount(snapshot::PhysiCellSnapshot; include_dead::Bool=false, 
     else
         cell_df = @view snapshot.cells[snapshot.cells.dead .== false, :]
     end
-    if isempty(cell_type_to_name_dict)
-        cell_type_to_name_dict = getCellTypeToNameDict(snapshot.folder)
-    end
+    getCellTypeToNameDict!(cell_type_to_name_dict, snapshot)
     cell_type_names = values(cell_type_to_name_dict)
     for cell_type_name in cell_type_names
         data[cell_type_name] = count(x -> x == cell_type_name, cell_df.cell_type_name)
@@ -44,10 +42,10 @@ function SimulationPopulationTimeSeries(sequence::PhysiCellSequence; include_dea
 end
 
 function SimulationPopulationTimeSeries(folder::String; include_dead::Bool=false)
-    return PhysiCellSequence(folder) |> x -> SimulationPopulationTimeSeries(x; include_dead=include_dead)
+    return PhysiCellSequence(folder; include_cells=true) |> x -> SimulationPopulationTimeSeries(x; include_dead=include_dead)
 end
 
-function SimulationPopulationTimeSeries(simulation_id::Int; include_dead::Bool=false)
+function SimulationPopulationTimeSeries(simulation_id::Integer; include_dead::Bool=false)
     print("Computing SimulationPopulationTimeSeries for Simulation $simulation_id...")
     simulation_folder = joinpath(data_dir, "outputs", "simulations", string(simulation_id))
     path_to_summary = joinpath(simulation_folder, "summary")
@@ -71,7 +69,7 @@ end
 SimulationPopulationTimeSeries(simulation::Simulation; include_dead::Bool=false) = SimulationPopulationTimeSeries(simulation.id; include_dead=include_dead)
 
 function finalPopulationCount(folder::String; include_dead::Bool=false)
-    final_snapshot = PhysiCellSnapshot(folder, :final)
+    final_snapshot = PhysiCellSnapshot(folder, :final; include_cells=true)
     return populationCount(final_snapshot; include_dead=include_dead)
 end
 

@@ -18,6 +18,7 @@ include("./test-project/VCT/PrintHelpers.jl")
         include("./test-project/VCT/MovieTests.jl")
     end
     include("./test-project/VCT/PopulationTests.jl")
+    include("./test-project/VCT/SubstrateTests.jl")
 
     # probably want this one last (it deletes/resets things)
     include("./test-project/VCT/DeletionTests.jl")

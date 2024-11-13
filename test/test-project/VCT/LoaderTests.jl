@@ -9,7 +9,7 @@ path_to_physicell_folder = "./test-project/PhysiCell" # path to PhysiCell folder
 path_to_data_folder = "./test-project/data" # path to data folder
 initializeVCT(path_to_physicell_folder, path_to_data_folder)
 
-sequence = PhysiCellSequence(path_to_data_folder * "/outputs/simulations/1/output")
+sequence = PhysiCellSequence(path_to_data_folder * "/outputs/simulations/1/output"; include_cells=true, include_substrates=true)
 
 seq_dict = getCellDataSequence(sequence, "elapsed_time_in_phase"; include_dead=true)
 

@@ -1,4 +1,4 @@
-using DataFrames
+using DataFrames, MAT
 
 export PhysiCellSnapshot, PhysiCellSequence, getCellPositionSequence, getCellDataSequence, computeMeanSpeed
 
@@ -9,51 +9,125 @@ struct PhysiCellSnapshot <: AbstractPhysiCellSequence
     index::Union{Int, Symbol}
     time::Float64
     cells::DataFrame
+    substrates::DataFrame
+    mesh::Dict{String, Vector{Float64}}
 end
 
 struct PhysiCellSequence <: AbstractPhysiCellSequence
     folder::String
     snapshots::Vector{PhysiCellSnapshot}
     cell_type_to_name_dict::Dict{Int, String}
+    substrate_names::Vector{String}
 end
 
-function getLabels(xml_doc::XMLDocument)
+function getLabels!(labels::Vector{String}, xml_doc::XMLDocument)
+    if !isempty(labels)
+        return
+    end
     xml_path = ["cellular_information", "cell_populations", "cell_population", "custom", "simplified_data", "labels"]
     labels_element = retrieveElement(xml_doc, xml_path; required=true)
 
-    labels = String[]
     for label in child_elements(labels_element)
-        name = content(label)
+        label_name = content(label)
         label_ind_width = attribute(label, "size"; required=true) |> x -> parse(Int, x)
         if label_ind_width > 1
-            name = [name * "_$i" for i in 1:label_ind_width]
-            append!(labels, name)
+            label_name = [label_name * "_$i" for i in 1:label_ind_width]
+            append!(labels, label_name)
         else
-            if name == "elapsed_time_in_phase" && name in labels
-                name = "elapsed_time_in_phase_2" # hack to get around a MultiCellDS duplicate?
+            if label_name == "elapsed_time_in_phase" && label_name in labels
+                label_name = "elapsed_time_in_phase_2" # hack to get around a MultiCellDS duplicate?
             end
-            push!(labels, name)
+            push!(labels, label_name)
         end
     end
+end
+
+function getLabels!(labels::Vector{String}, folder::String)
+    if !isempty(labels)
+        return
+    end
+    xml_doc = openXML(joinpath(folder, "initial.xml"))
+    getLabels!(labels, xml_doc)
+    closeXML(xml_doc)
+end
+
+function getLabels(folder::String)
+    xml_doc = openXML(joinpath(folder, "initial.xml"))
+    labels = String[]
+    getLabels!(labels, xml_doc)
+    closeXML(xml_doc)
     return labels
 end
 
-getLabels(folder::String) = joinpath(folder, "initial.xml") |> openXML |> getLabels
-
-function getCellTypeToNameDict(xml_doc::XMLDocument)
+function getCellTypeToNameDict!(cell_type_to_name_dict::Dict{Int, String}, xml_doc::XMLDocument)
+    if !isempty(cell_type_to_name_dict)
+        return
+    end
     xml_path = ["cellular_information", "cell_populations", "cell_population", "custom", "simplified_data", "cell_types"]
     cell_types_element = retrieveElement(xml_doc, xml_path; required=true)
 
-    cell_type_to_name_dict = Dict{Int, String}()
     for cell_type_element in child_elements(cell_types_element)
         cell_type_id = attribute(cell_type_element, "ID"; required=true) |> x -> parse(Int, x)
-        name = content(cell_type_element)
-        cell_type_to_name_dict[cell_type_id] = name
+        cell_type_name = content(cell_type_element)
+        cell_type_to_name_dict[cell_type_id] = cell_type_name
     end
-    return cell_type_to_name_dict
 end
 
-getCellTypeToNameDict(folder::String) = joinpath(folder, "initial.xml") |> openXML |> getCellTypeToNameDict
+function getCellTypeToNameDict!(cell_type_to_name_dict::Dict{Int, String}, folder::String)
+    if !isempty(cell_type_to_name_dict)
+        return
+    end
+    xml_doc = openXML(joinpath(folder, "initial.xml"))
+    getCellTypeToNameDict!(cell_type_to_name_dict, xml_doc)
+    closeXML(xml_doc)
+end
+
+getCellTypeToNameDict!(cell_type_to_name_dict::Dict{Int, String}, snapshot::PhysiCellSnapshot) = getCellTypeToNameDict!(cell_type_to_name_dict, snapshot.folder)
+
+function getSubstrateNames!(substrate_names::Vector{String}, xml_doc::XMLDocument)
+    if !isempty(substrate_names)
+        return
+    end
+    xml_path = ["microenvironment", "domain", "variables"]
+    variables_element = retrieveElement(xml_doc, xml_path; required=true)
+    substrate_dict = Dict{Int, String}()
+    for element in child_elements(variables_element)
+        if name(element) != "variable"
+            continue
+        end
+        variable_id = attribute(element, "ID"; required=true) |> x -> parse(Int, x)
+        substrate_name = attribute(element, "name"; required=true)
+        substrate_dict[variable_id] = substrate_name
+    end
+    for i in (substrate_dict |> keys |> collect |> sort)
+        push!(substrate_names, substrate_dict[i])
+    end
+end
+
+function getSubstrateNames!(substrate_names::Vector{String}, filepath::String)
+    if !isempty(substrate_names)
+        return
+    end
+    xml_doc = openXML(filepath)
+    getSubstrateNames!(substrate_names, xml_doc)
+    closeXML(xml_doc)
+end
+
+function getSubstrateNames(xml_doc::XMLDocument)
+    substrate_names = String[]
+    getSubstrateNames!(substrate_names, xml_doc)
+    return substrate_names
+end
+
+function getSubstrateNames(folder::String)
+    filepath = joinpath(folder, "initial.xml")
+    xml_doc = openXML(filepath)
+    substrate_names = getSubstrateNames(xml_doc)
+    closeXML(xml_doc)
+    return substrate_names
+end
+
+getSubstrateNames(aps::AbstractPhysiCellSequence) = getSubstrateNames(aps.folder)
 
 function indexToFilename(index::Symbol)
     @assert index in [:initial, :final] "The non-integer index must be either :initial or :final"
@@ -61,36 +135,106 @@ function indexToFilename(index::Symbol)
 end
 indexToFilename(index::Int) = "output$(lpad(index,8,"0"))"
 
-function PhysiCellSnapshot(folder::String, index::Union{Int, Symbol}; cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}(), labels::Vector{String}=String[])
+function PhysiCellSnapshot(folder::String, index::Union{Int, Symbol}; include_cells::Bool=false, cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}(), labels::Vector{String}=String[], include_substrates::Bool=false, substrate_names::Vector{String}=String[], include_mesh::Bool=false)
     filepath_base = joinpath(folder, indexToFilename(index))
     xml_doc = openXML("$(filepath_base).xml")
-    mat_file = "$(filepath_base)_cells.mat"
     time = getField(xml_doc, ["metadata","current_time"]) |> x->parse(Float64, x)
-    if isempty(labels)
-        labels = getLabels(xml_doc)
+    cells = DataFrame()
+    if include_cells
+        loadCells!(cells, filepath_base, cell_type_to_name_dict, labels)
     end
-    cells = DataFrame(matread(mat_file)["cell"]', labels)
-    cells[!,:ID] = convert.(Int,cells[!,:ID])
-    cells[!,:dead] = convert.(Bool,cells[!,:dead])
-    cells[!,:cell_type] = convert.(Int,cells[!,:cell_type])
-    if isempty(cell_type_to_name_dict)
-        cell_type_to_name_dict = getCellTypeToNameDict(xml_doc)
+    substrates = DataFrame()
+    if include_substrates
+        loadSubstrates!(substrates, filepath_base, substrate_names)
     end
-    cells[!,:cell_type_name] = [cell_type_to_name_dict[ct] for ct in cells[!,:cell_type]]
+    mesh = Dict{String, Vector{Float64}}()
+    if include_mesh
+        loadMesh!(mesh, xml_doc)
+    end
     closeXML(xml_doc)
-    return PhysiCellSnapshot(folder, index, time, DataFrame(cells))
+    return PhysiCellSnapshot(folder, index, time, DataFrame(cells), substrates, mesh)
 end
 
-function PhysiCellSequence(folder::String)
-    cell_type_to_name_dict = getCellTypeToNameDict(folder)
+function loadCells!(cells::DataFrame, filepath_base::String, cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}(), labels::Vector{String}=String[])
+    if !isempty(cells)
+        return
+    end
+    xml_doc = openXML("$(filepath_base).xml")
+    mat_file = "$(filepath_base)_cells.mat"
+    getLabels!(labels, xml_doc)
+    A = matread(mat_file)["cell"]
+    convert_to = Dict(:ID => Int, :dead => Bool, :cell_type => Int)
+    for (label, row) in zip(labels, eachrow(A))
+        conversion_fn = Symbol(label) in keys(convert_to) ? x->convert.(convert_to[Symbol(label)], x) : x->x
+        cells[!, label] = conversion_fn(row)
+    end
+    getCellTypeToNameDict!(cell_type_to_name_dict, xml_doc)
+    cells[!, :cell_type_name] = [cell_type_to_name_dict[ct] for ct in cells[!, :cell_type]]
+    closeXML(xml_doc)
+    return
+end
+
+function loadCells!(snapshot::PhysiCellSnapshot, cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}(), labels::Vector{String}=String[])
+    loadCells!(snapshot.cells, joinpath(snapshot.folder, "$(indexToFilename(snapshot.index))"), cell_type_to_name_dict, labels)
+end
+
+function loadSubstrates(filepath_base::String, substrate_names::Vector{String})
+    getSubstrateNames!(substrate_names, "$(filepath_base).xml")
+    mat_file = "$(filepath_base)_microenvironment0.mat"
+    A = matread(mat_file) |> values |> first # julia seems to read in the multiscale_microenvironment and assign the key multiscale_microenvironmen (note the missing 't'); do this to make sure we get the data
+    substrates = DataFrame(A', [:x; :y; :z; :volume; substrate_names])
+    return substrates, substrate_names
+end
+
+function loadSubstrates!(substrates::DataFrame, filepath_base::String, substrate_names::Vector{String})
+    if !isempty(substrates)
+        return
+    end
+    getSubstrateNames!(substrate_names, "$(filepath_base).xml")
+    mat_file = "$(filepath_base)_microenvironment0.mat"
+    A = matread(mat_file) |> values |> first # julia seems to read in the multiscale_microenvironment and assign the key multiscale_microenvironmen (note the missing 't'); do this to make sure we get the data
+    labels = [:x; :y; :z; :volume; substrate_names]
+    for (label, row) in zip(labels, eachrow(A))
+        substrates[!, label] = row
+    end
+end
+    
+function loadSubstrates!(snapshot::PhysiCellSnapshot, substrate_names::Vector{String}=String[])
+    loadSubstrates!(snapshot.substrates, joinpath(snapshot.folder, "$(indexToFilename(snapshot.index))"), substrate_names)
+end
+
+function loadMesh!(mesh::Dict{String, Vector{Float64}}, xml_doc::XMLDocument)
+    xml_path = ["microenvironment", "domain", "mesh"]
+    mesh_element = retrieveElement(xml_doc, xml_path; required=true)
+    mesh["bounding_box"] = parse.(Float64, split(content(find_element(mesh_element, "bounding_box")), " "))
+    for tag in ["x_coordinates", "y_coordinates", "z_coordinates"]
+        coord_element = find_element(mesh_element, tag)
+        mesh[string(tag[1])] = parse.(Float64, split(content(coord_element), attribute(coord_element, "delimiter"; required=true)))
+    end
+end
+
+function loadMesh!(snapshot::PhysiCellSnapshot)
+    xml_doc = openXML(joinpath(snapshot.folder, "$(indexToFilename(snapshot.index)).xml"))
+    loadMesh!(snapshot.mesh, xml_doc)
+    closeXML(xml_doc)
+end
+
+
+function PhysiCellSequence(folder::String; include_cells::Bool=false, include_substrates::Bool=false, include_mesh::Bool=false)
+    cell_type_to_name_dict = Dict{Int, String}()
+    if include_cells
+        getCellTypeToNameDict!(cell_type_to_name_dict, folder)
+    end
     labels = getLabels(folder)
-    snapshots = PhysiCellSnapshot[PhysiCellSnapshot(folder, 0; cell_type_to_name_dict=cell_type_to_name_dict, labels=labels)]
+    substrate_names = include_substrates ? getSubstrateNames(folder) : String[]
+    index_to_snapshot = index -> PhysiCellSnapshot(folder, index; include_cells=include_cells, cell_type_to_name_dict=cell_type_to_name_dict, labels=labels, include_substrates=include_substrates, include_mesh=include_mesh)
+    snapshots = PhysiCellSnapshot[index_to_snapshot(0)]
     index = 1
     while isfile(joinpath(folder, "output$(lpad(index,8,"0")).xml"))
-        push!(snapshots, PhysiCellSnapshot(folder, index; cell_type_to_name_dict=cell_type_to_name_dict, labels=labels))
+        push!(snapshots, index_to_snapshot(index))
         index += 1
     end
-    return PhysiCellSequence(folder, snapshots, cell_type_to_name_dict)
+    return PhysiCellSequence(folder, snapshots, cell_type_to_name_dict, substrate_names)
 end
 
 function getCellDataSequence(sequence::PhysiCellSequence, label::String; include_dead::Bool=false, include_cell_type::Bool=false)
@@ -193,7 +337,7 @@ function meanSpeed(p; direction=:any)::NTuple{3,Dict{String,Float64}}
 end
 
 function computeMeanSpeed(folder::String; direction=:any)::NTuple{3,Vector{Dict{String,Float64}}}
-    sequence = PhysiCellSequence(folder)
+    sequence = PhysiCellSequence(folder; include_cells=true)
     pos = getCellPositionSequence(sequence; include_dead=false, include_cell_type=true)
     dicts = [meanSpeed(p; direction=direction) for p in values(pos) if length(p.time) > 1]
     return [dict[1] for dict in dicts], [dict[2] for dict in dicts], [dict[3] for dict in dicts]

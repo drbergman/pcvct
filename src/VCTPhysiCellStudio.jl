@@ -36,6 +36,7 @@ function runStudio(simulation_id::Int; python_path::Union{Missing,String}=path_t
 
     path_to_temp_xml = joinpath(path_to_output, "PhysiCell_settings_temp.xml")
     save_file(xml_doc, path_to_temp_xml)
+    closeXML(xml_doc)
 
     cmd = `$path_to_python $(joinpath(path_to_studio, "bin", "studio.py")) -c $(path_to_temp_xml)`
     cd(() -> run(pipeline(cmd; stdout=devnull, stderr=devnull)), physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory; make sure the macro ADDON_PHYSIECM is defined (should work even if multiply defined, e.g., by Makefile)

@@ -107,6 +107,7 @@ function upgradeToV0_0_1(::Bool)
                 query = "UPDATE rulesets_variations SET '$(column_name)'=$(base_value) WHERE rulesets_variation_id=0;"
                 DBInterface.execute(db_rulesets_variations, query)
             end
+            closeXML(xml_doc)
         end
     end
     return true

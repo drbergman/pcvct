@@ -29,10 +29,12 @@ element_paths = [
 "attack_rates_path" => pcvct.attackRatesPath(cell_type)
 ]
 
+xml_doc = pcvct.openXML(path_to_xml)
 for ep in element_paths
-    ce = pcvct.retrieveElement(path_to_xml, ep[2]; required=false)
+    ce = pcvct.retrieveElement(xml_doc, ep[2]; required=false)
     @test !isnothing(ce) # make sure the element was found
 end
+pcvct.closeXML(xml_doc)
 
 node_paths = [
 "speed_path" => pcvct.motilityPath(cell_type, "speed")

@@ -39,10 +39,6 @@ function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{String}; require
     return current_element
 end
 
-function retrieveElement(path_to_xml::String, xml_path::Vector{String}; required::Bool=true)
-    return openXML(path_to_xml) |> x->retrieveElement(x, xml_path; required=required)
-end
-
 function retrieveElementError(xml_path::Vector{String}, path_element::String)
     error_msg = "Element not found: $(join(xml_path, " -> "))"
     error_msg *= "\n\tFailed at: $(path_element)"
@@ -70,10 +66,6 @@ function updateField(xml_doc::XMLDocument, xml_path_and_value::Vector{Any})
     return updateField(xml_doc, xml_path_and_value[1:end-1],xml_path_and_value[end])
 end
 
-function updateField(path_to_xml::String,xml_path::Vector{String},new_value::Union{Int,Real,String})
-    return openXML(path_to_xml) |> x -> updateField(x, xml_path, new_value)
-end
-
 function multiplyField(xml_doc::XMLDocument, xml_path::Vector{String}, multiplier::AbstractFloat)
     current_element = retrieveElement(xml_doc, xml_path; required=true)
     val = content(current_element)
@@ -96,14 +88,10 @@ function columnNameToXMLPath(column_name::String)
 end
 
 function updateFieldsFromCSV(xml_doc::XMLDocument, path_to_csv::String)
-    df = CSV.read(path_to_csv,DataFrame;header=false,silencewarnings=true,types=String)
+    df = CSV.read(path_to_csv, DataFrame; header=false, silencewarnings=true, types=String)
     for i = axes(df,1)
         df[i, :] |> Vector |> x -> filter!(!ismissing, x) .|> string |> x -> updateField(xml_doc, x)
     end
-end
-
-function updateFieldsFromCSV(path_to_csv::String,path_to_xml::String)
-    return openXML(path_to_xml) |> x->updateFieldsFromCSV(x, path_to_csv)
 end
 
 ################## Configuration Functions ##################

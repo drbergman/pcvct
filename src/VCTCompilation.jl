@@ -168,12 +168,12 @@ end
 
 function isPhysiECMInConfig(M::AbstractMonad)
     path_to_xml = joinpath(data_dir, "inputs", "configs", M.folder_names.config_folder, "config_variations", "config_variation_$(M.variation_ids.config_variation_id).xml")
+    xml_doc = openXML(path_to_xml)
     xml_path = ["microenvironment_setup", "ecm_setup"]
-    ecm_setup_element = retrieveElement(path_to_xml, xml_path; required=false)
-    if !isnothing(ecm_setup_element) && attribute(ecm_setup_element, "enabled") == "true" # note: attribute returns nothing if the attribute does not exist
-        return true
-    end
-    return false
+    ecm_setup_element = retrieveElement(xml_doc, xml_path; required=false)
+    physi_ecm_in_config = !isnothing(ecm_setup_element) && attribute(ecm_setup_element, "enabled") == "true" # note: attribute returns nothing if the attribute does not exist
+    closeXML(xml_doc)
+    return physi_ecm_in_config
 end
 
 function isPhysiECMInConfig(sampling::Sampling)

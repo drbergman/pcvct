@@ -2,7 +2,6 @@
 export initializeVCT, resetDatabase, runAbstractTrial, readTrialSamplingIDs, getSimulationIDs, deleteSimulation
 
 using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables, Distributions, Statistics, Random, QuasiMonteCarlo, Sobol
-using MAT # files for VCTLoader.jl
 using PhysiCellXMLRules
 
 # put these first as they define classes the rest rely on
