@@ -1,4 +1,7 @@
-export AbstractVariation, ElementaryVariation, DistributedVariation, addLHSConfigVariation, addLHSRulesetsVariation
+using Distributions
+import Distributions: cdf
+
+export AbstractVariation, ElementaryVariation, DistributedVariation
 export GridVariation, LHSVariation, addVariations
 
 ################## Abstract Variations ##################
@@ -16,8 +19,8 @@ struct DistributedVariation <: AbstractVariation
     distribution::Distribution
 end
 
-getVariationXMLPath(av::AbstractVariation) = av.xml_path::Vector{String}
-variationColumnName(av::AbstractVariation) = getVariationXMLPath(av) |> xmlPathToColumnName
+xmlPath(av::AbstractVariation) = av.xml_path::Vector{String}
+columnName(av::AbstractVariation) = xmlPath(av) |> xmlPathToColumnName
 
 function UniformDistributedVariation(xml_path::Vector{String}, lb::T, ub::T) where {T<:Real}
     return DistributedVariation(xml_path, Uniform(lb, ub))
@@ -27,45 +30,45 @@ function NormalDistributedVariation(xml_path::Vector{String}, mu::T, sigma::T; l
     return DistributedVariation(xml_path, truncated(Normal(mu, sigma), lb, ub))
 end
 
-getVariationValues(ev::ElementaryVariation) = ev.values
+_values(ev::ElementaryVariation) = ev.values
 
-function getVariationValues(ev::ElementaryVariation, cdf::Vector{<:Real})
+function _values(ev::ElementaryVariation, cdf::Vector{<:Real})
     index = floor.(Int, cdf * length(ev.values)) .+ 1
     index[index.==(length(ev.values)+1)] .= length(ev.values) # if cdf = 1, index = length(ev.values)+1, so we set it to length(ev.values)
     return ev.values[index]
 end
 
-getVariationValues(ev::ElementaryVariation, cdf::Real) = getVariationValues(ev, [cdf])
+_values(ev::ElementaryVariation, cdf::Real) = _values(ev, [cdf])
 
-function getVariationValues(dv::DistributedVariation, cdf::Vector{<:Real})
+function _values(dv::DistributedVariation, cdf::Vector{<:Real})
     return map(Base.Fix1(quantile, dv.distribution), cdf)
 end
 
-getVariationValues(dv::DistributedVariation, cdf::Real) = getVariationValues(dv, [cdf])
+_values(dv::DistributedVariation, cdf::Real) = _values(dv, [cdf])
 
-getVariationValues(dv::DistributedVariation) = error("A cdf must be provided for a DistributedVariation.")
-getVariationValues(av::AbstractVariation, cdf) = error("getVariationValues not defined for $(typeof(av)) with type of cdf = $(typeof(cdf))")
+_values(dv::DistributedVariation) = error("A cdf must be provided for a DistributedVariation.")
+_values(av::AbstractVariation, cdf) = error("values not defined for $(typeof(av)) with type of cdf = $(typeof(cdf))")
 
-function getVariationDataType(ev::ElementaryVariation)
+function dataType(ev::ElementaryVariation)
     return typeof(ev).parameters[1] # typeof(ev).parameters[1] is the type parameter T in the definition of ElementaryVariation{T}
 end
 
-function getVariationDataType(dv::DistributedVariation)
+function dataType(dv::DistributedVariation)
     return eltype(dv.distribution)
 end
 
-getVariationDataType(av::AbstractVariation) = error("getVariationDataType not defined for $(typeof(av))")
+dataType(av::AbstractVariation) = error("dataType not defined for $(typeof(av))")
 
-function variationCDF(ev::ElementaryVariation, value::Real)
-    if !(value in ev.values)
+function cdf(ev::ElementaryVariation, x::Real)
+    if !(x in ev.values)
         error("Value not in elementary variation values.")
     end
-    return (findfirst(isequal(value), ev.values) - 1) / (length(ev.values) - 1)
+    return (findfirst(isequal(x), ev.values) - 1) / (length(ev.values) - 1)
 end
 
-variationCDF(dv::DistributedVariation, value::Real) = cdf(dv.distribution, value)
+cdf(dv::DistributedVariation, x::Real) = cdf(dv.distribution, x)
 
-variationCDF(av::AbstractVariation, value::Real) = error("variationCDF not defined for $(typeof(av))")
+cdf(av::AbstractVariation, x::Real) = error("cdf not defined for $(typeof(av))")
 
 ################## Database Interface Functions ##################
 
@@ -176,23 +179,8 @@ function addICCellVariationRow(ic_cell_id::Int, table_features::String, static_v
     return addICCellVariationRow(ic_cell_id, table_features, "$(static_values)$(varied_values)")
 end
 
-function addGrid(AV::Vector{<:AbstractVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function)
-    new_values = [getVariationValues(av) for av in AV]
-
-    static_values, table_features = setUpColumns(AV, addColumnsByPathsFn, prepareAddNewFn)
-
-    NDG = ndgrid(new_values...)
-    sz_variations = size(NDG[1])
-    variation_ids = zeros(Int, sz_variations)
-    for i in eachindex(NDG[1])
-        varied_values = [A[i] for A in NDG] .|> string |> x -> join("\"" .* x .* "\"", ",")
-        variation_ids[i] = addRowFn(table_features, static_values, varied_values)
-    end
-    return variation_ids |> vec
-end
-
 function setUpColumns(AV::Vector{<:AbstractVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function)
-    xml_paths = [getVariationXMLPath(av) for av in AV]
+    xml_paths = [xmlPath(av) for av in AV]
 
     static_column_names, varied_column_names = addColumnsByPathsFn(xml_paths)
     return prepareAddNewFn(static_column_names, varied_column_names)
@@ -291,7 +279,7 @@ function addVariations(method::AddVariationMethod, config_id::Int, rulesets_coll
     return addParsedVariations(method, config_id, rulesets_collection_id, ic_cell_id, parsed_variations; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id)
 end
 
-addVariations(method::AddVariationMethod, config_folder::String, rulesets_collection_folder::String, ic_cell_folder::String, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=ic_cell_folder=="" ? -1 : 0) = addVariations(method, retrieveID("configs", config_folder), retrieveID("rulesets_collections", rulesets_collection_folder), retrieveID("ic_cells", ic_cell_folder), AV; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id)
+addVariations(method::AddVariationMethod, config_folder::String, rulesets_collection_folder::String, ic_cell_folder::String, AV::Vector{<:AbstractVariation}; kwargs...) = addVariations(method, retrieveID("configs", config_folder), retrieveID("rulesets_collections", rulesets_collection_folder), retrieveID("ic_cells", ic_cell_folder), AV; kwargs...)
 
 struct ParsedVariations
     config_variations::Vector{<:AbstractVariation}
@@ -335,24 +323,8 @@ function ParsedVariations(AV::Vector{<:AbstractVariation})
     return ParsedVariations(config_variations, rulesets_variations, ic_cell_variations, config_variation_indices, rulesets_variation_indices, ic_cell_variation_indices)
 end
 
-function addParsedVariations(grid_variation::GridVariation, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, parsed_variations::ParsedVariations; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=ic_cell_id==-1 ? -1 : 0)
-    return addGridCombo(grid_variation, config_id, rulesets_collection_id, ic_cell_id, parsed_variations; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id)
-end
-
-function addParsedVariations(lhs_variation::LHSVariation, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, parsed_variations::ParsedVariations; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=ic_cell_id==-1 ? -1 : 0)
-    return addLHSCombo(lhs_variation, config_id, rulesets_collection_id, ic_cell_id, parsed_variations; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id)
-end
-
-function addParsedVariations(sobol_variation::SobolVariation, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, parsed_variations::ParsedVariations; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=ic_cell_id==-1 ? -1 : 0)
-    return addSobolCombo(sobol_variation, config_id, rulesets_collection_id, ic_cell_id, parsed_variations; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id)
-end
-
-function addParsedVariations(rbd_variation::RBDVariation, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, parsed_variations::ParsedVariations; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=ic_cell_id==-1 ? -1 : 0)
-    return addRBDCombo(rbd_variation, config_id, rulesets_collection_id, ic_cell_id, parsed_variations; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id)
-end
-
 function variationTarget(av::AbstractVariation)
-    xml_path = getVariationXMLPath(av)
+    xml_path = xmlPath(av)
     if startswith(xml_path[1], "hypothesis_ruleset:name:")
         return :rulesets
     elseif startswith(xml_path[1], "cell_patches:name:")
@@ -362,62 +334,49 @@ function variationTarget(av::AbstractVariation)
     end
 end
 
+addParsedVariations(::GridVariation, args...; kwargs...) = addGrid(args...; kwargs...)
+addParsedVariations(lhs_variation::LHSVariation, args...; kwargs...) = addLHS(lhs_variation, args...; kwargs...)
+addParsedVariations(sobol_variation::SobolVariation, args...; kwargs...) = addSobol(sobol_variation, args...; kwargs...)
+addParsedVariations(rbd_variation::RBDVariation, args...; kwargs...) = addRBD(rbd_variation, args...; kwargs...)
+
 ################## Grid Variations ##################
 
-function addGridConfigVariation(config_id::Int, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0)
-    addColumnsByPathsFn = (paths) -> addConfigVariationColumns(config_id, paths, [getVariationDataType(av) for av in AV])
-    prepareAddNewFn = (static_column_names, varied_column_names) -> prepareAddNewConfigVariations(config_id, static_column_names, varied_column_names; reference_config_variation_id=reference_config_variation_id)
-    addRowFn = (features, static_values, varied_values) -> addConfigVariationRow(config_id, features, static_values, varied_values)
-    return addGrid(AV, addColumnsByPathsFn, prepareAddNewFn, addRowFn)
-end
-
-addGridConfigVariation(config_folder::String, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0) = addGridConfigVariation(retrieveID("configs", config_folder), AV; reference_config_variation_id=reference_config_variation_id)
-addGridConfigVariation(config_id::Int, AV::AbstractVariation; reference_config_variation_id::Int=0) = addGridConfigVariation(config_id, [AV]; reference_config_variation_id=reference_config_variation_id)
-addGridConfigVariation(config_folder::String, AV::AbstractVariation; reference_config_variation_id::Int=0) = addGridConfigVariation(config_folder, [AV]; reference_config_variation_id=reference_config_variation_id)
-
-function addGridRulesetsVariation(rulesets_collection_id::Int, AV::Vector{<:AbstractVariation}; reference_rulesets_variation_id::Int=0)
-    addColumnsByPathsFn = (paths) -> addRulesetsVariationsColumns(rulesets_collection_id, paths)
-    prepareAddNewFn = (static_names, varied_names) -> prepareAddNewRulesetsVariations(rulesets_collection_id, static_names, varied_names; reference_rulesets_variation_id=reference_rulesets_variation_id)
-    addRowFn = (features, static_values, varied_values) -> addRulesetsVariationRow(rulesets_collection_id, features, static_values, varied_values)
-    return addGrid(AV, addColumnsByPathsFn, prepareAddNewFn, addRowFn)
-end
-
-addGridRulesetsVariation(rulesets_collection_folder::String, AV::Vector{<:AbstractVariation}; reference_rulesets_variation_id::Int=0) = addGridRulesetsVariation(retrieveID("rulesets_collections", rulesets_collection_folder), AV; reference_rulesets_variation_id=reference_rulesets_variation_id)
-addGridRulesetsVariation(rulesets_collection_id::Int, AV::AbstractVariation; reference_rulesets_variation_id::Int=0) = addGridRulesetsVariation(rulesets_collection_id, [AV]; reference_rulesets_variation_id=reference_rulesets_variation_id)
-addGridRulesetsVariation(rulesets_collection_folder::String, AV::AbstractVariation; reference_rulesets_variation_id::Int=0) = addGridRulesetsVariation(rulesets_collection_folder, [AV]; reference_rulesets_variation_id=reference_rulesets_variation_id)
-
-function addGridICCellVariation(ic_cell_id::Int, AV::Vector{<:AbstractVariation}; reference_ic_cell_variation_id::Int=ic_cell_id==-1 ? -1 : 0)
-    addColumnsByPathsFn = (paths) -> addICCellVariationColumns(ic_cell_id, paths)
-    prepareAddNewFn = (static_names, varied_names) -> prepareAddNewICCellVariations(ic_cell_id, static_names, varied_names; reference_ic_cell_variation_id=reference_ic_cell_variation_id)
-    addRowFn = (features, static_values, varied_values) -> addICCellVariationRow(ic_cell_id, features, static_values, varied_values)
-    return addGrid(AV, addColumnsByPathsFn, prepareAddNewFn, addRowFn)
-end
-
-addGridICCellVariation(ic_cell_folder::String, AV::Vector{<:AbstractVariation}; reference_ic_cell_variation_id::Int=ic_cell_folder=="" ? -1 : 0) = addGridICCellVariation(retrieveID("ic_cells", ic_cell_folder), AV; reference_ic_cell_variation_id=reference_ic_cell_variation_id)
-addGridICCellVariation(ic_cell_id::Int, AV::AbstractVariation; reference_ic_cell_variation_id::Int=ic_cell_id==-1 ? -1 : 0) = addGridICCellVariation(ic_cell_id, [AV]; reference_ic_cell_variation_id=reference_ic_cell_variation_id)
-addGridICCellVariation(ic_cell_folder::String, AV::AbstractVariation; reference_ic_cell_variation_id::Int=ic_cell_folder=="" ? -1 : 0) = addGridICCellVariation(ic_cell_folder, [AV]; reference_ic_cell_variation_id=reference_ic_cell_variation_id)
-
-function addGridCombo(::GridVariation, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, pv::ParsedVariations; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=ic_cell_id==-1 ? -1 : 0)
+function addGrid(config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, pv::ParsedVariations; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=ic_cell_id==-1 ? -1 : 0)
     if isempty(pv.config_variations)
         config_variation_ids = [reference_config_variation_id]
     else
-        config_variation_ids = addGridConfigVariation(config_id, pv.config_variations; reference_config_variation_id=reference_config_variation_id)
+        config_variation_ids = gridToDB(pv.config_variations, prepareConfigVariationFunctions(config_id, pv.config_variations; reference_config_variation_id=reference_config_variation_id)...)
     end
     if isempty(pv.rulesets_variations)
         rulesets_variation_ids = [reference_rulesets_variation_id]
     else
-        rulesets_variation_ids = addGridRulesetsVariation(rulesets_collection_id, pv.rulesets_variations; reference_rulesets_variation_id=reference_rulesets_variation_id)
+        rulesets_variation_ids = gridToDB(pv.rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)...)
     end
     if isempty(pv.ic_cell_variations)
         ic_cell_variation_ids = [ic_cell_id==-1 ? -1 : reference_ic_cell_variation_id]
     else
-        ic_cell_variation_ids = addGridICCellVariation(ic_cell_id, pv.ic_cell_variations; reference_ic_cell_variation_id=reference_ic_cell_variation_id)
+        ic_cell_variation_ids = gridToDB(pv.ic_cell_variations, prepareICCellVariationFunctions(ic_cell_id; reference_ic_cell_variation_id=reference_ic_cell_variation_id)...)
     end
     all_config_variation_ids, all_rulesets_variation_ids, all_ic_cell_variation_ids = ndgrid(config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids)
     return all_config_variation_ids, all_rulesets_variation_ids, all_ic_cell_variation_ids
 end
 
-addGridCombo(config_folder::String, rulesets_collection_folder::String, ic_cell_folder::String, pv::ParsedVariations; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=ic_cell_folder=="" ? -1 : 0) = addGridCombo(retrieveID("configs", config_folder), retrieveID("rulesets_collections", rulesets_collection_folder), retrieveID("ic_cells", ic_cell_folder), pv; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id)
+addGrid(config_folder::String, rulesets_collection_folder::String, ic_cell_folder::String, pv::ParsedVariations; kwargs...) = addGrid(retrieveID("configs", config_folder), retrieveID("rulesets_collections", rulesets_collection_folder), retrieveID("ic_cells", ic_cell_folder), pv; kwargs...)
+
+function gridToDB(AV::Vector{<:AbstractVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function)
+    new_values = [_values(av) for av in AV]
+
+    static_values, table_features = setUpColumns(AV, addColumnsByPathsFn, prepareAddNewFn)
+
+    NDG = ndgrid(new_values...)
+    sz_variations = size(NDG[1])
+    variation_ids = zeros(Int, sz_variations)
+    for i in eachindex(NDG[1])
+        varied_values = [A[i] for A in NDG] .|> string |> x -> join("\"" .* x .* "\"", ",")
+        variation_ids[i] = addRowFn(table_features, static_values, varied_values)
+    end
+    return variation_ids |> vec
+end
 
 ################## Latin Hypercube Sampling Functions ##################
 
@@ -486,40 +445,7 @@ function generateLHSCDFs(n::Int, d::Int; add_noise::Bool=false, rng::AbstractRNG
     return cdfs[lhs_inds]
 end
 
-function addLHS(n::Integer, AV::Vector{<:AbstractVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function; add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG, orthogonalize::Bool=true)
-    d = length(AV)
-    cdfs = generateLHSCDFs(n, d; add_noise=add_noise, rng=rng, orthogonalize=orthogonalize)
-    return cdfsToVariations(cdfs, AV, addColumnsByPathsFn, prepareAddNewFn, addRowFn)
-end
-
-function addLHSConfigVariation(n::Integer, config_id::Int, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG)
-    fns = prepareConfigVariationFunctions(config_id, AV; reference_config_variation_id=reference_config_variation_id)
-    return addLHS(n, AV, fns...; add_noise=add_noise, rng=rng)
-end
-
-addLHSConfigVariation(n::Integer, config_folder::String, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSConfigVariation(n, retrieveID("configs", config_folder), AV; reference_config_variation_id=reference_config_variation_id, add_noise=add_noise, rng=rng)
-addLHSConfigVariation(n::Integer, config_id::Int, AV::AbstractVariation; reference_config_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSConfigVariation(n, config_id, [AV]; reference_config_variation_id=reference_config_variation_id, add_noise=add_noise, rng=rng)
-addLHSConfigVariation(n::Integer, config_folder::String, AV::AbstractVariation; reference_config_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSConfigVariation(n, config_folder, [AV]; reference_config_variation_id=reference_config_variation_id, add_noise=add_noise, rng=rng)
-
-function addLHSRulesetsVariation(n::Integer, rulesets_collection_id::Int, AV::Vector{<:AbstractVariation}; reference_rulesets_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG)
-    fns = prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)
-    return addLHS(n, AV, fns...; add_noise=add_noise, rng=rng)
-end
-
-addLHSRulesetsVariation(n::Integer, rulesets_collection_folder::String, AV::Vector{<:AbstractVariation}; reference_config_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSRulesetsVariation(n, retrieveID("rulesets_collections", rulesets_collection_folder), AV; reference_config_variation_id=reference_config_variation_id, add_noise=add_noise, rng=rng)
-addLHSRulesetsVariation(n::Integer, rulesets_collection_id::Int, AV::AbstractVariation; reference_config_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSRulesetsVariation(n, rulesets_collection_id, [AV]; reference_config_variation_id=reference_config_variation_id, add_noise=add_noise, rng=rng)
-addLHSRulesetsVariation(n::Integer, rulesets_collection_folder::String, AV::AbstractVariation; reference_config_variation_id::Int=0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSRulesetsVariation(n, rulesets_collection_folder, [AV]; reference_config_variation_id=reference_config_variation_id, add_noise=add_noise, rng=rng)
-
-function addLHSICCellVariation(n::Integer, ic_cell_id::Int, AV::Vector{<:AbstractVariation}; reference_ic_cell_variation_id::Int=ic_cell_id==-1 ? -1 : 0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG)
-    fns = prepareICCellVariationFunctions(ic_cell_id; reference_ic_cell_variation_id=reference_ic_cell_variation_id)
-    return addLHS(n, AV, fns...; add_noise=add_noise, rng=rng)
-end
-
-addLHSICCellVariation(n::Integer, ic_cell_folder::String, AV::Vector{<:AbstractVariation}; reference_ic_cell_variation_id::Int=ic_cell_folder=="" ? -1 : 0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSICCellVariation(n, retrieveID("ic_cells", ic_cell_folder), AV; reference_ic_cell_variation_id=reference_ic_cell_variation_id, add_noise=add_noise, rng=rng)
-addLHSICCellVariation(n::Integer, ic_cell_id::Int, AV::AbstractVariation; reference_ic_cell_variation_id::Int=ic_cell_id==-1 ? -1 : 0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSICCellVariation(n, ic_cell_id, [AV]; reference_ic_cell_variation_id=reference_ic_cell_variation_id, add_noise=add_noise, rng=rng)
-addLHSICCellVariation(n::Integer, ic_cell_folder::String, AV::AbstractVariation; reference_ic_cell_variation_id::Int=ic_cell_folder=="" ? -1 : 0, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG) = addLHSICCellVariation(n, ic_cell_folder, [AV]; reference_ic_cell_variation_id=reference_ic_cell_variation_id, add_noise=add_noise, rng=rng)
-
-function addLHSCombo(lhs_variation::LHSVariation, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, pv::ParsedVariations; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=ic_cell_id==-1 ? -1 : 0)
+function addLHS(lhs_variation::LHSVariation, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, pv::ParsedVariations; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=ic_cell_id==-1 ? -1 : 0)
     d = length(pv.config_variations) + length(pv.rulesets_variations) + length(pv.ic_cell_variations)
     cdfs = generateLHSCDFs(lhs_variation.n, d; add_noise=lhs_variation.add_noise, rng=lhs_variation.rng, orthogonalize=lhs_variation.orthogonalize)
     if isempty(pv.config_variations)
@@ -581,7 +507,7 @@ end
 
 generateSobolCDFs(sobol_variation::SobolVariation, d::Int) = generateSobolCDFs(sobol_variation.n, d; n_matrices=sobol_variation.n_matrices, randomization=sobol_variation.randomization, skip_start=sobol_variation.skip_start, include_one=sobol_variation.include_one)
 
-function addSobolCombo(sobol_variation::SobolVariation, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, pv::ParsedVariations; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=ic_cell_id==-1 ? -1 : 0)
+function addSobol(sobol_variation::SobolVariation, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, pv::ParsedVariations; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=ic_cell_id==-1 ? -1 : 0)
     d = length(pv.config_variations) + length(pv.rulesets_variations) + length(pv.ic_cell_variations)
     cdfs = generateSobolCDFs(sobol_variation, d) # cdfs is (d, sobol_variation.n_matrices, sobol_variation.n)
     cdfs_reshaped = reshape(cdfs, (d, sobol_variation.n_matrices * sobol_variation.n)) # reshape to (d, sobol_variation.n_matrices * sobol_variation.n) so that each column is a sobol sample
@@ -682,7 +608,7 @@ function createSortedRBDMatrix(variation_ids::Vector{Int}, S::AbstractMatrix{Flo
     return variations_matrix
 end
 
-function addRBDCombo(rbd_variation::RBDVariation, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, pv::ParsedVariations; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=ic_cell_id==-1 ? -1 : 0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true)
+function addRBD(rbd_variation::RBDVariation, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, pv::ParsedVariations; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=ic_cell_id==-1 ? -1 : 0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true)
     d = length(pv.config_variations) + length(pv.rulesets_variations) + length(pv.ic_cell_variations)
     cdfs, S = generateRBDCDFs(rbd_variation, d)
     if isempty(pv.config_variations)
@@ -712,7 +638,7 @@ function cdfsToVariations(cdfs::AbstractMatrix{Float64}, AV::Vector{<:AbstractVa
     n = size(cdfs, 1)
     new_values = []
     for (i, av) in enumerate(AV)
-        new_value = getVariationValues(av, cdfs[:,i]) # ok, all the new values for the given parameter
+        new_value = _values(av, cdfs[:,i]) # ok, all the new values for the given parameter
         push!(new_values, new_value)
     end
 
@@ -728,22 +654,22 @@ function cdfsToVariations(cdfs::AbstractMatrix{Float64}, AV::Vector{<:AbstractVa
 end
 
 function prepareConfigVariationFunctions(config_id::Int, AV::Vector{<:AbstractVariation}; reference_config_variation_id=0)
-    addColumnsByPathsFn = (paths) -> addConfigVariationColumns(config_id, paths, [getVariationDataType(av) for av in AV])
-    prepareAddNewFn = (static_column_names, varied_column_names) -> prepareAddNewConfigVariations(config_id, static_column_names, varied_column_names; reference_config_variation_id=reference_config_variation_id)
-    addRowFn = (features, static_values, varied_values) -> addConfigVariationRow(config_id, features, static_values, varied_values)
+    addColumnsByPathsFn = (paths) -> addConfigVariationColumns(config_id, paths, [dataType(av) for av in AV])
+    prepareAddNewFn = (args...) -> prepareAddNewConfigVariations(config_id, args...; reference_config_variation_id=reference_config_variation_id)
+    addRowFn = (args...) -> addConfigVariationRow(config_id, args...)
     return addColumnsByPathsFn, prepareAddNewFn, addRowFn
 end
 
 function prepareRulesetsVariationFunctions(rulesets_collection_id::Int; reference_rulesets_variation_id::Int=0)
     addColumnsByPathsFn = (paths) -> addRulesetsVariationsColumns(rulesets_collection_id, paths)
-    prepareAddNewFn = (static_column_names, varied_column_names) -> prepareAddNewRulesetsVariations(rulesets_collection_id, static_column_names, varied_column_names; reference_rulesets_variation_id=reference_rulesets_variation_id)
-    addRowFn = (features, static_values, varied_values) -> addRulesetsVariationRow(rulesets_collection_id, features, static_values, varied_values)
+    prepareAddNewFn = (args...) -> prepareAddNewRulesetsVariations(rulesets_collection_id, args...; reference_rulesets_variation_id=reference_rulesets_variation_id)
+    addRowFn = (args...) -> addRulesetsVariationRow(rulesets_collection_id, args...)
     return addColumnsByPathsFn, prepareAddNewFn, addRowFn
 end
 
 function prepareICCellVariationFunctions(ic_cell_id::Int; reference_ic_cell_variation_id::Int=0)
     addColumnsByPathsFn = (paths) -> addICCellVariationColumns(ic_cell_id, paths)
-    prepareAddNewFn = (static_column_names, varied_column_names) -> prepareAddNewICCellVariations(ic_cell_id, static_column_names, varied_column_names; reference_ic_cell_variation_id=reference_ic_cell_variation_id)
-    addRowFn = (features, static_values, varied_values) -> addICCellVariationRow(ic_cell_id, features, static_values, varied_values)
+    prepareAddNewFn = (args...) -> prepareAddNewICCellVariations(ic_cell_id, args...; reference_ic_cell_variation_id=reference_ic_cell_variation_id)
+    addRowFn = (args...) -> addICCellVariationRow(ic_cell_id, args...)
     return addColumnsByPathsFn, prepareAddNewFn, addRowFn
 end

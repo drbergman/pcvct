@@ -82,28 +82,29 @@ n_success = runAbstractTrial(sampling; force_recompile=false)
 @test length(sampling) == length(config_variation_ids) * monad_min_length
 
 ## test the in place functions
+# NOTE to users: do not use gridToDB. This is here temporarily as internal code gets refactored.
 reference_config_variation_id = config_variation_ids[1] # just get one with the short max_time
 config_variation_ids = Int[]
 EV = ElementaryVariation[]
 addDomainVariationDimension!(EV, (-78.0, 78.0, -30.0, 30.0, -10.0, 10.0))
-new_config_variation_ids = pcvct.addGridConfigVariation(config_folder, EV; reference_config_variation_id=reference_config_variation_id)
+new_config_variation_ids = pcvct.gridToDB(EV, pcvct.prepareConfigVariationFunctions(pcvct.retrieveID("configs", config_folder), EV; reference_config_variation_id=reference_config_variation_id)...)
 append!(config_variation_ids, new_config_variation_ids)
 
 
 EV = ElementaryVariation[]
 addDomainVariationDimension!(EV, (x_min=-78.1, x_max=78.1, y_min=-30.1, y_max=30.1, z_min=-10.1, z_max=10.1))
-new_config_variation_ids = pcvct.addGridConfigVariation(config_folder, EV; reference_config_variation_id=reference_config_variation_id)
+new_config_variation_ids = pcvct.gridToDB(EV, pcvct.prepareConfigVariationFunctions(pcvct.retrieveID("configs", config_folder), EV; reference_config_variation_id=reference_config_variation_id)...)
 append!(config_variation_ids, new_config_variation_ids)
 
 EV = ElementaryVariation[]
 addDomainVariationDimension!(EV, (min_x=-78.2, maxy=30.2))
-new_config_variation_ids = pcvct.addGridConfigVariation(config_folder, EV; reference_config_variation_id=reference_config_variation_id)
+new_config_variation_ids = pcvct.gridToDB(EV, pcvct.prepareConfigVariationFunctions(pcvct.retrieveID("configs", config_folder), EV; reference_config_variation_id=reference_config_variation_id)...)
 append!(config_variation_ids, new_config_variation_ids)
 
 EV = ElementaryVariation[]
 addMotilityVariationDimension!(EV, cell_type, "speed", [0.1, 1.0])
 addCustomDataVariationDimension!(EV, cell_type, "sample", [0.1, 1.0])
-new_config_variation_ids = pcvct.addGridConfigVariation(config_folder, EV; reference_config_variation_id=reference_config_variation_id)
+new_config_variation_ids = pcvct.gridToDB(EV, pcvct.prepareConfigVariationFunctions(pcvct.retrieveID("configs", config_folder), EV; reference_config_variation_id=reference_config_variation_id)...)
 append!(config_variation_ids, new_config_variation_ids)
 
 sampling = Sampling(config_folder, custom_code_folder;
@@ -122,7 +123,7 @@ push!(EV, ElementaryVariation(xml_path, [0.0, 1e-8]))
 xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","signal:name:pressure","half_max"]
 push!(EV, ElementaryVariation(xml_path, [0.25, 0.75]))
 
-rulesets_variation_ids = pcvct.addGridRulesetsVariation(rulesets_collection_folder, EV)
+rulesets_variation_ids = pcvct.gridToDB(EV, pcvct.prepareRulesetsVariationFunctions(pcvct.retrieveID("rulesets_collections", rulesets_collection_folder))...)
 
 sampling = Sampling(config_folder, custom_code_folder;
     monad_min_length=monad_min_length,
