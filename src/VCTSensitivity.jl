@@ -32,7 +32,7 @@ struct MOAT <: GSAMethod
 end
 
 MOAT() = MOAT(LHSVariation(15)) # default to 15 points
-MOAT(n::Int) = MOAT(LHSVariation(n))
+MOAT(n::Int; kwargs...) = MOAT(LHSVariation(n; kwargs...))
 
 struct MOATSampling <: GSASampling
     sampling::Sampling

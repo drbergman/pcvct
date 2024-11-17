@@ -229,6 +229,7 @@ struct LHSVariation <: AddVariationMethod
     orthogonalize::Bool
 end
 LHSVariation(n; add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG, orthogonalize::Bool=true) = LHSVariation(n, add_noise, rng, orthogonalize)
+LHSVariation(; n::Int=4, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG, orthogonalize::Bool=true) = LHSVariation(n, add_noise, rng, orthogonalize)
 
 struct SobolVariation <: AddVariationMethod
     n::Int
