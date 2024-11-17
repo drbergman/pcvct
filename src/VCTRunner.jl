@@ -41,17 +41,11 @@ function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=miss
     catch e
         println("\tSimulation $(simulation.id) failed.")
         # write the execution command to output.err
+        lines = readlines(joinpath(path_to_simulation_folder, "output.err"))
         open(joinpath(path_to_simulation_folder, "output.err"), "w+") do io
             # read the lines of the output.err file
-            println(io, "Execution command: $cmd\n")
-            println(io, "Error: $(e.message)\n")
-            println(io, "Stacktrace:")
-            for (i, line) in enumerate(stacktrace(e))
-                println(io, "$i: $line")
-            end
-            println()
-            lines = readlines(joinpath(path_to_simulation_folder, "output.err"))
             println(io, "Execution command: $cmd")
+            println(io, "\n---stderr from PhysiCell---")
             for line in lines
                 println(io, line)
             end

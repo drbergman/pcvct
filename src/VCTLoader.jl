@@ -155,6 +155,8 @@ function PhysiCellSnapshot(folder::String, index::Union{Int, Symbol}; include_ce
     return PhysiCellSnapshot(folder, index, time, DataFrame(cells), substrates, mesh)
 end
 
+PhysiCellSnapshot(simulation_id::Integer, index::Union{Int, Symbol}; kwargs...) = PhysiCellSnapshot(joinpath(data_dir, "outputs", "simulations", string(simulation_id), "output"), index; kwargs...)
+
 function loadCells!(cells::DataFrame, filepath_base::String, cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}(), labels::Vector{String}=String[])
     if !isempty(cells)
         return
