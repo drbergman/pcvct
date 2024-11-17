@@ -39,5 +39,5 @@ sampling = Sampling(config_folder, custom_code_folder;
 
 hashBorderPrint("SUCCESSFULLY CREATED SAMPLING WITH IC CELL VARIATION!")
 
-n_success = runAbstractTrial(sampling)
+n_success = runAbstractTrial(sampling; force_recompile=false)
 

@@ -130,8 +130,8 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         # ...for now, just know we're setting the max time to 60 minutes
         """))\
         xml_path = [\"overall\"; \"max_time\"]
-        values = [60.0]
-        ev_max_time = ElementaryVariation(xml_path, values)
+        value = 60.0
+        ev_max_time = ElementaryVariation(xml_path, value)
         config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, [ev_max_time])
         reference_config_variation_id = config_variation_ids[1]
         reference_rulesets_variation_id = rulesets_variation_ids[1]
