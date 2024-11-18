@@ -6,7 +6,7 @@ function deleteSimulation(simulation_ids::AbstractVector{<:Integer}; delete_supe
     for row in eachrow(sim_df)
         rm(joinpath(data_dir, "outputs", "simulations", string(row.simulation_id)); force=true, recursive=true)
 
-        config_folder = getConfigFolder(row.config_id)
+        config_folder = configFolder(row.config_id)
         result_df = constructSelectQuery(
             "simulations",
             "WHERE config_id = $(row.config_id) AND config_variation_id = $(row.config_variation_id);";
@@ -16,7 +16,7 @@ function deleteSimulation(simulation_ids::AbstractVector{<:Integer}; delete_supe
             rm(joinpath(data_dir, "inputs", "configs", config_folder, "config_variations", "config_variation_$(row.config_variation_id).xml"); force=true)
         end
 
-        rulesets_collection_folder = getRulesetsCollectionFolder(row.rulesets_collection_id)
+        rulesets_collection_folder = rulesetsCollectionFolder(row.rulesets_collection_id)
         result_df = constructSelectQuery(
             "simulations",
             "WHERE rulesets_collection_id = $(row.rulesets_collection_id) AND rulesets_variation_id = $(row.rulesets_variation_id);";
@@ -26,7 +26,7 @@ function deleteSimulation(simulation_ids::AbstractVector{<:Integer}; delete_supe
             rm(joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder, "rulesets_collections_variations", "rulesets_variation_$(row.rulesets_variation_id).xml"); force=true)
         end
 
-        ic_cell_folder = getICCellFolder(row.ic_cell_id)
+        ic_cell_folder = icCellFolder(row.ic_cell_id)
         result_df = constructSelectQuery(
             "simulations",
             "WHERE ic_cell_id = $(row.ic_cell_id) AND ic_cell_variation_id = $(row.ic_cell_variation_id);";
@@ -41,7 +41,7 @@ function deleteSimulation(simulation_ids::AbstractVector{<:Integer}; delete_supe
         return nothing
     end
 
-    monad_ids = constructSelectQuery("monads", "", selection="monad_id") |> queryToDataFrame |> x -> x.monad_id
+    monad_ids = constructSelectQuery("monads"; selection="monad_id") |> queryToDataFrame |> x -> x.monad_id
     monad_ids_to_delete = Int[]
     for monad_id in monad_ids
         monad_simulation_ids = readMonadSimulationIDs(monad_id)
@@ -81,7 +81,7 @@ function deleteMonad(monad_ids::AbstractVector{<:Integer}; delete_subs::Bool=tru
         return nothing
     end
 
-    sampling_ids = constructSelectQuery("samplings", "", selection="sampling_id") |> queryToDataFrame |> x -> x.sampling_id
+    sampling_ids = constructSelectQuery("samplings"; selection="sampling_id") |> queryToDataFrame |> x -> x.sampling_id
     sampling_ids_to_delete = Int[]
     for sampling_id in sampling_ids
         sampling_monad_ids = readSamplingMonadIDs(sampling_id)
@@ -113,7 +113,7 @@ function deleteSampling(sampling_ids::AbstractVector{<:Integer}; delete_subs::Bo
         rm(joinpath(data_dir, "outputs", "samplings", string(sampling_id)); force=true, recursive=true)
     end
     if !isempty(monad_ids_to_delete)
-        all_sampling_ids = constructSelectQuery("samplings", "", selection="sampling_id") |> queryToDataFrame |> x -> x.sampling_id
+        all_sampling_ids = constructSelectQuery("samplings"; selection="sampling_id") |> queryToDataFrame |> x -> x.sampling_id
         for sampling_id in all_sampling_ids
             if sampling_id in sampling_ids
                 continue # skip the samplings to be deleted (we want to delete their monads)
@@ -129,7 +129,7 @@ function deleteSampling(sampling_ids::AbstractVector{<:Integer}; delete_subs::Bo
         return nothing
     end
 
-    trial_ids = constructSelectQuery("trials", "", selection="trial_id") |> queryToDataFrame |> x -> x.trial_id
+    trial_ids = constructSelectQuery("trials"; selection="trial_id") |> queryToDataFrame |> x -> x.trial_id
     trial_ids_to_delete = Int[]
     for trial_id in trial_ids
         trial_sampling_ids = readTrialSamplingIDs(trial_id)
@@ -161,7 +161,7 @@ function deleteTrial(trial_ids::AbstractVector{<:Integer}; delete_subs::Bool=tru
         rm(joinpath(data_dir, "outputs", "trials", string(trial_id)); force=true, recursive=true)
     end
     if !isempty(sampling_ids_to_delete)
-        all_trial_ids = constructSelectQuery("trials", "", selection="trial_id") |> queryToDataFrame |> x -> x.trial_id
+        all_trial_ids = constructSelectQuery("trials"; selection="trial_id") |> queryToDataFrame |> x -> x.trial_id
         for trial_id in all_trial_ids
             if trial_id in trial_ids
                 continue # skip the trials to be deleted (we want to delete their samplings)
@@ -204,7 +204,7 @@ function resetDatabase(; force_reset::Bool=false, force_continue::Bool=false)
         resetConfigFolder(config_folder)
     end
 
-    config_folders = constructSelectQuery("configs", "", selection="folder_name") |> queryToDataFrame |> x -> x.folder_name
+    config_folders = constructSelectQuery("configs"; selection="folder_name") |> queryToDataFrame |> x -> x.folder_name
     for config_folder in config_folders
         resetConfigFolder(joinpath(data_dir, "inputs", "configs", config_folder))
     end
@@ -213,7 +213,7 @@ function resetDatabase(; force_reset::Bool=false, force_continue::Bool=false)
         resetRulesetsCollectionFolder(path_to_rulesets_collection_folder)
     end
     
-    rulesets_collection_folders = constructSelectQuery("rulesets_collections", "", selection="folder_name") |> queryToDataFrame |> x -> x.folder_name
+    rulesets_collection_folders = constructSelectQuery("rulesets_collections"; selection="folder_name") |> queryToDataFrame |> x -> x.folder_name
     for rulesets_collection_folder in rulesets_collection_folders
         resetRulesetsCollectionFolder(joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder))
     end
@@ -222,7 +222,7 @@ function resetDatabase(; force_reset::Bool=false, force_continue::Bool=false)
         resetICCellFolder(ic_cell_folder)
     end
 
-    ic_cell_folders = constructSelectQuery("ic_cells", "", selection="folder_name") |> queryToDataFrame |> x -> x.folder_name
+    ic_cell_folders = constructSelectQuery("ic_cells"; selection="folder_name") |> queryToDataFrame |> x -> x.folder_name
     for ic_cell_folder in ic_cell_folders
         resetICCellFolder(joinpath(data_dir, "inputs", "ics", "cells", ic_cell_folder))
     end
@@ -234,7 +234,7 @@ function resetDatabase(; force_reset::Bool=false, force_continue::Bool=false)
         end
     end
 
-    custom_code_folders = constructSelectQuery("custom_codes", "", selection="folder_name") |> queryToDataFrame |> x -> x.folder_name
+    custom_code_folders = constructSelectQuery("custom_codes"; selection="folder_name") |> queryToDataFrame |> x -> x.folder_name
     for custom_code_folder in custom_code_folders
         rm(joinpath(data_dir, "inputs", "custom_codes", custom_code_folder, baseToExecutable("project")); force=true)
     end

@@ -151,7 +151,7 @@ getMeanCounts(m::MonadPopulationTimeSeries) = m.cell_count_means
 end
 
 @recipe function f(sampling::Sampling; include_dead=false)
-    df = pcvct.getSimulationsTable(sampling)
+    df = pcvct.simulationsTable(sampling)
     monads = []
     title_tuples = []
     for monad_id in sampling.monad_ids

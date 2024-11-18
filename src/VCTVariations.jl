@@ -104,8 +104,8 @@ function addColumns(xml_paths::Vector{Vector{String}}, table_name::String, id_co
 end
 
 function addConfigVariationColumns(config_id::Int, xml_paths::Vector{Vector{String}}, variable_types::Vector{DataType})
-    config_folder = getConfigFolder(config_id)
-    db_columns = getConfigDB(config_folder)
+    config_folder = configFolder(config_id)
+    db_columns = configDB(config_folder)
     path_to_xml = joinpath(data_dir, "inputs", "configs", config_folder, "PhysiCell_settings.xml")
     dataTypeRulesFn = (i, _) -> begin
         if variable_types[i] == Bool
@@ -122,8 +122,8 @@ function addConfigVariationColumns(config_id::Int, xml_paths::Vector{Vector{Stri
 end
 
 function addRulesetsVariationsColumns(rulesets_collection_id::Int, xml_paths::Vector{Vector{String}})
-    rulesets_collection_folder = getRulesetsCollectionFolder(rulesets_collection_id)
-    db_columns = getRulesetsCollectionDB(rulesets_collection_folder)
+    rulesets_collection_folder = rulesetsCollectionFolder(rulesets_collection_id)
+    db_columns = rulesetsCollectionDB(rulesets_collection_folder)
     path_to_rulesets_collection_folder = joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder)
     path_to_base_xml = joinpath(path_to_rulesets_collection_folder, "base_rulesets.xml")
     if !isfile(path_to_base_xml)
@@ -134,8 +134,8 @@ function addRulesetsVariationsColumns(rulesets_collection_id::Int, xml_paths::Ve
 end
 
 function addICCellVariationColumns(ic_cell_id::Int, xml_paths::Vector{Vector{String}})
-    ic_cell_folder = getICCellFolder(ic_cell_id)
-    db_columns = getICCellDB(ic_cell_folder)
+    ic_cell_folder = icCellFolder(ic_cell_id)
+    db_columns = icCellDB(ic_cell_folder)
     path_to_ic_cell_folder = joinpath(data_dir, "inputs", "ics", "cells", ic_cell_folder)
     path_to_base_xml = joinpath(path_to_ic_cell_folder, "cells.xml")
     dataTypeRulesFn = (_, name) -> endswith(name, "number") ? "INT" : "REAL"
@@ -153,7 +153,7 @@ function addRow(db_columns::SQLite.DB, table_name::String, id_name::String, tabl
 end
 
 function addConfigVariationRow(config_id::Int, table_features::String, values::String)
-    db_columns = getConfigDB(config_id)
+    db_columns = configDB(config_id)
     return addRow(db_columns, "config_variations", "config_variation_id", table_features, values)
 end
 
@@ -162,7 +162,7 @@ function addConfigVariationRow(config_id::Int, table_features::String, static_va
 end
 
 function addRulesetsVariationRow(rulesets_collection_id::Int, table_features::String, values::String)
-    db_columns = getRulesetsCollectionDB(rulesets_collection_id)
+    db_columns = rulesetsCollectionDB(rulesets_collection_id)
     return addRow(db_columns, "rulesets_variations", "rulesets_variation_id", table_features, values)
 end
 
@@ -171,7 +171,7 @@ function addRulesetsVariationRow(rulesets_collection_id::Int, table_features::St
 end
 
 function addICCellVariationRow(ic_cell_id::Int, table_features::String, values::String)
-    db_columns = getICCellDB(ic_cell_id)
+    db_columns = icCellDB(ic_cell_id)
     return addRow(db_columns, "ic_cell_variations", "ic_cell_variation_id", table_features, values)
 end
 
@@ -204,17 +204,17 @@ function prepareAddNew(db_columns::SQLite.DB, static_column_names::Vector{String
 end
 
 function prepareAddNewConfigVariations(config_id::Int, static_column_names::Vector{String}, varied_column_names::Vector{String}; reference_config_variation_id::Int=0)
-    db_columns = getConfigDB(config_id)
+    db_columns = configDB(config_id)
     return prepareAddNew(db_columns, static_column_names, varied_column_names, "config_variations", "config_variation_id", reference_config_variation_id)
 end
 
 function prepareAddNewRulesetsVariations(rulesets_collection_id::Int, static_column_names::Vector{String}, varied_column_names::Vector{String}; reference_rulesets_variation_id::Int=0)
-    db_columns = getRulesetsCollectionDB(rulesets_collection_id)
+    db_columns = rulesetsCollectionDB(rulesets_collection_id)
     return prepareAddNew(db_columns, static_column_names, varied_column_names, "rulesets_variations", "rulesets_variation_id", reference_rulesets_variation_id)
 end
 
 function prepareAddNewICCellVariations(ic_cell_id::Int, static_column_names::Vector{String}, varied_column_names::Vector{String}; reference_ic_cell_variation_id::Int=ic_cell_id==-1 ? -1 : 0)
-    db_columns = getICCellDB(ic_cell_id)
+    db_columns = icCellDB(ic_cell_id)
     return prepareAddNew(db_columns, static_column_names, varied_column_names, "ic_cell_variations", "ic_cell_variation_id", reference_ic_cell_variation_id)
 end
 

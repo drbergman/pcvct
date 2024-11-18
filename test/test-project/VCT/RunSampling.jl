@@ -58,7 +58,7 @@ end
 
 hashBorderPrint("SIMULATION SUCCESSFULLY RUN!")
 
-query = pcvct.constructSelectQuery("simulations", "")
+query = pcvct.constructSelectQuery("simulations")
 df = pcvct.queryToDataFrame(query; is_row=true)
 
 hashBorderPrint("SIMULATION SUCCESSFULLY IN DB!")
