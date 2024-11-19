@@ -9,7 +9,7 @@ path_to_physicell_folder = "./test-project/PhysiCell" # path to PhysiCell folder
 path_to_data_folder = "./test-project/data" # path to data folder
 initializeVCT(path_to_physicell_folder, path_to_data_folder)
 
-getSimulationsTable()
+simulationsTable()
 simulation_ids = 1:5
 printSimulationsTable(simulation_ids)
 pcvct.printConfigVariationsTable(simulation_ids)

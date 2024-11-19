@@ -119,7 +119,7 @@ end
 
 function getConfigBaseValue(column_name::String, config_variation_id::Int, folder::String)
     query = constructSelectQuery("config_variations", "WHERE config_variation_id=$config_variation_id;"; selection="\"$(column_name)\"")
-    variation_value_df = queryToDataFrame(query; db=getConfigDB(folder), is_row=true)
+    variation_value_df = queryToDataFrame(query; db=configDB(folder), is_row=true)
     return variation_value_df[1,1]
 end
 
@@ -130,7 +130,7 @@ end
 
 function getRulesetsBaseValue(column_name::String, rulesets_variation_id::Int, folder::String)
     query = constructSelectQuery("rulesets_variations", "WHERE rulesets_variation_id=$rulesets_variation_id;"; selection="\"$(column_name)\"")
-    variation_value_df = queryToDataFrame(query; db=getRulesetsCollectionDB(folder), is_row=true)
+    variation_value_df = queryToDataFrame(query; db=rulesetsCollectionDB(folder), is_row=true)
     return variation_value_df[1,1]
 end
 
@@ -141,7 +141,7 @@ end
 
 function getICCellBaseValue(column_name::String, ic_cell_variation_id::Int, folder::String)
     query = constructSelectQuery("ic_cell_variations", "WHERE ic_cell_variation_id=$ic_cell_variation_id;"; selection="\"$(column_name)\"")
-    variation_value_df = queryToDataFrame(query; db=getICCellDB(folder), is_row=true)
+    variation_value_df = queryToDataFrame(query; db=icCellDB(folder), is_row=true)
     return variation_value_df[1,1]
 end
 

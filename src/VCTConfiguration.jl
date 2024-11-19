@@ -107,7 +107,7 @@ function loadConfiguration(M::AbstractMonad)
 
     xml_doc = openXML(path_to_xml)
     query = constructSelectQuery("config_variations", "WHERE config_variation_id=$(M.variation_ids.config_variation_id);")
-    variation_row = queryToDataFrame(query; db=getConfigDB(M.folder_names.config_folder), is_row=true)
+    variation_row = queryToDataFrame(query; db=configDB(M.folder_names.config_folder), is_row=true)
     for column_name in names(variation_row)
         if column_name == "config_variation_id"
             continue
@@ -148,7 +148,7 @@ function loadRulesets(M::AbstractMonad)
     xml_doc = parse_file(path_to_base_xml)
     if M.variation_ids.rulesets_variation_id != 0 # only update if not using the base variation for the ruleset
         query = constructSelectQuery("rulesets_variations", "WHERE rulesets_variation_id=$(M.variation_ids.rulesets_variation_id);")
-        variation_row = queryToDataFrame(query; db=getRulesetsCollectionDB(M), is_row=true)
+        variation_row = queryToDataFrame(query; db=rulesetsCollectionDB(M), is_row=true)
         for column_name in names(variation_row)
             if column_name == "rulesets_variation_id"
                 continue
@@ -180,7 +180,7 @@ function loadICCells(M::AbstractMonad)
     xml_doc = parse_file(path_to_base_xml)
     if M.variation_ids.ic_cell_variation_id != 0 # only update if not using the base variation for the ic cells
         query = constructSelectQuery("ic_cell_variations", "WHERE ic_cell_variation_id=$(M.variation_ids.ic_cell_variation_id);")
-        variation_row = queryToDataFrame(query; db=getICCellDB(M.folder_names.ic_cell_folder), is_row=true)
+        variation_row = queryToDataFrame(query; db=icCellDB(M.folder_names.ic_cell_folder), is_row=true)
         for column_name in names(variation_row)
             if column_name == "ic_cell_variation_id"
                 continue

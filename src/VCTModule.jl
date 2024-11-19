@@ -14,7 +14,6 @@ include("VCTConfiguration.jl")
 include("VCTCreation.jl")
 include("VCTDatabase.jl") 
 include("VCTDeletion.jl")
-# include("VCTExtraction.jl")
 include("VCTICCell.jl")
 include("VCTLoader.jl")
 include("VCTMovie.jl")
@@ -22,6 +21,7 @@ include("VCTRunner.jl")
 include("VCTRecorder.jl")
 include("VCTSensitivity.jl")
 include("VCTVersion.jl")
+include("VCTPhysiCellVersion.jl")
 
 include("VCTAnalysis.jl")
 
@@ -30,6 +30,7 @@ include("VCTPhysiCellStudio.jl")
 VERSION >= v"1.11" && include("public.julia")
 
 physicell_dir::String = abspath("PhysiCell")
+current_physicell_version_id = missing
 data_dir::String = abspath("data")
 PHYSICELL_CPP::String = haskey(ENV, "PHYSICELL_CPP") ? ENV["PHYSICELL_CPP"] : "/opt/homebrew/bin/g++-14"
 if Sys.iswindows()
@@ -87,8 +88,10 @@ function initializeVCT(path_to_physicell::String, path_to_data::String; auto_upg
         println("Database initialization failed.")
         return
     end
-    println(rpad("Compiler:", 20, ' ') * PHYSICELL_CPP)
+    global current_physicell_version_id = physicellVersionID()
+    println(rpad("PhysiCell version:", 20, ' ') * physicellVersion())
     println(rpad("pcvct version:", 20, ' ') * string(pcvctVersion()))
+    println(rpad("Compiler:", 20, ' ') * PHYSICELL_CPP)
     flush(stdout)
 end
 
@@ -178,7 +181,7 @@ function getTrialSimulations(trial_id::Int)
     return vcat([getSamplingSimulations(sampling_id) for sampling_id in sampling_ids]...)
 end
 
-getSimulationIDs() = constructSelectQuery("simulations", "", selection="simulation_id") |> queryToDataFrame |> x -> x.simulation_id
+getSimulationIDs() = constructSelectQuery("simulations"; selection="simulation_id") |> queryToDataFrame |> x -> x.simulation_id
 getSimulationIDs(simulation::Simulation) = [simulation.id]
 getSimulationIDs(monad::Monad) = readMonadSimulationIDs(monad.id)
 getSimulationIDs(sampling::Sampling) = getSamplingSimulations(sampling.id)
@@ -190,7 +193,7 @@ function getTrialMonads(trial_id::Int)
     return vcat([readSamplingMonadIDs(sampling_id) for sampling_id in sampling_ids]...)
 end
 
-getMonadIDs() = constructSelectQuery("monads", "", selection="monad_id") |> queryToDataFrame |> x -> x.monad_id
+getMonadIDs() = constructSelectQuery("monads"; selection="monad_id") |> queryToDataFrame |> x -> x.monad_id
 getMonadIDs(monad::Monad) = [monad.id]
 getMonadIDs(sampling::Sampling) = readSamplingMonadIDs(sampling.id)
 getMonadIDs(trial::Trial) = getTrialMonads(trial.id)

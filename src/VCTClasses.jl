@@ -122,11 +122,13 @@ end
 function Simulation(folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_ids::VariationIDs)
     simulation_id = DBInterface.execute(db, 
     """
-    INSERT INTO simulations (config_id,rulesets_collection_id,\
+    INSERT INTO simulations (physicell_version_id,\
+    config_id,rulesets_collection_id,\
     ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id,\
     $(join([string(field) for field in fieldnames(VariationIDs)],",")),\
     status_code_id) \
     VALUES(\
+        $(physicellVersionDBEntry()),\
         $(folder_ids.config_id),$(folder_ids.rulesets_collection_id),\
         $(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),\
         $(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id),\
@@ -216,11 +218,12 @@ end
 function Monad(min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_ids::VariationIDs; use_previous_simulations::Bool=true)
     monad_id = DBInterface.execute(db, 
     """
-    INSERT OR IGNORE INTO monads (config_id,rulesets_collection_id,\
+    INSERT OR IGNORE INTO monads (physicell_version_id,config_id,rulesets_collection_id,\
     ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id,\
     $(join([string(field) for field in fieldnames(VariationIDs)],","))\
     ) \
     VALUES(\
+        $(physicellVersionDBEntry()),\
         $(folder_ids.config_id),$(folder_ids.rulesets_collection_id),\
         $(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),\
         $(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id),\
@@ -393,9 +396,9 @@ function Sampling(monad_min_length::Int, monad_ids::AbstractVector{<:Integer}, f
     sampling_ids = constructSelectQuery(
         "samplings",
         """
-        WHERE (config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id)=\
+        WHERE (physicell_version_id,config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id)=\
         (\
-            $(folder_ids.config_id),$(folder_ids.rulesets_collection_id),$(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),$(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id)\
+            $(physicellVersionDBEntry()),$(folder_ids.config_id),$(folder_ids.rulesets_collection_id),$(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),$(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id)\
         );\
         """,
         selection="sampling_id"
@@ -558,7 +561,7 @@ end
 
 function getTrialID(sampling_ids::Vector{Int})
     id = -1
-    trial_ids = constructSelectQuery("trials", "", selection="trial_id") |> queryToDataFrame |> x -> x.trial_id
+    trial_ids = constructSelectQuery("trials"; selection="trial_id") |> queryToDataFrame |> x -> x.trial_id
     if !isempty(trial_ids) # if there are previous trials
         for trial_id in trial_ids # check if the sampling_ids are the same with any previous sampling_ids
             sampling_ids_in_db = readTrialSamplingIDs(trial_id) # get the sampling_ids belonging to this trial
