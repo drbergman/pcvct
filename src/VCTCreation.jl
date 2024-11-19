@@ -1,4 +1,4 @@
-using Downloads
+using Downloads, JSON3
 
 function createProject(; project_dir::String=".", clone_physicell::Bool=true, template_as_default::Bool=true, terse::Bool=false)
     mkpath(project_dir)
@@ -9,6 +9,13 @@ function createProject(; project_dir::String=".", clone_physicell::Bool=true, te
     setUpVCT(project_dir, physicell_dir, data_dir, template_as_default, terse)
 end
 
+function getLatestReleaseTag(repo_url::String)
+    api_url = replace(repo_url, "github.com" => "api.github.com/repos") * "/releases/latest"
+    response = Downloads.download(api_url)
+    release_info = JSON3.read(response, Dict{String, Any})
+    return release_info["tag_name"]
+end
+
 function setUpPhysiCell(project_dir::String, clone_physicell::Bool)
     physicell_dir = joinpath(project_dir, "PhysiCell")
     if isdir(physicell_dir)
@@ -17,18 +24,20 @@ function setUpPhysiCell(project_dir::String, clone_physicell::Bool)
     end
     is_git_repo = isdir(joinpath(project_dir, ".git"))
     if clone_physicell
+        latest_tag = getLatestReleaseTag("https://github.com/drbergman/PhysiCell")
         if is_git_repo
             println("Cloning PhysiCell repository as submodule")
             run(`git submodule add https://github.com/drbergman/PhysiCell $(physicell_dir)`)
             run(`git submodule update --init --recursive --depth 1`)
+            run(`git -C $physicell_dir checkout $latest_tag`)
         else
             println("Cloning PhysiCell repository")
-            run(`git clone --depth 1 https://github.com/drbergman/PhysiCell $(physicell_dir)`)
+            run(`git clone --branch $latest_tag --depth 1 https://github.com/drbergman/PhysiCell $(physicell_dir)`)
         end
     else
         # download drbergman/Pysicell main branch
         println("Downloading PhysiCell repository")
-        url = "https://codeload.github.com/drbergman/PhysiCell/zip/refs/heads/my-physicell"
+        url = "https://api.github.com/repos/drbergman/PhysiCell/releases/latest"
         zip_path = joinpath(project_dir, "PhysiCell.zip")
         Downloads.download(url, zip_path)
         extract_path = joinpath(project_dir, "PhysiCell_extract")
