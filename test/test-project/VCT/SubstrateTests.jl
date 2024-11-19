@@ -1,4 +1,4 @@
-using Test, pcvct, Plots
+using Test, pcvct
 
 filename = @__FILE__
 filename = split(filename, "/") |> last
