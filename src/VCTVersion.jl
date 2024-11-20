@@ -56,7 +56,9 @@ end
 function upgradePCVCT(from_version::VersionNumber, to_version::VersionNumber, auto_upgrade::Bool)
     println("Upgrading pcvct from version $(from_version) to $(to_version)...")
     milestone_versions = [v"0.0.1", v"0.0.3"]
-    next_milestones = findall(x -> from_version < x, milestone_versions) # this could be simplified to take advantage of this list being sorted, but who cares? It's already so fast
+    next_milestone_inds = findall(x -> from_version < x, milestone_versions) # this could be simplified to take advantage of this list being sorted, but who cares? It's already so fast
+    next_milestones = milestone_versions[next_milestone_inds]
+    println("Next milestones: $(next_milestones)")
     success = true
     for next_milestone in next_milestones
         up_fn_symbol = Meta.parse("upgradeToV$(replace(string(next_milestone), "." => "_"))")
@@ -155,25 +157,37 @@ function upgradeToV0_0_3(auto_upgrade::Bool)
     # now get the config_variations.db's right
     config_folders = queryToDataFrame(constructSelectQuery("configs", "", selection="folder_name")) |> x -> x.folder_name
     for config_folder in config_folders
-        if !isfile(joinpath(data_dir, "inputs", "configs", config_folder, "variations.db"))
+        path_to_config_folder = joinpath(data_dir, "inputs", "configs", config_folder)
+        if !isfile(joinpath(path_to_config_folder, "variations.db"))
             continue
         end
         # rename all "variation" to "config_variation" in filenames and in databases
-        mv(joinpath(data_dir, "inputs", "configs", config_folder, "variations.db"), joinpath(data_dir, "inputs", "configs", config_folder, "config_variations.db"))
-        db_config_variations = joinpath(data_dir, "inputs", "configs", config_folder, "config_variations.db") |> SQLite.DB
-        DBInterface.execute(db_config_variations, "ALTER TABLE variations RENAME TO config_variations;")
-        DBInterface.execute(db_config_variations, "ALTER TABLE config_variations RENAME COLUMN variation_id TO config_variation_id;")
+        src_file = joinpath(path_to_config_folder, "variations.db")
+        if isfile(src_file)
+            mv(src_file, joinpath(path_to_config_folder, "config_variations.db"))
+        end
+        db_config_variations = joinpath(path_to_config_folder, "config_variations.db") |> SQLite.DB
+        # check if variations is a table name in the database
+        if DBInterface.execute(db_config_variations, "SELECT name FROM sqlite_master WHERE type='table' AND name='variations';") |> DataFrame |> x -> (length(x.name)==1)
+            DBInterface.execute(db_config_variations, "ALTER TABLE variations RENAME TO config_variations;")
+        end
+        if DBInterface.execute(db_config_variations, "SELECT 1 FROM pragma_table_info('config_variations') WHERE name='config_variation_id';") |> DataFrame |> isempty
+            DBInterface.execute(db_config_variations, "ALTER TABLE config_variations RENAME COLUMN variation_id TO config_variation_id;")
+        end
         index_df = DBInterface.execute(db_config_variations, "SELECT type,name,tbl_name,sql FROM sqlite_master WHERE type = 'index';") |> DataFrame
         variations_index = index_df[!, :name] .== "variations_index"
-        variations_sql = index_df[variations_index, :sql][1]
-        cols = split(variations_sql, "(")[2]
-        cols = split(cols, ")")[1]
-        cols = split(cols, ",") .|> string
-        SQLite.createindex!(db_config_variations, "config_variations", "config_variations_index", cols; unique=true, ifnotexists=false)
-        if isdir(joinpath(data_dir, "inputs", "configs", config_folder, "variations"))
-            mv(joinpath(data_dir, "inputs", "configs", config_folder, "variations"), joinpath(data_dir, "inputs", "configs", config_folder, "config_variations"))
-            for file in readdir(joinpath(data_dir, "inputs", "configs", config_folder, "config_variations"))
-                mv(joinpath(data_dir, "inputs", "configs", config_folder, "config_variations", file), joinpath(data_dir, "inputs", "configs", config_folder, "config_variations", "config_$(file)"))
+        if any(variations_index)
+            variations_sql = index_df[variations_index, :sql][1]
+            cols = split(variations_sql, "(")[2]
+            cols = split(cols, ")")[1]
+            cols = split(cols, ",") .|> string .|> x -> strip(x, '"')
+            SQLite.createindex!(db_config_variations, "config_variations", "config_variations_index", cols; unique=true, ifnotexists=false)
+            SQLite.dropindex!(db_config_variations, "variations_index")
+        end
+        if isdir(joinpath(path_to_config_folder, "variations"))
+            mv(joinpath(path_to_config_folder, "variations"), joinpath(path_to_config_folder, "config_variations"))
+            for file in readdir(joinpath(path_to_config_folder, "config_variations"))
+                mv(joinpath(path_to_config_folder, "config_variations", file), joinpath(path_to_config_folder, "config_variations", "config_$(file)"))
             end
         end
     end
