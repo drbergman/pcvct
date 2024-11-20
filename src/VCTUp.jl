@@ -1,8 +1,8 @@
-
 function upgradePCVCT(from_version::VersionNumber, to_version::VersionNumber, auto_upgrade::Bool)
     println("Upgrading pcvct from version $(from_version) to $(to_version)...")
-    milestone_versions = [v"0.0.1", v"0.0.3", v"0.0.8"]
-    next_milestones = findall(x -> from_version < x, milestone_versions) # this could be simplified to take advantage of this list being sorted, but who cares? It's already so fast
+    milestone_versions = [v"0.0.1", v"0.0.3", v"0.0.9"]
+    next_milestone_inds = findall(x -> from_version < x, milestone_versions) # this could be simplified to take advantage of this list being sorted, but who cares? It's already so fast
+    next_milestones = milestone_versions[next_milestone_inds]
     success = true
     for next_milestone in next_milestones
         up_fn_symbol = Meta.parse("upgradeToV$(replace(string(next_milestone), "." => "_"))")
@@ -102,48 +102,63 @@ function upgradeToV0_0_3(auto_upgrade::Bool)
     # now get the config_variations.db's right
     config_folders = queryToDataFrame(constructSelectQuery("configs"; selection="folder_name")) |> x -> x.folder_name
     for config_folder in config_folders
-        if !isfile(joinpath(data_dir, "inputs", "configs", config_folder, "variations.db"))
+        path_to_config_folder = joinpath(data_dir, "inputs", "configs", config_folder)
+        if !isfile(joinpath(path_to_config_folder, "variations.db"))
             continue
         end
         # rename all "variation" to "config_variation" in filenames and in databases
-        mv(joinpath(data_dir, "inputs", "configs", config_folder, "variations.db"), joinpath(data_dir, "inputs", "configs", config_folder, "config_variations.db"))
-        db_config_variations = joinpath(data_dir, "inputs", "configs", config_folder, "config_variations.db") |> SQLite.DB
-        DBInterface.execute(db_config_variations, "ALTER TABLE variations RENAME TO config_variations;")
-        DBInterface.execute(db_config_variations, "ALTER TABLE config_variations RENAME COLUMN variation_id TO config_variation_id;")
+        old_db_file = joinpath(path_to_config_folder, "variations.db")
+        db_file = joinpath(path_to_config_folder, "config_variations.db")
+        if isfile(old_db_file)
+            mv(old_db_file, db_file)
+        end
+        db_config_variations = db_file |> SQLite.DB
+        # check if variations is a table name in the database
+        if DBInterface.execute(db_config_variations, "SELECT name FROM sqlite_master WHERE type='table' AND name='variations';") |> DataFrame |> x -> (length(x.name)==1)
+            DBInterface.execute(db_config_variations, "ALTER TABLE variations RENAME TO config_variations;")
+        end
+        if DBInterface.execute(db_config_variations, "SELECT 1 FROM pragma_table_info('config_variations') WHERE name='config_variation_id';") |> DataFrame |> isempty
+            DBInterface.execute(db_config_variations, "ALTER TABLE config_variations RENAME COLUMN variation_id TO config_variation_id;")
+        end
         index_df = DBInterface.execute(db_config_variations, "SELECT type,name,tbl_name,sql FROM sqlite_master WHERE type = 'index';") |> DataFrame
         variations_index = index_df[!, :name] .== "variations_index"
-        variations_sql = index_df[variations_index, :sql][1]
-        cols = split(variations_sql, "(")[2]
-        cols = split(cols, ")")[1]
-        cols = split(cols, ",") .|> string
-        SQLite.createindex!(db_config_variations, "config_variations", "config_variations_index", cols; unique=true, ifnotexists=false)
-        if isdir(joinpath(data_dir, "inputs", "configs", config_folder, "variations"))
-            mv(joinpath(data_dir, "inputs", "configs", config_folder, "variations"), joinpath(data_dir, "inputs", "configs", config_folder, "config_variations"))
-            for file in readdir(joinpath(data_dir, "inputs", "configs", config_folder, "config_variations"))
-                mv(joinpath(data_dir, "inputs", "configs", config_folder, "config_variations", file), joinpath(data_dir, "inputs", "configs", config_folder, "config_variations", "config_$(file)"))
+        if any(variations_index)
+            variations_sql = index_df[variations_index, :sql][1]
+            cols = split(variations_sql, "(")[2]
+            cols = split(cols, ")")[1]
+            cols = split(cols, ",") .|> string .|> x -> strip(x, '"')
+            SQLite.createindex!(db_config_variations, "config_variations", "config_variations_index", cols; unique=true, ifnotexists=false)
+            SQLite.dropindex!(db_config_variations, "variations_index")
+        end
+        old_folder = joinpath(path_to_config_folder, "variations")
+        new_folder = joinpath(path_to_config_folder, "config_variations")
+        if isdir(old_folder)
+            mv(old_folder, new_folder)
+            for file in readdir(new_folder)
+                mv(joinpath(new_folder, file), joinpath(new_folder, "config_$(file)"))
             end
         end
     end
     return true
 end
 
-function upgradeToV0_0_8(auto_upgrade::Bool)
+function upgradeToV0_0_9(auto_upgrade::Bool)
     warning_msg = """
-    \t- Upgrading to version 0.0.8...
-    \nWARNING: Upgrading to version 0.0.8 will change the database schema.
-    See info at https://github.com/drbergman/pcvct?tab=readme-ov-file#to-v008
+    \t- Upgrading to version 0.0.9...
+    \nWARNING: Upgrading to version 0.0.9 will change the database schema.
+    See info at https://github.com/drbergman/pcvct?tab=readme-ov-file#to-v009
 
     ------IF ANOTHER INSTANCE OF PCVCT IS USING THIS DATABASE, PLEASE CLOSE IT BEFORE PROCEEDING.------
 
-    Continue upgrading to version 0.0.8? (y/n):
+    Continue upgrading to version 0.0.9? (y/n):
     """
     println(warning_msg)
     response = auto_upgrade ? "y" : readline()
     if response != "y"
-        println("Upgrade to version 0.0.8 aborted.")
+        println("Upgrade to version 0.0.9 aborted.")
         return false
     end
-    println("\t- Upgrading to version 0.0.8...")
+    println("\t- Upgrading to version 0.0.9...")
 
     createPCVCTTable("physicell_versions", physicellVersionsSchema())
     global current_physicell_version_id = physicellVersionID()
@@ -151,17 +166,23 @@ function upgradeToV0_0_8(auto_upgrade::Bool)
     println("\t\tPhysiCell version: $(physicellVersion())")
     println("\n\t\tAssuming all output has been generated with this version...")
 
-    DBInterface.execute(db, "ALTER TABLE simulations ADD COLUMN physicell_version_id INTEGER;")
-    DBInterface.execute(db, "UPDATE simulations SET physicell_version_id=$(physicellVersionDBEntry());")
+    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('simulations') WHERE name='physicell_version_id';") |> DataFrame |> isempty
+        DBInterface.execute(db, "ALTER TABLE simulations ADD COLUMN physicell_version_id INTEGER;")
+        DBInterface.execute(db, "UPDATE simulations SET physicell_version_id=$(physicellVersionDBEntry());")
+    end
 
-    DBInterface.execute(db, "ALTER TABLE monads ADD COLUMN physicell_version_id INTEGER;")
-    DBInterface.execute(db, "CREATE TABLE monads_temp AS SELECT * FROM monads;")
-    DBInterface.execute(db, "UPDATE monads_temp SET physicell_version_id=$(physicellVersionDBEntry());")
-    DBInterface.execute(db, "DROP TABLE monads;")
-    createPCVCTTable("monads", monadsSchema())
-    DBInterface.execute(db, "INSERT INTO monads SELECT * FROM monads_temp;")
+    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('monads') WHERE name='physicell_version_id';") |> DataFrame |> isempty
+        DBInterface.execute(db, "ALTER TABLE monads ADD COLUMN physicell_version_id INTEGER;")
+        DBInterface.execute(db, "CREATE TABLE monads_temp AS SELECT * FROM monads;")
+        DBInterface.execute(db, "UPDATE monads_temp SET physicell_version_id=$(physicellVersionDBEntry());")
+        DBInterface.execute(db, "DROP TABLE monads;")
+        createPCVCTTable("monads", monadsSchema())
+        DBInterface.execute(db, "INSERT INTO monads SELECT * FROM monads_temp;")
+    end
 
-    DBInterface.execute(db, "ALTER TABLE samplings ADD COLUMN physicell_version_id INTEGER;")
-    DBInterface.execute(db, "UPDATE samplings SET physicell_version_id=$(physicellVersionDBEntry());")
+    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('samplings') WHERE name='physicell_version_id';") |> DataFrame |> isempty
+        DBInterface.execute(db, "ALTER TABLE samplings ADD COLUMN physicell_version_id INTEGER;")
+        DBInterface.execute(db, "UPDATE samplings SET physicell_version_id=$(physicellVersionDBEntry());")
+    end
     return true
 end
