@@ -1,6 +1,6 @@
 function upgradePCVCT(from_version::VersionNumber, to_version::VersionNumber, auto_upgrade::Bool)
     println("Upgrading pcvct from version $(from_version) to $(to_version)...")
-    milestone_versions = [v"0.0.1", v"0.0.3", v"0.0.9"]
+    milestone_versions = [v"0.0.1", v"0.0.3", v"0.0.10"]
     next_milestone_inds = findall(x -> from_version < x, milestone_versions) # this could be simplified to take advantage of this list being sorted, but who cares? It's already so fast
     next_milestones = milestone_versions[next_milestone_inds]
     success = true
@@ -22,6 +22,15 @@ function upgradePCVCT(from_version::VersionNumber, to_version::VersionNumber, au
         DBInterface.execute(db, "UPDATE pcvct_version SET version='$(to_version)';")
     end
     return success
+end
+
+function populateTableOnFeatureSubset(db::SQLite.DB, source_table::String, target_table::String; column_mapping::Dict{String, String}=Dict{String,String}())
+    source_columns = queryToDataFrame("PRAGMA table_info($(source_table));") |> x -> x[!, :name]
+    target_columns = [c in keys(column_mapping) ? column_mapping[c] : c for c in source_columns]
+    insert_into_cols = "(" * join(target_columns, ",") * ")"
+    select_cols = join(source_columns, ",")
+    query = "INSERT INTO $(target_table) $(insert_into_cols) SELECT $(select_cols) FROM $(source_table);"
+    DBInterface.execute(db, query)
 end
 
 function upgradeToV0_0_1(::Bool)
@@ -96,7 +105,7 @@ function upgradeToV0_0_3(auto_upgrade::Bool)
     createPCVCTTable("monads", monadsSchema())
     # drop the previous unique constraint on monads
     # insert from monads_temp all values except ic_cell_variation_id (set that to -1 if ic_cell_id is -1 and to 0 if ic_cell_id is not -1)
-    DBInterface.execute(db, "INSERT INTO monads SELECT * FROM monads_temp;")
+    populateTableOnFeatureSubset(db, "monads_temp", "monads")
     DBInterface.execute(db, "DROP TABLE monads_temp;")
 
     # now get the config_variations.db's right
@@ -142,23 +151,23 @@ function upgradeToV0_0_3(auto_upgrade::Bool)
     return true
 end
 
-function upgradeToV0_0_9(auto_upgrade::Bool)
+function upgradeToV0_0_10(auto_upgrade::Bool)
     warning_msg = """
-    \t- Upgrading to version 0.0.9...
-    \nWARNING: Upgrading to version 0.0.9 will change the database schema.
-    See info at https://github.com/drbergman/pcvct?tab=readme-ov-file#to-v009
+    \t- Upgrading to version 0.0.10...
+    \nWARNING: Upgrading to version 0.0.10 will change the database schema.
+    See info at https://github.com/drbergman/pcvct?tab=readme-ov-file#to-v0010
 
     ------IF ANOTHER INSTANCE OF PCVCT IS USING THIS DATABASE, PLEASE CLOSE IT BEFORE PROCEEDING.------
 
-    Continue upgrading to version 0.0.9? (y/n):
+    Continue upgrading to version 0.0.10? (y/n):
     """
     println(warning_msg)
     response = auto_upgrade ? "y" : readline()
     if response != "y"
-        println("Upgrade to version 0.0.9 aborted.")
+        println("Upgrade to version 0.0.10 aborted.")
         return false
     end
-    println("\t- Upgrading to version 0.0.9...")
+    println("\t- Upgrading to version 0.0.10...")
 
     createPCVCTTable("physicell_versions", physicellVersionsSchema())
     global current_physicell_version_id = physicellVersionID()
@@ -177,7 +186,8 @@ function upgradeToV0_0_9(auto_upgrade::Bool)
         DBInterface.execute(db, "UPDATE monads_temp SET physicell_version_id=$(physicellVersionDBEntry());")
         DBInterface.execute(db, "DROP TABLE monads;")
         createPCVCTTable("monads", monadsSchema())
-        DBInterface.execute(db, "INSERT INTO monads SELECT * FROM monads_temp;")
+        populateTableOnFeatureSubset(db, "monads_temp", "monads")
+        DBInterface.execute(db, "DROP TABLE monads_temp;")
     end
 
     if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('samplings') WHERE name='physicell_version_id';") |> DataFrame |> isempty

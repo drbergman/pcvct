@@ -13,7 +13,7 @@ Introduce XML-based cell initial conditions. This introduces `ic_cell_variations
 - Adding the `ic_cell_variation_id` column to the `simulations` and `monads` tables.
 - In `data/inputs/configs`, renaming all instances of "variation" to "config_variation" in filenames and databases.
 
-## to v0.0.9
+## to v0.0.10
 Start tracking the PhysiCell version used in the simulation.
 This introduces the `physicell_versions` table which tracks the PhysiCell versions used in simulations.
 Currently, only supports reading the PhysiCell version, not setting it (e.g., through git commands).
