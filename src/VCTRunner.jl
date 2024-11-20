@@ -20,7 +20,14 @@ function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=miss
     config_str = joinpath(data_dir, "inputs", "configs", simulation.folder_names.config_folder, "config_variations", "config_variation_$(simulation.variation_ids.config_variation_id).xml")
     flags = ["-o", path_to_simulation_output]
     if simulation.folder_ids.ic_cell_id != -1
-        append!(flags, ["-i", pathToICCell(simulation)])
+        try
+            append!(flags, ["-i", pathToICCell(simulation)])
+        catch e
+            println("\nWARNING: Simulation $(simulation.id) failed to initialize the IC cell file.\n\tCause: $e\n")
+            DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Failed")) WHERE simulation_id=$(simulation.id);" )
+            eraseSimulationID(simulation.id; monad_id=monad_id)
+            return false
+        end
     end
     if simulation.folder_ids.ic_substrate_id != -1
         append!(flags, ["-s", joinpath(data_dir, "inputs", "ics", "substrates", simulation.folder_names.ic_substrate_folder, "substrates.csv")]) # if ic file included (id != -1), then include this in the command
@@ -39,7 +46,7 @@ function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=miss
     try
         run(pipeline(cmd; stdout=joinpath(path_to_simulation_folder, "output.log"), stderr=joinpath(path_to_simulation_folder, "output.err")); wait=true)
     catch e
-        println("\tSimulation $(simulation.id) failed.")
+        println("\nWARNING: Simulation $(simulation.id) failed. Please check $(joinpath(path_to_simulation_folder, "output.err")) for more information.\n")
         # write the execution command to output.err
         lines = readlines(joinpath(path_to_simulation_folder, "output.err"))
         open(joinpath(path_to_simulation_folder, "output.err"), "w+") do io
@@ -50,7 +57,6 @@ function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=miss
                 println(io, line)
             end
         end
-        println("\tCheck $(joinpath(path_to_simulation_folder, "output.err")) for more information.")
         DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Failed")) WHERE simulation_id=$(simulation.id);" )
         success = false
         eraseSimulationID(simulation.id; monad_id=monad_id)
