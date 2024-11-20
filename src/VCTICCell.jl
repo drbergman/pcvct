@@ -93,6 +93,9 @@ end
 function generatePatch(::Type{AnnulusPatch}, patch::XMLElement, cell_type::String, path_to_ic_cell_file::String)
     inner_radius = parse(Float64, find_element(patch, "inner_radius") |> content)
     outer_radius = parse(Float64, find_element(patch, "outer_radius") |> content)
+    if inner_radius > outer_radius
+        throw(ArgumentError("Inner radius of annulus is greater than outer radius."))
+    end
     r_fn(number) = sqrt.(inner_radius^2 .+ (outer_radius^2 - inner_radius^2) * rand(number))
     place_annulus(r_fn, patch, cell_type, path_to_ic_cell_file)
 end

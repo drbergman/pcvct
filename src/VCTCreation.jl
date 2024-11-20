@@ -11,7 +11,9 @@ end
 
 function getLatestReleaseTag(repo_url::String)
     api_url = replace(repo_url, "github.com" => "api.github.com/repos") * "/releases/latest"
-    response = Downloads.download(api_url)
+    # include this header for CI testing to not exceed request limit (I think?): macos for some reason raised a `RequestError: HTTP/2 403`; users should not need to set this ENV variable
+    headers = haskey(ENV, "PCVCT_PUBLIC_REPO_AUTH") ? Dict("Authorization" => "token $(ENV["PCVCT_PUBLIC_REPO_AUTH"])") : Pair{String,String}[] 
+    response = Downloads.download(api_url; headers=headers)
     release_info = JSON3.read(response, Dict{String, Any})
     return release_info["tag_name"]
 end
