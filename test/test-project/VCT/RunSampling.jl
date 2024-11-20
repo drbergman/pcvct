@@ -88,7 +88,7 @@ sampling = Sampling(config_folder, custom_code_folder;
 
 hashBorderPrint("SAMPLING SUCCESSFULLY CREATED!")
 
-n_success = runAbstractTrial(sampling)
+n_success = runAbstractTrial(sampling; force_recompile=false)
 
 hashBorderPrint("SAMPLING SUCCESSFULLY RUN!")
 
