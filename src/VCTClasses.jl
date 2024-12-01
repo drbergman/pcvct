@@ -252,8 +252,9 @@ function Monad(min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::A
         monad_id = monad_id[1] # get the monad_id
     end
     simulation_ids = use_previous_simulations ? readMonadSimulationIDs(monad_id) : Int[]
-    if min_length - length(simulation_ids) > 0
-        for _ = 1:(min_length - length(simulation_ids))
+    num_sims_to_add = min_length - length(simulation_ids)
+    if num_sims_to_add > 0
+        for _ = 1:num_sims_to_add
             simulation = Simulation(folder_ids, folder_names, variation_ids) # create a new simulation
             push!(simulation_ids, simulation.id) # add the simulation id to the monad
         end
