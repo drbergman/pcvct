@@ -10,3 +10,6 @@ path_to_data_folder = "./test-project/data" # path to data folder
 initializeVCT(path_to_physicell_folder, path_to_data_folder)
 
 plot(Sampling(1))
+
+plotbycelltype(Sampling(1))
+plotbycelltype(Sampling(1), "default")

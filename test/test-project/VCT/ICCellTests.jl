@@ -40,6 +40,7 @@ sampling = Sampling(config_folder, custom_code_folder;
 hashBorderPrint("SUCCESSFULLY CREATED SAMPLING WITH IC CELL VARIATION!")
 
 n_success = runAbstractTrial(sampling; force_recompile=false)
+@test n_success == length(sampling)
 
 hashBorderPrint("SUCCESSFULLY RAN SAMPLING WITH IC CELL VARIATION!")
 
@@ -61,5 +62,4 @@ sampling = Sampling(config_folder, custom_code_folder;
 )
     
 n_success = runAbstractTrial(sampling; force_recompile=false)
-
 @test n_success == 0
