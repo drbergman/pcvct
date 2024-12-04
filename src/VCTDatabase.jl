@@ -35,6 +35,7 @@ function createSchema(is_new_db::Bool; auto_upgrade::Bool=false)
 
     # initialize and populate physicell_versions table
     createPCVCTTable("physicell_versions", physicellVersionsSchema())
+    global current_physicell_version_id = physicellVersionID()
 
     # initialize and populate custom_codes table
     custom_codes_schema = """

@@ -11,17 +11,22 @@ function physicellVersionID()
         return df.physicell_version_id[1]
     end
 
+    repo_is_dirty = false
     if !gitDirectoryIsClean(physicell_dir)
         println("""
-        PhysiCell repo is dirty. Not adding version to database.
-        Make a new commit or stash changes to clean the repo.
+        \nWARNING: PhysiCell repo is dirty. The latest commit hash will be marked with the "-dirty" suffix in the database.
+        These results may not be reproducible.
+        To regain reproducibility, make a new commit or stash changes to clean the repository.
+        To see the changed files, run the following command from your terminal:\n
+        \tgit -C $(physicell_dir) status
         """
         )
-        return missing
+        repo_is_dirty = true
     end
 
     # then, get the current commit hash
     commit_hash = readchomp(`git -C $physicell_dir rev-parse HEAD`)
+    commit_hash *= repo_is_dirty ? "-dirty" : ""
 
     # then, compare that hash with hashes in the database
     query = constructSelectQuery("physicell_versions", "WHERE commit_hash = '$commit_hash'")
@@ -37,14 +42,14 @@ function physicellVersionID()
     
     # then, compare that hash with remote hashes to identify the tag, repo owner, and date
     hash_to_tag_dict = getCommitHashToTagDict(physicell_dir)
-    if haskey(hash_to_tag_dict, commit_hash)
+    if !repo_is_dirty && haskey(hash_to_tag_dict, commit_hash)
         entry_dict["tag"] = hash_to_tag_dict[commit_hash]
     else
         entry_dict["tag"] = "NULL"
     end
     
-    entry_dict["repo_owner"] = repoOwner(commit_hash, entry_dict["tag"])
-    entry_dict["date"] = readchomp(`git -C $physicell_dir show -s --format=%ci $commit_hash`)
+    entry_dict["repo_owner"] = repo_is_dirty ? "NULL" : repoOwner(commit_hash, entry_dict["tag"])
+    entry_dict["date"] = repo_is_dirty ? "NULL" : readchomp(`git -C $physicell_dir show -s --format=%ci $commit_hash`)
     
     db_entry_dict = [k => v=="NULL" ? v : "'$v'" for (k,v) in entry_dict] |> Dict # surround non-NULL values with single quotes, so NULL really go in as NULL
     if is_hash_in_db

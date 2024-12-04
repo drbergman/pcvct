@@ -236,10 +236,11 @@ function Monad(min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::A
         monad_id = constructSelectQuery(
             "monads",
             """
-            WHERE (config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,\
+            WHERE (physicell_version_id,config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,\
             ic_ecm_id,custom_code_id,\
             $(join([string(field) for field in fieldnames(VariationIDs)],",")))=\
             (\
+                $(physicellVersionDBEntry()),\
                 $(folder_ids.config_id),$(folder_ids.rulesets_collection_id),\
                 $(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),\
                 $(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id),\
@@ -400,7 +401,7 @@ function Sampling(monad_min_length::Int, monad_ids::AbstractVector{<:Integer}, f
         (\
             $(physicellVersionDBEntry()),$(folder_ids.config_id),$(folder_ids.rulesets_collection_id),$(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),$(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id)\
         );\
-        """,
+        """;
         selection="sampling_id"
     ) |> queryToDataFrame |> x -> x.sampling_id
     if !isempty(sampling_ids) # if there are previous samplings with the same parameters
@@ -417,8 +418,8 @@ function Sampling(monad_min_length::Int, monad_ids::AbstractVector{<:Integer}, f
         id = DBInterface.execute(db, 
         """
         INSERT INTO samplings \
-        (config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id) \
-        VALUES($(folder_ids.config_id),$(folder_ids.rulesets_collection_id),\
+        (physicell_version_id,config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id) \
+        VALUES($(physicellVersionDBEntry()),$(folder_ids.config_id),$(folder_ids.rulesets_collection_id),\
         $(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),\
         $(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id)) RETURNING sampling_id;
         """

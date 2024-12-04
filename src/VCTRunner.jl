@@ -119,7 +119,8 @@ function runTrial(trial::Trial; force_recompile::Bool=true, prune_options::Prune
     return simulation_tasks
 end
 
-collectSimulationTasks(simulation::Simulation; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions()) = [@task runSimulation(simulation; do_full_setup=true, force_recompile=force_recompile, prune_options=prune_options)]
+collectSimulationTasks(simulation::Simulation; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions()) = 
+    isStarted(simulation) ? Task[] : [@task runSimulation(simulation; do_full_setup=true, force_recompile=force_recompile, prune_options=prune_options)]
 collectSimulationTasks(monad::Monad; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions()) = runMonad(monad; do_full_setup=true, force_recompile=force_recompile, prune_options=prune_options)
 collectSimulationTasks(sampling::Sampling; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions()) = runSampling(sampling; force_recompile=force_recompile, prune_options=prune_options)
 collectSimulationTasks(trial::Trial; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions()) = runTrial(trial; force_recompile=force_recompile, prune_options=prune_options)
