@@ -353,7 +353,7 @@ end
 
 function addSimulationID!(monad::Monad, simulation_id::Int)
     if simulation_id in monad.simulation_ids
-        return monad
+        return
     end
     push!(monad.simulation_ids, simulation_id)
     recordSimulationIDs(monad.id, monad.simulation_ids)

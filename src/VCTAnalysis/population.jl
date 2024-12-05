@@ -83,7 +83,7 @@ struct MonadPopulationTimeSeries <: AbstractPopulationTimeSeries
     time::Vector{Real}
     cell_count_arrays::Dict{String, Array{Integer,2}}
     cell_count_means::Dict{String, Vector{Real}}
-    cell_count_std::Dict{String, Vector{Real}}
+    cell_count_stds::Dict{String, Vector{Real}}
 end
 
 function MonadPopulationTimeSeries(monad::Monad; include_dead::Bool=false)
@@ -106,15 +106,15 @@ function MonadPopulationTimeSeries(monad::Monad; include_dead::Bool=false)
         end
     end
     cell_count_means = Dict{String, Vector{Real}}()
-    cell_count_std = Dict{String, Vector{Real}}()
+    cell_count_stds = Dict{String, Vector{Real}}()
     for (name, array) in cell_count_arrays
         cell_count_means[name] = mean(array, dims=2) |> vec
-        cell_count_std[name] = std(array, dims=2) |> vec
+        cell_count_stds[name] = std(array, dims=2) |> vec
     end
-    return MonadPopulationTimeSeries(monad.id, monad_length, time, cell_count_arrays, cell_count_means, cell_count_std)
+    return MonadPopulationTimeSeries(monad.id, monad_length, time, cell_count_arrays, cell_count_means, cell_count_stds)
 end
 
-function populationTimeSeries(M::AbstractMonad; include_dead::Bool=false, cell_types = :all)
+function populationTimeSeries(M::AbstractMonad; include_dead::Bool=false)
     if M isa Simulation
         return SimulationPopulationTimeSeries(M; include_dead=include_dead)
     else
@@ -123,7 +123,6 @@ function populationTimeSeries(M::AbstractMonad; include_dead::Bool=false, cell_t
 end
 
 # plot recipes
-
 getMeanCounts(s::SimulationPopulationTimeSeries) = s.cell_count
 getMeanCounts(m::MonadPopulationTimeSeries) = m.cell_count_means
 
@@ -143,14 +142,14 @@ getMeanCounts(m::MonadPopulationTimeSeries) = m.cell_count_means
             x = pts.time
             y = counts
             if typeof(M) == Monad && length(M.simulation_ids) > 1
-                ribbon := pts.cell_count_std[name]
+                ribbon := pts.cell_count_stds[name]
             end
             x, y
         end
     end
 end
 
-@recipe function f(sampling::Sampling; include_dead=false)
+@recipe function f(sampling::Sampling; include_dead=false, include_cell_types=:all, exclude_cell_types=String[])
     df = pcvct.simulationsTable(sampling)
     monads = []
     title_tuples = []
@@ -171,13 +170,117 @@ end
     layout  --> (length(monads), 1) # easy room for improvement here
 
     for (i, (monad, title_tuple)) in enumerate(zip(monads, title_tuples))
-
         @series begin
             title --> "(" * join(title_tuple, ", ") * ")"
             subplot := i
             legend := false
             include_dead --> include_dead
+            include_cell_types --> include_cell_types
+            exclude_cell_types --> exclude_cell_types
             monad
+        end
+    end
+end
+
+"""
+`plotbycelltype(T::AbstractTrial, cell_types::Union{String, Vector{String}}=:all)`
+Plot the population time series of a trial by cell type.
+Each cell type gets its own subplot.
+Each monad gets its own series within each subplot.
+"""
+plotbycelltype
+
+@userplot PlotByCellType
+
+struct CellTypeInMonads
+    time::Vector{Vector{Real}}
+    cell_count_means::Vector{Vector{Real}}
+    cell_count_stds::Vector{Vector{Real}}
+end
+
+@recipe function f(p::PlotByCellType)
+    @assert typeof(p.args[1]) <: AbstractTrial "Expected first argument to be a subtype of AbstractTrial, got $(typeof(p.args[1]))."
+    if length(p.args) == 1
+        T = p.args[1]
+        cell_types = :all
+    elseif length(p.args) == 2
+        T, cell_types = p.args
+    else
+        error("Expected 1 or 2 arguments, got $(length(p.args)).")
+    end
+
+    if T isa Simulation
+        monads = [Monad(T)]
+    else
+        monads = Monad.(getMonadIDs(T))
+    end
+
+    monad_summary = Dict{Int,Any}()
+    all_cell_types = Set()
+    for monad in monads
+        simulation_ids = getSimulationIDs(monad)
+        monad_length = length(simulation_ids)
+        time = Real[]
+        cell_count_arrays = Dict{Any, Array{Int,2}}()
+        for (i, simulation_id) in enumerate(simulation_ids)
+            spts = SimulationPopulationTimeSeries(simulation_id)
+            if isempty(time)
+                time = spts.time
+            else
+                @assert time == spts.time "Simulations $(simulation_ids[1]) and $(simulation_id) in monad $(monad.id) have different times in their time series."
+            end
+            if cell_types == :all
+                for (name, cell_count) in pairs(spts.cell_count)
+                    if !(name in keys(cell_count_arrays))
+                        cell_count_arrays[name] = zeros(Int, length(time), monad_length)
+                    end
+                    cell_count_arrays[name][:,i] = cell_count
+                end
+            else
+                if cell_types isa String
+                    cell_types = [cell_types]
+                end
+                for cell_type in cell_types
+                    if cell_type isa String
+                        cell_type = [cell_type]
+                    end
+                    if !(cell_type in keys(cell_count_arrays))
+                        cell_count_arrays[cell_type] = zeros(Int, length(time), monad_length)
+                    end
+                    cell_count_arrays[cell_type][:,i] = sum([spts.cell_count[ct] for ct in cell_type])
+                end
+            end
+        end
+        cell_count_means = Dict{Any, Vector{Real}}()
+        cell_count_stds = Dict{Any, Vector{Real}}()
+        for (name, array) in cell_count_arrays
+            cell_count_means[name] = mean(array, dims=2) |> vec
+            cell_count_stds[name] = std(array, dims=2) |> vec
+            push!(all_cell_types, name)
+        end
+        monad_summary[monad.id] = (time=time, cell_count_means=cell_count_means, cell_count_stds=cell_count_stds)
+    end
+
+    layout  --> (length(all_cell_types), 1) # easy room for improvement here
+
+    for (i, cell_type) in enumerate(all_cell_types)
+        @series begin
+            title --> cell_type
+            legend := false
+            subplot := i
+            x = [monad_summary[monad.id].time for monad in monads]
+            y = [monad_summary[monad.id].cell_count_means[cell_type] for monad in monads]
+            z = [monad_summary[monad.id].cell_count_stds[cell_type] for monad in monads]
+            CellTypeInMonads(x, y, z)
+        end
+    end
+end
+
+@recipe function f(tc::CellTypeInMonads)
+    for (x, y, z) in zip(tc.time, tc.cell_count_means, tc.cell_count_stds)
+        @series begin
+            ribbon := z
+            x, y
         end
     end
 end

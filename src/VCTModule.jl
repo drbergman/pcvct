@@ -171,21 +171,21 @@ readSamplingMonadIDs(sampling::Sampling) = readSamplingMonadIDs(sampling.id)
 readTrialSamplingIDs(trial_id::Int) = readConstituentIDs(joinpath(data_dir, "outputs", "trials", string(trial_id), "samplings.csv"))
 readTrialSamplingIDs(trial::Trial) = readTrialSamplingIDs(trial.id)
 
-function getSamplingSimulations(sampling_id::Int)
+function getSamplingSimulationIDs(sampling_id::Int)
     monad_ids = readSamplingMonadIDs(sampling_id)
     return vcat([readMonadSimulationIDs(monad_id) for monad_id in monad_ids]...)
 end
 
-function getTrialSimulations(trial_id::Int)
+function getTrialSimulationIDs(trial_id::Int)
     sampling_ids = readTrialSamplingIDs(trial_id)
-    return vcat([getSamplingSimulations(sampling_id) for sampling_id in sampling_ids]...)
+    return vcat([getSamplingSimulationIDs(sampling_id) for sampling_id in sampling_ids]...)
 end
 
 getSimulationIDs() = constructSelectQuery("simulations"; selection="simulation_id") |> queryToDataFrame |> x -> x.simulation_id
 getSimulationIDs(simulation::Simulation) = [simulation.id]
 getSimulationIDs(monad::Monad) = readMonadSimulationIDs(monad.id)
-getSimulationIDs(sampling::Sampling) = getSamplingSimulations(sampling.id)
-getSimulationIDs(trial::Trial) = getTrialSimulations(trial.id)
+getSimulationIDs(sampling::Sampling) = getSamplingSimulationIDs(sampling.id)
+getSimulationIDs(trial::Trial) = getTrialSimulationIDs(trial.id)
 getSimulationIDs(Ts::AbstractArray{<:AbstractTrial}) = vcat([getSimulationIDs(T) for T in Ts]...)
 
 function getTrialMonads(trial_id::Int)
@@ -205,9 +205,9 @@ function getSimulationIDs(class_id::VCTClassID)
     elseif class_id_type == Monad
         return readMonadSimulationIDs(class_id.id)
     elseif class_id_type == Sampling
-        return getSamplingSimulations(class_id.id)
+        return getSamplingSimulationIDs(class_id.id)
     elseif class_id_type == Trial
-        return getTrialSimulations(class_id.id)
+        return getTrialSimulationIDs(class_id.id)
     else
         error(error_string)
     end

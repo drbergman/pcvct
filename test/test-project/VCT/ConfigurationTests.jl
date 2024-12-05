@@ -80,6 +80,7 @@ sampling = Sampling(config_folder, custom_code_folder;
 
 n_success = runAbstractTrial(sampling; force_recompile=false)
 @test length(sampling) == length(config_variation_ids) * monad_min_length
+@test n_success == length(sampling)
 
 ## test the in place functions
 # NOTE to users: do not use gridToDB. This is here temporarily as internal code gets refactored.
@@ -113,6 +114,7 @@ sampling = Sampling(config_folder, custom_code_folder;
 )
 
 n_success = runAbstractTrial(sampling; force_recompile=false)
+@test n_success == length(sampling)
 
 hashBorderPrint("SUCCESSFULLY VARIED CONFIG PARAMETERS!")
 
@@ -134,13 +136,14 @@ sampling = Sampling(config_folder, custom_code_folder;
 )
 
 n_success = runAbstractTrial(sampling; force_recompile=false)
+@test n_success == length(sampling)
 
 hashBorderPrint("SUCCESSFULLY VARIED RULESETS PARAMETERS!")
 
 EV = ElementaryVariation[]
 addMotilityVariationDimension!(EV, cell_type, "speed", [0.1, 1.0])
 xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","signal:name:pressure","half_max"]
-push!(EV, ElementaryVariation(xml_path, [0.25, 0.75]))
+push!(EV, ElementaryVariation(xml_path, [0.3, 0.6]))
 
 config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, EV; reference_config_variation_id=reference_config_variation_id)
 sampling = Sampling(config_folder, custom_code_folder;
@@ -152,5 +155,6 @@ sampling = Sampling(config_folder, custom_code_folder;
 )
 
 n_success = runAbstractTrial(sampling; force_recompile=false)
+@test n_success == length(sampling)
 
 hashBorderPrint("SUCCESSFULLY VARIED CONFIG AND RULESETS PARAMETERS!")
