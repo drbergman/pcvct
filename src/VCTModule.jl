@@ -88,7 +88,6 @@ function initializeVCT(path_to_physicell::String, path_to_data::String; auto_upg
         println("Database initialization failed.")
         return
     end
-    global current_physicell_version_id = physicellVersionID()
     println(rpad("PhysiCell version:", 20, ' ') * physicellVersion())
     println(rpad("pcvct version:", 20, ' ') * string(pcvctVersion()))
     println(rpad("Compiler:", 20, ' ') * PHYSICELL_CPP)

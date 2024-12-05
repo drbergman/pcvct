@@ -1,6 +1,6 @@
 function upgradePCVCT(from_version::VersionNumber, to_version::VersionNumber, auto_upgrade::Bool)
     println("Upgrading pcvct from version $(from_version) to $(to_version)...")
-    milestone_versions = [v"0.0.1", v"0.0.3", v"0.0.10"]
+    milestone_versions = [v"0.0.1", v"0.0.3", v"0.0.10", v"0.0.11"]
     next_milestone_inds = findall(x -> from_version < x, milestone_versions) # this could be simplified to take advantage of this list being sorted, but who cares? It's already so fast
     next_milestones = milestone_versions[next_milestone_inds]
     success = true
@@ -195,4 +195,24 @@ function upgradeToV0_0_10(auto_upgrade::Bool)
         DBInterface.execute(db, "UPDATE samplings SET physicell_version_id=$(physicellVersionDBEntry());")
     end
     return true
+end
+
+function upgradeToV0_0_11(::Bool)
+    println("\t- Upgrading to version 0.0.11...")
+    query = constructSelectQuery("samplings")
+    samplings_df = queryToDataFrame(query)
+    for row in eachrow(samplings_df)
+        if !ismissing(row.physicell_version_id)
+            continue
+        end
+        monads = getMonadIDs(Sampling(row.sampling_id))
+        query = constructSelectQuery("monads", "WHERE monad_id IN ($(join(monads, ",")))"; selection="physicell_version_id")
+        monads_df = queryToDataFrame(query)
+        monad_physicell_versions = monads_df.physicell_version_id |> unique
+        if length(monad_physicell_versions) == 1
+            DBInterface.execute(db, "UPDATE samplings SET physicell_version_id=$(monad_physicell_versions[1]) WHERE sampling_id=$(row.sampling_id);")
+        else
+            println("WARNING: Multiple PhysiCell versions found for monads in sampling $(row.sampling_id). Not setting the sampling PhysiCell version.")
+        end
+    end
 end
