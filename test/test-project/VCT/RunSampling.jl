@@ -55,6 +55,7 @@ if n_success == 0
         hashBorderPrint("No output log file found.")
     end
 end
+@test n_success == 1
 
 hashBorderPrint("SIMULATION SUCCESSFULLY RUN!")
 
@@ -89,6 +90,7 @@ sampling = Sampling(config_folder, custom_code_folder;
 hashBorderPrint("SAMPLING SUCCESSFULLY CREATED!")
 
 n_success = runAbstractTrial(sampling; force_recompile=false)
+@test n_success == length(sampling)
 
 hashBorderPrint("SAMPLING SUCCESSFULLY RUN!")
 

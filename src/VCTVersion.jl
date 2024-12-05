@@ -36,7 +36,7 @@ function resolvePCVCTVersion(is_new_db::Bool, auto_upgrade::Bool)
 
     if pcvct_version < pcvct_db_version
         msg = """
-        The pcvct version is $(pcvct_version) but the database version is $(pcvct_db_version).\
+        The pcvct version is $(pcvct_version) but the database version is $(pcvct_db_version). \
         Upgrade your pcvct version to $(pcvct_db_version) or higher:
             pkg> registry add https://github.com/drbergman/PCVCTRegistry
             pkg> registry up PCVCTRegistry

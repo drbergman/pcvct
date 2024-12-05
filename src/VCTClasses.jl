@@ -236,10 +236,11 @@ function Monad(min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::A
         monad_id = constructSelectQuery(
             "monads",
             """
-            WHERE (config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,\
+            WHERE (physicell_version_id,config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,\
             ic_ecm_id,custom_code_id,\
             $(join([string(field) for field in fieldnames(VariationIDs)],",")))=\
             (\
+                $(physicellVersionDBEntry()),\
                 $(folder_ids.config_id),$(folder_ids.rulesets_collection_id),\
                 $(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),\
                 $(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id),\
@@ -252,8 +253,9 @@ function Monad(min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::A
         monad_id = monad_id[1] # get the monad_id
     end
     simulation_ids = use_previous_simulations ? readMonadSimulationIDs(monad_id) : Int[]
-    if min_length - length(simulation_ids) > 0
-        for _ = 1:(min_length - length(simulation_ids))
+    num_sims_to_add = min_length - length(simulation_ids)
+    if num_sims_to_add > 0
+        for _ = 1:num_sims_to_add
             simulation = Simulation(folder_ids, folder_names, variation_ids) # create a new simulation
             push!(simulation_ids, simulation.id) # add the simulation id to the monad
         end
@@ -352,7 +354,7 @@ end
 
 function addSimulationID!(monad::Monad, simulation_id::Int)
     if simulation_id in monad.simulation_ids
-        return monad
+        return
     end
     push!(monad.simulation_ids, simulation_id)
     recordSimulationIDs(monad.id, monad.simulation_ids)
@@ -400,7 +402,7 @@ function Sampling(monad_min_length::Int, monad_ids::AbstractVector{<:Integer}, f
         (\
             $(physicellVersionDBEntry()),$(folder_ids.config_id),$(folder_ids.rulesets_collection_id),$(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),$(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id)\
         );\
-        """,
+        """;
         selection="sampling_id"
     ) |> queryToDataFrame |> x -> x.sampling_id
     if !isempty(sampling_ids) # if there are previous samplings with the same parameters
@@ -417,8 +419,8 @@ function Sampling(monad_min_length::Int, monad_ids::AbstractVector{<:Integer}, f
         id = DBInterface.execute(db, 
         """
         INSERT INTO samplings \
-        (config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id) \
-        VALUES($(folder_ids.config_id),$(folder_ids.rulesets_collection_id),\
+        (physicell_version_id,config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id) \
+        VALUES($(physicellVersionDBEntry()),$(folder_ids.config_id),$(folder_ids.rulesets_collection_id),\
         $(folder_ids.ic_cell_id),$(folder_ids.ic_substrate_id),\
         $(folder_ids.ic_ecm_id),$(folder_ids.custom_code_id)) RETURNING sampling_id;
         """
