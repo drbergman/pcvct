@@ -1,4 +1,4 @@
-function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=missing, do_full_setup::Bool=true, force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions())
+function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=missing, do_full_setup::Bool=true, force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions(), use_hpc::Bool=false)
     DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Running")) WHERE simulation_id=$(simulation.id);" )
 
     if ismissing(monad_id)
@@ -44,7 +44,11 @@ function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=miss
     flush(stdout)
     success = false # create this here so the return statement handles it correctly
     try
-        run(pipeline(cmd; stdout=joinpath(path_to_simulation_folder, "output.log"), stderr=joinpath(path_to_simulation_folder, "output.err")); wait=true)
+        if use_hpc
+            run(pipeline(`sbatch --wrap="$cmd"`, stdout=joinpath(path_to_simulation_folder, "output.log"), stderr=joinpath(path_to_simulation_folder, "output.err")); wait=true)
+        else
+            run(pipeline(cmd; stdout=joinpath(path_to_simulation_folder, "output.log"), stderr=joinpath(path_to_simulation_folder, "output.err")); wait=true)
+        end
     catch e
         println("\nWARNING: Simulation $(simulation.id) failed. Please check $(joinpath(path_to_simulation_folder, "output.err")) for more information.\n")
         # write the execution command to output.err
