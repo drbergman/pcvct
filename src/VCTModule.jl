@@ -22,6 +22,7 @@ include("VCTRecorder.jl")
 include("VCTSensitivity.jl")
 include("VCTVersion.jl")
 include("VCTPhysiCellVersion.jl")
+include("VCTHPC.jl")
 
 include("VCTAnalysis.jl")
 
@@ -38,6 +39,8 @@ if Sys.iswindows()
 else
     baseToExecutable(s::String) = s
 end
+
+submit_on_hpc = isRunningOnHPC()
 
 ################## Initialization Functions ##################
 

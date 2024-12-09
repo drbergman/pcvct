@@ -1,4 +1,4 @@
-function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=missing, do_full_setup::Bool=true, force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions(), use_hpc::Bool=false)
+function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=missing, do_full_setup::Bool=true, force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions())
     DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Running")) WHERE simulation_id=$(simulation.id);" )
 
     if ismissing(monad_id)
@@ -42,18 +42,21 @@ function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=miss
     cmd = `$executable_str $config_str $flags`
     println("\tRunning simulation: $(simulation.id)...")
     flush(stdout)
+
+    if submit_on_hpc
+        return runSimulationOnHPC(simulation, cmd, path_to_simulation_folder, monad_id, prune_options)
+    end
+
     success = false # create this here so the return statement handles it correctly
+
+    path_to_out, path_to_err = setSimulationOutputPaths(path_to_simulation_folder)
     try
-        if use_hpc
-            run(pipeline(`sbatch --wrap="$cmd"`, stdout=joinpath(path_to_simulation_folder, "output.log"), stderr=joinpath(path_to_simulation_folder, "output.err")); wait=true)
-        else
-            run(pipeline(cmd; stdout=joinpath(path_to_simulation_folder, "output.log"), stderr=joinpath(path_to_simulation_folder, "output.err")); wait=true)
-        end
+        run(pipeline(cmd; stdout=path_to_out, stderr=path_to_err); wait=true)
     catch e
-        println("\nWARNING: Simulation $(simulation.id) failed. Please check $(joinpath(path_to_simulation_folder, "output.err")) for more information.\n")
+        println("\nWARNING: Simulation $(simulation.id) failed. Please check $(path_to_err) for more information.\n")
         # write the execution command to output.err
-        lines = readlines(joinpath(path_to_simulation_folder, "output.err"))
-        open(joinpath(path_to_simulation_folder, "output.err"), "w+") do io
+        lines = readlines(path_to_err)
+        open(path_to_err, "w+") do io
             # read the lines of the output.err file
             println(io, "Execution command: $cmd")
             println(io, "\n---stderr from PhysiCell---")
@@ -65,7 +68,7 @@ function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=miss
         success = false
         eraseSimulationID(simulation.id; monad_id=monad_id)
     else
-        rm(joinpath(path_to_simulation_folder, "output.err"); force=true)
+        rm(path_to_err; force=true)
         DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Completed")) WHERE simulation_id=$(simulation.id);" )
         success = true
     end
@@ -73,6 +76,12 @@ function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=miss
     pruneSimulationOutput(simulation; prune_options=prune_options)
     
     return success
+end
+
+function setSimulationOutputPaths(path_to_simulation_folder::String)
+    path_to_out = joinpath(path_to_simulation_folder, "output.log")
+    path_to_err = joinpath(path_to_simulation_folder, "output.err")
+    return path_to_out, path_to_err
 end
 
 function runMonad(monad::Monad; do_full_setup::Bool=true, force_recompile::Bool=false, prune_options=PruneOptions())
