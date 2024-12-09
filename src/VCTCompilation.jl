@@ -49,12 +49,12 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
     path_to_input_custom_codes = joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder)
     cp(joinpath(path_to_input_custom_codes, "custom_modules"), temp_custom_modules_dir; force=true)
 
-    # path_to_folder = joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder) # source dir needs to end in / or else the dir is copied into target, not the source files
-    # for file in readdir(joinpath(path_to_folder, "custom_modules"), sort=false)
+    # path_to_input_custom_codes = joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder) # source dir needs to end in / or else the dir is copied into target, not the source files
+    # for file in readdir(joinpath(path_to_input_custom_codes, "custom_modules"), sort=false)
     #     if !isfile(joinpath(temp_physicell_dir, "custom_modules", file))
     #         continue # skip directories
     #     end
-    #     src = joinpath(path_to_folder, "custom_modules", file)
+    #     src = joinpath(path_to_input_custom_codes, "custom_modules", file)
     #     dst = joinpath(temp_physicell_dir, "custom_modules", file)
     #     cp(src, dst, force=true)
     # end
@@ -78,15 +78,15 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
             end
         end
         println("Running make command...")
-        cd(() -> run(pipeline(cmd; stdout=joinpath(path_to_folder, "compilation.log"), stderr=joinpath(path_to_folder, "compilation.err"))), temp_physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory
+        cd(() -> run(pipeline(cmd; stdout=joinpath(path_to_input_custom_codes, "compilation.log"), stderr=joinpath(path_to_input_custom_codes, "compilation.err"))), temp_physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory
     catch e
         println("""
         Compilation failed. 
         Error: $e
-        Check $(joinpath(path_to_folder, "compilation.err")) for more information.
+        Check $(joinpath(path_to_input_custom_codes, "compilation.err")) for more information.
         """
         )
-        open(joinpath(path_to_folder, "compilation.err"), "r") do f
+        open(joinpath(path_to_input_custom_codes, "compilation.err"), "r") do f
             # print contents of f to the console
             for line in eachline(f)
                 println(line)
@@ -96,10 +96,10 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
     end
     
     # check if the error file is empty, if it is, delete it
-    if filesize(joinpath(path_to_folder, "compilation.err")) == 0
-        rm(joinpath(path_to_folder, "compilation.err"); force=true)
+    if filesize(joinpath(path_to_input_custom_codes, "compilation.err")) == 0
+        rm(joinpath(path_to_input_custom_codes, "compilation.err"); force=true)
     else
-        println("Compilation exited without error, but check $(joinpath(path_to_folder, "compilation.err")) for warnings.")
+        println("Compilation exited without error, but check $(joinpath(path_to_input_custom_codes, "compilation.err")) for warnings.")
     end
 
     mv(joinpath(temp_physicell_dir, executable_name), joinpath(path_to_input_custom_codes, baseToExecutable("project")), force=true)
