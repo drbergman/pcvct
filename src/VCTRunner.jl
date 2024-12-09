@@ -53,20 +53,8 @@ function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=miss
     try
         run(pipeline(cmd; stdout=path_to_out, stderr=path_to_err); wait=true)
     catch e
-        println("\nWARNING: Simulation $(simulation.id) failed. Please check $(path_to_err) for more information.\n")
-        # write the execution command to output.err
-        lines = readlines(path_to_err)
-        open(path_to_err, "w+") do io
-            # read the lines of the output.err file
-            println(io, "Execution command: $cmd")
-            println(io, "\n---stderr from PhysiCell---")
-            for line in lines
-                println(io, line)
-            end
-        end
-        DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Failed")) WHERE simulation_id=$(simulation.id);" )
+        resolveSimulationError(simulation.id, monad_id, path_to_err, cmd)
         success = false
-        eraseSimulationID(simulation.id; monad_id=monad_id)
     else
         rm(path_to_err; force=true)
         DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Completed")) WHERE simulation_id=$(simulation.id);" )
@@ -76,6 +64,22 @@ function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=miss
     pruneSimulationOutput(simulation; prune_options=prune_options)
     
     return success
+end
+
+function resolveSimulationError(simulation_id, monad_id, path_to_err, cmd)
+    println("\nWARNING: Simulation $(simulation_id) failed. Please check $(path_to_err) for more information.\n")
+    # write the execution command to output.err
+    lines = readlines(path_to_err)
+    open(path_to_err, "w+") do io
+        # read the lines of the output.err file
+        println(io, "Execution command: $cmd")
+        println(io, "\n---stderr from PhysiCell---")
+        for line in lines
+            println(io, line)
+        end
+    end
+    DBInterface.execute(db, "UPDATE simulations SET status_code_id=$(getStatusCodeID("Failed")) WHERE simulation_id=$(simulation_id);")
+    eraseSimulationID(simulation_id; monad_id=monad_id)
 end
 
 function setSimulationOutputPaths(path_to_simulation_folder::String)
@@ -157,7 +161,7 @@ function runAbstractTrial(T::AbstractTrial; force_recompile::Bool=true, prune_op
     n_asterisks = 1
     asterisks = Dict{String, Int}()
     size_T = length(T)
-    println("Finished $(typeof(T)) $(T.id).")
+    println("Finished $(submit_on_hpc ? "scheduling " : "")$(typeof(T)) $(T.id).")
     println("\t- Consists of $(size_T) simulations.")
     print(  "\t- Scheduled $(length(simulation_tasks)) simulations to complete this $(typeof(T)).")
     print_low_schedule_message = length(simulation_tasks) < size_T
@@ -168,7 +172,7 @@ function runAbstractTrial(T::AbstractTrial; force_recompile::Bool=true, prune_op
     else
         println()
     end
-    print(  "\t- Successful completion of $(n_success[]) simulations.")
+    print(  "\t- Successful $(submit_on_hpc ? "scheduling" : "completion") of $(n_success[]) simulations.")
     print_low_success_warning = n_success[] < length(simulation_tasks)
     if print_low_success_warning
         println(" ($(repeat("*", n_asterisks)))")

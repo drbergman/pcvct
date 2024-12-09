@@ -41,6 +41,7 @@ else
 end
 
 submit_on_hpc = isRunningOnHPC()
+sbatch_options = defaultJobOptions() # this is a dictionary that will be used to pass options to the sbatch command
 
 ################## Initialization Functions ##################
 
