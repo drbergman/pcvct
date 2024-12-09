@@ -63,6 +63,14 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
     println("Compiling custom code for $(S.folder_names.custom_code_folder) with flags: $cflags")
 
     try
+        println("Makefile contents:")
+        open(joinpath(temp_physicell_dir, "Makefile")) do f
+            # print contents of f to the console
+            for line in eachline(f)
+                println(line)
+            end
+        end
+        println("Running make command...")
         cd(() -> run(pipeline(cmd; stdout=joinpath(path_to_folder, "compilation.log"), stderr=joinpath(path_to_folder, "compilation.err"))), temp_physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory
     catch e
         println("""
