@@ -5,7 +5,7 @@ function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=miss
         monad = Monad(simulation)
         monad_id = monad.id
     end
-    path_to_simulation_folder = joinpath(data_dir, "outputs", "simulations", string(simulation.id))
+    path_to_simulation_folder = outputFolder(simulation)
     path_to_simulation_output = joinpath(path_to_simulation_folder, "output")
     mkpath(path_to_simulation_output)
 
@@ -13,7 +13,12 @@ function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=miss
         loadConfiguration(simulation)
         loadRulesets(simulation)
         loadICCells(simulation)
-        loadCustomCode(simulation; force_recompile=force_recompile)
+        success = loadCustomCode(simulation; force_recompile=force_recompile)
+        if !success
+            DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Failed")) WHERE simulation_id=$(simulation.id);" )
+            eraseSimulationID(simulation.id; monad_id=monad_id)
+            return false
+        end
     end
 
     executable_str = joinpath(data_dir, "inputs", "custom_codes", simulation.folder_names.custom_code_folder, baseToExecutable("project")) # path to executable
@@ -72,10 +77,13 @@ function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=miss
 end
 
 function runMonad(monad::Monad; do_full_setup::Bool=true, force_recompile::Bool=false, prune_options=PruneOptions())
-    mkpath(joinpath(data_dir, "outputs", "monads", string(monad.id)))
+    mkpath(outputFolder(monad))
 
     if do_full_setup
-        loadCustomCode(monad; force_recompile=force_recompile)
+        compilation_success = loadCustomCode(monad; force_recompile=force_recompile)
+        if !compilation_success
+            return Task[] # do not delete simulations or the monad as these could have succeeded in the past (or on other nodes, etc.)
+        end
     end
     loadConfiguration(monad)
     loadRulesets(monad)
@@ -87,7 +95,6 @@ function runMonad(monad::Monad; do_full_setup::Bool=true, force_recompile::Bool=
             continue # if the simulation has already been started (or even completed), then don't run it again
         end
         simulation = Simulation(simulation_id)
-       
         push!(simulation_tasks, @task runSimulation(simulation; monad_id=monad.id, do_full_setup=false, force_recompile=false, prune_options=prune_options))
     end
 
@@ -95,9 +102,13 @@ function runMonad(monad::Monad; do_full_setup::Bool=true, force_recompile::Bool=
 end
 
 function runSampling(sampling::Sampling; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions())
-    mkpath(joinpath(data_dir, "outputs", "samplings", string(sampling.id)))
+    mkpath(outputFolder(sampling))
 
-    loadCustomCode(sampling; force_recompile=force_recompile)
+    compilation_success = loadCustomCode(sampling; force_recompile=force_recompile)
+    if !compilation_success
+        return Task[] # do not delete simulations, monads, or the sampling as these could have succeeded in the past (or on other nodes, etc.)
+    end
+
     simulation_tasks = []
     for index in eachindex(sampling.variation_ids)
         monad = Monad(sampling, index) # instantiate a monad with the variation_id and the simulation ids already found
@@ -108,7 +119,7 @@ function runSampling(sampling::Sampling; force_recompile::Bool=false, prune_opti
 end
 
 function runTrial(trial::Trial; force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
-    mkpath(joinpath(data_dir, "outputs", "trials", string(trial.id)))
+    mkpath(outputFolder(trial))
 
     simulation_tasks = []
     for i in eachindex(trial.sampling_ids)

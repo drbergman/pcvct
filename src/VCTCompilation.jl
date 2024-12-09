@@ -31,26 +31,28 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
     recompile |= force_recompile # if force_recompile is true, then recompile no matter what
 
     if !recompile
-        return
+        return true
     end
-
-    # at some point, should "lock" this function until any other compilations are complete...ideally a way that is independent of the current runtime
 
     if clean
         cd(()->run(pipeline(`make clean`; stdout=devnull)), physicell_dir)
     end
+    
+    temp_physicell_dir = joinpath(outputFolder(S), "temp_physicell")
+    # copy the entire PhysiCell directory to a temporary directory to avoid conflicts with concurrent compilation
+    cp(physicell_dir, temp_physicell_dir; force=true)
 
     path_to_folder = joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder) # source dir needs to end in / or else the dir is copied into target, not the source files
     for file in readdir(joinpath(path_to_folder, "custom_modules"), sort=false)
-        if !isfile(joinpath(path_to_folder, "custom_modules", file))
-            continue
+        if !isfile(joinpath(temp_physicell_dir, "custom_modules", file))
+            continue # skip directories
         end
         src = joinpath(path_to_folder, "custom_modules", file)
-        dst = joinpath(physicell_dir, "custom_modules", file)
+        dst = joinpath(temp_physicell_dir, "custom_modules", file)
         cp(src, dst, force=true)
     end
-    cp(joinpath(path_to_folder, "main.cpp"), joinpath(physicell_dir, "main.cpp"), force=true)
-    cp(joinpath(path_to_folder, "Makefile"), joinpath(physicell_dir, "Makefile"), force=true)
+    cp(joinpath(path_to_folder, "main.cpp"), joinpath(temp_physicell_dir, "main.cpp"), force=true)
+    cp(joinpath(path_to_folder, "Makefile"), joinpath(temp_physicell_dir, "Makefile"), force=true)
 
     executable_name = baseToExecutable("project_ccid_$(S.folder_ids.custom_code_id)")
     cmd = `make CC=$(PHYSICELL_CPP) PROGRAM_NAME=$(executable_name) CFLAGS=$(cflags)`
@@ -60,20 +62,24 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
 
     println("Compiling custom code for $(S.folder_names.custom_code_folder) with flags: $cflags")
 
-    cd(() -> run(pipeline(cmd; stdout=joinpath(path_to_folder, "compilation.log"), stderr=joinpath(path_to_folder, "compilation.err"))), physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory; make sure the macro ADDON_PHYSIECM is defined (should work even if multiply defined, e.g., by Makefile)
+    try
+        cd(() -> run(pipeline(cmd; stdout=joinpath(path_to_folder, "compilation.log"), stderr=joinpath(path_to_folder, "compilation.err"))), temp_physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory
+    catch e
+        println("Compilation failed. Check $(joinpath(path_to_folder, "compilation.err")) for more information.")
+        return false
+    end
     
     # check if the error file is empty, if it is, delete it
     if filesize(joinpath(path_to_folder, "compilation.err")) == 0
         rm(joinpath(path_to_folder, "compilation.err"); force=true)
+    else
+        println("Compilation exited without error, but check $(joinpath(path_to_folder, "compilation.err")) for warnings.")
     end
 
-    rm(joinpath(physicell_dir, "custom_modules", "custom.cpp"); force=true)
-    rm(joinpath(physicell_dir, "custom_modules", "custom.h"); force=true)
-    rm(joinpath(physicell_dir, "main.cpp"); force=true)
-    cp(joinpath(physicell_dir, "sample_projects", "Makefile-default"), joinpath(physicell_dir, "Makefile"), force=true)
+    mv(joinpath(temp_physicell_dir, executable_name), joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder, baseToExecutable("project")), force=true)
 
-    mv(joinpath(physicell_dir, executable_name), joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder, baseToExecutable("project")), force=true)
-    return 
+    rm(temp_physicell_dir; force=true, recursive=true)
+    return true
 end
 
 """

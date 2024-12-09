@@ -49,13 +49,6 @@ function getField(xml_doc::XMLDocument, xml_path::Vector{String}; required::Bool
     return retrieveElement(xml_doc, xml_path; required=required) |> content
 end
 
-function getOutputFolder(path_to_xml)
-    xml_doc = openXML(path_to_xml)
-    rel_path_to_output = getField(xml_doc, ["save", "folder"])
-    closeXML(xml_doc)
-    return rel_path_to_output
-end
-
 function updateField(xml_doc::XMLDocument, xml_path::Vector{String}, new_value::Union{Int,Real,String})
     current_element = retrieveElement(xml_doc, xml_path; required=true)
     set_content(current_element, string(new_value))
