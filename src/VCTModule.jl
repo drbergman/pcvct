@@ -213,7 +213,7 @@ end
 
 ################## Miscellaneous Functions ##################
 
-function outputFolder(lower_class_str::String, id::Int)
+function outputFolder(lower_class_str::AbstractString, id::Int)
     return joinpath(data_dir, "outputs", lower_class_str * "s", string(id))
 end
 
