@@ -42,17 +42,24 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
     # copy the entire PhysiCell directory to a temporary directory to avoid conflicts with concurrent compilation
     cp(physicell_dir, temp_physicell_dir; force=true)
 
-    path_to_folder = joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder) # source dir needs to end in / or else the dir is copied into target, not the source files
-    for file in readdir(joinpath(path_to_folder, "custom_modules"), sort=false)
-        if !isfile(joinpath(temp_physicell_dir, "custom_modules", file))
-            continue # skip directories
-        end
-        src = joinpath(path_to_folder, "custom_modules", file)
-        dst = joinpath(temp_physicell_dir, "custom_modules", file)
-        cp(src, dst, force=true)
+    temp_custom_modules_dir = joinpath(temp_physicell_dir, "custom_modules")
+    if isdir(temp_custom_modules_dir)
+        rm(temp_custom_modules_dir; force=true, recursive=true)
     end
-    cp(joinpath(path_to_folder, "main.cpp"), joinpath(temp_physicell_dir, "main.cpp"), force=true)
-    cp(joinpath(path_to_folder, "Makefile"), joinpath(temp_physicell_dir, "Makefile"), force=true)
+    path_to_input_custom_codes = joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder)
+    cp(joinpath(path_to_input_custom_codes, "custom_modules"), temp_custom_modules_dir; force=true)
+
+    # path_to_folder = joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder) # source dir needs to end in / or else the dir is copied into target, not the source files
+    # for file in readdir(joinpath(path_to_folder, "custom_modules"), sort=false)
+    #     if !isfile(joinpath(temp_physicell_dir, "custom_modules", file))
+    #         continue # skip directories
+    #     end
+    #     src = joinpath(path_to_folder, "custom_modules", file)
+    #     dst = joinpath(temp_physicell_dir, "custom_modules", file)
+    #     cp(src, dst, force=true)
+    # end
+    cp(joinpath(path_to_input_custom_codes, "main.cpp"), joinpath(temp_physicell_dir, "main.cpp"), force=true)
+    cp(joinpath(path_to_input_custom_codes, "Makefile"), joinpath(temp_physicell_dir, "Makefile"), force=true)
 
     executable_name = baseToExecutable("project_ccid_$(S.folder_ids.custom_code_id)")
     cmd = `make CC=$(PHYSICELL_CPP) PROGRAM_NAME=$(executable_name) CFLAGS=$(cflags)`
@@ -95,7 +102,7 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
         println("Compilation exited without error, but check $(joinpath(path_to_folder, "compilation.err")) for warnings.")
     end
 
-    mv(joinpath(temp_physicell_dir, executable_name), joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder, baseToExecutable("project")), force=true)
+    mv(joinpath(temp_physicell_dir, executable_name), joinpath(path_to_input_custom_codes, baseToExecutable("project")), force=true)
 
     rm(temp_physicell_dir; force=true, recursive=true)
     return true
