@@ -66,6 +66,12 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
         cd(() -> run(pipeline(cmd; stdout=joinpath(path_to_folder, "compilation.log"), stderr=joinpath(path_to_folder, "compilation.err"))), temp_physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory
     catch e
         println("Compilation failed. Check $(joinpath(path_to_folder, "compilation.err")) for more information.")
+        open(joinpath(path_to_folder, "compilation.err"), "a") do f
+            # print contents of f to the console
+            for line in eachline(f)
+                println(line)
+            end
+        end
         return false
     end
     
