@@ -21,7 +21,7 @@ function runStudio(simulation_id::Int; python_path::Union{Missing,String}=path_t
         println("Setting path to studio to $path_to_studio")
     end
 
-    path_to_output = joinpath(data_dir, "outputs", "simulations", string(simulation_id), "output")
+    path_to_output = joinpath(outputFolder("simulation", simulation_id), "output")
     path_to_xml = joinpath(path_to_output, "PhysiCell_settings.xml")
     xml_doc = openXML(path_to_xml)
     updateField(xml_doc, ["save", "folder"], path_to_output)
