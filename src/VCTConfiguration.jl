@@ -59,31 +59,16 @@ function updateField(xml_doc::XMLDocument, xml_path_and_value::Vector{Any})
     return updateField(xml_doc, xml_path_and_value[1:end-1],xml_path_and_value[end])
 end
 
-function multiplyField(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString}, multiplier::AbstractFloat)
-    current_element = retrieveElement(xml_doc, xml_path; required=true)
-    val = content(current_element)
-    if attribute(current_element, "type"; required=false) == "int"
-        val = parse(Int, val) |> y -> round(Int, multiplier * y)
-    else
-        val = parse(AbstractFloat, val) |> y -> multiplier * y
-    end
-
-    val |> string |> x -> set_content(current_element, x)
-    return nothing
-end
-
 function xmlPathToColumnName(xml_path::Vector{<:AbstractString})
     return join(xml_path, "/")
 end
 
-function columnNameToXMLPath(column_name::String)
-    return split(column_name, "/") .|> string
-end
+columnNameToXMLPath(column_name::String) = split(column_name, "/")
 
 function updateFieldsFromCSV(xml_doc::XMLDocument, path_to_csv::String)
     df = CSV.read(path_to_csv, DataFrame; header=false, silencewarnings=true, types=String)
     for i = axes(df,1)
-        df[i, :] |> Vector |> x -> filter!(!ismissing, x) .|> string |> x -> updateField(xml_doc, x)
+        df[i, :] |> Vector |> x -> filter!(!ismissing, x) |> x -> updateField(xml_doc, x)
     end
 end
 
@@ -105,7 +90,7 @@ function loadConfiguration(M::AbstractMonad)
         if column_name == "config_variation_id"
             continue
         end
-        xml_path = split(column_name,"/") .|> string
+        xml_path = columnNameToXMLPath(column_name)
         updateField(xml_doc, xml_path, variation_row[1, column_name])
     end
     save_file(xml_doc, path_to_xml)
@@ -146,7 +131,7 @@ function loadRulesets(M::AbstractMonad)
             if column_name == "rulesets_variation_id"
                 continue
             end
-            xml_path = split(column_name, "/") .|> string
+            xml_path = columnNameToXMLPath(column_name)
             updateField(xml_doc, xml_path, variation_row[1, column_name])
         end
     end
@@ -178,7 +163,7 @@ function loadICCells(M::AbstractMonad)
             if column_name == "ic_cell_variation_id"
                 continue
             end
-            xml_path = split(column_name, "/") .|> string
+            xml_path = columnNameToXMLPath(column_name)
             updateField(xml_doc, xml_path, variation_row[1, column_name])
         end
     end
@@ -332,7 +317,7 @@ function simpleICCellVariationNames(name::String)
 end
 
 function getCellParameterName(column_name::String)
-    xml_path = split(column_name, "/") .|> string
+    xml_path = columnNameToXMLPath(column_name)
     cell_type = split(xml_path[2], ":")[3]
     target_name = ""
     for component in xml_path[3:end]
@@ -349,7 +334,7 @@ function getCellParameterName(column_name::String)
 end
 
 function getRuleParameterName(name::String)
-    xml_path = split(name, "/") .|> string
+    xml_path = columnNameToXMLPath(name)
     cell_type = split(xml_path[1], ":")[3]
     behavior = split(xml_path[2], ":")[3]
     is_decreasing = xml_path[3] == "decreasing_signals"
@@ -364,7 +349,7 @@ function getRuleParameterName(name::String)
 end
 
 function getICCellParameterName(name::String)
-    xml_path = split(name, "/") .|> string
+    xml_path = columnNameToXMLPath(name)
     cell_type = split(xml_path[1], ":")[3]
     patch_type = split(xml_path[2], ":")[3]
     id = split(xml_path[3], ":")[3]
