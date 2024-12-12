@@ -125,7 +125,7 @@ collectSimulationTasks(monad::Monad; force_recompile::Bool=false, prune_options:
 collectSimulationTasks(sampling::Sampling; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions()) = runSampling(sampling; force_recompile=force_recompile, prune_options=prune_options)
 collectSimulationTasks(trial::Trial; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions()) = runTrial(trial; force_recompile=force_recompile, prune_options=prune_options)
 
-function runAbstractTrial(T::AbstractTrial; force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
+function Base.run(T::AbstractTrial; force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
     cd(()->run(pipeline(`make clean`; stdout=devnull)), physicell_dir) # remove all *.o files so that a future recompile will re-compile all the files
 
     simulation_tasks = collectSimulationTasks(T; force_recompile=force_recompile, prune_options=prune_options)
@@ -173,3 +173,5 @@ function runAbstractTrial(T::AbstractTrial; force_recompile::Bool=true, prune_op
     println("\n--------------------------------------------------\n")
     return n_success[]
 end
+
+runAbstractTrial = run
