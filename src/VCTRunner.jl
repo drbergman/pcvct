@@ -1,3 +1,5 @@
+import Base.run
+
 function runSimulation(simulation::Simulation; monad_id::Union{Missing,Int}=missing, do_full_setup::Bool=true, force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions())
     DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Running")) WHERE simulation_id=$(simulation.id);" )
 
@@ -125,7 +127,28 @@ collectSimulationTasks(monad::Monad; force_recompile::Bool=false, prune_options:
 collectSimulationTasks(sampling::Sampling; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions()) = runSampling(sampling; force_recompile=force_recompile, prune_options=prune_options)
 collectSimulationTasks(trial::Trial; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions()) = runTrial(trial; force_recompile=force_recompile, prune_options=prune_options)
 
-function runAbstractTrial(T::AbstractTrial; force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
+"""
+`collectSimulationTasks(T::AbstractTrial; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions())`
+Collect the simulation tasks for the given trial, sampling, monad, or simulation.
+Used by `run` to collect the tasks to run.
+"""
+function collectSimulationTasks(T::AbstractTrial; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions=PruneOptions()) end
+
+"""
+`run(T::AbstractTrial; force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())`
+Run the given simulation, monad, sampling, or trial.
+This function will call the appropriate functions to run the simulations and return the number of successful simulations.
+It will also print out messages to the console to inform the user about the progress and results of the simulations.
+
+# Arguments
+- `T::AbstractTrial`: The trial, sampling, monad, or simulation to run.
+- `force_recompile::Bool=true`: If `true`, forces a recompilation of all files by removing all `.o` files in the PhysiCell directory.
+- `prune_options::PruneOptions=PruneOptions()`: Options for pruning simulations.
+
+# Returns
+- `Int`: The number of successful simulations that were run, not counting those that were completed previously.
+"""
+function run(T::AbstractTrial; force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
     cd(()->run(pipeline(`make clean`; stdout=devnull)), physicell_dir) # remove all *.o files so that a future recompile will re-compile all the files
 
     simulation_tasks = collectSimulationTasks(T; force_recompile=force_recompile, prune_options=prune_options)
@@ -173,3 +196,9 @@ function runAbstractTrial(T::AbstractTrial; force_recompile::Bool=true, prune_op
     println("\n--------------------------------------------------\n")
     return n_success[]
 end
+
+"""
+`runAbstractTrial(T::AbstractTrial; force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())`
+Alias for `run`.
+"""
+runAbstractTrial(T::AbstractTrial; force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions()) = run(T; force_recompile=force_recompile, prune_options=prune_options)

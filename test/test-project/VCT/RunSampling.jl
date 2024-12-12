@@ -33,7 +33,7 @@ simulation = Simulation(config_folder, custom_code_folder;
     ic_cell_variation_id=ic_cell_variation_id
 )
 
-n_success = runAbstractTrial(simulation)
+n_success = run(simulation)
 if n_success == 0
     hashBorderPrint("Simulation failed...")
     # print out the compilation error file if exists
@@ -89,7 +89,7 @@ sampling = Sampling(config_folder, custom_code_folder;
 
 hashBorderPrint("SAMPLING SUCCESSFULLY CREATED!")
 
-n_success = runAbstractTrial(sampling; force_recompile=false)
+n_success = run(sampling; force_recompile=false)
 @test n_success == length(sampling)
 
 hashBorderPrint("SAMPLING SUCCESSFULLY RUN!")
@@ -108,7 +108,7 @@ n_variations = length(sampling.variation_ids)
 
 hashBorderPrint("SAMPLING SUCCESSFULLY IN CSVS!")
 
-n_success = runAbstractTrial(sampling; force_recompile=false)
+n_success = run(sampling; force_recompile=false)
 
 # no new simulations should have been run
 @test n_success == 0
@@ -117,7 +117,7 @@ hashBorderPrint("SUCCESSFULLY FOUND PREVIOUS SIMS!")
 
 trial = Trial([sampling])
 
-n_success = runAbstractTrial(trial; force_recompile=false)
+n_success = run(trial; force_recompile=false)
 
 # no new simulations should have been run
 @test n_success == 0
