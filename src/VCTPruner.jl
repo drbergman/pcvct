@@ -11,8 +11,8 @@ export PruneOptions
     prune_final::Bool = false
 end
 
-function pruneSimulationOutput(simulation::Simulation; prune_options::PruneOptions=PruneOptions())
-    path_to_output_folder = joinpath(data_dir, "outputs", "simulations", string(simulation.id), "output")
+function pruneSimulationOutput(simulation_id::Integer; prune_options::PruneOptions=PruneOptions())
+    path_to_output_folder = joinpath(outputFolder("simulation", simulation_id), "output")
     if prune_options.prune_svg
         glob("snapshot*.svg", path_to_output_folder) .|> x->rm(x, force=true)
         if prune_options.prune_initial
@@ -41,3 +41,5 @@ function pruneSimulationOutput(simulation::Simulation; prune_options::PruneOptio
         end
     end
 end
+
+pruneSimulationOutput(simulation::Simulation; prune_options::PruneOptions=PruneOptions()) = pruneSimulationOutput(simulation.id; prune_options=prune_options)

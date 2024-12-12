@@ -22,6 +22,7 @@ include("VCTRecorder.jl")
 include("VCTSensitivity.jl")
 include("VCTVersion.jl")
 include("VCTPhysiCellVersion.jl")
+include("VCTHPC.jl")
 
 include("VCTAnalysis.jl")
 
@@ -38,6 +39,12 @@ if Sys.iswindows()
 else
     baseToExecutable(s::String) = s
 end
+
+run_on_hpc = isRunningOnHPC()
+max_number_of_parallel_simulations = haskey(ENV, "PCVCT_NUM_PARALLEL_SIMS") ? parse(Int, ENV["PCVCT_NUM_PARALLEL_SIMS"]) : 1
+march_flag = run_on_hpc ? "x86-64" : "native"
+
+sbatch_options = defaultJobOptions() # this is a dictionary that will be used to pass options to the sbatch command
 
 ################## Initialization Functions ##################
 
@@ -91,6 +98,8 @@ function initializeVCT(path_to_physicell::String, path_to_data::String; auto_upg
     println(rpad("PhysiCell version:", 20, ' ') * physicellVersion())
     println(rpad("pcvct version:", 20, ' ') * string(pcvctVersion()))
     println(rpad("Compiler:", 20, ' ') * PHYSICELL_CPP)
+    println(rpad("Running on HPC:", 20, ' ') * string(run_on_hpc))
+    println(rpad("Max parallel sims:", 20, ' ') * string(max_number_of_parallel_simulations))
     flush(stdout)
 end
 
@@ -157,17 +166,16 @@ The function constructs a file path based on the type and ID of the trial `T`.
 It then reads the constituent IDs from a CSV file located at the constructed path.
 """
 function readConstituentIDs(T::AbstractTrial)
-    type_str = typeof(T) |> string |> lowercase
-    path_to_folder = joinpath(data_dir, "outputs", type_str * "s", string(T.id))
+    path_to_folder = outputFolder(T)
     filename = lowercase(string(constituentsType(T))) * "s"
     return readConstituentIDs(joinpath(path_to_folder, filename * ".csv"))
 end
 
-readMonadSimulationIDs(monad_id::Int) = readConstituentIDs(joinpath(data_dir, "outputs", "monads", string(monad_id), "simulations.csv"))
+readMonadSimulationIDs(monad_id::Int) = readConstituentIDs(joinpath(outputFolder("monad", monad_id), "simulations.csv"))
 readMonadSimulationIDs(monad::Monad) = readMonadSimulationIDs(monad.id)
-readSamplingMonadIDs(sampling_id::Int) = readConstituentIDs(joinpath(data_dir, "outputs", "samplings", string(sampling_id), "monads.csv"))
+readSamplingMonadIDs(sampling_id::Int) = readConstituentIDs(joinpath(outputFolder("sampling", sampling_id), "monads.csv"))
 readSamplingMonadIDs(sampling::Sampling) = readSamplingMonadIDs(sampling.id)
-readTrialSamplingIDs(trial_id::Int) = readConstituentIDs(joinpath(data_dir, "outputs", "trials", string(trial_id), "samplings.csv"))
+readTrialSamplingIDs(trial_id::Int) = readConstituentIDs(joinpath(outputFolder("trial", trial_id), "samplings.csv"))
 readTrialSamplingIDs(trial::Trial) = readTrialSamplingIDs(trial.id)
 
 function getSamplingSimulationIDs(sampling_id::Int)
@@ -214,8 +222,16 @@ end
 
 ################## Miscellaneous Functions ##################
 
-function getOutputFolder(T::AbstractTrial)
+function outputFolder(lower_class_str::AbstractString, id::Int)
+    return joinpath(data_dir, "outputs", lower_class_str * "s", string(id))
+end
+
+function outputFolder(T::AbstractTrial)
     name = typeof(T) |> string |> lowercase
     name = split(name, ".")[end] # remove module name that comes with the type, e.g. main.vctmodule.sampling -> sampling
-    return joinpath(data_dir, "outputs", name * "s", string(T.id))
+    return outputFolder(name, T.id)
+end
+
+function setMarchFlag(flag::String)
+    global march_flag = flag
 end

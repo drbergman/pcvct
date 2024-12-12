@@ -4,7 +4,7 @@ function deleteSimulation(simulation_ids::AbstractVector{<:Integer}; delete_supe
     simulation_ids = sim_df.simulation_id # update based on the constraints added
     DBInterface.execute(db,"DELETE FROM simulations WHERE simulation_id IN ($(join(simulation_ids,",")));")
     for row in eachrow(sim_df)
-        rm(joinpath(data_dir, "outputs", "simulations", string(row.simulation_id)); force=true, recursive=true)
+        rm(outputFolder("simulation", row.simulation_id); force=true, recursive=true)
 
         config_folder = configFolder(row.config_id)
         result_df = constructSelectQuery(
@@ -71,7 +71,7 @@ function deleteMonad(monad_ids::AbstractVector{<:Integer}; delete_subs::Bool=tru
         if delete_subs
             append!(simulation_ids_to_delete, readMonadSimulationIDs(monad_id))
         end
-        rm(joinpath(data_dir, "outputs", "monads", string(monad_id)); force=true, recursive=true)
+        rm(outputFolder("monad", monad_id); force=true, recursive=true)
     end
     if !isempty(simulation_ids_to_delete)
         deleteSimulation(simulation_ids_to_delete; delete_supers=false)
@@ -110,7 +110,7 @@ function deleteSampling(sampling_ids::AbstractVector{<:Integer}; delete_subs::Bo
         if delete_subs
             append!(monad_ids_to_delete, readSamplingMonadIDs(sampling_id))
         end
-        rm(joinpath(data_dir, "outputs", "samplings", string(sampling_id)); force=true, recursive=true)
+        rm(outputFolder("sampling", sampling_id); force=true, recursive=true)
     end
     if !isempty(monad_ids_to_delete)
         all_sampling_ids = constructSelectQuery("samplings"; selection="sampling_id") |> queryToDataFrame |> x -> x.sampling_id
@@ -158,7 +158,7 @@ function deleteTrial(trial_ids::AbstractVector{<:Integer}; delete_subs::Bool=tru
         if delete_subs
             append!(sampling_ids_to_delete, readTrialSamplingIDs(trial_id))
         end
-        rm(joinpath(data_dir, "outputs", "trials", string(trial_id)); force=true, recursive=true)
+        rm(outputFolder("trial", trial_id); force=true, recursive=true)
     end
     if !isempty(sampling_ids_to_delete)
         all_trial_ids = constructSelectQuery("trials"; selection="trial_id") |> queryToDataFrame |> x -> x.trial_id

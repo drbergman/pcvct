@@ -8,25 +8,25 @@ export GridVariation, LHSVariation, addVariations
 
 abstract type AbstractVariation end
 struct ElementaryVariation{T} <: AbstractVariation
-    xml_path::Vector{String}
+    xml_path::Vector{<:AbstractString}
     values::Vector{T}
 end
 
-ElementaryVariation(xml_path::Vector{String}, value::T) where T = ElementaryVariation{T}(xml_path, [value])
+ElementaryVariation(xml_path::Vector{<:AbstractString}, value::T) where T = ElementaryVariation{T}(xml_path, [value])
 
 struct DistributedVariation <: AbstractVariation
-    xml_path::Vector{String}
+    xml_path::Vector{<:AbstractString}
     distribution::Distribution
 end
 
-xmlPath(av::AbstractVariation) = av.xml_path::Vector{String}
+xmlPath(av::AbstractVariation) = av.xml_path::Vector{<:AbstractString}
 columnName(av::AbstractVariation) = xmlPath(av) |> xmlPathToColumnName
 
-function UniformDistributedVariation(xml_path::Vector{String}, lb::T, ub::T) where {T<:Real}
+function UniformDistributedVariation(xml_path::Vector{<:AbstractString}, lb::T, ub::T) where {T<:Real}
     return DistributedVariation(xml_path, Uniform(lb, ub))
 end
 
-function NormalDistributedVariation(xml_path::Vector{String}, mu::T, sigma::T; lb::Real=-Inf, ub::Real=Inf) where {T<:Real}
+function NormalDistributedVariation(xml_path::Vector{<:AbstractString}, mu::T, sigma::T; lb::Real=-Inf, ub::Real=Inf) where {T<:Real}
     return DistributedVariation(xml_path, truncated(Normal(mu, sigma), lb, ub))
 end
 
