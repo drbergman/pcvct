@@ -78,7 +78,7 @@ sampling = Sampling(config_folder, custom_code_folder;
     ic_cell_variation_ids=ic_cell_variation_ids
 )
 
-n_success = runAbstractTrial(sampling; force_recompile=false)
+n_success = run(sampling; force_recompile=false)
 @test length(sampling) == length(config_variation_ids) * monad_min_length
 @test n_success == length(sampling)
 
@@ -113,7 +113,7 @@ sampling = Sampling(config_folder, custom_code_folder;
     config_variation_ids=config_variation_ids
 )
 
-n_success = runAbstractTrial(sampling; force_recompile=false)
+n_success = run(sampling; force_recompile=false)
 @test n_success == length(sampling)
 
 hashBorderPrint("SUCCESSFULLY VARIED CONFIG PARAMETERS!")
@@ -135,7 +135,7 @@ sampling = Sampling(config_folder, custom_code_folder;
     ic_cell_variation_ids=-1
 )
 
-n_success = runAbstractTrial(sampling; force_recompile=false)
+n_success = run(sampling; force_recompile=false)
 @test n_success == length(sampling)
 
 hashBorderPrint("SUCCESSFULLY VARIED RULESETS PARAMETERS!")
@@ -154,7 +154,7 @@ sampling = Sampling(config_folder, custom_code_folder;
     ic_cell_variation_ids=ic_cell_variation_ids
 )
 
-n_success = runAbstractTrial(sampling; force_recompile=false)
+n_success = run(sampling; force_recompile=false)
 @test n_success == length(sampling)
 
 hashBorderPrint("SUCCESSFULLY VARIED CONFIG AND RULESETS PARAMETERS!")

@@ -73,7 +73,7 @@ function moatSensitivity(method::MOAT, monad_min_length::Int, folder_names::Abst
     header_line = ["base", [columnName(av) for av in AV]...]
     monad_ids_df = DataFrame(monad_ids, header_line)
     sampling = Sampling(monad_min_length, monad_dict |> values |> collect)
-    n_success = runAbstractTrial(sampling; force_recompile=force_recompile, prune_options=PruneOptions())
+    n_success = run(sampling; force_recompile=force_recompile, prune_options=PruneOptions())
     return MOATSampling(sampling, monad_ids_df)
 end
 
@@ -241,7 +241,7 @@ function sobolSensitivity(method::Sobolʼ, monad_min_length::Int, folder_names::
     header_line = ["A", "B", [columnName(av) for av in AV[focus_indices]]...]
     monad_ids_df = DataFrame(monad_ids, header_line)
     sampling = Sampling(monad_min_length, monads)
-    n_success = runAbstractTrial(sampling; force_recompile=force_recompile, prune_options=prune_options)
+    n_success = run(sampling; force_recompile=force_recompile, prune_options=prune_options)
     return SobolSampling(sampling, monad_ids_df; sobol_index_methods=method.sobol_index_methods)
 end
 
@@ -329,7 +329,7 @@ function rbdSensitivity(method::RBD, monad_min_length::Int, folder_names::Abstra
     header_line = [columnName(av) for av in AV]
     monad_ids_df = DataFrame(monad_ids, header_line)
     sampling = Sampling(monad_min_length, monads)
-    n_success = runAbstractTrial(sampling; force_recompile=force_recompile, prune_options=prune_options)
+    n_success = run(sampling; force_recompile=force_recompile, prune_options=prune_options)
     return RBDSampling(sampling, monad_ids_df, method.rbd_variation.num_cycles; num_harmonics=method.num_harmonics)
 end
 

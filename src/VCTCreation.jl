@@ -241,7 +241,7 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         # running from a script, just add the -t flag:
         # julia -t 4 joinpath("data", "GenerateData.jl")
         """))\
-        runAbstractTrial(sampling; force_recompile=force_recompile)
+        run(sampling; force_recompile=force_recompile)
     """
 
     # Remove leading whitespace
