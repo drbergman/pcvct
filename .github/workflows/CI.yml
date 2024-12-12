@@ -83,7 +83,7 @@ jobs:
     - name: Run all tests
       uses: julia-actions/julia-runtest@v1
       env:
-        JULIA_NUM_THREADS: 8
+        PCVCT_NUM_PARALLEL_SIMS: 8
         PHYSICELL_CPP: ${{ matrix.compiler }} # maybe necessary for windows??
         PCVCT_PUBLIC_REPO_AUTH: ${{ secrets.PUBLIC_REPO_AUTH }}
     - uses: julia-actions/julia-processcoverage@v1

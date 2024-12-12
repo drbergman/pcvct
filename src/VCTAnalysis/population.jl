@@ -47,7 +47,7 @@ end
 
 function SimulationPopulationTimeSeries(simulation_id::Integer; include_dead::Bool=false)
     print("Computing SimulationPopulationTimeSeries for Simulation $simulation_id...")
-    simulation_folder = joinpath(data_dir, "outputs", "simulations", string(simulation_id))
+    simulation_folder = outputFolder("simulation", simulation_id)
     path_to_summary = joinpath(simulation_folder, "summary")
     path_to_file = joinpath(path_to_summary, "population_time_series$(include_dead ? "_include_dead" : "").csv")
     if isfile(path_to_file)
@@ -74,7 +74,7 @@ function finalPopulationCount(folder::String; include_dead::Bool=false)
 end
 
 function finalPopulationCount(simulation_id::Int; include_dead::Bool=false)
-    return joinpath(data_dir, "outputs", "simulations", string(simulation_id), "output") |> x -> finalPopulationCount(x; include_dead=include_dead)
+    return joinpath(outputFolder("simulation", simulation_id), "output") |> x -> finalPopulationCount(x; include_dead=include_dead)
 end
 
 struct MonadPopulationTimeSeries <: AbstractPopulationTimeSeries

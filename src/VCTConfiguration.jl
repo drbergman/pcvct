@@ -26,7 +26,7 @@ function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString
         candidate_elements = get_elements_by_tagname(current_element, path_element_name)
         found = false
         for ce in candidate_elements
-            if attribute(ce,attribute_name)==attribute_value
+            if attribute(ce, attribute_name) == attribute_value
                 found = true
                 current_element = ce
                 break
@@ -47,13 +47,6 @@ end
 
 function getField(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString}; required::Bool=true)
     return retrieveElement(xml_doc, xml_path; required=required) |> content
-end
-
-function getOutputFolder(path_to_xml)
-    xml_doc = openXML(path_to_xml)
-    rel_path_to_output = getField(xml_doc, ["save", "folder"])
-    closeXML(xml_doc)
-    return rel_path_to_output
 end
 
 function updateField(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString}, new_value::Union{Int,Real,String})
@@ -223,7 +216,7 @@ function customDataPath(cell_definition::String, field_name::String)::Vector{Str
     return [customDataPath(cell_definition); field_name]
 end
 
-function customDataPath(cell_definition::String, field_names::Vector{String})
+function customDataPath(cell_definition::String, field_names::Vector{<:AbstractString})
     return [customDataPath(cell_definition, field_name) for field_name in field_names]
 end
 
@@ -231,7 +224,7 @@ function userParameterPath(field_name::String)::Vector{String}
     return ["user_parameters"; field_name]
 end
 
-function userParameterPath(field_names::Vector{String})
+function userParameterPath(field_names::Vector{<:AbstractString})
     return [userParameterPath(field_name) for field_name in field_names]
 end
 
@@ -279,7 +272,7 @@ function addCustomDataVariationDimension!(AV::Vector{<:AbstractVariation}, cell_
     push!(AV, ElementaryVariation(xml_path, values))
 end
 
-function addCustomDataVariationDimension!(AV::Vector{<:AbstractVariation}, cell_definition::String, field_names::Vector{String}, values::Vector{Vector})
+function addCustomDataVariationDimension!(AV::Vector{<:AbstractVariation}, cell_definition::String, field_names::Vector{<:AbstractString}, values::Vector{Vector})
     for (field_name, value) in zip(field_names,values)
         addCustomDataVariationDimension!(EV, cell_definition, field_name, value)
     end
