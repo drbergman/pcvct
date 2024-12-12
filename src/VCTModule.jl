@@ -115,7 +115,7 @@ function readConstituentIDs(path_to_csv::String)
     ids = Int[]
     for i in axes(df,1)
         s = df.Column1[i]
-        I = split(s,":") .|> string .|> x->parse(Int,x)
+        I = split(s,":") .|> x->parse(Int,x)
         if length(I)==1
             push!(ids,I[1])
         else

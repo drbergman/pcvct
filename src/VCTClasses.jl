@@ -125,7 +125,7 @@ function Simulation(folder_ids::AbstractSamplingIDs, folder_names::AbstractSampl
     INSERT INTO simulations (physicell_version_id,\
     config_id,rulesets_collection_id,\
     ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id,\
-    $(join([string(field) for field in fieldnames(VariationIDs)],",")),\
+    $(join(fieldnames(pcvct.VariationIDs), ",")),\
     status_code_id) \
     VALUES(\
         $(physicellVersionDBEntry()),\
@@ -220,7 +220,7 @@ function Monad(min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::A
     """
     INSERT OR IGNORE INTO monads (physicell_version_id,config_id,rulesets_collection_id,\
     ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id,\
-    $(join([string(field) for field in fieldnames(VariationIDs)],","))\
+    $(join(fieldnames(pcvct.VariationIDs), ","))\
     ) \
     VALUES(\
         $(physicellVersionDBEntry()),\
@@ -238,7 +238,7 @@ function Monad(min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::A
             """
             WHERE (physicell_version_id,config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,\
             ic_ecm_id,custom_code_id,\
-            $(join([string(field) for field in fieldnames(VariationIDs)],",")))=\
+            $(join(fieldnames(pcvct.VariationIDs), ",")))=\
             (\
                 $(physicellVersionDBEntry()),\
                 $(folder_ids.config_id),$(folder_ids.rulesets_collection_id),\
