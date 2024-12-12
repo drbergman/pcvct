@@ -46,7 +46,7 @@ end
 
 function AverageSubstrateTimeSeries(simulation_id::Integer)
     print("Computing average substrate time series for Simulation $simulation_id...")
-    simulation_folder = joinpath(data_dir, "outputs", "simulations", string(simulation_id))
+    simulation_folder = outputFolder("simulation", simulation_id)
     path_to_summary = joinpath(simulation_folder, "summary")
     path_to_file = joinpath(path_to_summary, "average_substrate_time_series.csv")
     if isfile(path_to_file)
@@ -143,7 +143,7 @@ end
 
 function ExtracellularSubstrateTimeSeries(simulation_id::Integer; include_dead::Bool=false)
     print("Computing extracellular substrate time series for Simulation $simulation_id...")
-    simulation_folder = joinpath(data_dir, "outputs", "simulations", string(simulation_id))
+    simulation_folder = outputFolder("simulation", simulation_id)
     path_to_summary = joinpath(simulation_folder, "summary")
     path_to_file = joinpath(path_to_summary, "extracellular_substrate_time_series$(include_dead ? "_include_dead" : "").csv")
     if isfile(path_to_file)
