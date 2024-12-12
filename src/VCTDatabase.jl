@@ -328,6 +328,12 @@ function getStatusCodeID(status_code::String)
     return queryToDataFrame(query; is_row=true) |> x -> x[1,:status_code_id]
 end
 
+"""
+`isStarted(simulation_id::Int; new_status_code::Union{Missing,String}=missing)`
+Checks if a simulation has been started.
+If `new_status_code` is provided, then the status of the simulation is updated to this value.
+The check and status update are done in a transaction to ensure that the status is not changed by another process.
+"""
 function isStarted(simulation_id::Int; new_status_code::Union{Missing,String}=missing)
     query = constructSelectQuery("simulations", "WHERE simulation_id=$(simulation_id);"; selection="status_code_id")
     mode = ismissing(new_status_code) ? "DEFERRED" : "EXCLUSIVE" # if we are possibly going to update, then set to exclusive mode

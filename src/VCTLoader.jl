@@ -155,7 +155,7 @@ function PhysiCellSnapshot(folder::String, index::Union{Int, Symbol}; include_ce
     return PhysiCellSnapshot(folder, index, time, DataFrame(cells), substrates, mesh)
 end
 
-PhysiCellSnapshot(simulation_id::Integer, index::Union{Int, Symbol}; kwargs...) = PhysiCellSnapshot(joinpath(data_dir, "outputs", "simulations", string(simulation_id), "output"), index; kwargs...)
+PhysiCellSnapshot(simulation_id::Integer, index::Union{Int, Symbol}; kwargs...) = PhysiCellSnapshot(joinpath(outputFolder("simulation", simulation_id), "output"), index; kwargs...)
 
 function loadCells!(cells::DataFrame, filepath_base::String, cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}(), labels::Vector{String}=String[])
     if !isempty(cells)
@@ -346,7 +346,7 @@ function computeMeanSpeed(folder::String; direction=:any)::NTuple{3,Vector{Dict{
 end
 
 function computeMeanSpeed(simulation_id::Int; direction=:any)::NTuple{3,Vector{Dict{String,Float64}}}
-    return joinpath(data_dir, "outputs", "simulations", string(simulation_id), "output") |> x -> computeMeanSpeed(x; direction=direction)
+    return joinpath(outputFolder("simulation", simulation_id), "output") |> x -> computeMeanSpeed(x; direction=direction)
 end
 
 function computeMeanSpeed(class_id::Union{VCTClassID,AbstractTrial}; direction=:any)

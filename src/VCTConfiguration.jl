@@ -10,7 +10,7 @@ end
 
 closeXML(xml_doc::XMLDocument) = free(xml_doc)
 
-function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{String}; required::Bool=true)
+function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString}; required::Bool=true)
     current_element = root(xml_doc)
     for path_element in xml_path
         if !occursin(":",path_element)
@@ -26,7 +26,7 @@ function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{String}; require
         candidate_elements = get_elements_by_tagname(current_element, path_element_name)
         found = false
         for ce in candidate_elements
-            if attribute(ce,attribute_name)==attribute_value
+            if attribute(ce, attribute_name) == attribute_value
                 found = true
                 current_element = ce
                 break
@@ -39,24 +39,17 @@ function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{String}; require
     return current_element
 end
 
-function retrieveElementError(xml_path::Vector{String}, path_element::String)
+function retrieveElementError(xml_path::Vector{<:AbstractString}, path_element::String)
     error_msg = "Element not found: $(join(xml_path, " -> "))"
     error_msg *= "\n\tFailed at: $(path_element)"
     throw(ArgumentError(error_msg))
 end
 
-function getField(xml_doc::XMLDocument, xml_path::Vector{String}; required::Bool=true)
+function getField(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString}; required::Bool=true)
     return retrieveElement(xml_doc, xml_path; required=required) |> content
 end
 
-function getOutputFolder(path_to_xml)
-    xml_doc = openXML(path_to_xml)
-    rel_path_to_output = getField(xml_doc, ["save", "folder"])
-    closeXML(xml_doc)
-    return rel_path_to_output
-end
-
-function updateField(xml_doc::XMLDocument, xml_path::Vector{String}, new_value::Union{Int,Real,String})
+function updateField(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString}, new_value::Union{Int,Real,String})
     current_element = retrieveElement(xml_doc, xml_path; required=true)
     set_content(current_element, string(new_value))
     return nothing
@@ -66,7 +59,7 @@ function updateField(xml_doc::XMLDocument, xml_path_and_value::Vector{Any})
     return updateField(xml_doc, xml_path_and_value[1:end-1],xml_path_and_value[end])
 end
 
-function multiplyField(xml_doc::XMLDocument, xml_path::Vector{String}, multiplier::AbstractFloat)
+function multiplyField(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString}, multiplier::AbstractFloat)
     current_element = retrieveElement(xml_doc, xml_path; required=true)
     val = content(current_element)
     if attribute(current_element, "type"; required=false) == "int"
@@ -79,7 +72,7 @@ function multiplyField(xml_doc::XMLDocument, xml_path::Vector{String}, multiplie
     return nothing
 end
 
-function xmlPathToColumnName(xml_path::Vector{String})
+function xmlPathToColumnName(xml_path::Vector{<:AbstractString})
     return join(xml_path, "/")
 end
 
@@ -238,7 +231,7 @@ function customDataPath(cell_definition::String, field_name::String)::Vector{Str
     return [customDataPath(cell_definition); field_name]
 end
 
-function customDataPath(cell_definition::String, field_names::Vector{String})
+function customDataPath(cell_definition::String, field_names::Vector{<:AbstractString})
     return [customDataPath(cell_definition, field_name) for field_name in field_names]
 end
 
@@ -246,7 +239,7 @@ function userParameterPath(field_name::String)::Vector{String}
     return ["user_parameters"; field_name]
 end
 
-function userParameterPath(field_names::Vector{String})
+function userParameterPath(field_names::Vector{<:AbstractString})
     return [userParameterPath(field_name) for field_name in field_names]
 end
 
@@ -294,7 +287,7 @@ function addCustomDataVariationDimension!(AV::Vector{<:AbstractVariation}, cell_
     push!(AV, ElementaryVariation(xml_path, values))
 end
 
-function addCustomDataVariationDimension!(AV::Vector{<:AbstractVariation}, cell_definition::String, field_names::Vector{String}, values::Vector{Vector})
+function addCustomDataVariationDimension!(AV::Vector{<:AbstractVariation}, cell_definition::String, field_names::Vector{<:AbstractString}, values::Vector{Vector})
     for (field_name, value) in zip(field_names,values)
         addCustomDataVariationDimension!(EV, cell_definition, field_name, value)
     end

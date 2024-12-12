@@ -590,9 +590,9 @@ function Trial(samplings::Vector{Sampling})
     return Trial(monad_min_length, sampling_ids, folder_ids, folder_names, variation_ids)
 end
 
-function Trial(; monad_min_length::Int=0, sampling_ids::AbstractArray{<:Integer}=Int[], config_folders::Vector{String}=String[],
-                rulesets_collection_folders::Vector{String}=String[], ic_cell_folders::Vector{String}=String[], 
-                ic_substrate_folders::Vector{String}=String[], ic_ecm_folders::Vector{String}=String[], custom_code_folders::Vector{String}=String[],
+function Trial(; monad_min_length::Int=0, sampling_ids::AbstractArray{<:Integer}=Int[], config_folders::Vector{<:AbstractString}=String[],
+                rulesets_collection_folders::Vector{<:AbstractString}=String[], ic_cell_folders::Vector{<:AbstractString}=String[], 
+                ic_substrate_folders::Vector{<:AbstractString}=String[], ic_ecm_folders::Vector{<:AbstractString}=String[], custom_code_folders::Vector{<:AbstractString}=String[],
                 config_variation_ids::AbstractArray{<:AbstractArray{<:Integer}}=AbstractArray{<:Integer}[],
                 rulesets_variation_ids::AbstractArray{<:AbstractArray{<:Integer}}=AbstractArray{<:Integer}[],
                 ic_cell_variation_ids::AbstractArray{<:AbstractArray{<:Integer}}=AbstractArray{<:Integer}[],
