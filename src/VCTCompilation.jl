@@ -1,18 +1,13 @@
 
 """
-`loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)`
+    loadCustomCode(S::AbstractSampling[; force_recompile::Bool=false])
 
-Load and compile custom code for a given sampling instance.
+Load and compile custom code for a given `Sampling` instance.
 
-# Arguments
-- `S::AbstractSampling`: An instance of `AbstractSampling` containing the necessary folder names and IDs for custom code compilation.
-- `force_recompile::Bool=false`: A boolean flag to force recompilation of the custom code regardless of the current state.
-
-# Description
-This function determines if recompilation is necessary based on the previously used macros.
-If compilation is required, it copies the PhysiCell directory to a temporary directory to avoid conflicts.
-It then compiles the project, recording the output and error in the `custom_codes` folder used.
-The compiled executable is then moved into the `custom_codes` folder and the temporary PhysiCell folder deleted.
+Determines if recompilation is necessary based on the previously used macros.
+If compilation is required, copy the PhysiCell directory to a temporary directory to avoid conflicts.
+Then, compile the project, recording the output and error in the `custom_codes` folder used.
+Move the compiled executable into the `custom_codes` folder and the temporary PhysiCell folder deleted.
 """
 function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
     cflags, recompile, clean = getCompilerFlags(S)
@@ -43,10 +38,10 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
     cp(joinpath(path_to_input_custom_codes, "Makefile"), joinpath(temp_physicell_dir, "Makefile"), force=true)
 
     executable_name = baseToExecutable("project_ccid_$(S.folder_ids.custom_code_id)")
-    cmd = `make CC=$(PHYSICELL_CPP) PROGRAM_NAME=$(executable_name) CFLAGS=$(cflags)`
-    if Sys.isapple() # hacky way to say the -j flag works on my machine but not on the HPC
-        cmd = `$cmd -j 20`
-    end
+    cmd = `make -j 8 CC=$(PHYSICELL_CPP) PROGRAM_NAME=$(executable_name) CFLAGS=$(cflags)`
+    # if Sys.isapple() # hacky way to say the -j flag works on my machine but not on the HPC
+    #     cmd = `$cmd -j 20`
+    # end
 
     println("Compiling custom code for $(S.folder_names.custom_code_folder) with flags: $cflags")
 
@@ -76,21 +71,17 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
 end
 
 """
-`getCompilerFlags(S::AbstractSampling) -> Tuple{String, Bool, Bool}`
+    getCompilerFlags(S::AbstractSampling)
 
 Generate the compiler flags for the given sampling object `S`.
 
-# Arguments
-- `S::AbstractSampling`: The sampling object for which to generate compiler flags.
+Generate the necessary compiler flags based on the system and the macros defined in the sampling object `S`.
+If the required macros differ from a previous compilation (as stored in macros.txt), then recompile.
 
 # Returns
 - `cflags::String`: The compiler flags as a string.
 - `recompile::Bool`: A boolean indicating whether recompilation is needed.
 - `clean::Bool`: A boolean indicating whether cleaning is needed.
-
-# Description
-This function generates the necessary compiler flags based on the system and the macros defined in the sampling object `S`. \
-If the required macros differ from a previous compilation (as stored in macros.txt), then recompile.
 """
 function getCompilerFlags(S::AbstractSampling)
     recompile = false # only recompile if need is found
