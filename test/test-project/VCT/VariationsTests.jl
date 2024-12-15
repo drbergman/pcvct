@@ -1,14 +1,9 @@
-using Test, pcvct
 using Distributions
 
 filename = @__FILE__
 filename = split(filename, "/") |> last
 str = "TESTING WITH $(filename)"
 hashBorderPrint(str)
-
-path_to_physicell_folder = "./test-project/PhysiCell" # path to PhysiCell folder
-path_to_data_folder = "./test-project/data" # path to data folder
-initializeVCT(path_to_physicell_folder, path_to_data_folder)
 
 xml_path = [pcvct.apoptosisPath(cell_type); "death_rate"]
 dv = UniformDistributedVariation(xml_path, 0.0, 1.0)

@@ -1,12 +1,17 @@
-using pcvct
-using Test
+using pcvct, Test
 
 include("./test-project/VCT/PrintHelpers.jl")
 
 @testset "pcvct.jl" begin
     # Write your tests here.
-    include("./test-project/VCT/CreateProject.jl")
-    include("./test-project/VCT/RunSampling.jl")
+    include("./test-project/VCT/CreateProjectTests.jl")
+
+    path_to_physicell_folder = "./test-project/PhysiCell" # path to PhysiCell folder
+    path_to_data_folder = "./test-project/data" # path to data folder
+    initializeVCT(path_to_physicell_folder, path_to_data_folder)
+
+    include("./test-project/VCT/RunnerTests.jl")
+    include("./test-project/VCT/ImportTests.jl")
     include("./test-project/VCT/PrunerTests.jl")
     include("./test-project/VCT/ConfigurationTests.jl")
     include("./test-project/VCT/ICCellTests.jl")

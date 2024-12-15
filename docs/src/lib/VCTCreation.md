@@ -2,11 +2,11 @@
 CollapsedDocStrings = true
 ```
 
-# VCTHPC
+# VCTCreation
 
-Run pcvct on an HPC.
+Create a new pcvct project.
 
 ```@autodocs
 Modules = [pcvct]
-Pages = ["VCTHPC.jl"]
+Pages = ["VCTCreation.jl"]
 ```

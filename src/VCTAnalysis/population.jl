@@ -133,7 +133,7 @@ getMeanCounts(m::MonadPopulationTimeSeries) = m.cell_count_means
     exclude_cell_types = exclude_cell_types isa String ? [exclude_cell_types] : exclude_cell_types
     for (name, counts) in pairs(getMeanCounts(pts))
         skip = include_cell_types != :all && !(name in include_cell_types) # skip this cell type as only a subset was requested and this was not in it
-        skip |= name in exclude_cell_types # skip this cell type as it was requested to be excluded
+        skip = skip || name in exclude_cell_types # skip this cell type as it was requested to be excluded
         if skip
             continue 
         end

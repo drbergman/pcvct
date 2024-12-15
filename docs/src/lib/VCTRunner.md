@@ -4,7 +4,7 @@ CollapsedDocStrings = true
 
 # VCTRunner
 
-This file holds the functions for running simulations.
+Run simulations, monads, samplings, and trials in the pcvct framework.
 
 ```@autodocs
 Modules = [pcvct]

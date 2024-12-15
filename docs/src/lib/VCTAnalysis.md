@@ -4,7 +4,7 @@ CollapsedDocStrings = true
 
 # VCTAnalysis
 
-This folder holds functionality for analyzing output from the model.
+Analyze output from a pcvct project.
 
 ```@autodocs
 Modules = [pcvct]

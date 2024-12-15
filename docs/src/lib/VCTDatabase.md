@@ -4,7 +4,7 @@ CollapsedDocStrings = true
 
 # VCTDatabase
 
-This file holds the functions for the VCT database.
+Create and manage the pcvct database.
 
 ```@autodocs
 Modules = [pcvct]
