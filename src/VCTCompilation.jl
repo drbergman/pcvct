@@ -10,7 +10,8 @@ Then, compile the project, recording the output and error in the `custom_codes` 
 Move the compiled executable into the `custom_codes` folder and the temporary PhysiCell folder deleted.
 """
 function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
-    cflags, recompile, clean = getCompilerFlags(S)
+    cflags, recompile, clean = compilerFlags(S)
+    recompile = writePhysiCellCommitHash(S) || recompile # no matter what, write the PhysiCell version; if it is different, make sure to set recompile to true
 
     recompile |= force_recompile # if force_recompile is true, then recompile no matter what
 
@@ -71,7 +72,7 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
 end
 
 """
-    getCompilerFlags(S::AbstractSampling)
+    compilerFlags(S::AbstractSampling)
 
 Generate the compiler flags for the given sampling object `S`.
 
@@ -83,7 +84,7 @@ If the required macros differ from a previous compilation (as stored in macros.t
 - `recompile::Bool`: A boolean indicating whether recompilation is needed.
 - `clean::Bool`: A boolean indicating whether cleaning is needed.
 """
-function getCompilerFlags(S::AbstractSampling)
+function compilerFlags(S::AbstractSampling)
     recompile = false # only recompile if need is found
     clean = false # only clean if need is found
     cflags = "-march=$(march_flag) -O3 -fomit-frame-pointer -fopenmp -m64 -std=c++11"
@@ -113,9 +114,31 @@ function getCompilerFlags(S::AbstractSampling)
         cflags *= " -D $(macro_flag)"
     end
 
-    recompile |= !executableExists(S.folder_names.custom_code_folder) # last chance to recompile: do so if the executable does not exist
+    recompile = recompile || !executableExists(S.folder_names.custom_code_folder) # last chance to recompile: do so if the executable does not exist
 
     return cflags, recompile, clean
+end
+
+function writePhysiCellCommitHash(S::AbstractSampling)
+    path_to_commit_hash = joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder, "physicell_commit_hash.txt")
+    physicell_commit_hash = physiCellCommitHash()
+    current_commit_hash = ""
+    if isfile(path_to_commit_hash)
+        current_commit_hash = readchomp(path_to_commit_hash)
+    end
+    recompile = true
+    if current_commit_hash != physicell_commit_hash
+        open(path_to_commit_hash, "w") do f
+            println(f, physicell_commit_hash)
+        end
+    elseif endswith(physicell_commit_hash, "-dirty")
+        println("PhysiCell repo is dirty. Recompiling to be safe...")
+    elseif endswith(physicell_commit_hash, "-download")
+        println("PhysiCell repo is downloaded. Recompiling to be safe...")
+    else
+        recompile = false
+    end
+    return recompile
 end
 
 executableExists(custom_code_folder::String) = isfile(joinpath(data_dir, "inputs", "custom_codes", custom_code_folder, baseToExecutable("project")))

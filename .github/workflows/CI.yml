@@ -35,12 +35,12 @@ jobs:
         compiler: ["g++"]
         include:
           - os: "macOS-latest"
-            julia-version: '1'
+            julia-version: 'lts'
             shell: "bash"
             compiler: "g++-14"
             arch: "arm64"
           - os: "macOS-latest"
-            julia-version: 'lts'
+            julia-version: '1'
             shell: "bash"
             compiler: "g++-14"
             arch: "arm64"

@@ -1,13 +1,7 @@
-using Test, pcvct
-
 filename = @__FILE__
 filename = split(filename, "/") |> last
 str = "TESTING WITH $(filename)"
 hashBorderPrint(str)
-
-path_to_physicell_folder = "./test-project/PhysiCell" # path to PhysiCell folder
-path_to_data_folder = "./test-project/data" # path to data folder
-initializeVCT(path_to_physicell_folder, path_to_data_folder)
 
 config_folder = "0_template"
 path_to_xml = "$(path_to_data_folder)/inputs/configs/$(config_folder)/PhysiCell_settings.xml"
@@ -67,8 +61,10 @@ push!(EV, ElementaryVariation(["overall", "max_time"], [12.0]))
 
 
 monad_min_length = 2
+config_folder = "0_template"
 rulesets_collection_folder = "0_template"
 custom_code_folder = "0_template"
+ic_cell_folder = ""
 config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, EV)
 sampling = Sampling(config_folder, custom_code_folder;
     monad_min_length=monad_min_length,

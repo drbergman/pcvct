@@ -4,7 +4,7 @@ CollapsedDocStrings = true
 
 # VCTModule
 
-This file holds some core functionality for pcvct.
+Core functionality for pcvct.
 
 ```@autodocs
 Modules = [pcvct]

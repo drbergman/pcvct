@@ -1,11 +1,11 @@
-using Test, pcvct, LightXML
-
+using LightXML
 filename = @__FILE__
 filename = split(filename, "/") |> last
 str = "TESTING WITH $(filename)"
 hashBorderPrint(str)
 
-pcvct.createProject(; project_dir="./test-project")
+project_dir = "./test-project"
+pcvct.createProject(project_dir)
 
 path_to_data_folder = joinpath(".", "test-project", "data")
 

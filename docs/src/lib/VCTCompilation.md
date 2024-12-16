@@ -4,7 +4,7 @@ CollapsedDocStrings = true
 
 # VCTCompilation
 
-This file contains the functions used to compile a PhysiCell project, including using the necessary compiler macros.
+Compile a PhysiCell project in pcvct. Includes the necessary compiler macros and checks PhysiCell version by the commit hash of the PhysiCell repository.
 
 ```@autodocs
 Modules = [pcvct]

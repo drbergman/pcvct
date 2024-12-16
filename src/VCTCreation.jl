@@ -1,6 +1,32 @@
 using Downloads, JSON3
 
-function createProject(; project_dir::String=".", clone_physicell::Bool=true, template_as_default::Bool=true, terse::Bool=false)
+export createProject
+
+"""
+    createProject(project_dir::String="."; clone_physicell::Bool=true, template_as_default::Bool=true, terse::Bool=false)
+
+Create a new pcvct project structure.
+
+Creates a new project directory at `project_dir` with the following structure:
+```
+project_dir
+├── data
+├── PhysiCell # The latest release from https://github.com/drbergman/PhysiCell
+└── VCT
+```
+`data` is populated with the standard structure. `PhysiCell` is a copy of PhysiCell. `VCT` contains a generated `GenerateData.jl` file.
+
+# Arguments
+- `project_dir::String="."`: The directory in which to create the project. Relative paths are resolved from the current working directory where Julia was launched.
+- `clone_physicell::Bool=true`: Whether to clone the PhysiCell repository. If `false`, the latest release will be downloaded. Recommended to set to `true` so pcvct will be able to track changes to the PhysiCell repository.
+- `template_as_default::Bool=true`: Whether to set up the project with the template files as the default. If `false`, the project will be set up with an empty structure.
+- `terse::Bool=false`: Whether to generate a terse `GenerateData.jl` file. If `true`, the file will be generated without comments and explanations.
+
+# Note
+The names of the `data` and `PhysiCell` directories are fixed and cannot be changed. Their relative locations should not be changed without updating the `GenerateData.jl` file.
+The name of the `VCT` file and the `GenerateData.jl` are just by convention and can be changed.
+"""
+function createProject(project_dir::String="."; clone_physicell::Bool=true, template_as_default::Bool=true, terse::Bool=false)
     mkpath(project_dir)
     physicell_dir = setUpPhysiCell(project_dir, clone_physicell)
     data_dir = joinpath(project_dir, "data")
