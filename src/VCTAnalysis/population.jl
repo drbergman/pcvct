@@ -183,8 +183,10 @@ end
 end
 
 """
-`plotbycelltype(T::AbstractTrial, cell_types::Union{String, Vector{String}}=:all)`
+    plotbycelltype(T::AbstractTrial, cell_types::Union{String, Vector{String}}=:all)
+
 Plot the population time series of a trial by cell type.
+
 Each cell type gets its own subplot.
 Each monad gets its own series within each subplot.
 """

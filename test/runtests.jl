@@ -12,6 +12,7 @@ include("./test-project/VCT/PrintHelpers.jl")
 
     include("./test-project/VCT/RunnerTests.jl")
     include("./test-project/VCT/ImportTests.jl")
+    include("./test-project/VCT/ExportTests.jl")
     include("./test-project/VCT/PrunerTests.jl")
     include("./test-project/VCT/ConfigurationTests.jl")
     include("./test-project/VCT/ICCellTests.jl")
