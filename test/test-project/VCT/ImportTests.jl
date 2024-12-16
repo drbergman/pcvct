@@ -16,12 +16,12 @@ success = importProject(path_to_project, src, dest)
 
 custom_code_folder = rulesets_collection_folder = ic_cell_folder = "immune_function"
 
-EV = ElementaryVariation[]
-push!(EV, ElementaryVariation(["overall","max_time"], [12.0]))
-push!(EV, ElementaryVariation(["save","full_data","interval"], [6.0]))
-push!(EV, ElementaryVariation(["save","SVG","interval"], [6.0]))
+discrete_variations = DiscreteVariation[]
+push!(discrete_variations, DiscreteVariation(["overall","max_time"], [12.0]))
+push!(discrete_variations, DiscreteVariation(["save","full_data","interval"], [6.0]))
+push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], [6.0]))
 
-config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, EV)
+config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, discrete_variations)
 
 sampling = Sampling(config_folder, custom_code_folder;
     monad_min_length=1,
@@ -80,4 +80,3 @@ end
 
 success = importProject(path_to_bad_project)
 @test !success
-

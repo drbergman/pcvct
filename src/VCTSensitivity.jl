@@ -84,19 +84,19 @@ end
 
 function perturbConfigVariation(av::AbstractVariation, config_variation_id::Int, folder::String)
     base_value = getConfigBaseValue(columnName(av), config_variation_id, folder)
-    addFn = (ev) -> gridToDB([ev], prepareConfigVariationFunctions(retrieveID("configs", folder), [ev]; reference_config_variation_id=config_variation_id)...)
+    addFn = (discrete_variation) -> gridToDB([discrete_variation], prepareConfigVariationFunctions(retrieveID("configs", folder), [discrete_variation]; reference_config_variation_id=config_variation_id)...)
     return makePerturbation(av, base_value, addFn)
 end
 
 function perturbRulesetsVariation(av::AbstractVariation, rulesets_variation_id::Int, folder::String)
     base_value = getRulesetsBaseValue(columnName(av), rulesets_variation_id, folder)
-    addFn = (ev) -> gridToDB([ev], prepareRulesetsVariationFunctions(retrieveID("rulesets_collections", folder); reference_rulesets_variation_id=rulesets_variation_id)...)
+    addFn = (discrete_variation) -> gridToDB([discrete_variation], prepareRulesetsVariationFunctions(retrieveID("rulesets_collections", folder); reference_rulesets_variation_id=rulesets_variation_id)...)
     return makePerturbation(av, base_value, addFn)
 end
 
 function perturbICCellVariation(av::AbstractVariation, ic_cell_variation_id::Int, folder::String)
     base_value = getICCellBaseValue(columnName(av), ic_cell_variation_id, folder)
-    addFn = (ev) -> gridToDB([ev], prepareICCellVariationFunctions(retrieveID("ic_cells", folder); reference_ic_cell_variation_id=ic_cell_variation_id)...)
+    addFn = (discrete_variation) -> gridToDB([discrete_variation], prepareICCellVariationFunctions(retrieveID("ic_cells", folder); reference_ic_cell_variation_id=ic_cell_variation_id)...)
     return makePerturbation(av, base_value, addFn)
 end
 
@@ -105,10 +105,10 @@ function makePerturbation(av::AbstractVariation, base_value::Real, addFn::Functi
     dcdf = cdf_at_base < 0.5 ? 0.5 : -0.5
     new_value = _values(av, cdf_at_base + dcdf) # note, this is a vector of values
 
-    new_ev = ElementaryVariation(xmlPath(av), new_value)
+    discrete_variation = DiscreteVariation(xmlPath(av), new_value)
 
-    new_variation_id = addFn(new_ev)
-    @assert length(new_variation_id) == 1 "Only doing one perturbation at a time"
+    new_variation_id = addFn(discrete_variation)
+    @assert length(new_variation_id) == 1 "Only doing one perturbation at a time."
     return new_variation_id[1]
 end
 

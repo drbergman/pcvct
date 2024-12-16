@@ -1,18 +1,41 @@
 using Distributions
 import Distributions: cdf
 
-export AbstractVariation, ElementaryVariation, DistributedVariation
+export AbstractVariation, ElementaryVariation, DiscreteVariation, DistributedVariation
 export GridVariation, LHSVariation, addVariations
 
 ################## Abstract Variations ##################
 
 abstract type AbstractVariation end
-struct ElementaryVariation{T} <: AbstractVariation
+"""
+    DiscreteVariation{T}(xml_path::Vector{<:AbstractString}, values::Vector{T}) where T
+
+Create a `DiscreteVariation` object with the given `xml_path` and `values`.
+
+The type `T` is inferred from the type of the `values` argument.
+A singleton value can be passed in place of `values` for convenience.
+
+# Examples
+```jldoctest
+julia> DV = DiscreteVariation(["overall","max_time"], [1440.0, 2880.0])
+DiscreteVariation{Float64}(["overall", "max_time"], [1440.0, 2880.0])
+```
+```jldoctest
+julia> DV = DiscreteVariation(["overall","max_time"], 1440)
+DiscreteVariation{Int64}(["overall", "max_time"], [1440])
+```
+"""
+struct DiscreteVariation{T} <: AbstractVariation
     xml_path::Vector{<:AbstractString}
     values::Vector{T}
 end
 
-ElementaryVariation(xml_path::Vector{<:AbstractString}, value::T) where T = ElementaryVariation{T}(xml_path, [value])
+DiscreteVariation(xml_path::Vector{<:AbstractString}, value::T) where T = DiscreteVariation{T}(xml_path, [value])
+
+function ElementaryVariation(args...; kwargs...)
+    Base.depwarn("`ElementaryVariation` is deprecated in favor of the more descriptive `DiscreteVariation`.", :ElementaryVariation; force=true)
+    return DiscreteVariation(args...; kwargs...)
+end
 
 struct DistributedVariation <: AbstractVariation
     xml_path::Vector{<:AbstractString}
@@ -30,15 +53,15 @@ function NormalDistributedVariation(xml_path::Vector{<:AbstractString}, mu::T, s
     return DistributedVariation(xml_path, truncated(Normal(mu, sigma), lb, ub))
 end
 
-_values(ev::ElementaryVariation) = ev.values
+_values(discrete_variation::DiscreteVariation) = discrete_variation.values
 
-function _values(ev::ElementaryVariation, cdf::Vector{<:Real})
-    index = floor.(Int, cdf * length(ev.values)) .+ 1
-    index[index.==(length(ev.values)+1)] .= length(ev.values) # if cdf = 1, index = length(ev.values)+1, so we set it to length(ev.values)
-    return ev.values[index]
+function _values(discrete_variation::DiscreteVariation, cdf::Vector{<:Real})
+    index = floor.(Int, cdf * length(discrete_variation.values)) .+ 1
+    index[index.==(length(discrete_variation.values)+1)] .= length(discrete_variation.values) # if cdf = 1, index = length(discrete_variation.values)+1, so we set it to length(discrete_variation.values)
+    return discrete_variation.values[index]
 end
 
-_values(ev::ElementaryVariation, cdf::Real) = _values(ev, [cdf])
+_values(discrete_variation::DiscreteVariation, cdf::Real) = _values(discrete_variation, [cdf])
 
 function _values(dv::DistributedVariation, cdf::Vector{<:Real})
     return map(Base.Fix1(quantile, dv.distribution), cdf)
@@ -49,8 +72,8 @@ _values(dv::DistributedVariation, cdf::Real) = _values(dv, [cdf])
 _values(dv::DistributedVariation) = error("A cdf must be provided for a DistributedVariation.")
 _values(av::AbstractVariation, cdf) = error("values not defined for $(typeof(av)) with type of cdf = $(typeof(cdf))")
 
-function dataType(ev::ElementaryVariation)
-    return typeof(ev).parameters[1] # typeof(ev).parameters[1] is the type parameter T in the definition of ElementaryVariation{T}
+function dataType(discrete_variation::DiscreteVariation)
+    return typeof(discrete_variation).parameters[1] # typeof(discrete_variation).parameters[1] is the type parameter T in the definition of DiscreteVariation{T}
 end
 
 function dataType(dv::DistributedVariation)
@@ -59,11 +82,11 @@ end
 
 dataType(av::AbstractVariation) = error("dataType not defined for $(typeof(av))")
 
-function cdf(ev::ElementaryVariation, x::Real)
-    if !(x in ev.values)
+function cdf(discrete_variation::DiscreteVariation, x::Real)
+    if !(x in discrete_variation.values)
         error("Value not in elementary variation values.")
     end
-    return (findfirst(isequal(x), ev.values) - 1) / (length(ev.values) - 1)
+    return (findfirst(isequal(x), discrete_variation.values) - 1) / (length(discrete_variation.values) - 1)
 end
 
 cdf(dv::DistributedVariation, x::Real) = cdf(dv.distribution, x)
@@ -136,6 +159,7 @@ end
 function addICCellVariationColumns(ic_cell_id::Int, xml_paths::Vector{Vector{String}})
     ic_cell_folder = icCellFolder(ic_cell_id)
     db_columns = icCellDB(ic_cell_folder)
+    @assert db_columns isa SQLite.DB "ic_cell_folder must contain a cells.xml file to support variations."
     path_to_ic_cell_folder = joinpath(data_dir, "inputs", "ics", "cells", ic_cell_folder)
     path_to_base_xml = joinpath(path_to_ic_cell_folder, "cells.xml")
     dataTypeRulesFn = (_, name) -> endswith(name, "number") ? "INT" : "REAL"

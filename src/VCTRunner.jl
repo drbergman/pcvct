@@ -276,7 +276,10 @@ end
     
 Alias for `run`.
 """
-runAbstractTrial(T::AbstractTrial; force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions()) = run(T; force_recompile=force_recompile, prune_options=prune_options)
+function runAbstractTrial(T::AbstractTrial; force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions()) 
+    Base.depwarn("`runAbstractTrial` is deprecated. Use `run` instead.", :runAbstractTrial; force=true)
+    return run(T; force_recompile=force_recompile, prune_options=prune_options)
+end
 
 function processSimulationTask(simulation_task, prune_options)
     schedule(simulation_task)

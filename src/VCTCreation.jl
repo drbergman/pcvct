@@ -168,8 +168,8 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         """))\
         xml_path = [\"overall\"; \"max_time\"]
         value = 60.0
-        ev_max_time = ElementaryVariation(xml_path, value)
-        config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, [ev_max_time])
+        dv_max_time = DiscreteVariation(xml_path, value)
+        config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, [dv_max_time])
         reference_config_variation_id = config_variation_ids[1]
         reference_rulesets_variation_id = rulesets_variation_ids[1]
         reference_ic_cell_variation_id = ic_cell_variation_ids[1]
@@ -212,19 +212,19 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         """))\
         xml_path = [pcvct.cyclePath(\"default\"); \"phase_durations\"; \"duration:index:0\"]
         values = [200.0, 300.0, 400.0] # choose 3 discrete values to vary the duration of phase 0
-        ev_phase_0_duration = ElementaryVariation(xml_path, values)
+        dv_phase_0_duration = DiscreteVariation(xml_path, values)
 
         $(tersify("""
         # now do the same, but for the apoptosis rate
         """))\
         xml_path = [pcvct.apoptosisPath(\"default\"); \"death_rate\"]
         values = [4.31667e-05, 5.31667e-05, 6.31667e-05] # choose 3 discrete values to vary the apoptosis rate
-        ev_apoptosis_rate = ElementaryVariation(xml_path, values)
+        dv_apoptosis_rate = DiscreteVariation(xml_path, values)
 
         $(tersify("""
         # now combine them into a list:
         """))\
-        elementary_variations = [ev_phase_0_duration, ev_apoptosis_rate]
+        elementary_variations = [dv_phase_0_duration, dv_apoptosis_rate]
 
         ############ run the sampling ############
 
