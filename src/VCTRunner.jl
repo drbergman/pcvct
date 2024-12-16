@@ -186,25 +186,28 @@ collectSimulationTasks(sampling::Sampling; force_recompile::Bool=false) = runSam
 collectSimulationTasks(trial::Trial; force_recompile::Bool=false) = runTrial(trial; force_recompile=force_recompile)
 
 """
-`collectSimulationTasks(T::AbstractTrial; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions())`
+    collectSimulationTasks(T::AbstractTrial[; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions()])
+
 Collect the simulation tasks for the given trial, sampling, monad, or simulation.
+
 Used by `run` to collect the tasks to run.
+
+See also [`run`](@ref).
 """
 function collectSimulationTasks(T::AbstractTrial; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions=PruneOptions()) end
 
 """
-`run(T::AbstractTrial; force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())`
+    run(T::AbstractTrial[; force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions()])`
+
 Run the given simulation, monad, sampling, or trial.
-This function will call the appropriate functions to run the simulations and return the number of successful simulations.
-It will also print out messages to the console to inform the user about the progress and results of the simulations.
+
+Call the appropriate functions to run the simulations and return the number of successful simulations.
+Also print out messages to the console to inform the user about the progress and results of the simulations.
 
 # Arguments
 - `T::AbstractTrial`: The trial, sampling, monad, or simulation to run.
 - `force_recompile::Bool=true`: If `true`, forces a recompilation of all files by removing all `.o` files in the PhysiCell directory.
 - `prune_options::PruneOptions=PruneOptions()`: Options for pruning simulations.
-
-# Returns
-- `Int`: The number of successful simulations that were run, not counting those that were completed previously.
 """
 function run(T::AbstractTrial; force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
     cd(()->run(pipeline(`make clean`; stdout=devnull)), physicell_dir) # remove all *.o files so that a future recompile will re-compile all the files
@@ -269,7 +272,8 @@ function run(T::AbstractTrial; force_recompile::Bool=true, prune_options::PruneO
 end
 
 """
-`runAbstractTrial(T::AbstractTrial; force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())`
+    runAbstractTrial(T::AbstractTrial; force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
+    
 Alias for `run`.
 """
 runAbstractTrial(T::AbstractTrial; force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions()) = run(T; force_recompile=force_recompile, prune_options=prune_options)

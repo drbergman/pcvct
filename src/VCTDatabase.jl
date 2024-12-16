@@ -329,9 +329,11 @@ function getStatusCodeID(status_code::String)
 end
 
 """
-`isStarted(simulation_id::Int; new_status_code::Union{Missing,String}=missing)`
-Checks if a simulation has been started.
-If `new_status_code` is provided, then the status of the simulation is updated to this value.
+    isStarted(simulation_id::Int[; new_status_code::Union{Missing,String}=missing])
+
+Check if a simulation has been started.
+
+If `new_status_code` is provided, update the status of the simulation to this value.
 The check and status update are done in a transaction to ensure that the status is not changed by another process.
 """
 function isStarted(simulation_id::Int; new_status_code::Union{Missing,String}=missing)
@@ -403,18 +405,18 @@ getOptionalFolder(table_name::String, id_name::String, id::Int; db::SQLite.DB=db
 
 configFolder(config_id::Int) = getFolder("configs", "config_id", config_id)
 icCellFolder(ic_cell_id::Int) = getOptionalFolder("ic_cells", "ic_cell_id", ic_cell_id)
-getICSubstrateFolder(ic_substrate_id::Int) = getOptionalFolder("ic_substrates", "ic_substrate_id", ic_substrate_id)
-getICECMFolder(ic_ecm_id::Int) = getOptionalFolder("ic_ecms", "ic_ecm_id", ic_ecm_id)
+icSubstrateFolder(ic_substrate_id::Int) = getOptionalFolder("ic_substrates", "ic_substrate_id", ic_substrate_id)
+icECMFolder(ic_ecm_id::Int) = getOptionalFolder("ic_ecms", "ic_ecm_id", ic_ecm_id)
 rulesetsCollectionFolder(rulesets_collection_id::Int) = getOptionalFolder("rulesets_collections", "rulesets_collection_id", rulesets_collection_id)
-getCustomCodesFolder(custom_code_id::Int) = getFolder("custom_codes", "custom_code_id", custom_code_id)
+customCodesFolder(custom_code_id::Int) = getFolder("custom_codes", "custom_code_id", custom_code_id)
 
 function retrievePathInfo(config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, ic_substrate_id::Int, ic_ecm_id::Int, custom_code_id::Int)
     config_folder = configFolder(config_id)
     rulesets_collection_folder = rulesetsCollectionFolder(rulesets_collection_id)
     ic_cell_folder = icCellFolder(ic_cell_id)
-    ic_substrate_folder = getICSubstrateFolder(ic_substrate_id)
-    ic_ecm_folder = getICECMFolder(ic_ecm_id)
-    custom_code_folder = getCustomCodesFolder(custom_code_id)
+    ic_substrate_folder = icSubstrateFolder(ic_substrate_id)
+    ic_ecm_folder = icECMFolder(ic_ecm_id)
+    custom_code_folder = customCodesFolder(custom_code_id)
     return config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder
 end
 

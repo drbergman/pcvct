@@ -11,9 +11,9 @@ path_to_data_folder = joinpath(".", "test-project", "data")
 
 mkdir(joinpath(path_to_data_folder, "inputs", "ics", "cells", "1_xml"))
 xml_doc = XMLDocument()
-root = create_root(xml_doc, "ic_cells")
+xml_root = create_root(xml_doc, "ic_cells")
 
-e_patches = new_child(root, "cell_patches")
+e_patches = new_child(xml_root, "cell_patches")
 set_attribute(e_patches, "name", "default")
 
 e_discs = new_child(e_patches, "patch_collection")

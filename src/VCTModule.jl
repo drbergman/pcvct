@@ -1,5 +1,5 @@
 # each file (includes below) has their own export statements
-export initializeVCT, resetDatabase, runAbstractTrial, readTrialSamplingIDs, getSimulationIDs, deleteSimulation
+export initializeVCT, resetDatabase, runAbstractTrial, readTrialSamplingIDs, getSimulationIDs
 
 using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables, Distributions, Statistics, Random, QuasiMonteCarlo, Sobol
 using PhysiCellXMLRules
@@ -27,6 +27,7 @@ include("VCTHPC.jl")
 include("VCTAnalysis.jl")
 
 include("VCTPhysiCellStudio.jl")
+include("VCTExport.jl")
 
 VERSION >= v"1.11" && include("public.julia")
 
@@ -49,9 +50,9 @@ sbatch_options = defaultJobOptions() # this is a dictionary that will be used to
 ################## Initialization Functions ##################
 
 """
-`pcvctLogo() -> String`
+    pcvctLogo()
 
-Returns a string representation of the PCVCT logo.
+Return a string representation of the awesome pcvct logo.
 """
 function pcvctLogo()
     return """
@@ -73,13 +74,13 @@ function pcvctLogo()
 end
 
 """
-`initializeVCT(path_to_physicell::String, path_to_data::String)`
+    initializeVCT(path_to_physicell::String, path_to_data::String)
 
-Initializes the VCT environment by setting the paths to PhysiCell and data directories, and initializing the database.
+Initialize the VCT environment by setting the paths to PhysiCell and data directories, and initializing the database.
 
 # Arguments
-- `path_to_physicell::String`: Path to the PhysiCell directory.
-- `path_to_data::String`: Path to the data directory.
+- `path_to_physicell::String`: Path to the PhysiCell directory as either an absolute or relative path.
+- `path_to_data::String`: Path to the data directory as either an absolute or relative path.
 """
 function initializeVCT(path_to_physicell::String, path_to_data::String; auto_upgrade::Bool=false)
     # print big logo of PCVCT here
@@ -105,17 +106,6 @@ end
 
 ################## Selection Functions ##################
 
-"""
-`readConstituentIDs(path_to_csv::String) -> Vector{Int}`
-
-Reads constituent IDs from a CSV file.
-
-# Arguments
-- `path_to_csv::String`: Path to the CSV file.
-
-# Returns
-- `Vector{Int}`: A vector of constituent IDs.
-"""
 function readConstituentIDs(path_to_csv::String)
     if !isfile(path_to_csv)
         return Int[]
@@ -136,34 +126,18 @@ end
 
 
 """
-`constituentsType(T::AbstractTrial) -> Type`
+    constituentsType(T::AbstractTrial)
 
-Returns the type of constituents for a given AbstractTrial.
-
-# Arguments
-- `T::AbstractTrial`: An AbstractTrial object.
-
-# Returns
-- `Type`: The type of constituents.
+Return the type of constituents for a given AbstractTrial.
 """
 constituentsType(trial::Trial) = Sampling
 constituentsType(sampling::Sampling) = Monad
 constituentsType(monad::Monad) = Simulation
 
 """
-`readConstituentIDs(T::AbstractTrial)`
+    readConstituentIDs(T::AbstractTrial)
 
 Reads the constituent IDs for a given trial type `T`.
-
-# Arguments
-- `T::AbstractTrial`: An instance of a trial type.
-
-# Returns
-- A list of constituent IDs read from a CSV file.
-
-# Details
-The function constructs a file path based on the type and ID of the trial `T`. 
-It then reads the constituent IDs from a CSV file located at the constructed path.
 """
 function readConstituentIDs(T::AbstractTrial)
     path_to_folder = outputFolder(T)

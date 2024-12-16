@@ -11,9 +11,9 @@ Base.length(T::AbstractTrial) = getSimulationIDs(T) |> length
 ##########################################
 
 """
-`struct AbstractSamplingIDs`
+    struct AbstractSamplingIDs
 
-A struct representing various IDs used for sampling in the VCT environment.
+A type holding the IDs that are constant within `Sampling`s.
 
 # Fields
 - `config_id::Int`: Integer identifying the base configuration folder ID for lookup in the database.
@@ -43,9 +43,9 @@ end
 ##########################################
 
 """
-`AbstractSamplingFolders`
+    AbstractSamplingFolders
 
-A structure representing the folders used for sampling in a VCT (Virtual Cell Technology) environment.
+A type holding the folders that are constant within `Sampling`s.
 
 # Fields
 - `config_folder::String`: Name of the configuration folder.
