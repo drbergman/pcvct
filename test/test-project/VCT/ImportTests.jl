@@ -60,6 +60,8 @@ path_to_main = joinpath("test-project", "PhysiCell", "sample_projects", "bad_tem
 lines = readlines(path_to_main)
 idx = findfirst(x->contains(x, "argument_parser"), lines)
 lines[idx] = "    //no longer parsing because this is now a bad project"
+idx = findfirst(x->contains(x, "// load and parse settings file(s)"), lines)
+lines[idx] = "    //no longer loading settings because this is now a bad project"
 open(path_to_main, "w") do f
     for line in lines
         println(f, line)
