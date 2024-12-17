@@ -4,7 +4,7 @@ CollapsedDocStrings = true
 
 # VCTDeletion
 
-This file holds functionality for deleting output.
+Safely delete output from a pcvct project.
 
 ```@autodocs
 Modules = [pcvct]

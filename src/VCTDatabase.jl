@@ -5,7 +5,9 @@ db::SQLite.DB = SQLite.DB()
 ################## Database Initialization Functions ##################
 
 function initializeDatabase(path_to_database::String; auto_upgrade::Bool=false)
-    println(rpad("Path to database:", 20, ' ') * path_to_database)
+    if db.file == ":memory:" || abspath(db.file) != abspath(path_to_database)
+        println(rpad("Path to database:", 20, ' ') * path_to_database)
+    end
     is_new_db = !isfile(path_to_database)
     global db = SQLite.DB(path_to_database)
     SQLite.transaction(db, "EXCLUSIVE")
@@ -73,7 +75,8 @@ function createSchema(is_new_db::Bool; auto_upgrade::Bool=false)
         return false
     end
     for config_folder in config_folders
-        DBInterface.execute(db, "INSERT OR IGNORE INTO configs (folder_name) VALUES ('$(config_folder)');")
+        description = metadataDescription(joinpath(data_dir, "inputs", "configs", config_folder))
+        DBInterface.execute(db, "INSERT OR IGNORE INTO configs (folder_name, description) VALUES ('$(config_folder)', '$(description)');")
         db_config_variations = joinpath(data_dir, "inputs", "configs", config_folder, "config_variations.db") |> SQLite.DB
         createPCVCTTable("config_variations", "config_variation_id INTEGER PRIMARY KEY"; db=db_config_variations)
         DBInterface.execute(db_config_variations, "INSERT OR IGNORE INTO config_variations (config_variation_id) VALUES(0);")
@@ -90,7 +93,8 @@ function createSchema(is_new_db::Bool; auto_upgrade::Bool=false)
     if "rulesets_collections" in data_dir_contents
         rulesets_collections_folders = readdir(joinpath(data_dir, "inputs", "rulesets_collections"); sort=false) |> filter(x -> isdir(joinpath(data_dir, "inputs", "rulesets_collections", x)))
         for rulesets_collection_folder in rulesets_collections_folders
-            DBInterface.execute(db, "INSERT OR IGNORE INTO rulesets_collections (folder_name) VALUES ('$(rulesets_collection_folder)');")
+            description = metadataDescription(joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder))
+            DBInterface.execute(db, "INSERT OR IGNORE INTO rulesets_collections (folder_name, description) VALUES ('$(rulesets_collection_folder)', '$(description)');")
             db_rulesets_variations = joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder, "rulesets_variations.db") |> SQLite.DB
             createPCVCTTable("rulesets_variations", "rulesets_variation_id INTEGER PRIMARY KEY"; db=db_rulesets_variations)
             DBInterface.execute(db_rulesets_variations, "INSERT OR IGNORE INTO rulesets_variations (rulesets_variation_id) VALUES(0);")
@@ -154,31 +158,7 @@ function createSchema(is_new_db::Bool; auto_upgrade::Bool=false)
     createPCVCTTable("monads", monadsSchema())
 
     # initialize samplings table
-    samplings_schema = """
-        sampling_id INTEGER PRIMARY KEY,
-        physicell_version_id INTEGER,
-        custom_code_id INTEGER,
-        ic_cell_id INTEGER,
-        ic_substrate_id INTEGER,
-        ic_ecm_id INTEGER,
-        config_id INTEGER,
-        rulesets_collection_id INTEGER,
-        FOREIGN KEY (physicell_version_id)
-            REFERENCES physicell_versions (physicell_version_id),
-        FOREIGN KEY (custom_code_id)
-            REFERENCES custom_codes (custom_code_id),
-        FOREIGN KEY (ic_cell_id)
-            REFERENCES ic_cells (ic_cell_id),
-        FOREIGN KEY (ic_substrate_id)
-            REFERENCES ic_substrates (ic_substrate_id),
-        FOREIGN KEY (ic_ecm_id)
-            REFERENCES ic_ecms (ic_ecm_id),
-        FOREIGN KEY (config_id)
-            REFERENCES configs (config_id),
-        FOREIGN KEY (rulesets_collection_id)
-            REFERENCES rulesets_collections (rulesets_collection_id)
-    """
-    createPCVCTTable("samplings", samplings_schema)
+    createPCVCTTable("samplings", samplingsSchema())
 
     # initialize trials table
     trials_schema = """
@@ -208,43 +188,70 @@ end
 
 function physicellVersionsSchema()
     return """
-        physicell_version_id INTEGER PRIMARY KEY,
-        repo_owner TEXT,
-        tag TEXT,
-        commit_hash TEXT UNIQUE,
-        date TEXT
+    physicell_version_id INTEGER PRIMARY KEY,
+    repo_owner TEXT,
+    tag TEXT,
+    commit_hash TEXT UNIQUE,
+    date TEXT
     """
 end
 
 function monadsSchema()
     return """
-        monad_id INTEGER PRIMARY KEY,
-        physicell_version_id INTEGER,
-        custom_code_id INTEGER,
-        ic_cell_id INTEGER,
-        ic_substrate_id INTEGER,
-        ic_ecm_id INTEGER,
-        config_id INTEGER,
-        rulesets_collection_id INTEGER,
-        config_variation_id INTEGER,
-        rulesets_variation_id INTEGER,
-        ic_cell_variation_id INTEGER,
-        FOREIGN KEY (physicell_version_id)
-            REFERENCES physicell_versions (physicell_version_id),
-        FOREIGN KEY (custom_code_id)
-            REFERENCES custom_codes (custom_code_id),
-        FOREIGN KEY (ic_cell_id)
-            REFERENCES ic_cells (ic_cell_id),
-        FOREIGN KEY (ic_substrate_id)
-            REFERENCES ic_substrates (ic_substrate_id),
-        FOREIGN KEY (ic_ecm_id)
-            REFERENCES ic_ecms (ic_ecm_id),
-        FOREIGN KEY (config_id)
-            REFERENCES configs (config_id),
-        FOREIGN KEY (rulesets_collection_id)
-            REFERENCES rulesets_collections (rulesets_collection_id),
-        UNIQUE (physicell_version_id,custom_code_id,ic_cell_id,ic_substrate_id,ic_ecm_id,config_id,rulesets_collection_id,config_variation_id,rulesets_variation_id,ic_cell_variation_id)
+    monad_id INTEGER PRIMARY KEY,
+    physicell_version_id INTEGER,
+    custom_code_id INTEGER,
+    ic_cell_id INTEGER,
+    ic_substrate_id INTEGER,
+    ic_ecm_id INTEGER,
+    config_id INTEGER,
+    rulesets_collection_id INTEGER,
+    config_variation_id INTEGER,
+    rulesets_variation_id INTEGER,
+    ic_cell_variation_id INTEGER,
+    FOREIGN KEY (physicell_version_id)
+        REFERENCES physicell_versions (physicell_version_id),
+    FOREIGN KEY (custom_code_id)
+        REFERENCES custom_codes (custom_code_id),
+    FOREIGN KEY (ic_cell_id)
+        REFERENCES ic_cells (ic_cell_id),
+    FOREIGN KEY (ic_substrate_id)
+        REFERENCES ic_substrates (ic_substrate_id),
+    FOREIGN KEY (ic_ecm_id)
+        REFERENCES ic_ecms (ic_ecm_id),
+    FOREIGN KEY (config_id)
+        REFERENCES configs (config_id),
+    FOREIGN KEY (rulesets_collection_id)
+        REFERENCES rulesets_collections (rulesets_collection_id),
+    UNIQUE (physicell_version_id,custom_code_id,ic_cell_id,ic_substrate_id,ic_ecm_id,config_id,rulesets_collection_id,config_variation_id,rulesets_variation_id,ic_cell_variation_id)
    """
+end
+
+function samplingsSchema()
+    return """
+    sampling_id INTEGER PRIMARY KEY,
+    physicell_version_id INTEGER,
+    custom_code_id INTEGER,
+    ic_cell_id INTEGER,
+    ic_substrate_id INTEGER,
+    ic_ecm_id INTEGER,
+    config_id INTEGER,
+    rulesets_collection_id INTEGER,
+    FOREIGN KEY (physicell_version_id)
+        REFERENCES physicell_versions (physicell_version_id),
+    FOREIGN KEY (custom_code_id)
+        REFERENCES custom_codes (custom_code_id),
+    FOREIGN KEY (ic_cell_id)
+        REFERENCES ic_cells (ic_cell_id),
+    FOREIGN KEY (ic_substrate_id)
+        REFERENCES ic_substrates (ic_substrate_id),
+    FOREIGN KEY (ic_ecm_id)
+        REFERENCES ic_ecms (ic_ecm_id),
+    FOREIGN KEY (config_id)
+        REFERENCES configs (config_id),
+    FOREIGN KEY (rulesets_collection_id)
+        REFERENCES rulesets_collections (rulesets_collection_id)
+    """
 end
 
 function createICTable(ic_name::String; data_dir_contents=String[])
@@ -262,17 +269,27 @@ function createICTable(ic_name::String; data_dir_contents=String[])
                 if !isfile(joinpath(data_dir, "inputs", "ics", ic_name, ic_folder, icFilename(ic_name)))
                     continue
                 end
-                if isfile(joinpath(data_dir, "inputs", "ics", ic_name, ic_folder, "metadata.xml"))
-                    metadata = parse_file(joinpath(data_dir, "inputs", "ics", ic_name, ic_folder, "metadata.xml")) |> root
-                    description = content(find_element(metadata, "description"))
-                else
-                    description = ""
-                end
-                DBInterface.execute(db, "INSERT OR IGNORE INTO $(table_name) (folder_name, description) VALUES ('$(ic_folder)', '$description');")
+                description = metadataDescription(joinpath(data_dir, "inputs", "ics", ic_name, ic_folder))
+                DBInterface.execute(db, "INSERT OR IGNORE INTO $(table_name) (folder_name, description) VALUES ('$(ic_folder)', '$(description)');")
             end
         end
     end
     return
+end
+
+function metadataDescription(path_to_folder::AbstractString)
+    path_to_metadata = joinpath(path_to_folder, "metadata.xml")
+    description = ""
+    if isfile(path_to_metadata)
+        xml_doc = openXML(path_to_metadata)
+        metadata = root(xml_doc)
+        description_element = find_element(metadata, "description")
+        if !isnothing(description_element)
+            description = content(find_element(metadata, "description"))
+        end
+        closeXML(xml_doc)
+    end
+    return description
 end
 
 function icFilename(table_name::String)
@@ -328,6 +345,14 @@ function getStatusCodeID(status_code::String)
     return queryToDataFrame(query; is_row=true) |> x -> x[1,:status_code_id]
 end
 
+"""
+    isStarted(simulation_id::Int[; new_status_code::Union{Missing,String}=missing])
+
+Check if a simulation has been started.
+
+If `new_status_code` is provided, update the status of the simulation to this value.
+The check and status update are done in a transaction to ensure that the status is not changed by another process.
+"""
 function isStarted(simulation_id::Int; new_status_code::Union{Missing,String}=missing)
     query = constructSelectQuery("simulations", "WHERE simulation_id=$(simulation_id);"; selection="status_code_id")
     mode = ismissing(new_status_code) ? "DEFERRED" : "EXCLUSIVE" # if we are possibly going to update, then set to exclusive mode
@@ -353,7 +378,7 @@ configDB(S::AbstractSampling) = configDB(S.folder_names.config_folder)
 
 function rulesetsCollectionDB(rulesets_collection_folder::String)
     if rulesets_collection_folder == ""
-        return missing
+        return nothing
     end
     path_to_folder = joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder)
     return joinpath(path_to_folder, "rulesets_variations.db") |> SQLite.DB
@@ -363,7 +388,7 @@ rulesetsCollectionDB(rulesets_collection_id::Int) = rulesetsCollectionFolder(rul
 
 function icCellDB(ic_cell_folder::String)
     if ic_cell_folder == ""
-        return missing
+        return nothing
     end
     path_to_folder = joinpath(data_dir, "inputs", "ics", "cells", ic_cell_folder)
     if isfile(joinpath(path_to_folder, "cells.csv"))
@@ -397,18 +422,18 @@ getOptionalFolder(table_name::String, id_name::String, id::Int; db::SQLite.DB=db
 
 configFolder(config_id::Int) = getFolder("configs", "config_id", config_id)
 icCellFolder(ic_cell_id::Int) = getOptionalFolder("ic_cells", "ic_cell_id", ic_cell_id)
-getICSubstrateFolder(ic_substrate_id::Int) = getOptionalFolder("ic_substrates", "ic_substrate_id", ic_substrate_id)
-getICECMFolder(ic_ecm_id::Int) = getOptionalFolder("ic_ecms", "ic_ecm_id", ic_ecm_id)
+icSubstrateFolder(ic_substrate_id::Int) = getOptionalFolder("ic_substrates", "ic_substrate_id", ic_substrate_id)
+icECMFolder(ic_ecm_id::Int) = getOptionalFolder("ic_ecms", "ic_ecm_id", ic_ecm_id)
 rulesetsCollectionFolder(rulesets_collection_id::Int) = getOptionalFolder("rulesets_collections", "rulesets_collection_id", rulesets_collection_id)
-getCustomCodesFolder(custom_code_id::Int) = getFolder("custom_codes", "custom_code_id", custom_code_id)
+customCodesFolder(custom_code_id::Int) = getFolder("custom_codes", "custom_code_id", custom_code_id)
 
 function retrievePathInfo(config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, ic_substrate_id::Int, ic_ecm_id::Int, custom_code_id::Int)
     config_folder = configFolder(config_id)
     rulesets_collection_folder = rulesetsCollectionFolder(rulesets_collection_id)
     ic_cell_folder = icCellFolder(ic_cell_id)
-    ic_substrate_folder = getICSubstrateFolder(ic_substrate_id)
-    ic_ecm_folder = getICECMFolder(ic_ecm_id)
-    custom_code_folder = getCustomCodesFolder(custom_code_id)
+    ic_substrate_folder = icSubstrateFolder(ic_substrate_id)
+    ic_ecm_folder = icECMFolder(ic_ecm_id)
+    custom_code_folder = customCodesFolder(custom_code_id)
     return config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder
 end
 
@@ -471,7 +496,7 @@ function rulesetsVariationsTable(rulesets_variations_db::SQLite.DB, rulesets_var
     return df
 end
 
-function rulesetsVariationsTable(::Missing, rulesets_variation_ids::AbstractVector{<:Integer}; remove_constants::Bool = false)
+function rulesetsVariationsTable(::Nothing, rulesets_variation_ids::AbstractVector{<:Integer}; remove_constants::Bool = false)
     @assert all(x -> x == -1, rulesets_variation_ids) "If the rulesets_variation_id is missing, then all rulesets_variation_ids must be -1."
     return DataFrame(RulesVarID=rulesets_variation_ids)
 end
@@ -486,8 +511,13 @@ function icCellVariationsTable(ic_cell_variations_db::SQLite.DB, ic_cell_variati
     return df
 end
 
+function icCellVariationsTable(::Nothing, ic_cell_variation_ids::AbstractVector{<:Integer}; remove_constants::Bool = false)
+    @assert all(x -> x == -1, ic_cell_variation_ids) "If no ic_cell_folder is given, then all ic_cell_variation_ids must be -1."
+    return DataFrame(ICCellVarID=ic_cell_variation_ids)
+end
+
 function icCellVariationsTable(::Missing, ic_cell_variation_ids::AbstractVector{<:Integer}; remove_constants::Bool = false)
-    @assert all(x -> x == -1, ic_cell_variation_ids) "If the ic_cell_variation_id is missing, then all ic_cell_variation_ids must be -1."
+    @assert all(x -> x == 0, ic_cell_variation_ids) "If the ic_cell_folder contains a cells.csv, then all ic_cell_variation_ids must be 0."
     return DataFrame(ICCellVarID=ic_cell_variation_ids)
 end
 

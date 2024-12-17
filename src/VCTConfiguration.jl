@@ -10,7 +10,7 @@ end
 
 closeXML(xml_doc::XMLDocument) = free(xml_doc)
 
-function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{String}; required::Bool=true)
+function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString}; required::Bool=true)
     current_element = root(xml_doc)
     for path_element in xml_path
         if !occursin(":",path_element)
@@ -26,7 +26,7 @@ function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{String}; require
         candidate_elements = get_elements_by_tagname(current_element, path_element_name)
         found = false
         for ce in candidate_elements
-            if attribute(ce,attribute_name)==attribute_value
+            if attribute(ce, attribute_name) == attribute_value
                 found = true
                 current_element = ce
                 break
@@ -39,24 +39,17 @@ function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{String}; require
     return current_element
 end
 
-function retrieveElementError(xml_path::Vector{String}, path_element::String)
+function retrieveElementError(xml_path::Vector{<:AbstractString}, path_element::String)
     error_msg = "Element not found: $(join(xml_path, " -> "))"
     error_msg *= "\n\tFailed at: $(path_element)"
     throw(ArgumentError(error_msg))
 end
 
-function getField(xml_doc::XMLDocument, xml_path::Vector{String}; required::Bool=true)
+function getField(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString}; required::Bool=true)
     return retrieveElement(xml_doc, xml_path; required=required) |> content
 end
 
-function getOutputFolder(path_to_xml)
-    xml_doc = openXML(path_to_xml)
-    rel_path_to_output = getField(xml_doc, ["save", "folder"])
-    closeXML(xml_doc)
-    return rel_path_to_output
-end
-
-function updateField(xml_doc::XMLDocument, xml_path::Vector{String}, new_value::Union{Int,Real,String})
+function updateField(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString}, new_value::Union{Int,Real,String})
     current_element = retrieveElement(xml_doc, xml_path; required=true)
     set_content(current_element, string(new_value))
     return nothing
@@ -66,31 +59,16 @@ function updateField(xml_doc::XMLDocument, xml_path_and_value::Vector{Any})
     return updateField(xml_doc, xml_path_and_value[1:end-1],xml_path_and_value[end])
 end
 
-function multiplyField(xml_doc::XMLDocument, xml_path::Vector{String}, multiplier::AbstractFloat)
-    current_element = retrieveElement(xml_doc, xml_path; required=true)
-    val = content(current_element)
-    if attribute(current_element, "type"; required=false) == "int"
-        val = parse(Int, val) |> y -> round(Int, multiplier * y)
-    else
-        val = parse(AbstractFloat, val) |> y -> multiplier * y
-    end
-
-    val |> string |> x -> set_content(current_element, x)
-    return nothing
-end
-
-function xmlPathToColumnName(xml_path::Vector{String})
+function xmlPathToColumnName(xml_path::Vector{<:AbstractString})
     return join(xml_path, "/")
 end
 
-function columnNameToXMLPath(column_name::String)
-    return split(column_name, "/") .|> string
-end
+columnNameToXMLPath(column_name::String) = split(column_name, "/")
 
 function updateFieldsFromCSV(xml_doc::XMLDocument, path_to_csv::String)
     df = CSV.read(path_to_csv, DataFrame; header=false, silencewarnings=true, types=String)
     for i = axes(df,1)
-        df[i, :] |> Vector |> x -> filter!(!ismissing, x) .|> string |> x -> updateField(xml_doc, x)
+        df[i, :] |> Vector |> x -> filter!(!ismissing, x) |> x -> updateField(xml_doc, x)
     end
 end
 
@@ -112,7 +90,7 @@ function loadConfiguration(M::AbstractMonad)
         if column_name == "config_variation_id"
             continue
         end
-        xml_path = split(column_name,"/") .|> string
+        xml_path = columnNameToXMLPath(column_name)
         updateField(xml_doc, xml_path, variation_row[1, column_name])
     end
     save_file(xml_doc, path_to_xml)
@@ -153,7 +131,7 @@ function loadRulesets(M::AbstractMonad)
             if column_name == "rulesets_variation_id"
                 continue
             end
-            xml_path = split(column_name, "/") .|> string
+            xml_path = columnNameToXMLPath(column_name)
             updateField(xml_doc, xml_path, variation_row[1, column_name])
         end
     end
@@ -185,7 +163,7 @@ function loadICCells(M::AbstractMonad)
             if column_name == "ic_cell_variation_id"
                 continue
             end
-            xml_path = split(column_name, "/") .|> string
+            xml_path = columnNameToXMLPath(column_name)
             updateField(xml_doc, xml_path, variation_row[1, column_name])
         end
     end
@@ -238,7 +216,7 @@ function customDataPath(cell_definition::String, field_name::String)::Vector{Str
     return [customDataPath(cell_definition); field_name]
 end
 
-function customDataPath(cell_definition::String, field_names::Vector{String})
+function customDataPath(cell_definition::String, field_names::Vector{<:AbstractString})
     return [customDataPath(cell_definition, field_name) for field_name in field_names]
 end
 
@@ -246,7 +224,7 @@ function userParameterPath(field_name::String)::Vector{String}
     return ["user_parameters"; field_name]
 end
 
-function userParameterPath(field_names::Vector{String})
+function userParameterPath(field_names::Vector{<:AbstractString})
     return [userParameterPath(field_name) for field_name in field_names]
 end
 
@@ -260,7 +238,7 @@ function addDomainVariationDimension!(AV::Vector{<:AbstractVariation}, domain::N
     bounds_tags = ["x_min", "x_max", "y_min", "y_max", "z_min", "z_max"]
     for (tag, value) in zip(bounds_tags, domain)
         xml_path = ["domain", tag]
-        push!(AV, ElementaryVariation(xml_path, [value]))
+        push!(AV, DiscreteVariation(xml_path, [value]))
     end
 end
 
@@ -275,29 +253,23 @@ function addDomainVariationDimension!(AV::Vector{<:AbstractVariation}, domain::N
             tag = "$(last_character)_max"
         end
         xml_path = ["domain", tag]
-        push!(AV, ElementaryVariation(xml_path, [value...])) # do this to make sure that singletons and vectors are converted to vectors
+        push!(AV, DiscreteVariation(xml_path, [value...])) # do this to make sure that singletons and vectors are converted to vectors
     end
 end
 
 function addMotilityVariationDimension!(AV::Vector{<:AbstractVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
     xml_path = motilityPath(cell_definition, field_name)
-    push!(AV, ElementaryVariation(xml_path, values))
+    push!(AV, DiscreteVariation(xml_path, values))
 end
 
 function addAttackRateVariationDimension!(AV::Vector{<:AbstractVariation}, cell_definition::String, target_name::String, values::Vector{T} where T)
     xml_path = attackRatesPath(cell_definition, target_name)
-    push!(AV, ElementaryVariation(xml_path, values))
+    push!(AV, DiscreteVariation(xml_path, values))
 end
 
 function addCustomDataVariationDimension!(AV::Vector{<:AbstractVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
     xml_path = customDataPath(cell_definition, field_name)
-    push!(AV, ElementaryVariation(xml_path, values))
-end
-
-function addCustomDataVariationDimension!(AV::Vector{<:AbstractVariation}, cell_definition::String, field_names::Vector{String}, values::Vector{Vector})
-    for (field_name, value) in zip(field_names,values)
-        addCustomDataVariationDimension!(EV, cell_definition, field_name, value)
-    end
+    push!(AV, DiscreteVariation(xml_path, values))
 end
 
 ################## Simplify Name Functions ##################
@@ -339,7 +311,7 @@ function simpleICCellVariationNames(name::String)
 end
 
 function getCellParameterName(column_name::String)
-    xml_path = split(column_name, "/") .|> string
+    xml_path = columnNameToXMLPath(column_name)
     cell_type = split(xml_path[2], ":")[3]
     target_name = ""
     for component in xml_path[3:end]
@@ -356,7 +328,7 @@ function getCellParameterName(column_name::String)
 end
 
 function getRuleParameterName(name::String)
-    xml_path = split(name, "/") .|> string
+    xml_path = columnNameToXMLPath(name)
     cell_type = split(xml_path[1], ":")[3]
     behavior = split(xml_path[2], ":")[3]
     is_decreasing = xml_path[3] == "decreasing_signals"
@@ -371,7 +343,7 @@ function getRuleParameterName(name::String)
 end
 
 function getICCellParameterName(name::String)
-    xml_path = split(name, "/") .|> string
+    xml_path = columnNameToXMLPath(name)
     cell_type = split(xml_path[1], ":")[3]
     patch_type = split(xml_path[2], ":")[3]
     id = split(xml_path[3], ":")[3]

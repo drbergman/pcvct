@@ -73,7 +73,7 @@ function moatSensitivity(method::MOAT, monad_min_length::Int, folder_names::Abst
     header_line = ["base", [columnName(av) for av in AV]...]
     monad_ids_df = DataFrame(monad_ids, header_line)
     sampling = Sampling(monad_min_length, monad_dict |> values |> collect)
-    n_success = runAbstractTrial(sampling; force_recompile=force_recompile, prune_options=PruneOptions())
+    n_success = run(sampling; force_recompile=force_recompile, prune_options=PruneOptions())
     return MOATSampling(sampling, monad_ids_df)
 end
 
@@ -84,19 +84,19 @@ end
 
 function perturbConfigVariation(av::AbstractVariation, config_variation_id::Int, folder::String)
     base_value = getConfigBaseValue(columnName(av), config_variation_id, folder)
-    addFn = (ev) -> gridToDB([ev], prepareConfigVariationFunctions(retrieveID("configs", folder), [ev]; reference_config_variation_id=config_variation_id)...)
+    addFn = (discrete_variation) -> gridToDB([discrete_variation], prepareConfigVariationFunctions(retrieveID("configs", folder), [discrete_variation]; reference_config_variation_id=config_variation_id)...)
     return makePerturbation(av, base_value, addFn)
 end
 
 function perturbRulesetsVariation(av::AbstractVariation, rulesets_variation_id::Int, folder::String)
     base_value = getRulesetsBaseValue(columnName(av), rulesets_variation_id, folder)
-    addFn = (ev) -> gridToDB([ev], prepareRulesetsVariationFunctions(retrieveID("rulesets_collections", folder); reference_rulesets_variation_id=rulesets_variation_id)...)
+    addFn = (discrete_variation) -> gridToDB([discrete_variation], prepareRulesetsVariationFunctions(retrieveID("rulesets_collections", folder); reference_rulesets_variation_id=rulesets_variation_id)...)
     return makePerturbation(av, base_value, addFn)
 end
 
 function perturbICCellVariation(av::AbstractVariation, ic_cell_variation_id::Int, folder::String)
     base_value = getICCellBaseValue(columnName(av), ic_cell_variation_id, folder)
-    addFn = (ev) -> gridToDB([ev], prepareICCellVariationFunctions(retrieveID("ic_cells", folder); reference_ic_cell_variation_id=ic_cell_variation_id)...)
+    addFn = (discrete_variation) -> gridToDB([discrete_variation], prepareICCellVariationFunctions(retrieveID("ic_cells", folder); reference_ic_cell_variation_id=ic_cell_variation_id)...)
     return makePerturbation(av, base_value, addFn)
 end
 
@@ -105,10 +105,10 @@ function makePerturbation(av::AbstractVariation, base_value::Real, addFn::Functi
     dcdf = cdf_at_base < 0.5 ? 0.5 : -0.5
     new_value = _values(av, cdf_at_base + dcdf) # note, this is a vector of values
 
-    new_ev = ElementaryVariation(xmlPath(av), new_value)
+    discrete_variation = DiscreteVariation(xmlPath(av), new_value)
 
-    new_variation_id = addFn(new_ev)
-    @assert length(new_variation_id) == 1 "Only doing one perturbation at a time"
+    new_variation_id = addFn(discrete_variation)
+    @assert length(new_variation_id) == 1 "Only doing one perturbation at a time."
     return new_variation_id[1]
 end
 
@@ -241,7 +241,7 @@ function sobolSensitivity(method::Sobolʼ, monad_min_length::Int, folder_names::
     header_line = ["A", "B", [columnName(av) for av in AV[focus_indices]]...]
     monad_ids_df = DataFrame(monad_ids, header_line)
     sampling = Sampling(monad_min_length, monads)
-    n_success = runAbstractTrial(sampling; force_recompile=force_recompile, prune_options=prune_options)
+    n_success = run(sampling; force_recompile=force_recompile, prune_options=prune_options)
     return SobolSampling(sampling, monad_ids_df; sobol_index_methods=method.sobol_index_methods)
 end
 
@@ -329,7 +329,7 @@ function rbdSensitivity(method::RBD, monad_min_length::Int, folder_names::Abstra
     header_line = [columnName(av) for av in AV]
     monad_ids_df = DataFrame(monad_ids, header_line)
     sampling = Sampling(monad_min_length, monads)
-    n_success = runAbstractTrial(sampling; force_recompile=force_recompile, prune_options=prune_options)
+    n_success = run(sampling; force_recompile=force_recompile, prune_options=prune_options)
     return RBDSampling(sampling, monad_ids_df, method.rbd_variation.num_cycles; num_harmonics=method.num_harmonics)
 end
 
@@ -365,7 +365,7 @@ end
 
 function recordSensitivityScheme(gsa_sampling::GSASampling)
     method = methodString(gsa_sampling)
-    path_to_csv = joinpath(getOutputFolder(gsa_sampling.sampling), "$(method)_scheme.csv")
+    path_to_csv = joinpath(outputFolder(gsa_sampling.sampling), "$(method)_scheme.csv")
     return CSV.write(path_to_csv, getMonadIDDataFrame(gsa_sampling); header=true)
 end
 

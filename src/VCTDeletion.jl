@@ -1,10 +1,12 @@
-function deleteSimulation(simulation_ids::AbstractVector{<:Integer}; delete_supers::Bool=true, and_constraints::String="")
+export deleteSimulation, deleteSimulations
+
+function deleteSimulations(simulation_ids::AbstractVector{<:Integer}; delete_supers::Bool=true, and_constraints::String="")
     where_stmt = "WHERE simulation_id IN ($(join(simulation_ids,","))) $(and_constraints);"
     sim_df = constructSelectQuery("simulations", where_stmt) |> queryToDataFrame
     simulation_ids = sim_df.simulation_id # update based on the constraints added
     DBInterface.execute(db,"DELETE FROM simulations WHERE simulation_id IN ($(join(simulation_ids,",")));")
     for row in eachrow(sim_df)
-        rm(joinpath(data_dir, "outputs", "simulations", string(row.simulation_id)); force=true, recursive=true)
+        rm(outputFolder("simulation", row.simulation_id); force=true, recursive=true)
 
         config_folder = configFolder(row.config_id)
         result_df = constructSelectQuery(
@@ -61,8 +63,9 @@ function deleteSimulation(simulation_ids::AbstractVector{<:Integer}; delete_supe
     return nothing
 end
 
-deleteSimulation(simulation_id::Int; delete_supers::Bool=true, and_constraints::String="") = deleteSimulation([simulation_id]; delete_supers=delete_supers, and_constraints=and_constraints)
-deleteAllSimulations(; delete_supers::Bool=true, and_constraints::String="") = getSimulationIDs() |> x -> deleteSimulation(x; delete_supers=delete_supers, and_constraints=and_constraints)
+deleteSimulations(simulation_id::Int; delete_supers::Bool=true, and_constraints::String="") = deleteSimulations([simulation_id]; delete_supers=delete_supers, and_constraints=and_constraints)
+deleteSimulation = deleteSimulations # alias
+deleteAllSimulations(; delete_supers::Bool=true, and_constraints::String="") = getSimulationIDs() |> x -> deleteSimulations(x; delete_supers=delete_supers, and_constraints=and_constraints)
 
 function deleteMonad(monad_ids::AbstractVector{<:Integer}; delete_subs::Bool=true, delete_supers::Bool=true)
     DBInterface.execute(db,"DELETE FROM monads WHERE monad_id IN ($(join(monad_ids,",")));")
@@ -71,10 +74,10 @@ function deleteMonad(monad_ids::AbstractVector{<:Integer}; delete_subs::Bool=tru
         if delete_subs
             append!(simulation_ids_to_delete, readMonadSimulationIDs(monad_id))
         end
-        rm(joinpath(data_dir, "outputs", "monads", string(monad_id)); force=true, recursive=true)
+        rm(outputFolder("monad", monad_id); force=true, recursive=true)
     end
     if !isempty(simulation_ids_to_delete)
-        deleteSimulation(simulation_ids_to_delete; delete_supers=false)
+        deleteSimulations(simulation_ids_to_delete; delete_supers=false)
     end
 
     if !delete_supers
@@ -110,7 +113,7 @@ function deleteSampling(sampling_ids::AbstractVector{<:Integer}; delete_subs::Bo
         if delete_subs
             append!(monad_ids_to_delete, readSamplingMonadIDs(sampling_id))
         end
-        rm(joinpath(data_dir, "outputs", "samplings", string(sampling_id)); force=true, recursive=true)
+        rm(outputFolder("sampling", sampling_id); force=true, recursive=true)
     end
     if !isempty(monad_ids_to_delete)
         all_sampling_ids = constructSelectQuery("samplings"; selection="sampling_id") |> queryToDataFrame |> x -> x.sampling_id
@@ -158,7 +161,7 @@ function deleteTrial(trial_ids::AbstractVector{<:Integer}; delete_subs::Bool=tru
         if delete_subs
             append!(sampling_ids_to_delete, readTrialSamplingIDs(trial_id))
         end
-        rm(joinpath(data_dir, "outputs", "trials", string(trial_id)); force=true, recursive=true)
+        rm(outputFolder("trial", trial_id); force=true, recursive=true)
     end
     if !isempty(sampling_ids_to_delete)
         all_trial_ids = constructSelectQuery("trials"; selection="trial_id") |> queryToDataFrame |> x -> x.trial_id
@@ -275,23 +278,13 @@ end
 """
     deleteSimulationsByStatus(status_codes_to_delete::Vector{String}=["Failed"]; user_check::Bool=true)
 
-    Delete simulations from the database based on their status codes.
+Delete simulations from the database based on their status codes.
 
-    # Arguments
-    - `status_codes_to_delete::Vector{String}`: A vector of status codes for which simulations should be deleted. Default is `["Failed"]`.
-    - `user_check::Bool`: If `true`, prompts the user for confirmation before deleting simulations. Default is `true`.
+The list of possible status codes is: "Not Started", "Queued", "Running", "Completed", "Failed".
 
-    # Description
-    This function performs the following steps:
-    1. Queries the database to retrieve simulation IDs and their corresponding status codes.
-    2. Iterates over the provided `status_codes_to_delete`.
-    3. For each status code, retrieves the simulation IDs that match the status code.
-    4. If no simulations match the status code, it continues to the next status code.
-    5. If `user_check` is `true`, prompts the user for confirmation before deleting the simulations.
-    6. If the user confirms, deletes the simulations with the matching status code.
-
-    # Returns
-    - Nothing. The function performs database operations and deletes records as needed.
+# Arguments
+- `status_codes_to_delete::Vector{String}`: A vector of status codes for which simulations should be deleted. Default is `["Failed"]`.
+- `user_check::Bool`: If `true`, prompts the user for confirmation before deleting simulations. Default is `true`.
 """
 function deleteSimulationsByStatus(status_codes_to_delete::Vector{String}=["Failed"]; user_check::Bool=true)
     df = """
@@ -317,33 +310,19 @@ function deleteSimulationsByStatus(status_codes_to_delete::Vector{String}=["Fail
             end
         end
         println("\tDeleting $(length(simulation_ids)) simulations with status code '$status_code'.")
-        deleteSimulation(simulation_ids)
+        deleteSimulations(simulation_ids)
     end
 end
 
 """
-    eraseSimulationID(simulation_id::Int; monad_id::Union{Missing,Int}=missing, T::Union{Missing,AbstractTrial}=missing)
+    eraseSimulationID(simulation_id::Int[; monad_id::Union{Missing,Int}=missing])
 
-    Erase a simulation ID from the monad(s) it belongs to. Used when a simulation fails to run and needs to be removed from the monad's `simulations.csv`.
+Erase a simulation ID from the monad it belongs to `simulations.csv`.
 
-    # Arguments
-    - `simulation_id::Int`: The ID of the simulation to be erased.
-    - `monad_id::Union{Missing,Int}`: The ID of the monad associated with the simulation. If not provided, it will be inferred from the simulation ID. Default is `missing`.
-    - `T::Union{Missing,AbstractTrial}`: An optional parameter for additional context. Default is `missing`.
-
-    # Description
-    This function performs the following steps:
-    1. If `monad_id` is missing, it constructs a query to find the monad ID associated with the given `simulation_id`.
-    2. Retrieves the list of simulation IDs associated with the monad.
-    3. Finds the index of the given `simulation_id` in the list.
-    4. If the `simulation_id` is not found, the function returns early.
-    5. If the monad contains only the given `simulation_id`, it deletes the monad and any dependent records, but retains the simulation in the database for output file checks.
-    6. If the monad contains multiple simulations, it removes the given `simulation_id` from the list and updates the records.
-
-    # Returns
-    - Nothing. The function performs database operations and updates records as needed.
+If `monad_id` is not provided, the function will infer it from the simulation ID.
+If the monad contains only the given simulation ID, the monad will be deleted.
 """
-function eraseSimulationID(simulation_id::Int; monad_id::Union{Missing,Int}=missing, T::Union{Missing,AbstractTrial}=missing)
+function eraseSimulationID(simulation_id::Int; monad_id::Union{Missing,Int}=missing)
     if ismissing(monad_id)
         query = constructSelectQuery("simulations", "WHERE simulation_id = $(simulation_id);")
         df = queryToDataFrame(query)
