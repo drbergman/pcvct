@@ -238,7 +238,7 @@ function addDomainVariationDimension!(AV::Vector{<:AbstractVariation}, domain::N
     bounds_tags = ["x_min", "x_max", "y_min", "y_max", "z_min", "z_max"]
     for (tag, value) in zip(bounds_tags, domain)
         xml_path = ["domain", tag]
-        push!(AV, ElementaryVariation(xml_path, [value]))
+        push!(AV, DiscreteVariation(xml_path, [value]))
     end
 end
 
@@ -253,29 +253,23 @@ function addDomainVariationDimension!(AV::Vector{<:AbstractVariation}, domain::N
             tag = "$(last_character)_max"
         end
         xml_path = ["domain", tag]
-        push!(AV, ElementaryVariation(xml_path, [value...])) # do this to make sure that singletons and vectors are converted to vectors
+        push!(AV, DiscreteVariation(xml_path, [value...])) # do this to make sure that singletons and vectors are converted to vectors
     end
 end
 
 function addMotilityVariationDimension!(AV::Vector{<:AbstractVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
     xml_path = motilityPath(cell_definition, field_name)
-    push!(AV, ElementaryVariation(xml_path, values))
+    push!(AV, DiscreteVariation(xml_path, values))
 end
 
 function addAttackRateVariationDimension!(AV::Vector{<:AbstractVariation}, cell_definition::String, target_name::String, values::Vector{T} where T)
     xml_path = attackRatesPath(cell_definition, target_name)
-    push!(AV, ElementaryVariation(xml_path, values))
+    push!(AV, DiscreteVariation(xml_path, values))
 end
 
 function addCustomDataVariationDimension!(AV::Vector{<:AbstractVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
     xml_path = customDataPath(cell_definition, field_name)
-    push!(AV, ElementaryVariation(xml_path, values))
-end
-
-function addCustomDataVariationDimension!(AV::Vector{<:AbstractVariation}, cell_definition::String, field_names::Vector{<:AbstractString}, values::Vector{Vector})
-    for (field_name, value) in zip(field_names,values)
-        addCustomDataVariationDimension!(EV, cell_definition, field_name, value)
-    end
+    push!(AV, DiscreteVariation(xml_path, values))
 end
 
 ################## Simplify Name Functions ##################
