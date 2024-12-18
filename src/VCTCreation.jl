@@ -238,7 +238,9 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = 
         \taddVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder,
         \telementary_variations;
-        \treference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id
+        \treference_config_variation_id=reference_config_variation_id,
+        \treference_rulesets_variation_id=reference_rulesets_variation_id,
+        \treference_ic_cell_variation_id=reference_ic_cell_variation_id
         )
 
         $(tersify("""

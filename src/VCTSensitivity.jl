@@ -1,7 +1,7 @@
 using Distributions, DataFrames, CSV, Sobol, FFTW
 import GlobalSensitivity # do not bring in their definition of Sobol as it conflicts with the Sobol module
 
-export sensitivitySampling, MOAT, Sobolʼ, RBD
+export MOAT, Sobolʼ, RBD
 
 abstract type GSAMethod end
 abstract type GSASampling end
@@ -14,8 +14,8 @@ function methodString(gsa_sampling::GSASampling)
     return endswith(method, "sampling") ? method[1:end-8] : method
 end
 
-function sensitivitySampling(args...; functions::Vector{<:Function}=Function[], kwargs...)
-    gsa_sampling = _runSensitivitySampling(args...; kwargs...)
+function run(method::GSAMethod, args...; functions::Vector{<:Function}=Function[], kwargs...)
+    gsa_sampling = _runSensitivitySampling(method, args...; kwargs...)
     sensitivityResults!(gsa_sampling, functions)
     return gsa_sampling
 end
@@ -42,9 +42,11 @@ end
 
 MOATSampling(sampling::Sampling, monad_ids_df::DataFrame) = MOATSampling(sampling, monad_ids_df, Dict{Function, GlobalSensitivity.MorrisResult}())
 
-_runSensitivitySampling(method::MOAT, args...; kwargs...) = moatSensitivity(method, args...; kwargs...)
+function _runSensitivitySampling(method::MOAT, monad_min_length::Int, folder_names::AbstractSamplingFolders, evs::Vector{<:ElementaryVariation};
+    reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0,
+    reference_ic_cell_variation_id::Int=folder_names.ic_cell_folder=="" ? -1 : 0,
+    ignore_indices::Vector{Int}=Int[], force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
 
-function moatSensitivity(method::MOAT, monad_min_length::Int, folder_names::AbstractSamplingFolders, evs::Vector{<:ElementaryVariation}; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=folder_names.ic_cell_folder=="" ? -1 : 0, ignore_indices::Vector{Int}=Int[], force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
     if !isempty(ignore_indices)
         error("MOAT does not support ignoring indices...yet? Only Sobolʼ does for now.")
     end
@@ -73,7 +75,7 @@ function moatSensitivity(method::MOAT, monad_min_length::Int, folder_names::Abst
     header_line = ["base", [columnName(ev) for ev in evs]...]
     monad_ids_df = DataFrame(monad_ids, header_line)
     sampling = Sampling(monad_min_length, monad_dict |> values |> collect)
-    n_success = run(sampling; force_recompile=force_recompile, prune_options=PruneOptions())
+    n_success = run(sampling; force_recompile=force_recompile, prune_options=prune_options)
     return MOATSampling(sampling, monad_ids_df)
 end
 
@@ -197,9 +199,11 @@ end
 
 SobolSampling(sampling::Sampling, monad_ids_df::DataFrame; sobol_index_methods::NamedTuple{(:first_order, :total_order), Tuple{Symbol, Symbol}}=(first_order=:Jansen1999, total_order=:Jansen1999)) = SobolSampling(sampling, monad_ids_df, Dict{Function, GlobalSensitivity.SobolResult}(), sobol_index_methods)
 
-_runSensitivitySampling(method::Sobolʼ, args...; kwargs...) = sobolSensitivity(method, args...; kwargs...)
+function _runSensitivitySampling(method::Sobolʼ, monad_min_length::Int, folder_names::AbstractSamplingFolders, evs::Vector{<:ElementaryVariation};
+    reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0,
+    reference_ic_cell_variation_id::Int=folder_names.ic_cell_folder=="" ? -1 : 0,
+    ignore_indices::Vector{Int}=Int[], force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
 
-function sobolSensitivity(method::Sobolʼ, monad_min_length::Int, folder_names::AbstractSamplingFolders, evs::Vector{<:ElementaryVariation}; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=folder_names.ic_cell_folder=="" ? -1 : 0, ignore_indices::Vector{Int}=Int[], force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
     config_id = retrieveID("configs", folder_names.config_folder)
     rulesets_collection_id = retrieveID("rulesets_collections", folder_names.rulesets_collection_folder)
     ic_cell_id = retrieveID("ic_cells", folder_names.ic_cell_folder)
@@ -317,9 +321,9 @@ end
 
 RBDSampling(sampling::Sampling, monad_ids_df::DataFrame, num_cycles; num_harmonics::Int=6) = RBDSampling(sampling, monad_ids_df, Dict{Function, GlobalSensitivity.SobolResult}(), num_harmonics, num_cycles)
 
-_runSensitivitySampling(method::RBD, args...; kwargs...) = rbdSensitivity(method, args...; kwargs...)
-
-function rbdSensitivity(method::RBD, monad_min_length::Int, folder_names::AbstractSamplingFolders, evs::Vector{<:ElementaryVariation}; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=folder_names.ic_cell_folder=="" ? -1 : 0, ignore_indices::Vector{Int}=Int[], force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
+function _runSensitivitySampling(method::RBD, monad_min_length::Int, folder_names::AbstractSamplingFolders, evs::Vector{<:ElementaryVariation};
+    reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=folder_names.ic_cell_folder=="" ? -1 : 0,
+    ignore_indices::Vector{Int}=Int[], force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
     if !isempty(ignore_indices)
         error("RBD does not support ignoring indices...yet? Only Sobolʼ does for now.")
     end

@@ -9,7 +9,6 @@ export GridVariation, LHSVariation, addVariations
 abstract type AbstractVariation end
 abstract type ElementaryVariation <: AbstractVariation end
 
-
 """
     DiscreteVariation{T}(xml_path::Vector{<:AbstractString}, values::Vector{T}) where T
 
@@ -109,6 +108,16 @@ end
 cdf(dv::DistributedVariation, x::Real) = cdf(dv.distribution, x)
 
 cdf(ev::ElementaryVariation, ::Real) = error("cdf not defined for $(typeof(ev))")
+
+function variationLocation(xml_path::Vector{<:AbstractString})
+    if startswith(xml_path[1], "hypothesis_ruleset:name:")
+        return :rulesets
+    elseif startswith(xml_path[1], "cell_patches:name:")
+        return :ic_cell
+    else
+        return :config
+    end
+end
 
 ################## Database Interface Functions ##################
 
@@ -316,12 +325,16 @@ struct RBDVariation <: AddVariationMethod
 end
 RBDVariation(n::Int; rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true, pow2_diff=missing, num_cycles=missing) = RBDVariation(n, rng, use_sobol, pow2_diff, num_cycles)
 
-function addVariations(method::AddVariationMethod, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, evs::Vector{<:ElementaryVariation}; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=ic_cell_id==-1 ? -1 : 0) 
+function addVariations(method::AddVariationMethod, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, evs::Vector{<:ElementaryVariation}, reference_variation_ids::VariationIDs) 
     parsed_variations = ParsedVariations(evs)
-    return addParsedVariations(method, config_id, rulesets_collection_id, ic_cell_id, parsed_variations; reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id)
+    return addParsedVariations(method, config_id, rulesets_collection_id, ic_cell_id, parsed_variations, reference_variation_ids)
 end
 
-addVariations(method::AddVariationMethod, config_folder::String, rulesets_collection_folder::String, ic_cell_folder::String, evs::Vector{<:ElementaryVariation}; kwargs...) = addVariations(method, retrieveID("configs", config_folder), retrieveID("rulesets_collections", rulesets_collection_folder), retrieveID("ic_cells", ic_cell_folder), evs; kwargs...)
+function addVariations(method::AddVariationMethod, config_folder::String, rulesets_collection_folder::String, ic_cell_folder::String, evs::Vector{<:ElementaryVariation};
+    reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=ic_cell_folder=="" ? -1 : 0)
+    reference_variation_ids = VariationIDs(reference_config_variation_id, reference_rulesets_variation_id, reference_ic_cell_variation_id)
+    return addVariations(method, retrieveID("configs", config_folder), retrieveID("rulesets_collections", rulesets_collection_folder), retrieveID("ic_cells", ic_cell_folder), evs, reference_variation_ids)
+end
 
 struct ParsedVariations
     config_variations::Vector{<:ElementaryVariation}
@@ -365,44 +378,27 @@ function ParsedVariations(evs::Vector{<:ElementaryVariation})
     return ParsedVariations(config_variations, rulesets_variations, ic_cell_variations, config_variation_indices, rulesets_variation_indices, ic_cell_variation_indices)
 end
 
-function variationLocation(xml_path::Vector{<:AbstractString})
-    if startswith(xml_path[1], "hypothesis_ruleset:name:")
-        return :rulesets
-    elseif startswith(xml_path[1], "cell_patches:name:")
-        return :ic_cell
-    else
-        return :config
-    end
-end
-
-addParsedVariations(::GridVariation, args...; kwargs...) = addGrid(args...; kwargs...)
-addParsedVariations(lhs_variation::LHSVariation, args...; kwargs...) = addLHS(lhs_variation, args...; kwargs...)
-addParsedVariations(sobol_variation::SobolVariation, args...; kwargs...) = addSobol(sobol_variation, args...; kwargs...)
-addParsedVariations(rbd_variation::RBDVariation, args...; kwargs...) = addRBD(rbd_variation, args...; kwargs...)
-
 ################## Grid Variations ##################
 
-function addGrid(config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, pv::ParsedVariations; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=ic_cell_id==-1 ? -1 : 0)
+function addParsedVariations(::GridVariation, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, pv::ParsedVariations, reference_variation_ids::VariationIDs)
     if isempty(pv.config_variations)
-        config_variation_ids = [reference_config_variation_id]
+        config_variation_ids = [reference_variation_ids.config]
     else
-        config_variation_ids = gridToDB(pv.config_variations, prepareConfigVariationFunctions(config_id, pv.config_variations; reference_config_variation_id=reference_config_variation_id)...)
+        config_variation_ids = gridToDB(pv.config_variations, prepareConfigVariationFunctions(config_id, pv.config_variations; reference_config_variation_id=reference_variation_ids.config)...)
     end
     if isempty(pv.rulesets_variations)
-        rulesets_variation_ids = [reference_rulesets_variation_id]
+        rulesets_variation_ids = [reference_variation_ids.rulesets]
     else
-        rulesets_variation_ids = gridToDB(pv.rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)...)
+        rulesets_variation_ids = gridToDB(pv.rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_variation_ids.rulesets)...)
     end
     if isempty(pv.ic_cell_variations)
-        ic_cell_variation_ids = [ic_cell_id==-1 ? -1 : reference_ic_cell_variation_id]
+        ic_cell_variation_ids = [reference_variation_ids.ic_cell]
     else
-        ic_cell_variation_ids = gridToDB(pv.ic_cell_variations, prepareICCellVariationFunctions(ic_cell_id; reference_ic_cell_variation_id=reference_ic_cell_variation_id)...)
+        ic_cell_variation_ids = gridToDB(pv.ic_cell_variations, prepareICCellVariationFunctions(ic_cell_id; reference_ic_cell_variation_id=reference_variation_ids.ic_cell)...)
     end
     all_config_variation_ids, all_rulesets_variation_ids, all_ic_cell_variation_ids = ndgrid(config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids)
     return all_config_variation_ids, all_rulesets_variation_ids, all_ic_cell_variation_ids
 end
-
-addGrid(config_folder::String, rulesets_collection_folder::String, ic_cell_folder::String, pv::ParsedVariations; kwargs...) = addGrid(retrieveID("configs", config_folder), retrieveID("rulesets_collections", rulesets_collection_folder), retrieveID("ic_cells", ic_cell_folder), pv; kwargs...)
 
 function gridToDB(evs::Vector{<:ElementaryVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function, addRowFn::Function)
     new_values = _values.(evs)
@@ -486,23 +482,23 @@ function generateLHSCDFs(n::Int, d::Int; add_noise::Bool=false, rng::AbstractRNG
     return cdfs[lhs_inds]
 end
 
-function addLHS(lhs_variation::LHSVariation, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, pv::ParsedVariations; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=ic_cell_id==-1 ? -1 : 0)
+function addParsedVariations(lhs_variation::LHSVariation, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, pv::ParsedVariations, reference_variation_ids::VariationIDs)
     d = length(pv.config_variations) + length(pv.rulesets_variations) + length(pv.ic_cell_variations)
     cdfs = generateLHSCDFs(lhs_variation.n, d; add_noise=lhs_variation.add_noise, rng=lhs_variation.rng, orthogonalize=lhs_variation.orthogonalize)
     if isempty(pv.config_variations)
-        config_variation_ids = fill(reference_config_variation_id, lhs_variation.n)
+        config_variation_ids = fill(reference_variation_ids.config, lhs_variation.n)
     else
-        config_variation_ids = cdfsToVariations(cdfs[:, 1:length(pv.config_variations)], pv.config_variations, prepareConfigVariationFunctions(config_id, pv.config_variations; reference_config_variation_id=reference_config_variation_id)...)
+        config_variation_ids = cdfsToVariations(cdfs[:, 1:length(pv.config_variations)], pv.config_variations, prepareConfigVariationFunctions(config_id, pv.config_variations; reference_config_variation_id=reference_variation_ids.config)...)
     end
     if isempty(pv.rulesets_variations)
-        rulesets_variation_ids = fill(reference_rulesets_variation_id, lhs_variation.n)
+        rulesets_variation_ids = fill(reference_variation_ids.rulesets, lhs_variation.n)
     else
-        rulesets_variation_ids = cdfsToVariations(cdfs[:, length(pv.config_variations)+1:end], pv.rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)...)
+        rulesets_variation_ids = cdfsToVariations(cdfs[:, length(pv.config_variations)+1:end], pv.rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_variation_ids.rulesets)...)
     end
     if isempty(pv.ic_cell_variations)
-        ic_cell_variation_ids = fill(ic_cell_id==-1 ? -1 : reference_ic_cell_variation_id, lhs_variation.n)
+        ic_cell_variation_ids = fill(reference_variation_ids.ic_cell, lhs_variation.n)
     else
-        ic_cell_variation_ids = cdfsToVariations(cdfs[:, length(pv.config_variations)+length(pv.rulesets_variations)+1:end], pv.ic_cell_variations, prepareICCellVariationFunctions(ic_cell_id; reference_ic_cell_variation_id=reference_ic_cell_variation_id)...)
+        ic_cell_variation_ids = cdfsToVariations(cdfs[:, length(pv.config_variations)+length(pv.rulesets_variations)+1:end], pv.ic_cell_variations, prepareICCellVariationFunctions(ic_cell_id; reference_ic_cell_variation_id=reference_variation_ids.ic_cell)...)
     end
     return config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids
 end
@@ -548,25 +544,25 @@ end
 
 generateSobolCDFs(sobol_variation::SobolVariation, d::Int) = generateSobolCDFs(sobol_variation.n, d; n_matrices=sobol_variation.n_matrices, randomization=sobol_variation.randomization, skip_start=sobol_variation.skip_start, include_one=sobol_variation.include_one)
 
-function addSobol(sobol_variation::SobolVariation, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, pv::ParsedVariations; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=ic_cell_id==-1 ? -1 : 0)
+function addParsedVariations(sobol_variation::SobolVariation, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, pv::ParsedVariations, reference_variation_ids::VariationIDs)
     d = length(pv.config_variations) + length(pv.rulesets_variations) + length(pv.ic_cell_variations)
     cdfs = generateSobolCDFs(sobol_variation, d) # cdfs is (d, sobol_variation.n_matrices, sobol_variation.n)
     cdfs_reshaped = reshape(cdfs, (d, sobol_variation.n_matrices * sobol_variation.n)) # reshape to (d, sobol_variation.n_matrices * sobol_variation.n) so that each column is a sobol sample
     cdfs_reshaped = cdfs_reshaped' # transpose so that each row is a sobol sample
     if isempty(pv.config_variations)
-        config_variation_ids = fill(reference_config_variation_id, size(cdfs_reshaped,1))
+        config_variation_ids = fill(reference_variation_ids.config, size(cdfs_reshaped,1))
     else
-        config_variation_ids = cdfsToVariations(cdfs_reshaped[:,1:length(pv.config_variations)], pv.config_variations, prepareConfigVariationFunctions(config_id, pv.config_variations; reference_config_variation_id=reference_config_variation_id)...)
+        config_variation_ids = cdfsToVariations(cdfs_reshaped[:,1:length(pv.config_variations)], pv.config_variations, prepareConfigVariationFunctions(config_id, pv.config_variations; reference_config_variation_id=reference_variation_ids.config)...)
     end
     if isempty(pv.rulesets_variations)
-        rulesets_variation_ids = fill(reference_rulesets_variation_id, size(cdfs_reshaped,1))
+        rulesets_variation_ids = fill(reference_variation_ids.rulesets, size(cdfs_reshaped,1))
     else
-        rulesets_variation_ids = cdfsToVariations(cdfs_reshaped[:,length(pv.config_variations)+1:end], pv.rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)...)
+        rulesets_variation_ids = cdfsToVariations(cdfs_reshaped[:,length(pv.config_variations)+1:end], pv.rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_variation_ids.rulesets)...)
     end
     if isempty(pv.ic_cell_variations)
-        ic_cell_variation_ids = fill(reference_ic_cell_variation_id, size(cdfs_reshaped,1))
+        ic_cell_variation_ids = fill(reference_variation_ids.ic_cell, size(cdfs_reshaped,1))
     else
-        ic_cell_variation_ids = cdfsToVariations(cdfs_reshaped[:,length(pv.config_variations)+length(pv.rulesets_variations)+1:end], pv.ic_cell_variations, prepareICCellVariationFunctions(ic_cell_id; reference_ic_cell_variation_id=reference_ic_cell_variation_id)...)
+        ic_cell_variation_ids = cdfsToVariations(cdfs_reshaped[:,length(pv.config_variations)+length(pv.rulesets_variations)+1:end], pv.ic_cell_variations, prepareICCellVariationFunctions(ic_cell_id; reference_ic_cell_variation_id=reference_variation_ids.ic_cell)...)
     end
     config_variation_ids = reshape(config_variation_ids, (sobol_variation.n_matrices, sobol_variation.n))' # first, each sobol matrix variation indices goes into a row so that each column is the kth sample for each matrix; take the transpose so that each column corresponds to a matrix
     rulesets_variation_ids = reshape(rulesets_variation_ids, (sobol_variation.n_matrices, sobol_variation.n))'
@@ -649,23 +645,23 @@ function createSortedRBDMatrix(variation_ids::Vector{Int}, S::AbstractMatrix{Flo
     return variations_matrix
 end
 
-function addRBD(rbd_variation::RBDVariation, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, pv::ParsedVariations; reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=ic_cell_id==-1 ? -1 : 0, rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true)
+function addParsedVariations(rbd_variation::RBDVariation, config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, pv::ParsedVariations, reference_variation_ids::VariationIDs)
     d = length(pv.config_variations) + length(pv.rulesets_variations) + length(pv.ic_cell_variations)
     cdfs, S = generateRBDCDFs(rbd_variation, d)
     if isempty(pv.config_variations)
-        config_variation_ids = fill(reference_config_variation_id, size(cdfs,1))
+        config_variation_ids = fill(reference_variation_ids.config, size(cdfs,1))
     else
-        config_variation_ids = cdfsToVariations(cdfs[:,1:length(pv.config_variations)], pv.config_variations, prepareConfigVariationFunctions(config_id, pv.config_variations; reference_config_variation_id=reference_config_variation_id)...)
+        config_variation_ids = cdfsToVariations(cdfs[:,1:length(pv.config_variations)], pv.config_variations, prepareConfigVariationFunctions(config_id, pv.config_variations; reference_config_variation_id=reference_variation_ids.config)...)
     end
     if isempty(pv.rulesets_variations)
-        rulesets_variation_ids = fill(reference_rulesets_variation_id, size(cdfs,1))
+        rulesets_variation_ids = fill(reference_variation_ids.rulesets, size(cdfs,1))
     else
-        rulesets_variation_ids = cdfsToVariations(cdfs[:,length(pv.config_variations)+1:end], pv.rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_rulesets_variation_id)...)
+        rulesets_variation_ids = cdfsToVariations(cdfs[:,length(pv.config_variations)+1:end], pv.rulesets_variations, prepareRulesetsVariationFunctions(rulesets_collection_id; reference_rulesets_variation_id=reference_variation_ids.rulesets)...)
     end
     if isempty(pv.ic_cell_variations)
-        ic_cell_variation_ids = fill(reference_ic_cell_variation_id, size(cdfs,1))
+        ic_cell_variation_ids = fill(reference_variation_ids.ic_cell, size(cdfs,1))
     else
-        ic_cell_variation_ids = cdfsToVariations(cdfs[:,length(pv.config_variations)+length(pv.rulesets_variations)+1:end], pv.ic_cell_variations, prepareICCellVariationFunctions(ic_cell_id; reference_ic_cell_variation_id=reference_ic_cell_variation_id)...)
+        ic_cell_variation_ids = cdfsToVariations(cdfs[:,length(pv.config_variations)+length(pv.rulesets_variations)+1:end], pv.ic_cell_variations, prepareICCellVariationFunctions(ic_cell_id; reference_ic_cell_variation_id=reference_variation_ids.ic_cell)...)
     end
     config_variations_matrix = createSortedRBDMatrix(config_variation_ids, S)
     rulesets_variations_matrix = createSortedRBDMatrix(rulesets_variation_ids, S)
