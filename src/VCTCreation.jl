@@ -169,7 +169,7 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         xml_path = [\"overall\"; \"max_time\"]
         value = 60.0
         dv_max_time = DiscreteVariation(xml_path, value)
-        config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, [dv_max_time])
+        config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, [dv_max_time]; rulesets_collection_folder=rulesets_collection_folder, ic_cell_folder=ic_cell_folder)
         reference_config_variation_id = config_variation_ids[1]
         reference_rulesets_variation_id = rulesets_variation_ids[1]
         reference_ic_cell_variation_id = ic_cell_variation_ids[1]

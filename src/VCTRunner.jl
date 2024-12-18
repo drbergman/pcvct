@@ -20,7 +20,7 @@ function prepareSimulationCommand(simulation::Simulation, monad_id::Union{Missin
     end
 
     executable_str = joinpath(data_dir, "inputs", "custom_codes", simulation.folder_names.custom_code_folder, baseToExecutable("project")) # path to executable
-    config_str = joinpath(data_dir, "inputs", "configs", simulation.folder_names.config_folder, "config_variations", "config_variation_$(simulation.variation_ids.config_variation_id).xml")
+    config_str = joinpath(data_dir, "inputs", "configs", simulation.folder_names.config_folder, "config_variations", "config_variation_$(simulation.variation_ids.config).xml")
     flags = ["-o", path_to_simulation_output]
     if simulation.folder_ids.ic_cell_id != -1
         try
@@ -37,8 +37,8 @@ function prepareSimulationCommand(simulation::Simulation, monad_id::Union{Missin
     if simulation.folder_ids.ic_ecm_id != -1
         append!(flags, ["-e", joinpath(data_dir, "inputs", "ics", "ecms", simulation.folder_names.ic_ecm_folder, "ecm.csv")]) # if ic file included (id != -1), then include this in the command
     end
-    if simulation.variation_ids.rulesets_variation_id != -1
-        path_to_rules_file = joinpath(data_dir, "inputs", "rulesets_collections", simulation.folder_names.rulesets_collection_folder, "rulesets_collections_variations", "rulesets_variation_$(simulation.variation_ids.rulesets_variation_id).xml")
+    if simulation.variation_ids.rulesets != -1
+        path_to_rules_file = joinpath(data_dir, "inputs", "rulesets_collections", simulation.folder_names.rulesets_collection_folder, "rulesets_collections_variations", "rulesets_variation_$(simulation.variation_ids.rulesets).xml")
         append!(flags, ["-r", path_to_rules_file])
     end
     return `$executable_str $config_str $flags`

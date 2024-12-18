@@ -65,7 +65,10 @@ config_folder = "0_template"
 rulesets_collection_folder = "0_template"
 custom_code_folder = "0_template"
 ic_cell_folder = ""
-config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, discrete_variations)
+config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids =
+    addVariations(GridVariation(), discrete_variations, config_folder;
+    rulesets_collection_folder=rulesets_collection_folder,
+    ic_cell_folder=ic_cell_folder)
 sampling = Sampling(config_folder, custom_code_folder;
     monad_min_length=monad_min_length,
     rulesets_collection_folder=rulesets_collection_folder,
@@ -141,7 +144,12 @@ addMotilityVariationDimension!(discrete_variations, cell_type, "speed", [0.1, 1.
 xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","signal:name:pressure","half_max"]
 push!(discrete_variations, DiscreteVariation(xml_path, [0.3, 0.6]))
 
-config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, discrete_variations; reference_config_variation_id=reference_config_variation_id)
+config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids =
+    addVariations(GridVariation(), discrete_variations, config_folder;
+    rulesets_collection_folder=rulesets_collection_folder,
+    ic_cell_folder=ic_cell_folder,
+    reference_config_variation_id=reference_config_variation_id)
+
 sampling = Sampling(config_folder, custom_code_folder;
     monad_min_length=monad_min_length,
     rulesets_collection_folder=rulesets_collection_folder,
@@ -160,7 +168,11 @@ discrete_variations = DiscreteVariation[]
 
 addAttackRateVariationDimension!(discrete_variations, cell_type, cell_type, [0.1])
 
-config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, discrete_variations; reference_config_variation_id=reference_config_variation_id)
+config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids =
+    addVariations(GridVariation(), discrete_variations, config_folder;
+                  rulesets_collection_folder=rulesets_collection_folder,
+                  ic_cell_folder=ic_cell_folder,
+                  reference_config_variation_id=reference_config_variation_id)
 sampling = Sampling(config_folder, custom_code_folder;
     monad_min_length=monad_min_length,
     rulesets_collection_folder=rulesets_collection_folder,

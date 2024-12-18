@@ -21,7 +21,10 @@ push!(discrete_variations, DiscreteVariation(["overall","max_time"], [12.0]))
 push!(discrete_variations, DiscreteVariation(["save","full_data","interval"], [6.0]))
 push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], [6.0]))
 
-config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, discrete_variations)
+config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids =
+    addVariations(GridVariation(), discrete_variations, config_folder;
+                  rulesets_collection_folder=rulesets_collection_folder,
+                  ic_cell_folder=ic_cell_folder)
 
 sampling = Sampling(config_folder, custom_code_folder;
     monad_min_length=1,

@@ -19,7 +19,10 @@ xml_path = ["cell_patches:name:default", "patch_collection:type:disc", "patch:ID
 vals = [0.0, -100.0]
 push!(discrete_variations, DiscreteVariation(xml_path, vals))
 
-config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, discrete_variations)
+config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids =
+    addVariations(GridVariation(), discrete_variations, config_folder;
+                  rulesets_collection_folder=rulesets_collection_folder,
+                  ic_cell_folder=ic_cell_folder)
 
 hashBorderPrint("SUCCESSFULLY ADDED IC CELL VARIATION!")
 
@@ -44,8 +47,12 @@ xml_path = ["cell_patches:name:default", "patch_collection:type:annulus", "patch
 push!(discrete_variations, DiscreteVariation(xml_path, 300.0))
 
 config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = 
-    addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, discrete_variations;
-    reference_config_variation_id=config_variation_ids[1], reference_rulesets_variation_id=rulesets_variation_ids[1], reference_ic_cell_variation_id=ic_cell_variation_ids[1])
+    addVariations(GridVariation(), discrete_variations, config_folder;
+                  rulesets_collection_folder=rulesets_collection_folder,
+                  ic_cell_folder=ic_cell_folder,
+                  reference_config_variation_id=config_variation_ids[1],
+                  reference_rulesets_variation_id=rulesets_variation_ids[1],
+                  reference_ic_cell_variation_id=ic_cell_variation_ids[1])
 
 sampling = Sampling(config_folder, custom_code_folder;
     monad_min_length=monad_min_length,

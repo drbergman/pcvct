@@ -13,7 +13,11 @@ push!(discrete_variations, DiscreteVariation(["overall","max_time"], [12.0]))
 push!(discrete_variations, DiscreteVariation(["save","full_data","interval"], [6.0]))
 push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], [6.0]))
 
-config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, discrete_variations)
+config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids =
+    addVariations(GridVariation(), discrete_variations, config_folder;
+                  rulesets_collection_folder=rulesets_collection_folder,
+                  ic_cell_folder=ic_cell_folder)
+
 hashBorderPrint("DATABASE SUCCESSFULLY UPDATED!")
 
 custom_code_folder = "0_template"
@@ -72,7 +76,14 @@ push!(discrete_variations, DiscreteVariation(xml_path, [5.0, 6.0]))
 xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:3"]
 push!(discrete_variations, DiscreteVariation(xml_path, [7.0, 8.0]))
 
-config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, discrete_variations; reference_config_variation_id=config_variation_id, reference_rulesets_variation_id=rulesets_variation_id, reference_ic_cell_variation_id=ic_cell_variation_id)
+config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids =
+    addVariations(GridVariation(), discrete_variations, config_folder;
+                  rulesets_collection_folder=rulesets_collection_folder,
+                  ic_cell_folder=ic_cell_folder,
+                  reference_config_variation_id=config_variation_id,
+                  reference_rulesets_variation_id=rulesets_variation_id,
+                  reference_ic_cell_variation_id=ic_cell_variation_id)
+                  
 sampling = Sampling(config_folder, custom_code_folder;
     monad_min_length=monad_min_length,
     rulesets_collection_folder=rulesets_collection_folder,
@@ -91,7 +102,7 @@ hashBorderPrint("SAMPLING SUCCESSFULLY RUN!")
 n_simulations = length(sampling) # number of simulations recorded (in .csvs) for this sampling
 n_expected_sims = monad_min_length
 for discrete_variation in discrete_variations
-    global n_expected_sims *= length(discrete_variation.values)
+    global n_expected_sims *= length(discrete_variation)
 end
 n_variations = length(sampling.variation_ids)
 

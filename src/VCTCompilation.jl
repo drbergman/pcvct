@@ -176,7 +176,8 @@ function addPhysiECMIfNeeded(S::AbstractSampling)
 end
 
 function isPhysiECMInConfig(M::AbstractMonad)
-    path_to_xml = joinpath(data_dir, "inputs", "configs", M.folder_names.config_folder, "config_variations", "config_variation_$(M.variation_ids.config_variation_id).xml")
+    path_to_xml = joinpath(data_dir, "inputs", "configs", M.folder_names.config_folder,
+                           "config_variations", "config_variation_$(M.variation_ids.config).xml")
     xml_doc = openXML(path_to_xml)
     xml_path = ["microenvironment_setup", "ecm_setup"]
     ecm_setup_element = retrieveElement(xml_doc, xml_path; required=false)
@@ -198,7 +199,8 @@ function isPhysiECMInConfig(sampling::Sampling)
 end
 
 function readMacrosFile(S::AbstractSampling)
-    path_to_macros = joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder, "macros.txt")
+    path_to_macros = joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder,
+                              "macros.txt")
     if !isfile(path_to_macros)
         return []
     end
