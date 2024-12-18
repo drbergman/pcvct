@@ -84,10 +84,12 @@ end
 ##########################################
 
 struct VariationIDs
-    config_variation_id::Int # integer identifying which variation on the base config file to use (config_variations.db)
-    rulesets_variation_id::Int # integer identifying which variation on the ruleset file to use (rulesets_variations.db)
-    ic_cell_variation_id::Int # integer identifying which variation on the ic cell file to use (ic_cell_variations.db) (only used if cells.xml, not used for cells.csv)
+    config::Int # integer identifying which variation on the base config file to use (config_variations.db)
+    rulesets::Int # integer identifying which variation on the ruleset file to use (rulesets_variations.db)
+    ic_cell::Int # integer identifying which variation on the ic cell file to use (ic_cell_variations.db) (only used if cells.xml, not used for cells.csv)
 end
+
+variationIDNames() = (fieldnames(VariationIDs) .|> string) .* "_variation_id"
 
 ##########################################
 #############   Simulation   #############
@@ -103,17 +105,17 @@ struct Simulation <: AbstractMonad
 
     function Simulation(id::Int, folder_ids::AbstractSamplingIDs, folder_names::AbstractSamplingFolders, variation_ids::VariationIDs)
         @assert id > 0 "id must be positive"
-        @assert variation_ids.config_variation_id >= 0 "config_variation_id must be non-negative"
-        @assert variation_ids.rulesets_variation_id >= -1 "rulesets_variation_id must be non-negative or -1 (indicating no rules)"
-        @assert variation_ids.ic_cell_variation_id >= -1 "ic_cell_variation_id must be non-negative or -1 (indicating no ic cells)"
-        if variation_ids.rulesets_variation_id != -1
-            @assert folder_names.rulesets_collection_folder != "" "rulesets_collection_folder must be provided if rulesets_variation_id is not -1 (indicating that the rules are in use)"
+        @assert variation_ids.config >= 0 "config variation id must be non-negative"
+        @assert variation_ids.rulesets >= -1 "rulesets variation id must be non-negative or -1 (indicating no rules)"
+        @assert variation_ids.ic_cell >= -1 "ic_cell variation id must be non-negative or -1 (indicating no ic cells)"
+        if variation_ids.rulesets != -1
+            @assert folder_names.rulesets_collection_folder != "" "rulesets_collection_folder must be provided if rulesets variation id is not -1 (indicating that the rules are in use)"
         end
-        if variation_ids.ic_cell_variation_id == -1
-            @assert folder_names.ic_cell_folder == "" "ic_cell_variation_id must be >=0 if ic_cell_variation_id is not -1 (indicating that the initial cells are in use)"
+        if variation_ids.ic_cell == -1
+            @assert folder_names.ic_cell_folder == "" "ic_cell variation id must be >=0 if ic_cell variation id is not -1 (indicating that the initial cells are in use)"
         else
-            @assert folder_names.ic_cell_folder != "" "ic_cell_folder must be provided if ic_cell_variation_id is not -1 (indicating that the cells are in use)"
-            @assert variation_ids.ic_cell_variation_id == 0 || isfile(joinpath(data_dir, "inputs", "ics", "cells", folder_names.ic_cell_folder, "cells.xml")) "cells.xml must be provided if ic_cell_variation_id is >1 (indicating that the cell ic parameters are being varied)"
+            @assert folder_names.ic_cell_folder != "" "ic_cell_folder must be provided if ic_cell variation id is not -1 (indicating that the cells are in use)"
+            @assert variation_ids.ic_cell == 0 || isfile(joinpath(data_dir, "inputs", "ics", "cells", folder_names.ic_cell_folder, "cells.xml")) "cells.xml must be provided if ic_cell variation id is >1 (indicating that the cell ic parameters are being varied)"
         end
         return new(id, folder_ids, folder_names, variation_ids)
     end
@@ -125,7 +127,7 @@ function Simulation(folder_ids::AbstractSamplingIDs, folder_names::AbstractSampl
     INSERT INTO simulations (physicell_version_id,\
     config_id,rulesets_collection_id,\
     ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id,\
-    $(join(fieldnames(pcvct.VariationIDs), ",")),\
+    $(join(variationIDNames(), ",")),\
     status_code_id) \
     VALUES(\
         $(physicellVersionDBEntry()),\
@@ -198,7 +200,7 @@ function Monad(min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::A
     """
     INSERT OR IGNORE INTO monads (physicell_version_id,config_id,rulesets_collection_id,\
     ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id,\
-    $(join(fieldnames(pcvct.VariationIDs), ","))\
+    $(join(variationIDNames(), ","))\
     ) \
     VALUES(\
         $(physicellVersionDBEntry()),\
@@ -216,7 +218,7 @@ function Monad(min_length::Int, folder_ids::AbstractSamplingIDs, folder_names::A
             """
             WHERE (physicell_version_id,config_id,rulesets_collection_id,ic_cell_id,ic_substrate_id,\
             ic_ecm_id,custom_code_id,\
-            $(join(fieldnames(pcvct.VariationIDs), ",")))=\
+            $(join(variationIDNames(), ",")))=\
             (\
                 $(physicellVersionDBEntry()),\
                 $(folder_ids.config_id),$(folder_ids.rulesets_collection_id),\
