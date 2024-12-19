@@ -207,9 +207,10 @@ function _runSensitivitySampling(method::Sobolʼ, monad_min_length::Int, folder_
     config_id = retrieveID("configs", folder_names.config_folder)
     rulesets_collection_id = retrieveID("rulesets_collections", folder_names.rulesets_collection_folder)
     ic_cell_id = retrieveID("ic_cells", folder_names.ic_cell_folder)
+    folder_ids = VariationIDs(config_id, rulesets_collection_id, ic_cell_id)
     reference_variation_ids = VariationIDs(reference_config_variation_id, reference_rulesets_variation_id, reference_ic_cell_variation_id)
     config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids, cdfs, parsed_variations =
-        addVariations(method.sobol_variation, config_id, rulesets_collection_id, ic_cell_id, evs, reference_variation_ids)
+        addVariations(method.sobol_variation, folder_ids, evs, reference_variation_ids)
     d_config = length(parsed_variations.config_variations)
     d_rulesets = length(parsed_variations.rulesets_variations)
     d_ic_cell = length(parsed_variations.ic_cell_variations)
