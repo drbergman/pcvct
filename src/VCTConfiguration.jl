@@ -10,7 +10,7 @@ end
 
 closeXML(xml_doc::XMLDocument) = free(xml_doc)
 
-function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{String}; required::Bool=true)
+function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString}; required::Bool=true)
     current_element = root(xml_doc)
     for path_element in xml_path
         if !occursin(":",path_element)
@@ -26,7 +26,7 @@ function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{String}; require
         candidate_elements = get_elements_by_tagname(current_element, path_element_name)
         found = false
         for ce in candidate_elements
-            if attribute(ce,attribute_name)==attribute_value
+            if attribute(ce, attribute_name) == attribute_value
                 found = true
                 current_element = ce
                 break
@@ -39,24 +39,17 @@ function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{String}; require
     return current_element
 end
 
-function retrieveElementError(xml_path::Vector{String}, path_element::String)
+function retrieveElementError(xml_path::Vector{<:AbstractString}, path_element::String)
     error_msg = "Element not found: $(join(xml_path, " -> "))"
     error_msg *= "\n\tFailed at: $(path_element)"
     throw(ArgumentError(error_msg))
 end
 
-function getField(xml_doc::XMLDocument, xml_path::Vector{String}; required::Bool=true)
+function getField(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString}; required::Bool=true)
     return retrieveElement(xml_doc, xml_path; required=required) |> content
 end
 
-function getOutputFolder(path_to_xml)
-    xml_doc = openXML(path_to_xml)
-    rel_path_to_output = getField(xml_doc, ["save", "folder"])
-    closeXML(xml_doc)
-    return rel_path_to_output
-end
-
-function updateField(xml_doc::XMLDocument, xml_path::Vector{String}, new_value::Union{Int,Real,String})
+function updateField(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString}, new_value::Union{Int,Real,String})
     current_element = retrieveElement(xml_doc, xml_path; required=true)
     set_content(current_element, string(new_value))
     return nothing
@@ -66,38 +59,23 @@ function updateField(xml_doc::XMLDocument, xml_path_and_value::Vector{Any})
     return updateField(xml_doc, xml_path_and_value[1:end-1],xml_path_and_value[end])
 end
 
-function multiplyField(xml_doc::XMLDocument, xml_path::Vector{String}, multiplier::AbstractFloat)
-    current_element = retrieveElement(xml_doc, xml_path; required=true)
-    val = content(current_element)
-    if attribute(current_element, "type"; required=false) == "int"
-        val = parse(Int, val) |> y -> round(Int, multiplier * y)
-    else
-        val = parse(AbstractFloat, val) |> y -> multiplier * y
-    end
-
-    val |> string |> x -> set_content(current_element, x)
-    return nothing
-end
-
-function xmlPathToColumnName(xml_path::Vector{String})
+function xmlPathToColumnName(xml_path::Vector{<:AbstractString})
     return join(xml_path, "/")
 end
 
-function columnNameToXMLPath(column_name::String)
-    return split(column_name, "/") .|> string
-end
+columnNameToXMLPath(column_name::String) = split(column_name, "/")
 
 function updateFieldsFromCSV(xml_doc::XMLDocument, path_to_csv::String)
     df = CSV.read(path_to_csv, DataFrame; header=false, silencewarnings=true, types=String)
     for i = axes(df,1)
-        df[i, :] |> Vector |> x -> filter!(!ismissing, x) .|> string |> x -> updateField(xml_doc, x)
+        df[i, :] |> Vector |> x -> filter!(!ismissing, x) |> x -> updateField(xml_doc, x)
     end
 end
 
 ################## Configuration Functions ##################
 
 function loadConfiguration(M::AbstractMonad)
-    path_to_xml = joinpath(data_dir, "inputs", "configs", M.folder_names.config_folder, "config_variations", "config_variation_$(M.variation_ids.config_variation_id).xml")
+    path_to_xml = joinpath(data_dir, "inputs", "configs", M.folder_names.config_folder, "config_variations", "config_variation_$(M.variation_ids.config).xml")
     if isfile(path_to_xml)
         return
     end
@@ -106,13 +84,13 @@ function loadConfiguration(M::AbstractMonad)
     cp(path_to_xml_src, path_to_xml, force=true)
 
     xml_doc = openXML(path_to_xml)
-    query = constructSelectQuery("config_variations", "WHERE config_variation_id=$(M.variation_ids.config_variation_id);")
+    query = constructSelectQuery("config_variations", "WHERE config_variation_id=$(M.variation_ids.config);")
     variation_row = queryToDataFrame(query; db=configDB(M.folder_names.config_folder), is_row=true)
     for column_name in names(variation_row)
         if column_name == "config_variation_id"
             continue
         end
-        xml_path = split(column_name,"/") .|> string
+        xml_path = columnNameToXMLPath(column_name)
         updateField(xml_doc, xml_path, variation_row[1, column_name])
     end
     save_file(xml_doc, path_to_xml)
@@ -128,11 +106,11 @@ function loadConfiguration(sampling::Sampling)
 end
 
 function loadRulesets(M::AbstractMonad)
-    if M.variation_ids.rulesets_variation_id == -1 # no rules being used
+    if M.variation_ids.rulesets == -1 # no rules being used
         return
     end
     path_to_rulesets_collections_folder = joinpath(data_dir, "inputs", "rulesets_collections", M.folder_names.rulesets_collection_folder)
-    path_to_rulesets_xml = joinpath(path_to_rulesets_collections_folder, "rulesets_collections_variations", "rulesets_variation_$(M.variation_ids.rulesets_variation_id).xml")
+    path_to_rulesets_xml = joinpath(path_to_rulesets_collections_folder, "rulesets_collections_variations", "rulesets_variation_$(M.variation_ids.rulesets).xml")
     if isfile(path_to_rulesets_xml) # already have the rulesets variation created
         return
     end
@@ -146,14 +124,14 @@ function loadRulesets(M::AbstractMonad)
     end
         
     xml_doc = parse_file(path_to_base_xml)
-    if M.variation_ids.rulesets_variation_id != 0 # only update if not using the base variation for the ruleset
-        query = constructSelectQuery("rulesets_variations", "WHERE rulesets_variation_id=$(M.variation_ids.rulesets_variation_id);")
+    if M.variation_ids.rulesets != 0 # only update if not using the base variation for the ruleset
+        query = constructSelectQuery("rulesets_variations", "WHERE rulesets_variation_id=$(M.variation_ids.rulesets);")
         variation_row = queryToDataFrame(query; db=rulesetsCollectionDB(M), is_row=true)
         for column_name in names(variation_row)
             if column_name == "rulesets_variation_id"
                 continue
             end
-            xml_path = split(column_name, "/") .|> string
+            xml_path = columnNameToXMLPath(column_name)
             updateField(xml_doc, xml_path, variation_row[1, column_name])
         end
     end
@@ -170,7 +148,7 @@ function loadICCells(M::AbstractMonad)
     if isfile(joinpath(path_to_ic_cells_folder, "cells.csv")) # ic already given by cells.csv
         return
     end
-    path_to_ic_cells_xml = joinpath(path_to_ic_cells_folder, "ic_cell_variations", "ic_cell_variation_$(M.variation_ids.ic_cell_variation_id).xml")
+    path_to_ic_cells_xml = joinpath(path_to_ic_cells_folder, "ic_cell_variations", "ic_cell_variation_$(M.variation_ids.ic_cell).xml")
     if isfile(path_to_ic_cells_xml) # already have the ic cell variation created
         return
     end
@@ -178,14 +156,14 @@ function loadICCells(M::AbstractMonad)
 
     path_to_base_xml = joinpath(path_to_ic_cells_folder, "cells.xml")
     xml_doc = parse_file(path_to_base_xml)
-    if M.variation_ids.ic_cell_variation_id != 0 # only update if not using the base variation for the ic cells
-        query = constructSelectQuery("ic_cell_variations", "WHERE ic_cell_variation_id=$(M.variation_ids.ic_cell_variation_id);")
+    if M.variation_ids.ic_cell != 0 # only update if not using the base variation for the ic cells
+        query = constructSelectQuery("ic_cell_variations", "WHERE ic_cell_variation_id=$(M.variation_ids.ic_cell);")
         variation_row = queryToDataFrame(query; db=icCellDB(M.folder_names.ic_cell_folder), is_row=true)
         for column_name in names(variation_row)
             if column_name == "ic_cell_variation_id"
                 continue
             end
-            xml_path = split(column_name, "/") .|> string
+            xml_path = columnNameToXMLPath(column_name)
             updateField(xml_doc, xml_path, variation_row[1, column_name])
         end
     end
@@ -201,8 +179,8 @@ function pathToICCell(simulation::Simulation)
         return joinpath(path_to_ic_cell_folder, "cells.csv")
     end
     path_to_ic_cell_variations = joinpath(path_to_ic_cell_folder, "ic_cell_variations")
-    path_to_ic_cell_xml = joinpath(path_to_ic_cell_variations, "ic_cell_variation_$(simulation.variation_ids.ic_cell_variation_id).xml")
-    path_to_ic_cell_file = joinpath(path_to_ic_cell_variations, "ic_cell_variation_$(simulation.variation_ids.ic_cell_variation_id)_s$(simulation.id).csv")
+    path_to_ic_cell_xml = joinpath(path_to_ic_cell_variations, "ic_cell_variation_$(simulation.variation_ids.ic_cell).xml")
+    path_to_ic_cell_file = joinpath(path_to_ic_cell_variations, "ic_cell_variation_$(simulation.variation_ids.ic_cell)_s$(simulation.id).csv")
     generateICCell(path_to_ic_cell_xml, path_to_ic_cell_file)
     return path_to_ic_cell_file
 end
@@ -238,7 +216,7 @@ function customDataPath(cell_definition::String, field_name::String)::Vector{Str
     return [customDataPath(cell_definition); field_name]
 end
 
-function customDataPath(cell_definition::String, field_names::Vector{String})
+function customDataPath(cell_definition::String, field_names::Vector{<:AbstractString})
     return [customDataPath(cell_definition, field_name) for field_name in field_names]
 end
 
@@ -246,7 +224,7 @@ function userParameterPath(field_name::String)::Vector{String}
     return ["user_parameters"; field_name]
 end
 
-function userParameterPath(field_names::Vector{String})
+function userParameterPath(field_names::Vector{<:AbstractString})
     return [userParameterPath(field_name) for field_name in field_names]
 end
 
@@ -256,15 +234,15 @@ end
 
 ################## Variation Dimension Functions ##################
 
-function addDomainVariationDimension!(AV::Vector{<:AbstractVariation}, domain::NTuple{N,Real} where N) 
+function addDomainVariationDimension!(evs::Vector{<:ElementaryVariation}, domain::NTuple{N,Real} where N) 
     bounds_tags = ["x_min", "x_max", "y_min", "y_max", "z_min", "z_max"]
     for (tag, value) in zip(bounds_tags, domain)
         xml_path = ["domain", tag]
-        push!(AV, ElementaryVariation(xml_path, [value]))
+        push!(evs, DiscreteVariation(xml_path, [value]))
     end
 end
 
-function addDomainVariationDimension!(AV::Vector{<:AbstractVariation}, domain::NamedTuple)
+function addDomainVariationDimension!(evs::Vector{<:ElementaryVariation}, domain::NamedTuple)
     for (tag, value) in pairs(domain)
         tag = String(tag)
         if startswith(tag, "min")
@@ -275,29 +253,23 @@ function addDomainVariationDimension!(AV::Vector{<:AbstractVariation}, domain::N
             tag = "$(last_character)_max"
         end
         xml_path = ["domain", tag]
-        push!(AV, ElementaryVariation(xml_path, [value...])) # do this to make sure that singletons and vectors are converted to vectors
+        push!(evs, DiscreteVariation(xml_path, [value...])) # do this to make sure that singletons and vectors are converted to vectors
     end
 end
 
-function addMotilityVariationDimension!(AV::Vector{<:AbstractVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
+function addMotilityVariationDimension!(evs::Vector{<:ElementaryVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
     xml_path = motilityPath(cell_definition, field_name)
-    push!(AV, ElementaryVariation(xml_path, values))
+    push!(evs, DiscreteVariation(xml_path, values))
 end
 
-function addAttackRateVariationDimension!(AV::Vector{<:AbstractVariation}, cell_definition::String, target_name::String, values::Vector{T} where T)
+function addAttackRateVariationDimension!(evs::Vector{<:ElementaryVariation}, cell_definition::String, target_name::String, values::Vector{T} where T)
     xml_path = attackRatesPath(cell_definition, target_name)
-    push!(AV, ElementaryVariation(xml_path, values))
+    push!(evs, DiscreteVariation(xml_path, values))
 end
 
-function addCustomDataVariationDimension!(AV::Vector{<:AbstractVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
+function addCustomDataVariationDimension!(evs::Vector{<:ElementaryVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
     xml_path = customDataPath(cell_definition, field_name)
-    push!(AV, ElementaryVariation(xml_path, values))
-end
-
-function addCustomDataVariationDimension!(AV::Vector{<:AbstractVariation}, cell_definition::String, field_names::Vector{String}, values::Vector{Vector})
-    for (field_name, value) in zip(field_names,values)
-        addCustomDataVariationDimension!(EV, cell_definition, field_name, value)
-    end
+    push!(evs, DiscreteVariation(xml_path, values))
 end
 
 ################## Simplify Name Functions ##################
@@ -339,7 +311,7 @@ function simpleICCellVariationNames(name::String)
 end
 
 function getCellParameterName(column_name::String)
-    xml_path = split(column_name, "/") .|> string
+    xml_path = columnNameToXMLPath(column_name)
     cell_type = split(xml_path[2], ":")[3]
     target_name = ""
     for component in xml_path[3:end]
@@ -356,7 +328,7 @@ function getCellParameterName(column_name::String)
 end
 
 function getRuleParameterName(name::String)
-    xml_path = split(name, "/") .|> string
+    xml_path = columnNameToXMLPath(name)
     cell_type = split(xml_path[1], ":")[3]
     behavior = split(xml_path[2], ":")[3]
     is_decreasing = xml_path[3] == "decreasing_signals"
@@ -371,7 +343,7 @@ function getRuleParameterName(name::String)
 end
 
 function getICCellParameterName(name::String)
-    xml_path = split(name, "/") .|> string
+    xml_path = columnNameToXMLPath(name)
     cell_type = split(xml_path[1], ":")[3]
     patch_type = split(xml_path[2], ":")[3]
     id = split(xml_path[3], ":")[3]

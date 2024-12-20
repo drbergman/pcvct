@@ -1,6 +1,32 @@
 using Downloads, JSON3
 
-function createProject(; project_dir::String=".", clone_physicell::Bool=true, template_as_default::Bool=true, terse::Bool=false)
+export createProject
+
+"""
+    createProject(project_dir::String="."; clone_physicell::Bool=true, template_as_default::Bool=true, terse::Bool=false)
+
+Create a new pcvct project structure.
+
+Creates a new project directory at `project_dir` with the following structure:
+```
+project_dir
+├── data
+├── PhysiCell # The latest release from https://github.com/drbergman/PhysiCell
+└── VCT
+```
+`data` is populated with the standard structure. `PhysiCell` is a copy of PhysiCell. `VCT` contains a generated `GenerateData.jl` file.
+
+# Arguments
+- `project_dir::String="."`: The directory in which to create the project. Relative paths are resolved from the current working directory where Julia was launched.
+- `clone_physicell::Bool=true`: Whether to clone the PhysiCell repository. If `false`, the latest release will be downloaded. Recommended to set to `true` so pcvct will be able to track changes to the PhysiCell repository.
+- `template_as_default::Bool=true`: Whether to set up the project with the template files as the default. If `false`, the project will be set up with an empty structure.
+- `terse::Bool=false`: Whether to generate a terse `GenerateData.jl` file. If `true`, the file will be generated without comments and explanations.
+
+# Note
+The names of the `data` and `PhysiCell` directories are fixed and cannot be changed. Their relative locations should not be changed without updating the `GenerateData.jl` file.
+The name of the `VCT` file and the `GenerateData.jl` are just by convention and can be changed.
+"""
+function createProject(project_dir::String="."; clone_physicell::Bool=true, template_as_default::Bool=true, terse::Bool=false)
     mkpath(project_dir)
     physicell_dir = setUpPhysiCell(project_dir, clone_physicell)
     data_dir = joinpath(project_dir, "data")
@@ -142,8 +168,8 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         """))\
         xml_path = [\"overall\"; \"max_time\"]
         value = 60.0
-        ev_max_time = ElementaryVariation(xml_path, value)
-        config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, [ev_max_time])
+        dv_max_time = DiscreteVariation(xml_path, value)
+        config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, [dv_max_time])
         reference_config_variation_id = config_variation_ids[1]
         reference_rulesets_variation_id = rulesets_variation_ids[1]
         reference_ic_cell_variation_id = ic_cell_variation_ids[1]
@@ -186,19 +212,19 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         """))\
         xml_path = [pcvct.cyclePath(\"default\"); \"phase_durations\"; \"duration:index:0\"]
         values = [200.0, 300.0, 400.0] # choose 3 discrete values to vary the duration of phase 0
-        ev_phase_0_duration = ElementaryVariation(xml_path, values)
+        dv_phase_0_duration = DiscreteVariation(xml_path, values)
 
         $(tersify("""
         # now do the same, but for the apoptosis rate
         """))\
         xml_path = [pcvct.apoptosisPath(\"default\"); \"death_rate\"]
         values = [4.31667e-05, 5.31667e-05, 6.31667e-05] # choose 3 discrete values to vary the apoptosis rate
-        ev_apoptosis_rate = ElementaryVariation(xml_path, values)
+        dv_apoptosis_rate = DiscreteVariation(xml_path, values)
 
         $(tersify("""
         # now combine them into a list:
         """))\
-        elementary_variations = [ev_phase_0_duration, ev_apoptosis_rate]
+        discrete_variations = [dv_phase_0_duration, dv_apoptosis_rate]
 
         ############ run the sampling ############
 
@@ -211,8 +237,10 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         """))\
         config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = 
         \taddVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder,
-        \telementary_variations;
-        \treference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id
+        \tdiscrete_variations;
+        \treference_config_variation_id=reference_config_variation_id,
+        \treference_rulesets_variation_id=reference_rulesets_variation_id,
+        \treference_ic_cell_variation_id=reference_ic_cell_variation_id
         )
 
         $(tersify("""
@@ -241,7 +269,7 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         # running from a script, just add the -t flag:
         # julia -t 4 joinpath("data", "GenerateData.jl")
         """))\
-        runAbstractTrial(sampling; force_recompile=force_recompile)
+        run(sampling; force_recompile=force_recompile)
     """
 
     # Remove leading whitespace

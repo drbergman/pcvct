@@ -47,7 +47,7 @@ end
 
 function SimulationPopulationTimeSeries(simulation_id::Integer; include_dead::Bool=false)
     print("Computing SimulationPopulationTimeSeries for Simulation $simulation_id...")
-    simulation_folder = joinpath(data_dir, "outputs", "simulations", string(simulation_id))
+    simulation_folder = outputFolder("simulation", simulation_id)
     path_to_summary = joinpath(simulation_folder, "summary")
     path_to_file = joinpath(path_to_summary, "population_time_series$(include_dead ? "_include_dead" : "").csv")
     if isfile(path_to_file)
@@ -74,7 +74,7 @@ function finalPopulationCount(folder::String; include_dead::Bool=false)
 end
 
 function finalPopulationCount(simulation_id::Int; include_dead::Bool=false)
-    return joinpath(data_dir, "outputs", "simulations", string(simulation_id), "output") |> x -> finalPopulationCount(x; include_dead=include_dead)
+    return joinpath(outputFolder("simulation", simulation_id), "output") |> x -> finalPopulationCount(x; include_dead=include_dead)
 end
 
 struct MonadPopulationTimeSeries <: AbstractPopulationTimeSeries
@@ -133,7 +133,7 @@ getMeanCounts(m::MonadPopulationTimeSeries) = m.cell_count_means
     exclude_cell_types = exclude_cell_types isa String ? [exclude_cell_types] : exclude_cell_types
     for (name, counts) in pairs(getMeanCounts(pts))
         skip = include_cell_types != :all && !(name in include_cell_types) # skip this cell type as only a subset was requested and this was not in it
-        skip |= name in exclude_cell_types # skip this cell type as it was requested to be excluded
+        skip = skip || name in exclude_cell_types # skip this cell type as it was requested to be excluded
         if skip
             continue 
         end
@@ -183,8 +183,10 @@ end
 end
 
 """
-`plotbycelltype(T::AbstractTrial, cell_types::Union{String, Vector{String}}=:all)`
+    plotbycelltype(T::AbstractTrial, cell_types::Union{String, Vector{String}}=:all)
+
 Plot the population time series of a trial by cell type.
+
 Each cell type gets its own subplot.
 Each monad gets its own series within each subplot.
 """

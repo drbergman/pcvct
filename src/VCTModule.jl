@@ -1,5 +1,5 @@
 # each file (includes below) has their own export statements
-export initializeVCT, resetDatabase, runAbstractTrial, readTrialSamplingIDs, getSimulationIDs, deleteSimulation
+export initializeVCT, resetDatabase, runAbstractTrial, readTrialSamplingIDs, getSimulationIDs
 
 using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables, Distributions, Statistics, Random, QuasiMonteCarlo, Sobol
 using PhysiCellXMLRules
@@ -15,17 +15,21 @@ include("VCTCreation.jl")
 include("VCTDatabase.jl") 
 include("VCTDeletion.jl")
 include("VCTICCell.jl")
-include("VCTLoader.jl")
-include("VCTMovie.jl")
 include("VCTRunner.jl")
 include("VCTRecorder.jl")
-include("VCTSensitivity.jl")
 include("VCTVersion.jl")
 include("VCTPhysiCellVersion.jl")
+include("VCTHPC.jl")
+
+include("VCTLoader.jl")
 
 include("VCTAnalysis.jl")
+include("VCTSensitivity.jl")
+include("VCTImport.jl")
+include("VCTMovie.jl")
 
 include("VCTPhysiCellStudio.jl")
+include("VCTExport.jl")
 
 VERSION >= v"1.11" && include("public.julia")
 
@@ -39,12 +43,18 @@ else
     baseToExecutable(s::String) = s
 end
 
+run_on_hpc = isRunningOnHPC()
+max_number_of_parallel_simulations = haskey(ENV, "PCVCT_NUM_PARALLEL_SIMS") ? parse(Int, ENV["PCVCT_NUM_PARALLEL_SIMS"]) : 1
+march_flag = run_on_hpc ? "x86-64" : "native"
+
+sbatch_options = defaultJobOptions() # this is a dictionary that will be used to pass options to the sbatch command
+
 ################## Initialization Functions ##################
 
 """
-`pcvctLogo() -> String`
+    pcvctLogo()
 
-Returns a string representation of the PCVCT logo.
+Return a string representation of the awesome pcvct logo.
 """
 function pcvctLogo()
     return """
@@ -66,13 +76,13 @@ function pcvctLogo()
 end
 
 """
-`initializeVCT(path_to_physicell::String, path_to_data::String)`
+    initializeVCT(path_to_physicell::String, path_to_data::String)
 
-Initializes the VCT environment by setting the paths to PhysiCell and data directories, and initializing the database.
+Initialize the VCT environment by setting the paths to PhysiCell and data directories, and initializing the database.
 
 # Arguments
-- `path_to_physicell::String`: Path to the PhysiCell directory.
-- `path_to_data::String`: Path to the data directory.
+- `path_to_physicell::String`: Path to the PhysiCell directory as either an absolute or relative path.
+- `path_to_data::String`: Path to the data directory as either an absolute or relative path.
 """
 function initializeVCT(path_to_physicell::String, path_to_data::String; auto_upgrade::Bool=false)
     # print big logo of PCVCT here
@@ -91,22 +101,13 @@ function initializeVCT(path_to_physicell::String, path_to_data::String; auto_upg
     println(rpad("PhysiCell version:", 20, ' ') * physicellVersion())
     println(rpad("pcvct version:", 20, ' ') * string(pcvctVersion()))
     println(rpad("Compiler:", 20, ' ') * PHYSICELL_CPP)
+    println(rpad("Running on HPC:", 20, ' ') * string(run_on_hpc))
+    println(rpad("Max parallel sims:", 20, ' ') * string(max_number_of_parallel_simulations))
     flush(stdout)
 end
 
 ################## Selection Functions ##################
 
-"""
-`readConstituentIDs(path_to_csv::String) -> Vector{Int}`
-
-Reads constituent IDs from a CSV file.
-
-# Arguments
-- `path_to_csv::String`: Path to the CSV file.
-
-# Returns
-- `Vector{Int}`: A vector of constituent IDs.
-"""
 function readConstituentIDs(path_to_csv::String)
     if !isfile(path_to_csv)
         return Int[]
@@ -115,7 +116,7 @@ function readConstituentIDs(path_to_csv::String)
     ids = Int[]
     for i in axes(df,1)
         s = df.Column1[i]
-        I = split(s,":") .|> string .|> x->parse(Int,x)
+        I = split(s,":") .|> x->parse(Int,x)
         if length(I)==1
             push!(ids,I[1])
         else
@@ -127,47 +128,30 @@ end
 
 
 """
-`constituentsType(T::AbstractTrial) -> Type`
+    constituentsType(T::AbstractTrial)
 
-Returns the type of constituents for a given AbstractTrial.
-
-# Arguments
-- `T::AbstractTrial`: An AbstractTrial object.
-
-# Returns
-- `Type`: The type of constituents.
+Return the type of constituents for a given AbstractTrial.
 """
 constituentsType(trial::Trial) = Sampling
 constituentsType(sampling::Sampling) = Monad
 constituentsType(monad::Monad) = Simulation
 
 """
-`readConstituentIDs(T::AbstractTrial)`
+    readConstituentIDs(T::AbstractTrial)
 
 Reads the constituent IDs for a given trial type `T`.
-
-# Arguments
-- `T::AbstractTrial`: An instance of a trial type.
-
-# Returns
-- A list of constituent IDs read from a CSV file.
-
-# Details
-The function constructs a file path based on the type and ID of the trial `T`. 
-It then reads the constituent IDs from a CSV file located at the constructed path.
 """
 function readConstituentIDs(T::AbstractTrial)
-    type_str = typeof(T) |> string |> lowercase
-    path_to_folder = joinpath(data_dir, "outputs", type_str * "s", string(T.id))
+    path_to_folder = outputFolder(T)
     filename = lowercase(string(constituentsType(T))) * "s"
     return readConstituentIDs(joinpath(path_to_folder, filename * ".csv"))
 end
 
-readMonadSimulationIDs(monad_id::Int) = readConstituentIDs(joinpath(data_dir, "outputs", "monads", string(monad_id), "simulations.csv"))
+readMonadSimulationIDs(monad_id::Int) = readConstituentIDs(joinpath(outputFolder("monad", monad_id), "simulations.csv"))
 readMonadSimulationIDs(monad::Monad) = readMonadSimulationIDs(monad.id)
-readSamplingMonadIDs(sampling_id::Int) = readConstituentIDs(joinpath(data_dir, "outputs", "samplings", string(sampling_id), "monads.csv"))
+readSamplingMonadIDs(sampling_id::Int) = readConstituentIDs(joinpath(outputFolder("sampling", sampling_id), "monads.csv"))
 readSamplingMonadIDs(sampling::Sampling) = readSamplingMonadIDs(sampling.id)
-readTrialSamplingIDs(trial_id::Int) = readConstituentIDs(joinpath(data_dir, "outputs", "trials", string(trial_id), "samplings.csv"))
+readTrialSamplingIDs(trial_id::Int) = readConstituentIDs(joinpath(outputFolder("trial", trial_id), "samplings.csv"))
 readTrialSamplingIDs(trial::Trial) = readTrialSamplingIDs(trial.id)
 
 function getSamplingSimulationIDs(sampling_id::Int)
@@ -214,8 +198,16 @@ end
 
 ################## Miscellaneous Functions ##################
 
-function getOutputFolder(T::AbstractTrial)
+function outputFolder(lower_class_str::AbstractString, id::Int)
+    return joinpath(data_dir, "outputs", lower_class_str * "s", string(id))
+end
+
+function outputFolder(T::AbstractTrial)
     name = typeof(T) |> string |> lowercase
     name = split(name, ".")[end] # remove module name that comes with the type, e.g. main.vctmodule.sampling -> sampling
-    return joinpath(data_dir, "outputs", name * "s", string(T.id))
+    return outputFolder(name, T.id)
+end
+
+function setMarchFlag(flag::String)
+    global march_flag = flag
 end

@@ -143,9 +143,6 @@ function gitRemotes(dir::String)
 end
 
 function physicellVersion()
-    if ismissing(current_physicell_version_id)
-        return "Current PhysiCell repository is a dirty git repo. Not recording version in database."
-    end
     query = constructSelectQuery("physicell_versions", "WHERE physicell_version_id = $(current_physicell_version_id)")
     df = queryToDataFrame(query; is_row=true)
     str_begin = ismissing(df.repo_owner[1]) ? "" : "($(df.repo_owner[1])) "
@@ -154,6 +151,10 @@ function physicellVersion()
     return "$str_begin$str_middle$str_end"
 end
 
-function physicellVersionDBEntry()
-    return ismissing(current_physicell_version_id) ? "NULL" : current_physicell_version_id
+function physiCellCommitHash()
+    query = constructSelectQuery("physicell_versions", "WHERE physicell_version_id = $(current_physicell_version_id)"; selection="commit_hash")
+    df = queryToDataFrame(query; is_row=true)
+    return df.commit_hash[1]
 end
+
+physicellVersionDBEntry() = current_physicell_version_id

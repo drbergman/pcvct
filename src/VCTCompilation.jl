@@ -1,106 +1,93 @@
 
 """
-`loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)`
+    loadCustomCode(S::AbstractSampling[; force_recompile::Bool=false])
 
-Load and compile custom code for a given sampling instance.
+Load and compile custom code for a given `Sampling` instance.
 
-# Arguments
-- `S::AbstractSampling`: An instance of `AbstractSampling` containing the necessary folder names and IDs for custom code compilation.
-- `force_recompile::Bool=false`: A boolean flag to force recompilation of the custom code regardless of the current state.
-
-# Description
-This function performs the following steps:
-1. Retrieves compiler flags and determines if recompilation is necessary.
-2. If recompilation is not required and `force_recompile` is false, the function returns immediately.
-3. If recompilation is required, it optionally cleans the build directory.
-4. Copies custom module files, `main.cpp`, and `Makefile` from the source directory to the target directory.
-5. Compiles the custom code using the `make` command with appropriate flags.
-6. Logs the compilation output and errors to specified files.
-7. Deletes the error log file if it is empty.
-8. Cleans up by removing copied files and restoring the default `Makefile`.
-9. Moves the compiled project to the designated folder.
-
-# Notes
-- The function assumes the presence of specific directory structures and file names.
-- On macOS, the `-j` flag is used to parallelize the compilation process.
-- The function logs compilation output and errors to files in the source directory.
+Determines if recompilation is necessary based on the previously used macros.
+If compilation is required, copy the PhysiCell directory to a temporary directory to avoid conflicts.
+Then, compile the project, recording the output and error in the `custom_codes` folder used.
+Move the compiled executable into the `custom_codes` folder and the temporary PhysiCell folder deleted.
 """
 function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
-    cflags, recompile, clean = getCompilerFlags(S)
+    cflags, recompile, clean = compilerFlags(S)
+    recompile = writePhysiCellCommitHash(S) || recompile # no matter what, write the PhysiCell version; if it is different, make sure to set recompile to true
 
     recompile |= force_recompile # if force_recompile is true, then recompile no matter what
 
     if !recompile
-        return
+        return true
     end
-
-    # at some point, should "lock" this function until any other compilations are complete...ideally a way that is independent of the current runtime
 
     if clean
         cd(()->run(pipeline(`make clean`; stdout=devnull)), physicell_dir)
     end
+    
+    rand_suffix = randstring(10) # just to ensure that no two nodes try to compile at the same place at the same time
+    temp_physicell_dir = joinpath(outputFolder(S), "temp_physicell_$(rand_suffix)")
+    # copy the entire PhysiCell directory to a temporary directory to avoid conflicts with concurrent compilation
+    cp(physicell_dir, temp_physicell_dir; force=true)
 
-    path_to_folder = joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder) # source dir needs to end in / or else the dir is copied into target, not the source files
-    for file in readdir(joinpath(path_to_folder, "custom_modules"), sort=false)
-        if !isfile(joinpath(path_to_folder, "custom_modules", file))
-            continue
-        end
-        src = joinpath(path_to_folder, "custom_modules", file)
-        dst = joinpath(physicell_dir, "custom_modules", file)
-        cp(src, dst, force=true)
+    temp_custom_modules_dir = joinpath(temp_physicell_dir, "custom_modules")
+    if isdir(temp_custom_modules_dir)
+        rm(temp_custom_modules_dir; force=true, recursive=true)
     end
-    cp(joinpath(path_to_folder, "main.cpp"), joinpath(physicell_dir, "main.cpp"), force=true)
-    cp(joinpath(path_to_folder, "Makefile"), joinpath(physicell_dir, "Makefile"), force=true)
+    path_to_input_custom_codes = joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder)
+    cp(joinpath(path_to_input_custom_codes, "custom_modules"), temp_custom_modules_dir; force=true)
+
+    cp(joinpath(path_to_input_custom_codes, "main.cpp"), joinpath(temp_physicell_dir, "main.cpp"), force=true)
+    cp(joinpath(path_to_input_custom_codes, "Makefile"), joinpath(temp_physicell_dir, "Makefile"), force=true)
 
     executable_name = baseToExecutable("project_ccid_$(S.folder_ids.custom_code_id)")
-    cmd = `make CC=$(PHYSICELL_CPP) PROGRAM_NAME=$(executable_name) CFLAGS=$(cflags)`
-    if Sys.isapple() # hacky way to say the -j flag works on my machine but not on the HPC
-        cmd = `$cmd -j 20`
-    end
+    cmd = `make -j 8 CC=$(PHYSICELL_CPP) PROGRAM_NAME=$(executable_name) CFLAGS=$(cflags)`
+    # if Sys.isapple() # hacky way to say the -j flag works on my machine but not on the HPC
+    #     cmd = `$cmd -j 20`
+    # end
 
     println("Compiling custom code for $(S.folder_names.custom_code_folder) with flags: $cflags")
 
-    cd(() -> run(pipeline(cmd; stdout=joinpath(path_to_folder, "compilation.log"), stderr=joinpath(path_to_folder, "compilation.err"))), physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory; make sure the macro ADDON_PHYSIECM is defined (should work even if multiply defined, e.g., by Makefile)
+    try
+        cd(() -> run(pipeline(cmd; stdout=joinpath(path_to_input_custom_codes, "compilation.log"), stderr=joinpath(path_to_input_custom_codes, "compilation.err"))), temp_physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory
+    catch e
+        println("""
+        Compilation failed. 
+        Error: $e
+        Check $(joinpath(path_to_input_custom_codes, "compilation.err")) for more information.
+        """
+        )
+        return false
+    end
     
     # check if the error file is empty, if it is, delete it
-    if filesize(joinpath(path_to_folder, "compilation.err")) == 0
-        rm(joinpath(path_to_folder, "compilation.err"); force=true)
+    if filesize(joinpath(path_to_input_custom_codes, "compilation.err")) == 0
+        rm(joinpath(path_to_input_custom_codes, "compilation.err"); force=true)
+    else
+        println("Compilation exited without error, but check $(joinpath(path_to_input_custom_codes, "compilation.err")) for warnings.")
     end
 
-    rm(joinpath(physicell_dir, "custom_modules", "custom.cpp"); force=true)
-    rm(joinpath(physicell_dir, "custom_modules", "custom.h"); force=true)
-    rm(joinpath(physicell_dir, "main.cpp"); force=true)
-    cp(joinpath(physicell_dir, "sample_projects", "Makefile-default"), joinpath(physicell_dir, "Makefile"), force=true)
+    mv(joinpath(temp_physicell_dir, executable_name), joinpath(path_to_input_custom_codes, baseToExecutable("project")), force=true)
 
-    mv(joinpath(physicell_dir, executable_name), joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder, baseToExecutable("project")), force=true)
-    return 
+    rm(temp_physicell_dir; force=true, recursive=true)
+    return true
 end
 
 """
-`getCompilerFlags(S::AbstractSampling) -> Tuple{String, Bool, Bool}`
+    compilerFlags(S::AbstractSampling)
 
 Generate the compiler flags for the given sampling object `S`.
 
-# Arguments
-- `S::AbstractSampling`: The sampling object for which to generate compiler flags.
+Generate the necessary compiler flags based on the system and the macros defined in the sampling object `S`.
+If the required macros differ from a previous compilation (as stored in macros.txt), then recompile.
 
 # Returns
 - `cflags::String`: The compiler flags as a string.
 - `recompile::Bool`: A boolean indicating whether recompilation is needed.
 - `clean::Bool`: A boolean indicating whether cleaning is needed.
-
-# Description
-This function generates the necessary compiler flags based on the system and the macros defined in the sampling object `S`. It checks if the system is macOS and adjusts the flags accordingly. It also compares the current macros with the updated macros to determine if recompilation and cleaning are needed.
-
-# Notes
-- On macOS, it checks if the system architecture is `arm64` and adjusts the `-mfpmath` flag accordingly.
-- It reads the current macros from a file and compares them with the updated macros to decide if recompilation and cleaning are necessary.
-- If the project file does not exist in the specified directory, it sets `recompile` to `true`.
 """
-function getCompilerFlags(S::AbstractSampling)
+function compilerFlags(S::AbstractSampling)
     recompile = false # only recompile if need is found
     clean = false # only clean if need is found
-    cflags = "-march=native -O3 -fomit-frame-pointer -fopenmp -m64 -std=c++11"
+    cflags = "-march=$(march_flag) -O3 -fomit-frame-pointer -fopenmp -m64 -std=c++11"
     if Sys.isapple()
         if strip(read(`uname -s`, String)) == "Darwin"
             cc_path = strip(read(`which $(PHYSICELL_CPP)`, String))
@@ -127,12 +114,34 @@ function getCompilerFlags(S::AbstractSampling)
         cflags *= " -D $(macro_flag)"
     end
 
-    if !recompile && !isfile(joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder, baseToExecutable("project")))
-        recompile = true
-    end
+    recompile = recompile || !executableExists(S.folder_names.custom_code_folder) # last chance to recompile: do so if the executable does not exist
 
     return cflags, recompile, clean
 end
+
+function writePhysiCellCommitHash(S::AbstractSampling)
+    path_to_commit_hash = joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder, "physicell_commit_hash.txt")
+    physicell_commit_hash = physiCellCommitHash()
+    current_commit_hash = ""
+    if isfile(path_to_commit_hash)
+        current_commit_hash = readchomp(path_to_commit_hash)
+    end
+    recompile = true
+    if current_commit_hash != physicell_commit_hash
+        open(path_to_commit_hash, "w") do f
+            println(f, physicell_commit_hash)
+        end
+    elseif endswith(physicell_commit_hash, "-dirty")
+        println("PhysiCell repo is dirty. Recompiling to be safe...")
+    elseif endswith(physicell_commit_hash, "-download")
+        println("PhysiCell repo is downloaded. Recompiling to be safe...")
+    else
+        recompile = false
+    end
+    return recompile
+end
+
+executableExists(custom_code_folder::String) = isfile(joinpath(data_dir, "inputs", "custom_codes", custom_code_folder, baseToExecutable("project")))
 
 function addMacrosIfNeeded(S::AbstractSampling)
     # else get the macros neeeded
@@ -167,7 +176,7 @@ function addPhysiECMIfNeeded(S::AbstractSampling)
 end
 
 function isPhysiECMInConfig(M::AbstractMonad)
-    path_to_xml = joinpath(data_dir, "inputs", "configs", M.folder_names.config_folder, "config_variations", "config_variation_$(M.variation_ids.config_variation_id).xml")
+    path_to_xml = joinpath(data_dir, "inputs", "configs", M.folder_names.config_folder, "config_variations", "config_variation_$(M.variation_ids.config).xml")
     xml_doc = openXML(path_to_xml)
     xml_path = ["microenvironment_setup", "ecm_setup"]
     ecm_setup_element = retrieveElement(xml_doc, xml_path; required=false)

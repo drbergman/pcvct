@@ -1,7 +1,7 @@
 name = "pcvct"
 uuid = "3c374bc7-7384-4f83-8ca0-87b8c727e6ff"
 authors = ["Daniel Bergman <danielrbergman@gmail.com> and contributors"]
-version = "0.0.11"
+version = "0.0.12"
 
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
@@ -42,7 +42,7 @@ LightXML = "0.9"
 LinearAlgebra = "1.10"
 MAT = "0.10"
 Parameters = "0.12"
-PhysiCellXMLRules = "0.0.1 - 0.0.2"
+PhysiCellXMLRules = "0.0.3"
 Pkg = "1.10.0"
 QuasiMonteCarlo = "0.3"
 RecipesBase = "1.3.4"
