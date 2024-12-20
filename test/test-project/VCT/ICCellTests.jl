@@ -37,6 +37,8 @@ hashBorderPrint("SUCCESSFULLY CREATED SAMPLING WITH IC CELL VARIATION!")
 n_success = run(sampling; force_recompile=false)
 @test n_success == length(sampling)
 
+simulation_with_ic_cell_xml_id = getSimulationIDs(sampling)[1] # used in ExportTests.jl
+
 hashBorderPrint("SUCCESSFULLY RAN SAMPLING WITH IC CELL VARIATION!")
 
 discrete_variations = DiscreteVariation[]
