@@ -91,7 +91,7 @@ hashBorderPrint("SAMPLING SUCCESSFULLY RUN!")
 n_simulations = length(sampling) # number of simulations recorded (in .csvs) for this sampling
 n_expected_sims = monad_min_length
 for discrete_variation in discrete_variations
-    global n_expected_sims *= length(discrete_variation.values)
+    global n_expected_sims *= length(discrete_variation)
 end
 n_variations = length(sampling.variation_ids)
 

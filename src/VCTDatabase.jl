@@ -457,14 +457,14 @@ end
 
 ########### Summarizing Database Functions ###########
 
-configVariationIDs(M::AbstractMonad) = [M.variation_ids.config_variation_id]
-configVariationIDs(sampling::Sampling) = [vid.config_variation_id for vid in sampling.variation_ids]
+configVariationIDs(M::AbstractMonad) = [M.variation_ids.config]
+configVariationIDs(sampling::Sampling) = [vid.config for vid in sampling.variation_ids]
 
-rulesetsVariationIDs(M::AbstractMonad) = [M.variation_ids.rulesets_variation_id]
-rulesetsVariationIDs(sampling::Sampling) = [vid.rulesets_variation_id for vid in sampling.variation_ids]
+rulesetsVariationIDs(M::AbstractMonad) = [M.variation_ids.rulesets]
+rulesetsVariationIDs(sampling::Sampling) = [vid.rulesets for vid in sampling.variation_ids]
 
-icCellVariationIDs(M::AbstractMonad) = [M.variation_ids.ic_cell_variation_id]
-icCellVariationIDs(sampling::Sampling) = [vid.ic_cell_variation_id for vid in sampling.variation_ids]
+icCellVariationIDs(M::AbstractMonad) = [M.variation_ids.ic_cell]
+icCellVariationIDs(sampling::Sampling) = [vid.ic_cell for vid in sampling.variation_ids]
 
 getAbstractTrial(class_id::VCTClassID) = class_id.id |> getVCTClassIDType(class_id)
 

@@ -75,7 +75,7 @@ end
 ################## Configuration Functions ##################
 
 function loadConfiguration(M::AbstractMonad)
-    path_to_xml = joinpath(data_dir, "inputs", "configs", M.folder_names.config_folder, "config_variations", "config_variation_$(M.variation_ids.config_variation_id).xml")
+    path_to_xml = joinpath(data_dir, "inputs", "configs", M.folder_names.config_folder, "config_variations", "config_variation_$(M.variation_ids.config).xml")
     if isfile(path_to_xml)
         return
     end
@@ -84,7 +84,7 @@ function loadConfiguration(M::AbstractMonad)
     cp(path_to_xml_src, path_to_xml, force=true)
 
     xml_doc = openXML(path_to_xml)
-    query = constructSelectQuery("config_variations", "WHERE config_variation_id=$(M.variation_ids.config_variation_id);")
+    query = constructSelectQuery("config_variations", "WHERE config_variation_id=$(M.variation_ids.config);")
     variation_row = queryToDataFrame(query; db=configDB(M.folder_names.config_folder), is_row=true)
     for column_name in names(variation_row)
         if column_name == "config_variation_id"
@@ -106,11 +106,11 @@ function loadConfiguration(sampling::Sampling)
 end
 
 function loadRulesets(M::AbstractMonad)
-    if M.variation_ids.rulesets_variation_id == -1 # no rules being used
+    if M.variation_ids.rulesets == -1 # no rules being used
         return
     end
     path_to_rulesets_collections_folder = joinpath(data_dir, "inputs", "rulesets_collections", M.folder_names.rulesets_collection_folder)
-    path_to_rulesets_xml = joinpath(path_to_rulesets_collections_folder, "rulesets_collections_variations", "rulesets_variation_$(M.variation_ids.rulesets_variation_id).xml")
+    path_to_rulesets_xml = joinpath(path_to_rulesets_collections_folder, "rulesets_collections_variations", "rulesets_variation_$(M.variation_ids.rulesets).xml")
     if isfile(path_to_rulesets_xml) # already have the rulesets variation created
         return
     end
@@ -124,8 +124,8 @@ function loadRulesets(M::AbstractMonad)
     end
         
     xml_doc = parse_file(path_to_base_xml)
-    if M.variation_ids.rulesets_variation_id != 0 # only update if not using the base variation for the ruleset
-        query = constructSelectQuery("rulesets_variations", "WHERE rulesets_variation_id=$(M.variation_ids.rulesets_variation_id);")
+    if M.variation_ids.rulesets != 0 # only update if not using the base variation for the ruleset
+        query = constructSelectQuery("rulesets_variations", "WHERE rulesets_variation_id=$(M.variation_ids.rulesets);")
         variation_row = queryToDataFrame(query; db=rulesetsCollectionDB(M), is_row=true)
         for column_name in names(variation_row)
             if column_name == "rulesets_variation_id"
@@ -148,7 +148,7 @@ function loadICCells(M::AbstractMonad)
     if isfile(joinpath(path_to_ic_cells_folder, "cells.csv")) # ic already given by cells.csv
         return
     end
-    path_to_ic_cells_xml = joinpath(path_to_ic_cells_folder, "ic_cell_variations", "ic_cell_variation_$(M.variation_ids.ic_cell_variation_id).xml")
+    path_to_ic_cells_xml = joinpath(path_to_ic_cells_folder, "ic_cell_variations", "ic_cell_variation_$(M.variation_ids.ic_cell).xml")
     if isfile(path_to_ic_cells_xml) # already have the ic cell variation created
         return
     end
@@ -156,8 +156,8 @@ function loadICCells(M::AbstractMonad)
 
     path_to_base_xml = joinpath(path_to_ic_cells_folder, "cells.xml")
     xml_doc = parse_file(path_to_base_xml)
-    if M.variation_ids.ic_cell_variation_id != 0 # only update if not using the base variation for the ic cells
-        query = constructSelectQuery("ic_cell_variations", "WHERE ic_cell_variation_id=$(M.variation_ids.ic_cell_variation_id);")
+    if M.variation_ids.ic_cell != 0 # only update if not using the base variation for the ic cells
+        query = constructSelectQuery("ic_cell_variations", "WHERE ic_cell_variation_id=$(M.variation_ids.ic_cell);")
         variation_row = queryToDataFrame(query; db=icCellDB(M.folder_names.ic_cell_folder), is_row=true)
         for column_name in names(variation_row)
             if column_name == "ic_cell_variation_id"
@@ -179,8 +179,8 @@ function pathToICCell(simulation::Simulation)
         return joinpath(path_to_ic_cell_folder, "cells.csv")
     end
     path_to_ic_cell_variations = joinpath(path_to_ic_cell_folder, "ic_cell_variations")
-    path_to_ic_cell_xml = joinpath(path_to_ic_cell_variations, "ic_cell_variation_$(simulation.variation_ids.ic_cell_variation_id).xml")
-    path_to_ic_cell_file = joinpath(path_to_ic_cell_variations, "ic_cell_variation_$(simulation.variation_ids.ic_cell_variation_id)_s$(simulation.id).csv")
+    path_to_ic_cell_xml = joinpath(path_to_ic_cell_variations, "ic_cell_variation_$(simulation.variation_ids.ic_cell).xml")
+    path_to_ic_cell_file = joinpath(path_to_ic_cell_variations, "ic_cell_variation_$(simulation.variation_ids.ic_cell)_s$(simulation.id).csv")
     generateICCell(path_to_ic_cell_xml, path_to_ic_cell_file)
     return path_to_ic_cell_file
 end
@@ -234,15 +234,15 @@ end
 
 ################## Variation Dimension Functions ##################
 
-function addDomainVariationDimension!(AV::Vector{<:AbstractVariation}, domain::NTuple{N,Real} where N) 
+function addDomainVariationDimension!(evs::Vector{<:ElementaryVariation}, domain::NTuple{N,Real} where N) 
     bounds_tags = ["x_min", "x_max", "y_min", "y_max", "z_min", "z_max"]
     for (tag, value) in zip(bounds_tags, domain)
         xml_path = ["domain", tag]
-        push!(AV, DiscreteVariation(xml_path, [value]))
+        push!(evs, DiscreteVariation(xml_path, [value]))
     end
 end
 
-function addDomainVariationDimension!(AV::Vector{<:AbstractVariation}, domain::NamedTuple)
+function addDomainVariationDimension!(evs::Vector{<:ElementaryVariation}, domain::NamedTuple)
     for (tag, value) in pairs(domain)
         tag = String(tag)
         if startswith(tag, "min")
@@ -253,23 +253,23 @@ function addDomainVariationDimension!(AV::Vector{<:AbstractVariation}, domain::N
             tag = "$(last_character)_max"
         end
         xml_path = ["domain", tag]
-        push!(AV, DiscreteVariation(xml_path, [value...])) # do this to make sure that singletons and vectors are converted to vectors
+        push!(evs, DiscreteVariation(xml_path, [value...])) # do this to make sure that singletons and vectors are converted to vectors
     end
 end
 
-function addMotilityVariationDimension!(AV::Vector{<:AbstractVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
+function addMotilityVariationDimension!(evs::Vector{<:ElementaryVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
     xml_path = motilityPath(cell_definition, field_name)
-    push!(AV, DiscreteVariation(xml_path, values))
+    push!(evs, DiscreteVariation(xml_path, values))
 end
 
-function addAttackRateVariationDimension!(AV::Vector{<:AbstractVariation}, cell_definition::String, target_name::String, values::Vector{T} where T)
+function addAttackRateVariationDimension!(evs::Vector{<:ElementaryVariation}, cell_definition::String, target_name::String, values::Vector{T} where T)
     xml_path = attackRatesPath(cell_definition, target_name)
-    push!(AV, DiscreteVariation(xml_path, values))
+    push!(evs, DiscreteVariation(xml_path, values))
 end
 
-function addCustomDataVariationDimension!(AV::Vector{<:AbstractVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
+function addCustomDataVariationDimension!(evs::Vector{<:ElementaryVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
     xml_path = customDataPath(cell_definition, field_name)
-    push!(AV, DiscreteVariation(xml_path, values))
+    push!(evs, DiscreteVariation(xml_path, values))
 end
 
 ################## Simplify Name Functions ##################
