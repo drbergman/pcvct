@@ -19,10 +19,10 @@ function prepareSimulationCommand(simulation::Simulation, monad_id::Union{Missin
         end
     end
 
-    executable_str = joinpath(data_dir, "inputs", "custom_codes", simulation.folder_names.custom_code_folder, baseToExecutable("project")) # path to executable
-    config_str = joinpath(data_dir, "inputs", "configs", simulation.folder_names.config_folder, "config_variations", "config_variation_$(simulation.variation_ids.config).xml")
+    executable_str = joinpath(data_dir, "inputs", "custom_codes", simulation.inputs.custom_code.folder, baseToExecutable("project")) # path to executable
+    config_str = joinpath(data_dir, "inputs", "configs", simulation.inputs.config.folder, "config_variations", "config_variation_$(simulation.variation_ids.config).xml")
     flags = ["-o", path_to_simulation_output]
-    if simulation.folder_ids.ic_cell_id != -1
+    if simulation.inputs.ic_cell.id != -1
         try
             append!(flags, ["-i", pathToICCell(simulation)])
         catch e
@@ -31,14 +31,14 @@ function prepareSimulationCommand(simulation::Simulation, monad_id::Union{Missin
             return nothing
         end
     end
-    if simulation.folder_ids.ic_substrate_id != -1
-        append!(flags, ["-s", joinpath(data_dir, "inputs", "ics", "substrates", simulation.folder_names.ic_substrate_folder, "substrates.csv")]) # if ic file included (id != -1), then include this in the command
+    if simulation.inputs.ic_substrate.id != -1
+        append!(flags, ["-s", joinpath(data_dir, "inputs", "ics", "substrates", simulation.inputs.ic_substrate.folder, "substrates.csv")]) # if ic file included (id != -1), then include this in the command
     end
-    if simulation.folder_ids.ic_ecm_id != -1
-        append!(flags, ["-e", joinpath(data_dir, "inputs", "ics", "ecms", simulation.folder_names.ic_ecm_folder, "ecm.csv")]) # if ic file included (id != -1), then include this in the command
+    if simulation.inputs.ic_ecm.id != -1
+        append!(flags, ["-e", joinpath(data_dir, "inputs", "ics", "ecms", simulation.inputs.ic_ecm.folder, "ecm.csv")]) # if ic file included (id != -1), then include this in the command
     end
     if simulation.variation_ids.rulesets != -1
-        path_to_rules_file = joinpath(data_dir, "inputs", "rulesets_collections", simulation.folder_names.rulesets_collection_folder, "rulesets_collections_variations", "rulesets_variation_$(simulation.variation_ids.rulesets).xml")
+        path_to_rules_file = joinpath(data_dir, "inputs", "rulesets_collections", simulation.inputs.rulesets_collection.folder, "rulesets_collections_variations", "rulesets_variation_$(simulation.variation_ids.rulesets).xml")
         append!(flags, ["-r", path_to_rules_file])
     end
     return `$executable_str $config_str $flags`

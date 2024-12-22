@@ -32,19 +32,19 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
     if isdir(temp_custom_modules_dir)
         rm(temp_custom_modules_dir; force=true, recursive=true)
     end
-    path_to_input_custom_codes = joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder)
+    path_to_input_custom_codes = joinpath(data_dir, "inputs", "custom_codes", S.inputs.custom_code.folder)
     cp(joinpath(path_to_input_custom_codes, "custom_modules"), temp_custom_modules_dir; force=true)
 
     cp(joinpath(path_to_input_custom_codes, "main.cpp"), joinpath(temp_physicell_dir, "main.cpp"), force=true)
     cp(joinpath(path_to_input_custom_codes, "Makefile"), joinpath(temp_physicell_dir, "Makefile"), force=true)
 
-    executable_name = baseToExecutable("project_ccid_$(S.folder_ids.custom_code_id)")
+    executable_name = baseToExecutable("project_ccid_$(S.inputs.custom_code.id)")
     cmd = `make -j 8 CC=$(PHYSICELL_CPP) PROGRAM_NAME=$(executable_name) CFLAGS=$(cflags)`
     # if Sys.isapple() # hacky way to say the -j flag works on my machine but not on the HPC
     #     cmd = `$cmd -j 20`
     # end
 
-    println("Compiling custom code for $(S.folder_names.custom_code_folder) with flags: $cflags")
+    println("Compiling custom code for $(S.inputs.custom_code.folder) with flags: $cflags")
 
     try
         cd(() -> run(pipeline(cmd; stdout=joinpath(path_to_input_custom_codes, "compilation.log"), stderr=joinpath(path_to_input_custom_codes, "compilation.err"))), temp_physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory
@@ -114,13 +114,13 @@ function compilerFlags(S::AbstractSampling)
         cflags *= " -D $(macro_flag)"
     end
 
-    recompile = recompile || !executableExists(S.folder_names.custom_code_folder) # last chance to recompile: do so if the executable does not exist
+    recompile = recompile || !executableExists(S.inputs.custom_code.folder) # last chance to recompile: do so if the executable does not exist
 
     return cflags, recompile, clean
 end
 
 function writePhysiCellCommitHash(S::AbstractSampling)
-    path_to_commit_hash = joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder, "physicell_commit_hash.txt")
+    path_to_commit_hash = joinpath(data_dir, "inputs", "custom_codes", S.inputs.custom_code.folder, "physicell_commit_hash.txt")
     physicell_commit_hash = physiCellCommitHash()
     current_commit_hash = ""
     if isfile(path_to_commit_hash)
@@ -151,7 +151,7 @@ function addMacrosIfNeeded(S::AbstractSampling)
 end
 
 function addMacro(S::AbstractSampling, macro_name::String)
-    path_to_macros = joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder, "macros.txt")
+    path_to_macros = joinpath(data_dir, "inputs", "custom_codes", S.inputs.custom_code.folder, "macros.txt")
     open(path_to_macros, "a") do f
         println(f, macro_name)
     end
@@ -162,7 +162,7 @@ function addPhysiECMIfNeeded(S::AbstractSampling)
         # if the custom codes folder for the sampling already has the macro, then we don't need to do anything
         return
     end
-    if S.folder_ids.ic_ecm_id != -1
+    if S.inputs.ic_ecm.id != -1
         # if this sampling is providing an ic file for ecm, then we need to add the macro
         addMacro(S, "ADDON_PHYSIECM")
         return
@@ -176,7 +176,7 @@ function addPhysiECMIfNeeded(S::AbstractSampling)
 end
 
 function isPhysiECMInConfig(M::AbstractMonad)
-    path_to_xml = joinpath(data_dir, "inputs", "configs", M.folder_names.config_folder, "config_variations", "config_variation_$(M.variation_ids.config).xml")
+    path_to_xml = joinpath(data_dir, "inputs", "configs", M.inputs.config.folder, "config_variations", "config_variation_$(M.variation_ids.config).xml")
     xml_doc = openXML(path_to_xml)
     xml_path = ["microenvironment_setup", "ecm_setup"]
     ecm_setup_element = retrieveElement(xml_doc, xml_path; required=false)
@@ -198,7 +198,7 @@ function isPhysiECMInConfig(sampling::Sampling)
 end
 
 function readMacrosFile(S::AbstractSampling)
-    path_to_macros = joinpath(data_dir, "inputs", "custom_codes", S.folder_names.custom_code_folder, "macros.txt")
+    path_to_macros = joinpath(data_dir, "inputs", "custom_codes", S.inputs.custom_code.folder, "macros.txt")
     if !isfile(path_to_macros)
         return []
     end

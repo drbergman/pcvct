@@ -132,9 +132,9 @@ end
 
 Return the type of constituents for a given AbstractTrial.
 """
-constituentsType(trial::Trial) = Sampling
-constituentsType(sampling::Sampling) = Monad
-constituentsType(monad::Monad) = Simulation
+constituentsType(::Trial) = Sampling
+constituentsType(::Sampling) = Monad
+constituentsType(::Monad) = Simulation
 
 """
     readConstituentIDs(T::AbstractTrial)

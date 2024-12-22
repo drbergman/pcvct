@@ -374,7 +374,7 @@ isStarted(simulation::Simulation; new_status_code::Union{Missing,String}=missing
 
 configDB(config_folder::String) = joinpath(data_dir, "inputs", "configs", config_folder, "config_variations.db") |> SQLite.DB
 configDB(config_id::Int) = configFolder(config_id) |> configDB
-configDB(S::AbstractSampling) = configDB(S.folder_names.config_folder)
+configDB(S::AbstractSampling) = configDB(S.inputs.config.folder)
 
 function rulesetsCollectionDB(rulesets_collection_folder::String)
     if rulesets_collection_folder == ""
@@ -383,7 +383,7 @@ function rulesetsCollectionDB(rulesets_collection_folder::String)
     path_to_folder = joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder)
     return joinpath(path_to_folder, "rulesets_variations.db") |> SQLite.DB
 end
-rulesetsCollectionDB(M::AbstractMonad) = rulesetsCollectionDB(M.folder_names.rulesets_collection_folder)
+rulesetsCollectionDB(M::AbstractMonad) = rulesetsCollectionDB(M.inputs.rulesets_collection.folder)
 rulesetsCollectionDB(rulesets_collection_id::Int) = rulesetsCollectionFolder(rulesets_collection_id) |> rulesetsCollectionDB
 
 function icCellDB(ic_cell_folder::String)
@@ -397,7 +397,7 @@ function icCellDB(ic_cell_folder::String)
     return joinpath(path_to_folder, "ic_cell_variations.db") |> SQLite.DB
 end
 icCellDB(ic_cell_id::Int) = icCellFolder(ic_cell_id) |> icCellDB
-icCellDB(S::AbstractSampling) = icCellDB(S.folder_names.ic_cell_folder)
+icCellDB(S::AbstractSampling) = icCellDB(S.inputs.ic_cell.folder)
 
 ########### Retrieving Database Information Functions ###########
 
@@ -427,32 +427,14 @@ icECMFolder(ic_ecm_id::Int) = getOptionalFolder("ic_ecms", "ic_ecm_id", ic_ecm_i
 rulesetsCollectionFolder(rulesets_collection_id::Int) = getOptionalFolder("rulesets_collections", "rulesets_collection_id", rulesets_collection_id)
 customCodesFolder(custom_code_id::Int) = getFolder("custom_codes", "custom_code_id", custom_code_id)
 
-function retrievePathInfo(config_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, ic_substrate_id::Int, ic_ecm_id::Int, custom_code_id::Int)
-    config_folder = configFolder(config_id)
-    rulesets_collection_folder = rulesetsCollectionFolder(rulesets_collection_id)
-    ic_cell_folder = icCellFolder(ic_cell_id)
-    ic_substrate_folder = icSubstrateFolder(ic_substrate_id)
-    ic_ecm_folder = icECMFolder(ic_ecm_id)
-    custom_code_folder = customCodesFolder(custom_code_id)
-    return config_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder, custom_code_folder
-end
-
 function retrieveID(table_name::String, folder_name::String; db::SQLite.DB=db)
     if folder_name == ""
         return -1
     end
     primary_key_string = "$(rstrip(table_name,'s'))_id"
-    return constructSelectQuery(table_name, "WHERE folder_name='$(folder_name)'"; selection=primary_key_string) |> queryToDataFrame |> x -> x[1, primary_key_string]
-end
-
-function retrieveID(folder_names::AbstractSamplingFolders)
-    config_id = retrieveID("configs", folder_names.config_folder)
-    rulesets_collection_id = retrieveID("rulesets_collections", folder_names.rulesets_collection_folder)
-    ic_cell_id = retrieveID("ic_cells", folder_names.ic_cell_folder)
-    ic_substrate_id = retrieveID("ic_substrates", folder_names.ic_substrate_folder)
-    ic_ecm_id = retrieveID("ic_ecms", folder_names.ic_ecm_folder)
-    custom_code_id = retrieveID("custom_codes", folder_names.custom_code_folder)
-    return config_id, rulesets_collection_id, ic_cell_id, ic_substrate_id, ic_ecm_id, custom_code_id
+    query = constructSelectQuery(table_name, "WHERE folder_name='$(folder_name)'"; selection=primary_key_string)
+    df = queryToDataFrame(query; is_row=true)
+    return df[1, primary_key_string]
 end
 
 ########### Summarizing Database Functions ###########
