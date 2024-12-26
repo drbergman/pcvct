@@ -8,6 +8,8 @@ config_folder = "0_template"
 custom_code_folder = "0_template"
 rulesets_collection_folder = "0_template"
 ic_cell_folder = "1_xml"
+inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rulesets_collection_folder, ic_cell=ic_cell_folder)
+
 monad_min_length = 1
 
 discrete_variations = DiscreteVariation[]
@@ -19,14 +21,12 @@ xml_path = ["cell_patches:name:default", "patch_collection:type:disc", "patch:ID
 vals = [0.0, -100.0]
 push!(discrete_variations, DiscreteVariation(xml_path, vals))
 
-config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, discrete_variations)
+config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), inputs, discrete_variations)
 
 hashBorderPrint("SUCCESSFULLY ADDED IC CELL VARIATION!")
 
-sampling = Sampling(config_folder, custom_code_folder;
+sampling = Sampling(inputs;
     monad_min_length=monad_min_length,
-    rulesets_collection_folder=rulesets_collection_folder,
-    ic_cell_folder=ic_cell_folder,
     config_variation_ids=config_variation_ids,
     rulesets_variation_ids=rulesets_variation_ids,
     ic_cell_variation_ids=ic_cell_variation_ids
@@ -46,13 +46,11 @@ xml_path = ["cell_patches:name:default", "patch_collection:type:annulus", "patch
 push!(discrete_variations, DiscreteVariation(xml_path, 300.0))
 
 config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = 
-    addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, discrete_variations;
+    addVariations(GridVariation(), inputs, discrete_variations;
     reference_config_variation_id=config_variation_ids[1], reference_rulesets_variation_id=rulesets_variation_ids[1], reference_ic_cell_variation_id=ic_cell_variation_ids[1])
 
-sampling = Sampling(config_folder, custom_code_folder;
+sampling = Sampling(inputs;
     monad_min_length=monad_min_length,
-    rulesets_collection_folder=rulesets_collection_folder,
-    ic_cell_folder=ic_cell_folder,
     config_variation_ids=config_variation_ids,
     rulesets_variation_ids=rulesets_variation_ids,
     ic_cell_variation_ids=ic_cell_variation_ids

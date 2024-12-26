@@ -160,6 +160,15 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         ic_substrate_folder = \"\" # optionally add this folder with substrates.csv to $(joinpath(path_to_ics, "substrates"))
         ic_ecm_folder = \"\" # optionally add this folder with ecms.csv to $(joinpath(path_to_ics, "ecms"))
 
+        $(tersify("""
+        # package them all together into a single object
+        """))\
+        inputs = InputFolders(config_folder, custom_code_folder;
+                              rulesets_collection=rulesets_collection_folder,
+                              ic_cell=ic_cell_folder,
+                              ic_substrate=ic_substrate_folder,
+                              ic_ecm=ic_ecm_folder)
+
         ############ make the simulations short ############
 
         $(tersify("""
@@ -169,7 +178,7 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         xml_path = [\"overall\"; \"max_time\"]
         value = 60.0
         dv_max_time = DiscreteVariation(xml_path, value)
-        config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, [dv_max_time])
+        config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), inputs, [dv_max_time])
         reference_config_variation_id = config_variation_ids[1]
         reference_rulesets_variation_id = rulesets_variation_ids[1]
         reference_ic_cell_variation_id = ic_cell_variation_ids[1]
@@ -236,7 +245,7 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         # ...Here, we are using the variations with short max time from above.
         """))\
         config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = 
-        \taddVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder,
+        \taddVariations(GridVariation(), inputs,
         \tdiscrete_variations;
         \treference_config_variation_id=reference_config_variation_id,
         \treference_rulesets_variation_id=reference_rulesets_variation_id,
@@ -248,16 +257,12 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         # Note: all these entries can be keyword arguments, so you can specify only the ones you want to change
         # monad_min_length defaults to 0 (which means no new simulations will be created)
         """))\
-        sampling = Sampling(config_folder, custom_code_folder;
-        \tmonad_min_length=monad_min_length,
-        \trulesets_collection_folder=rulesets_collection_folder,
-        \tic_cell_folder=ic_cell_folder,
-        \tic_substrate_folder=ic_substrate_folder,
-        \tic_ecm_folder=ic_ecm_folder, 
-        \tconfig_variation_ids=config_variation_ids,
-        \trulesets_variation_ids=rulesets_variation_ids,
-        \tic_cell_variation_ids=ic_cell_variation_ids,
-        \tuse_previous_simulations=use_previous_simulations) # use_previous_simulations defaults to true, so you can omit it if you want to reuse simulations
+        sampling = Sampling(inputs;
+                            monad_min_length=monad_min_length,
+                            config_variation_ids=config_variation_ids,
+                            rulesets_variation_ids=rulesets_variation_ids,
+                            ic_cell_variation_ids=ic_cell_variation_ids,
+                            use_previous_simulations=use_previous_simulations) # use_previous_simulations defaults to true, so you can omit it if you want to reuse simulations
 
         $(tersify("""
         # at this point, we have only added the sampling to the database...

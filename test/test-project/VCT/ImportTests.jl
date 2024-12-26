@@ -3,10 +3,12 @@ filename = split(filename, "/") |> last
 str = "TESTING WITH $(filename)"
 hashBorderPrint(str)
 
+config_folder = "immune_sample"
+custom_code_folder = rulesets_collection_folder = ic_cell_folder = "immune_function"
+
 path_to_project = "./test-project/PhysiCell/sample_projects/immune_function"
 
 dest = Dict()
-config_folder = "immune_sample"
 dest["config"] = config_folder
 
 src = Dict()
@@ -14,19 +16,17 @@ src["config"] = "PhysiCell_settings.xml"
 success = importProject(path_to_project, src, dest)
 @test success
 
-custom_code_folder = rulesets_collection_folder = ic_cell_folder = "immune_function"
+inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rulesets_collection_folder, ic_cell=ic_cell_folder)
 
 discrete_variations = DiscreteVariation[]
 push!(discrete_variations, DiscreteVariation(["overall","max_time"], [12.0]))
 push!(discrete_variations, DiscreteVariation(["save","full_data","interval"], [6.0]))
 push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], [6.0]))
 
-config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, discrete_variations)
+config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), inputs, discrete_variations)
 
-sampling = Sampling(config_folder, custom_code_folder;
+sampling = Sampling(inputs;
     monad_min_length=1,
-    rulesets_collection_folder=rulesets_collection_folder,
-    ic_cell_folder=ic_cell_folder,
     config_variation_ids=config_variation_ids,
     rulesets_variation_ids=rulesets_variation_ids,
     ic_cell_variation_ids=ic_cell_variation_ids

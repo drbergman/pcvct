@@ -52,12 +52,12 @@ function prepareFolder(simulation::Simulation, export_folder::AbstractString)
     row = queryToDataFrame(query; is_row=true)
 
     # config file
-    config_folder = simulation.folder_names.config_folder
+    config_folder = simulation.inputs.config.folder
     path_to_xml = joinpath(data_dir, "inputs", "configs", config_folder, "config_variations", "config_variation_$(row.config_variation_id[1]).xml")
     cp(path_to_xml, joinpath(export_config_folder, "PhysiCell_settings.xml"))
 
     # custom code
-    custom_code_folder = simulation.folder_names.custom_code_folder
+    custom_code_folder = simulation.inputs.custom_code.folder
     path_to_custom_codes_folder = joinpath(data_dir, "inputs", "custom_codes", custom_code_folder)
     for filename in ["main.cpp", "Makefile"]
         cp(joinpath(path_to_custom_codes_folder, filename), joinpath(export_folder, filename))
@@ -66,7 +66,7 @@ function prepareFolder(simulation::Simulation, export_folder::AbstractString)
 
     # rulesets
     if row.rulesets_collection_id[1] != -1
-        rulesets_collection_folder = simulation.folder_names.rulesets_collection_folder
+        rulesets_collection_folder = simulation.inputs.rulesets_collection.folder
         path_to_xml = joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder, "rulesets_collections_variations", "rulesets_variation_$(row.rulesets_variation_id[1]).xml")
         path_to_csv = joinpath(export_folder, "config", "cell_rules.csv")
         exportRulesToCSV(path_to_csv, path_to_xml)
@@ -74,7 +74,7 @@ function prepareFolder(simulation::Simulation, export_folder::AbstractString)
 
     # ic cells
     if row.ic_cell_id[1] != -1
-        ic_cell_folder = simulation.folder_names.ic_cell_folder
+        ic_cell_folder = simulation.inputs.ic_cell.folder
         path_to_ic_cells_folder = joinpath(data_dir, "inputs", "ics", "cells", ic_cell_folder)
         ic_cell_file_name = readdir(path_to_ic_cells_folder)
         filter!(x -> x in ["cells.csv", "cells.xml"], ic_cell_file_name)
@@ -88,14 +88,14 @@ function prepareFolder(simulation::Simulation, export_folder::AbstractString)
 
     # ic substrates
     if row.ic_substrate_id[1] != -1
-        ic_substrate_folder = simulation.folder_names.ic_substrate_folder
+        ic_substrate_folder = simulation.inputs.ic_substrate.folder
         path_to_file = joinpath(data_dir, "inputs", "ics", "substrates", ic_substrate_folder, "substrates.csv")
         cp(path_to_file, joinpath(export_folder, "config", "substrates.csv"))
     end
 
     # ic ecm
     if row.ic_ecm_id[1] != -1
-        ic_ecm_folder = simulation.folder_names.ic_ecm_folder
+        ic_ecm_folder = simulation.inputs.ic_ecm.folder
         path_to_file = joinpath(data_dir, "inputs", "ics", "ecm", ic_ecm_folder, "ecm.csv")
         cp(path_to_file, joinpath(export_folder, "config", "ecm.csv"))
     end

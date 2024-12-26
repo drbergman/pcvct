@@ -7,25 +7,25 @@ hashBorderPrint("DATABASE SUCCESSFULLY INITIALIZED!")
 
 config_folder = "0_template"
 rulesets_collection_folder = "0_template"
-ic_cell_folder = ""
+custom_code_folder = "0_template"
+inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rulesets_collection_folder)
+
+cell_type = "default"
+monad_min_length = 2
+
 discrete_variations = DiscreteVariation[]
 push!(discrete_variations, DiscreteVariation(["overall","max_time"], [12.0]))
 push!(discrete_variations, DiscreteVariation(["save","full_data","interval"], [6.0]))
 push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], [6.0]))
 
-config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, discrete_variations)
+config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), inputs, discrete_variations)
 hashBorderPrint("DATABASE SUCCESSFULLY UPDATED!")
 
-custom_code_folder = "0_template"
 config_variation_id = config_variation_ids[1]
 rulesets_variation_id = rulesets_variation_ids[1]
 ic_cell_variation_id = ic_cell_variation_ids[1]
-simulation = Simulation(config_folder, custom_code_folder;
-    rulesets_collection_folder=rulesets_collection_folder,
-    config_variation_id=config_variation_id,
-    rulesets_variation_id=rulesets_variation_id,
-    ic_cell_variation_id=ic_cell_variation_id
-)
+variation_ids = pcvct.VariationIDs(config_variation_id, rulesets_variation_id, ic_cell_variation_id)
+simulation = Simulation(inputs, variation_ids)
 
 n_success = run(simulation)
 if n_success == 0
@@ -58,10 +58,6 @@ df = pcvct.queryToDataFrame(query; is_row=true)
 
 hashBorderPrint("SIMULATION SUCCESSFULLY IN DB!")
 
-monad_min_length = 2
-
-cell_type = "default"
-
 discrete_variations = DiscreteVariation[]
 xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:0"]
 push!(discrete_variations, DiscreteVariation(xml_path, [1.0, 2.0]))
@@ -72,10 +68,9 @@ push!(discrete_variations, DiscreteVariation(xml_path, [5.0, 6.0]))
 xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:3"]
 push!(discrete_variations, DiscreteVariation(xml_path, [7.0, 8.0]))
 
-config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, discrete_variations; reference_config_variation_id=config_variation_id, reference_rulesets_variation_id=rulesets_variation_id, reference_ic_cell_variation_id=ic_cell_variation_id)
-sampling = Sampling(config_folder, custom_code_folder;
+config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), inputs, discrete_variations; reference_config_variation_id=config_variation_id, reference_rulesets_variation_id=rulesets_variation_id, reference_ic_cell_variation_id=ic_cell_variation_id)
+sampling = Sampling(inputs;
     monad_min_length=monad_min_length,
-    rulesets_collection_folder=rulesets_collection_folder,
     config_variation_ids=config_variation_ids,
     rulesets_variation_ids=rulesets_variation_ids,
     ic_cell_variation_ids=ic_cell_variation_ids
@@ -110,6 +105,7 @@ n_success = run(sampling; force_recompile=false)
 hashBorderPrint("SUCCESSFULLY FOUND PREVIOUS SIMS!")
 
 trial = Trial([sampling])
+@test trial isa Trial
 
 n_success = run(trial; force_recompile=false)
 

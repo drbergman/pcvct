@@ -4,6 +4,12 @@ str = "TESTING WITH $(filename)"
 hashBorderPrint(str)
 
 config_folder = "0_template"
+custom_code_folder = "0_template"
+rulesets_collection_folder = "0_template"
+inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rulesets_collection_folder)
+
+monad_min_length = 2
+
 path_to_xml = "$(path_to_data_folder)/inputs/configs/$(config_folder)/PhysiCell_settings.xml"
 
 cell_type = "default"
@@ -59,16 +65,9 @@ end
 
 push!(discrete_variations, DiscreteVariation(["overall", "max_time"], [12.0]))
 
-
-monad_min_length = 2
-config_folder = "0_template"
-rulesets_collection_folder = "0_template"
-custom_code_folder = "0_template"
-ic_cell_folder = ""
-config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, discrete_variations)
-sampling = Sampling(config_folder, custom_code_folder;
+config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), inputs, discrete_variations)
+sampling = Sampling(inputs;
     monad_min_length=monad_min_length,
-    rulesets_collection_folder=rulesets_collection_folder,
     config_variation_ids=config_variation_ids,
     rulesets_variation_ids=rulesets_variation_ids,
     ic_cell_variation_ids=ic_cell_variation_ids
@@ -104,7 +103,8 @@ addCustomDataVariationDimension!(discrete_variations, cell_type, "sample", [0.1,
 new_config_variation_ids = pcvct.gridToDB(discrete_variations, pcvct.prepareConfigVariationFunctions(pcvct.retrieveID("configs", config_folder), discrete_variations; reference_config_variation_id=reference_config_variation_id)...)
 append!(config_variation_ids, new_config_variation_ids)
 
-sampling = Sampling(config_folder, custom_code_folder;
+inputs_no_rules = InputFolders(config_folder, custom_code_folder)
+sampling = Sampling(inputs_no_rules;
     monad_min_length=monad_min_length,
     config_variation_ids=config_variation_ids
 )
@@ -123,9 +123,9 @@ push!(discrete_variations, DiscreteVariation(xml_path, [0.25, 0.75]))
 
 rulesets_variation_ids = pcvct.gridToDB(discrete_variations, pcvct.prepareRulesetsVariationFunctions(pcvct.retrieveID("rulesets_collections", rulesets_collection_folder))...)
 
-sampling = Sampling(config_folder, custom_code_folder;
+inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rulesets_collection_folder)
+sampling = Sampling(inputs;
     monad_min_length=monad_min_length,
-    rulesets_collection_folder=rulesets_collection_folder,
     config_variation_ids=reference_config_variation_id,
     rulesets_variation_ids=rulesets_variation_ids,
     ic_cell_variation_ids=-1
@@ -141,10 +141,9 @@ addMotilityVariationDimension!(discrete_variations, cell_type, "speed", [0.1, 1.
 xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","signal:name:pressure","half_max"]
 push!(discrete_variations, DiscreteVariation(xml_path, [0.3, 0.6]))
 
-config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, discrete_variations; reference_config_variation_id=reference_config_variation_id)
-sampling = Sampling(config_folder, custom_code_folder;
+config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), inputs, discrete_variations; reference_config_variation_id=reference_config_variation_id)
+sampling = Sampling(inputs;
     monad_min_length=monad_min_length,
-    rulesets_collection_folder=rulesets_collection_folder,
     config_variation_ids=config_variation_ids,
     rulesets_variation_ids=rulesets_variation_ids,
     ic_cell_variation_ids=ic_cell_variation_ids
@@ -160,10 +159,9 @@ discrete_variations = DiscreteVariation[]
 
 addAttackRateVariationDimension!(discrete_variations, cell_type, cell_type, [0.1])
 
-config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, discrete_variations; reference_config_variation_id=reference_config_variation_id)
-sampling = Sampling(config_folder, custom_code_folder;
+config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), inputs, discrete_variations; reference_config_variation_id=reference_config_variation_id)
+sampling = Sampling(inputs;
     monad_min_length=monad_min_length,
-    rulesets_collection_folder=rulesets_collection_folder,
     config_variation_ids=config_variation_ids,
     rulesets_variation_ids=rulesets_variation_ids,
     ic_cell_variation_ids=ic_cell_variation_ids
