@@ -25,7 +25,7 @@ struct ImportSources
     main::ImportSource
     makefile::ImportSource
     custom_modules::ImportSource
-    rules::ImportSource
+    rulesets_collection::ImportSource
     ic_cell::ImportSource
     ic_substrate::ImportSource
     ic_ecm::ImportSource

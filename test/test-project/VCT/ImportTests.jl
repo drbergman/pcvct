@@ -23,18 +23,11 @@ push!(discrete_variations, DiscreteVariation(["overall","max_time"], [12.0]))
 push!(discrete_variations, DiscreteVariation(["save","full_data","interval"], [6.0]))
 push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], [6.0]))
 
-config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), inputs, discrete_variations)
+sampling = createTrial(inputs, discrete_variations; n_replicates=1)
 
-sampling = Sampling(inputs;
-    monad_min_length=1,
-    config_variation_ids=config_variation_ids,
-    rulesets_variation_ids=rulesets_variation_ids,
-    ic_cell_variation_ids=ic_cell_variation_ids
-)
+out = run(sampling; force_recompile=false)
 
-n_success = run(sampling; force_recompile=false)
-
-@test n_success == length(sampling)
+@test out.n_success == length(sampling)
 
 success = importProject(path_to_project, src, dest)
 @test success

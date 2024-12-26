@@ -18,14 +18,14 @@ simulation = Simulation(1)
 monad = Monad(1)
 @test monad isa Monad
 
-monad_min_length = 1
+n_replicates = 1
 config_variation_ids = [1, 2]
-rulesets_variation_ids = [1, 1]
+rulesets_collection_variation_ids = [1, 1]
 ic_cell_variation_ids = [0, 0]
 sampling = Sampling(inputs;
-    monad_min_length=monad_min_length,
+    n_replicates=n_replicates,
     config_variation_ids=config_variation_ids,
-    rulesets_variation_ids=rulesets_variation_ids,
+    rulesets_collection_variation_ids=rulesets_collection_variation_ids,
     ic_cell_variation_ids=ic_cell_variation_ids
 )
 @test sampling isa Sampling

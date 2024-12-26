@@ -8,7 +8,7 @@ custom_code_folder = "0_template"
 rulesets_collection_folder = "0_template"
 inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rulesets_collection_folder)
 
-monad_min_length = 2
+n_replicates = 2
 
 path_to_xml = "$(path_to_data_folder)/inputs/configs/$(config_folder)/PhysiCell_settings.xml"
 
@@ -65,52 +65,45 @@ end
 
 push!(discrete_variations, DiscreteVariation(["overall", "max_time"], [12.0]))
 
-config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), inputs, discrete_variations)
-sampling = Sampling(inputs;
-    monad_min_length=monad_min_length,
-    config_variation_ids=config_variation_ids,
-    rulesets_variation_ids=rulesets_variation_ids,
-    ic_cell_variation_ids=ic_cell_variation_ids
-)
+sampling = createTrial(inputs, discrete_variations; n_replicates=n_replicates)
 
-n_success = run(sampling; force_recompile=false)
-@test length(sampling) == length(config_variation_ids) * monad_min_length
-@test n_success == length(sampling)
+@test sampling isa Sampling
+
+out = run(sampling; force_recompile=false)
+@test length(sampling) == prod(length.(discrete_variations)) * n_replicates
+@test out.n_success == length(sampling)
 
 ## test the in place functions
 # NOTE to users: do not use gridToDB. This is here temporarily as internal code gets refactored.
-reference_config_variation_id = config_variation_ids[1] # just get one with the short max_time
-config_variation_ids = Int[]
+reference_monad = Monad(sampling.monad_ids[1])
+
+monads = Monad[]
 discrete_variations = DiscreteVariation[]
 addDomainVariationDimension!(discrete_variations, (-78.0, 78.0, -30.0, 30.0, -10.0, 10.0))
-new_config_variation_ids = pcvct.gridToDB(discrete_variations, pcvct.prepareConfigVariationFunctions(pcvct.retrieveID("configs", config_folder), discrete_variations; reference_config_variation_id=reference_config_variation_id)...)
-append!(config_variation_ids, new_config_variation_ids)
-
+monad = createTrial(reference_monad, discrete_variations; n_replicates=n_replicates)
+push!(monads, monad)
 
 discrete_variations = DiscreteVariation[]
 addDomainVariationDimension!(discrete_variations, (x_min=-78.1, x_max=78.1, y_min=-30.1, y_max=30.1, z_min=-10.1, z_max=10.1))
-new_config_variation_ids = pcvct.gridToDB(discrete_variations, pcvct.prepareConfigVariationFunctions(pcvct.retrieveID("configs", config_folder), discrete_variations; reference_config_variation_id=reference_config_variation_id)...)
-append!(config_variation_ids, new_config_variation_ids)
+monad = createTrial(reference_monad, discrete_variations; n_replicates=n_replicates)
+push!(monads, monad)
 
 discrete_variations = DiscreteVariation[]
 addDomainVariationDimension!(discrete_variations, (min_x=-78.2, maxy=30.2))
-new_config_variation_ids = pcvct.gridToDB(discrete_variations, pcvct.prepareConfigVariationFunctions(pcvct.retrieveID("configs", config_folder), discrete_variations; reference_config_variation_id=reference_config_variation_id)...)
-append!(config_variation_ids, new_config_variation_ids)
+monad = createTrial(reference_monad, discrete_variations; n_replicates=n_replicates)
+push!(monads, monad)
+
+sampling_1 = Sampling(monads)
 
 discrete_variations = DiscreteVariation[]
 addMotilityVariationDimension!(discrete_variations, cell_type, "speed", [0.1, 1.0])
 addCustomDataVariationDimension!(discrete_variations, cell_type, "sample", [0.1, 1.0])
-new_config_variation_ids = pcvct.gridToDB(discrete_variations, pcvct.prepareConfigVariationFunctions(pcvct.retrieveID("configs", config_folder), discrete_variations; reference_config_variation_id=reference_config_variation_id)...)
-append!(config_variation_ids, new_config_variation_ids)
+sampling_2 = createTrial(reference_monad, discrete_variations; n_replicates=n_replicates)
 
-inputs_no_rules = InputFolders(config_folder, custom_code_folder)
-sampling = Sampling(inputs_no_rules;
-    monad_min_length=monad_min_length,
-    config_variation_ids=config_variation_ids
-)
+trial = Trial([sampling_1, sampling_2])
 
-n_success = run(sampling; force_recompile=false)
-@test n_success == length(sampling)
+out = run(trial; force_recompile=false)
+@test out.n_success == length(trial)
 
 hashBorderPrint("SUCCESSFULLY VARIED CONFIG PARAMETERS!")
 
@@ -121,18 +114,10 @@ push!(discrete_variations, DiscreteVariation(xml_path, [0.0, 1e-8]))
 xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","signal:name:pressure","half_max"]
 push!(discrete_variations, DiscreteVariation(xml_path, [0.25, 0.75]))
 
-rulesets_variation_ids = pcvct.gridToDB(discrete_variations, pcvct.prepareRulesetsVariationFunctions(pcvct.retrieveID("rulesets_collections", rulesets_collection_folder))...)
+sampling = createTrial(reference_monad, discrete_variations; n_replicates=n_replicates)
 
-inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rulesets_collection_folder)
-sampling = Sampling(inputs;
-    monad_min_length=monad_min_length,
-    config_variation_ids=reference_config_variation_id,
-    rulesets_variation_ids=rulesets_variation_ids,
-    ic_cell_variation_ids=-1
-)
-
-n_success = run(sampling; force_recompile=false)
-@test n_success == length(sampling)
+out = run(sampling; force_recompile=false)
+@test out.n_success == length(sampling)
 
 hashBorderPrint("SUCCESSFULLY VARIED RULESETS PARAMETERS!")
 
@@ -141,16 +126,10 @@ addMotilityVariationDimension!(discrete_variations, cell_type, "speed", [0.1, 1.
 xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","signal:name:pressure","half_max"]
 push!(discrete_variations, DiscreteVariation(xml_path, [0.3, 0.6]))
 
-config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), inputs, discrete_variations; reference_config_variation_id=reference_config_variation_id)
-sampling = Sampling(inputs;
-    monad_min_length=monad_min_length,
-    config_variation_ids=config_variation_ids,
-    rulesets_variation_ids=rulesets_variation_ids,
-    ic_cell_variation_ids=ic_cell_variation_ids
-)
+sampling = createTrial(reference_monad, discrete_variations; n_replicates=n_replicates)
 
-n_success = run(sampling; force_recompile=false)
-@test n_success == length(sampling)
+out = run(sampling; force_recompile=false)
+@test out.n_success == length(sampling)
 
 hashBorderPrint("SUCCESSFULLY VARIED CONFIG AND RULESETS PARAMETERS!")
 
@@ -159,13 +138,7 @@ discrete_variations = DiscreteVariation[]
 
 addAttackRateVariationDimension!(discrete_variations, cell_type, cell_type, [0.1])
 
-config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), inputs, discrete_variations; reference_config_variation_id=reference_config_variation_id)
-sampling = Sampling(inputs;
-    monad_min_length=monad_min_length,
-    config_variation_ids=config_variation_ids,
-    rulesets_variation_ids=rulesets_variation_ids,
-    ic_cell_variation_ids=ic_cell_variation_ids
-)
+sampling = createTrial(reference_monad, discrete_variations; n_replicates=n_replicates)
 
-n_success = run(sampling; force_recompile=false)
-@test n_success == length(sampling)
+out = run(sampling; force_recompile=false)
+@test out.n_success == length(sampling)

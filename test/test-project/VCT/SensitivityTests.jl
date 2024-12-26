@@ -40,14 +40,14 @@ ub = 1000.0
 push!(evs, NormalDistributedVariation(xml_path, mu, sigma; lb=lb, ub=ub))
 
 n_points = 2^3-1
-monad_min_length = 1
+n_replicates = 1
 
 gs_fn(simulation_id::Int) = finalPopulationCount(simulation_id)[cell_type]
 
-moat_sampling = run(MOAT(n_points), monad_min_length, inputs, evs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
-moat_sampling = run(MOAT(8; orthogonalize=true), monad_min_length, inputs, evs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
-sobol_sampling = run(Sobolʼ(n_points), monad_min_length, inputs, evs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
-rbd_sampling = run(RBD(n_points), monad_min_length, inputs, evs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
+moat_sampling = run(MOAT(n_points), n_replicates, inputs, evs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
+moat_sampling = run(MOAT(8; orthogonalize=true), n_replicates, inputs, evs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
+sobol_sampling = run(Sobolʼ(n_points), n_replicates, inputs, evs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
+rbd_sampling = run(RBD(n_points), n_replicates, inputs, evs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
 
 # test sensitivity with config, rules, and ic_cells at once
 ic_cell_folder = "1_xml"
@@ -75,6 +75,6 @@ push!(evs, UniformDistributedVariation(xml_path, 0.0, 1.0e-8))
 xml_path = ["cell_patches:name:default", "patch_collection:type:annulus", "patch:ID:1", "inner_radius"]
 push!(evs, UniformDistributedVariation(xml_path, 0.0, 1.0))
 
-moat_sampling = run(MOAT(n_points), monad_min_length, inputs, evs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
-n_simulations_expected = n_points * (length(evs) + 1) * monad_min_length
+moat_sampling = run(MOAT(n_points), n_replicates, inputs, evs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
+n_simulations_expected = n_points * (length(evs) + 1) * n_replicates
 @test length(moat_sampling.sampling) == n_simulations_expected

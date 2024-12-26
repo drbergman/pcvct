@@ -67,7 +67,7 @@ function prepareFolder(simulation::Simulation, export_folder::AbstractString)
     # rulesets
     if row.rulesets_collection_id[1] != -1
         rulesets_collection_folder = simulation.inputs.rulesets_collection.folder
-        path_to_xml = joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder, "rulesets_collections_variations", "rulesets_variation_$(row.rulesets_variation_id[1]).xml")
+        path_to_xml = joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder, "rulesets_collections_variations", "rulesets_variation_$(row.rulesets_collection_variation_id[1]).xml")
         path_to_csv = joinpath(export_folder, "config", "cell_rules.csv")
         exportRulesToCSV(path_to_csv, path_to_xml)
     end
