@@ -10,7 +10,6 @@ rulesets_collection_folder = "0_template"
 custom_code_folder = "0_template"
 inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rulesets_collection_folder)
 
-cell_type = "default"
 n_replicates = 2
 
 discrete_variations = DiscreteVariation[]
@@ -34,35 +33,14 @@ out2 = run(inputs, discrete_variations)
 @test out.trial.inputs == out2.trial.inputs
 @test out.trial.variation_ids == out2.trial.variation_ids
 
-if out.n_success == 0
-    hashBorderPrint("Simulation failed...")
-    # print out the compilation error file if exists
-    if isfile("$(path_to_data_folder)/inputs/custom_codes/$(custom_code_folder)/output.err")
-        println(read("$(path_to_data_folder)/inputs/custom_codes/$(custom_code_folder)/output.err", String))
-    else
-        hashBorderPrint("No compilation error file found.")
-    end
-    # print out the output error file if exists
-    if isfile("$(path_to_data_folder)/outputs/simulations/$(simulation.id)/output.err")
-        println(read("$(path_to_data_folder)/outputs/simulations/$(simulation.id)/output.err", String))
-    else
-        hashBorderPrint("No output error file found.")
-    end
-    # print out the output log file if exists
-    if isfile("$(path_to_data_folder)/outputs/simulations/$(simulation.id)/output.log")
-        println(read("$(path_to_data_folder)/outputs/simulations/$(simulation.id)/output.log", String))
-    else
-        hashBorderPrint("No output log file found.")
-    end
-end
-
 hashBorderPrint("SIMULATION SUCCESSFULLY RUN!")
 
-query = pcvct.constructSelectQuery("simulations")
+query = pcvct.constructSelectQuery("simulations", "WHERE simulation_id=1")
 df = pcvct.queryToDataFrame(query; is_row=true)
 
 hashBorderPrint("SIMULATION SUCCESSFULLY IN DB!")
 
+cell_type = "default"
 discrete_variations = DiscreteVariation[]
 xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:0"]
 push!(discrete_variations, DiscreteVariation(xml_path, [1.0, 2.0]))
@@ -92,7 +70,6 @@ out2 = run(simulation, discrete_variations; n_replicates=n_replicates, force_rec
 @test out2.n_success == 0
 
 hashBorderPrint("SUCCESSFULLY `run` WITHOUT CREATING SAMPLING!")
-
 
 n_simulations = length(sampling) # number of simulations recorded (in .csvs) for this sampling
 n_expected_sims = n_replicates

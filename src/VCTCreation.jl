@@ -217,15 +217,15 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         # \t2) the name of a tag along with the value of one attribute (name:attribute_name:attribute_value)
         """))\
         xml_path = [pcvct.cyclePath(\"default\"); \"phase_durations\"; \"duration:index:0\"]
-        values = [200.0, 300.0, 400.0] # choose 3 discrete values to vary the duration of phase 0
-        dv_phase_0_duration = DiscreteVariation(xml_path, values)
+        vals = [200.0, 300.0, 400.0] # choose 3 discrete values to vary the duration of phase 0
+        dv_phase_0_duration = DiscreteVariation(xml_path, vals)
 
         $(tersify("""
         # now do the same, but for the apoptosis rate
         """))\
         xml_path = [pcvct.apoptosisPath(\"default\"); \"death_rate\"]
-        values = [4.31667e-05, 5.31667e-05, 6.31667e-05] # choose 3 discrete values to vary the apoptosis rate
-        dv_apoptosis_rate = DiscreteVariation(xml_path, values)
+        vals = [4.31667e-05, 5.31667e-05, 6.31667e-05] # choose 3 discrete values to vary the apoptosis rate
+        dv_apoptosis_rate = DiscreteVariation(xml_path, vals)
 
         $(tersify("""
         # now combine them into a list:

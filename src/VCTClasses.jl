@@ -145,7 +145,7 @@ end
 function getSimulation(simulation_id::Int)
     df = constructSelectQuery("simulations", "WHERE simulation_id=$(simulation_id);") |> queryToDataFrame
     if isempty(df)
-        error("No simulations found for simulation_id=$simulation_id. This simulation has not been created yet.")
+        error("Simulation $(simulation_id) not in the database.")
     end
     inputs = InputFolders(df.config_id[1], df.custom_code_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1])
     variation_ids = VariationIDs(df.config_variation_id[1], df.rulesets_collection_variation_id[1], df.ic_cell_variation_id[1])
@@ -244,10 +244,10 @@ end
 
 function getMonad(monad_id::Int)
     df = constructSelectQuery("monads", "WHERE monad_id=$(monad_id);") |> queryToDataFrame
-    simulation_ids = readMonadSimulationIDs(monad_id)
-    if isempty(df) || isempty(simulation_ids)
-        error("No monads found for monad_id=$monad_id. This monad did not run.")
+    if isempty(df)
+        error("Monad $(monad_id) not in the database.")
     end
+    simulation_ids = readMonadSimulationIDs(monad_id)
     n_replicates = 0
     inputs = InputFolders(df.config_id[1], df.custom_code_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1])
     variation_ids = VariationIDs(df.config_variation_id[1], df.rulesets_collection_variation_id[1], df.ic_cell_variation_id[1])
@@ -408,10 +408,10 @@ end
 
 function getSampling(sampling_id::Int)
     df = constructSelectQuery("samplings", "WHERE sampling_id=$(sampling_id);") |> queryToDataFrame
-    monad_ids = readSamplingMonadIDs(sampling_id)
-    if isempty(df) || isempty(monad_ids)
-        error("No samplings found for sampling_id=$sampling_id. This sampling did not run.")
+    if isempty(df)
+        error("Sampling $(sampling_id) not in the database.")
     end
+    monad_ids = readSamplingMonadIDs(sampling_id)
     n_replicates = 0 # not running more simulations for this Sampling this way
     inputs = InputFolders(df.config_id[1], df.custom_code_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1])
     monad_df = constructSelectQuery("monads", "WHERE monad_id IN ($(join(monad_ids,",")))") |> queryToDataFrame

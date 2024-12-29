@@ -21,18 +21,17 @@ xml_path = ["cell_patches:name:default", "patch_collection:type:disc", "patch:ID
 vals = [0.0, -100.0]
 push!(discrete_variations, DiscreteVariation(xml_path, vals))
 
-sampling = createTrial(inputs, discrete_variations; n_replicates=n_replicates)
+out = run(inputs, discrete_variations; n_replicates=n_replicates)
 
-@test sampling isa Sampling
+@test out.trial isa Sampling
 
 hashBorderPrint("SUCCESSFULLY ADDED IC CELL VARIATION!")
 
 hashBorderPrint("SUCCESSFULLY CREATED SAMPLING WITH IC CELL VARIATION!")
 
-out = run(sampling; force_recompile=false)
-@test out.n_success == length(sampling)
+@test out.n_success == length(out.trial)
 
-simulation_with_ic_cell_xml_id = getSimulationIDs(sampling)[1] # used in ExportTests.jl
+simulation_with_ic_cell_xml_id = getSimulationIDs(out.trial)[1] # used in ExportTests.jl
 
 hashBorderPrint("SUCCESSFULLY RAN SAMPLING WITH IC CELL VARIATION!")
 
@@ -40,7 +39,5 @@ discrete_variations = DiscreteVariation[]
 xml_path = ["cell_patches:name:default", "patch_collection:type:annulus", "patch:ID:1", "inner_radius"]
 push!(discrete_variations, DiscreteVariation(xml_path, 300.0))
 
-sampling = createTrial(Monad(sampling.monad_ids[1]), discrete_variations; n_replicates=n_replicates)
-    
-out = run(sampling; force_recompile=false)
+out = run(Monad(out.trial.monad_ids[1]), discrete_variations; n_replicates=n_replicates)
 @test out.n_success == 0
