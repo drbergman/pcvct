@@ -5,10 +5,8 @@ include("./test-project/VCT/PrintHelpers.jl")
 @testset "pcvct.jl" begin
     # Write your tests here.
     include("./test-project/VCT/CreateProjectTests.jl")
-
-    path_to_physicell_folder = "./test-project/PhysiCell" # path to PhysiCell folder
-    path_to_data_folder = "./test-project/data" # path to data folder
-    initializeVCT(path_to_physicell_folder, path_to_data_folder)
+    
+    include("./test-project/VCT/GenerateData.jl") # this file is created by CreateProjectTests.jl
 
     include("./test-project/VCT/RunnerTests.jl")
     include("./test-project/VCT/ImportTests.jl")

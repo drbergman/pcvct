@@ -38,3 +38,7 @@ samplings = [Sampling(1), Sampling(2)]
 
 trial = Trial(samplings)
 @test trial isa Trial
+
+@test_throws ErrorException pcvct.getSimulation(999)
+@test_throws ErrorException pcvct.getMonad(999)
+@test_throws ErrorException pcvct.getSampling(999)

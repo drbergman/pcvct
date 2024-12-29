@@ -65,17 +65,14 @@ end
 
 push!(discrete_variations, DiscreteVariation(["overall", "max_time"], [12.0]))
 
-sampling = createTrial(inputs, discrete_variations; n_replicates=n_replicates)
+out = run(inputs, discrete_variations; n_replicates=n_replicates)
 
-@test sampling isa Sampling
-
-out = run(sampling; force_recompile=false)
-@test length(sampling) == prod(length.(discrete_variations)) * n_replicates
-@test out.n_success == length(sampling)
+@test out.trial isa Sampling
+@test length(out.trial) == prod(length.(discrete_variations)) * n_replicates
+@test out.n_success == length(out.trial)
 
 ## test the in place functions
-# NOTE to users: do not use gridToDB. This is here temporarily as internal code gets refactored.
-reference_monad = Monad(sampling.monad_ids[1])
+reference_monad = Monad(out.trial.monad_ids[1])
 
 monads = Monad[]
 discrete_variations = DiscreteVariation[]
@@ -114,10 +111,9 @@ push!(discrete_variations, DiscreteVariation(xml_path, [0.0, 1e-8]))
 xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","signal:name:pressure","half_max"]
 push!(discrete_variations, DiscreteVariation(xml_path, [0.25, 0.75]))
 
-sampling = createTrial(reference_monad, discrete_variations; n_replicates=n_replicates)
+out = run(reference_monad, discrete_variations; n_replicates=n_replicates)
 
-out = run(sampling; force_recompile=false)
-@test out.n_success == length(sampling)
+@test out.n_success == length(out.trial)
 
 hashBorderPrint("SUCCESSFULLY VARIED RULESETS PARAMETERS!")
 
@@ -126,10 +122,8 @@ addMotilityVariationDimension!(discrete_variations, cell_type, "speed", [0.1, 1.
 xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","signal:name:pressure","half_max"]
 push!(discrete_variations, DiscreteVariation(xml_path, [0.3, 0.6]))
 
-sampling = createTrial(reference_monad, discrete_variations; n_replicates=n_replicates)
-
-out = run(sampling; force_recompile=false)
-@test out.n_success == length(sampling)
+out = run(reference_monad, discrete_variations; n_replicates=n_replicates)
+@test out.n_success == length(out.trial)
 
 hashBorderPrint("SUCCESSFULLY VARIED CONFIG AND RULESETS PARAMETERS!")
 
@@ -138,7 +132,5 @@ discrete_variations = DiscreteVariation[]
 
 addAttackRateVariationDimension!(discrete_variations, cell_type, cell_type, [0.1])
 
-sampling = createTrial(reference_monad, discrete_variations; n_replicates=n_replicates)
-
-out = run(sampling; force_recompile=false)
-@test out.n_success == length(sampling)
+out = run(reference_monad, discrete_variations; n_replicates=n_replicates)
+@test out.n_success == length(out.trial)
