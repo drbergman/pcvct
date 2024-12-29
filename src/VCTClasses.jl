@@ -81,8 +81,14 @@ end
 
 struct VariationIDs
     config::Int # integer identifying which variation on the base config file to use (config_variations.db)
-    rulesets::Int # integer identifying which variation on the ruleset file to use (rulesets_variations.db)
+    rulesets_collection::Int # integer identifying which variation on the ruleset file to use (rulesets_collection_variations.db)
     ic_cell::Int # integer identifying which variation on the ic cell file to use (ic_cell_variations.db) (only used if cells.xml, not used for cells.csv)
+end
+
+function VariationIDs(inputs::InputFolders)
+    fns = fieldnames(VariationIDs)
+    base_variation_ids = [(getfield(inputs, fn).id==-1 ? -1 : 0) for fn in fns]
+    return VariationIDs(base_variation_ids...)
 end
 
 variationIDNames() = (fieldnames(VariationIDs) .|> string) .* "_variation_id"
@@ -99,10 +105,10 @@ struct Simulation <: AbstractMonad
     function Simulation(id::Int, inputs::InputFolders, variation_ids::VariationIDs)
         @assert id > 0 "id must be positive"
         @assert variation_ids.config >= 0 "config variation id must be non-negative"
-        @assert variation_ids.rulesets >= -1 "rulesets variation id must be non-negative or -1 (indicating no rules)"
+        @assert variation_ids.rulesets_collection >= -1 "rulesets_collection variation id must be non-negative or -1 (indicating no rules)"
         @assert variation_ids.ic_cell >= -1 "ic_cell variation id must be non-negative or -1 (indicating no ic cells)"
-        if variation_ids.rulesets != -1
-            @assert inputs.rulesets_collection.folder != "" "rulesets_collection folder must be provided if rulesets variation id is not -1 (indicating that the rules are in use)"
+        if variation_ids.rulesets_collection != -1
+            @assert inputs.rulesets_collection.folder != "" "rulesets_collection folder must be provided if rulesets_collection variation id is not -1 (indicating that the rules are in use)"
         end
         if variation_ids.ic_cell == -1
             @assert inputs.ic_cell.folder == "" "ic_cell variation_id must be >=0 if ic_cell folder is provided"
@@ -114,7 +120,7 @@ struct Simulation <: AbstractMonad
     end
 end
 
-function Simulation(inputs::InputFolders, variation_ids::VariationIDs=VariationIDs(0,0,0))
+function Simulation(inputs::InputFolders, variation_ids::VariationIDs=VariationIDs(inputs))
     simulation_id = DBInterface.execute(db, 
     """
     INSERT INTO simulations (physicell_version_id,\
@@ -142,7 +148,7 @@ function getSimulation(simulation_id::Int)
         error("No simulations found for simulation_id=$simulation_id. This simulation has not been created yet.")
     end
     inputs = InputFolders(df.config_id[1], df.custom_code_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1])
-    variation_ids = VariationIDs(df.config_variation_id[1], df.rulesets_variation_id[1], df.ic_cell_variation_id[1])
+    variation_ids = VariationIDs(df.config_variation_id[1], df.rulesets_collection_variation_id[1], df.ic_cell_variation_id[1])
     return Simulation(simulation_id, inputs, variation_ids)
 end
 
@@ -157,26 +163,26 @@ Base.length(simulation::Simulation) = 1
 struct Monad <: AbstractMonad
     # a monad is a group of simulation replicates, i.e. identical up to randomness
     id::Int # integer uniquely identifying this monad
-    min_length::Int # (minimum) number of simulations belonging to this monad
+    n_replicates::Int # (minimum) number of simulations belonging to this monad
     simulation_ids::Vector{Int} # simulation ids belonging to this monad
 
     inputs::InputFolders # contains the folder names for the simulations in this monad
 
     variation_ids::VariationIDs
 
-    function Monad(id::Int, min_length::Int, simulation_ids::Vector{Int}, inputs::InputFolders, variation_ids::VariationIDs)
+    function Monad(id::Int, n_replicates::Int, simulation_ids::Vector{Int}, inputs::InputFolders, variation_ids::VariationIDs)
         @assert id > 0 "id must be positive"
-        @assert min_length >= 0 "min_length must be non-negative"
+        @assert n_replicates >= 0 "n_replicates must be non-negative"
 
         # this could be done when adding new simulation ids to save some fie I/O
         # doing it here just to make sure it is always up to date (and for consistency across classes)
         recordSimulationIDs(id, simulation_ids) # record the simulation ids in a .csv file
 
-        return new(id, min_length, simulation_ids, inputs, variation_ids)
+        return new(id, n_replicates, simulation_ids, inputs, variation_ids)
     end
 end
 
-function Monad(min_length::Int, inputs::InputFolders, variation_ids::VariationIDs; use_previous_simulations::Bool=true)
+function Monad(n_replicates::Int, inputs::InputFolders, variation_ids::VariationIDs; use_previous::Bool=true)
     monad_id = DBInterface.execute(db, 
     """
     INSERT OR IGNORE INTO monads (physicell_version_id,\
@@ -219,8 +225,8 @@ function Monad(min_length::Int, inputs::InputFolders, variation_ids::VariationID
     else
         monad_id = monad_id[1] # get the monad_id
     end
-    simulation_ids = use_previous_simulations ? readMonadSimulationIDs(monad_id) : Int[]
-    num_sims_to_add = min_length - length(simulation_ids)
+    simulation_ids = use_previous ? readMonadSimulationIDs(monad_id) : Int[]
+    num_sims_to_add = n_replicates - length(simulation_ids)
     if num_sims_to_add > 0
         for _ = 1:num_sims_to_add
             simulation = Simulation(inputs, variation_ids) # create a new simulation
@@ -228,12 +234,12 @@ function Monad(min_length::Int, inputs::InputFolders, variation_ids::VariationID
         end
     end
 
-    return Monad(monad_id, min_length, simulation_ids, inputs, variation_ids)
+    return Monad(monad_id, n_replicates, simulation_ids, inputs, variation_ids)
 end
 
-function Monad(inputs::InputFolders, variation_ids::VariationIDs; use_previous_simulations::Bool=true)
-    min_length = 0 # not making a monad to run if not supplying the min_length info
-    Monad(min_length, inputs, variation_ids; use_previous_simulations=use_previous_simulations)
+function Monad(inputs::InputFolders, variation_ids::VariationIDs; use_previous::Bool=true)
+    n_replicates = 0 # not making a monad to run if not supplying the n_replicates info
+    Monad(n_replicates, inputs, variation_ids; use_previous=use_previous)
 end
 
 function getMonad(monad_id::Int)
@@ -242,10 +248,10 @@ function getMonad(monad_id::Int)
     if isempty(df) || isempty(simulation_ids)
         error("No monads found for monad_id=$monad_id. This monad did not run.")
     end
-    min_length = 0
+    n_replicates = 0
     inputs = InputFolders(df.config_id[1], df.custom_code_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1])
-    variation_ids = VariationIDs(df.config_variation_id[1], df.rulesets_variation_id[1], df.ic_cell_variation_id[1])
-    return Monad(monad_id, min_length, simulation_ids, inputs, variation_ids)
+    variation_ids = VariationIDs(df.config_variation_id[1], df.rulesets_collection_variation_id[1], df.ic_cell_variation_id[1])
+    return Monad(monad_id, n_replicates, simulation_ids, inputs, variation_ids)
 end
 
 Monad(monad_id::Int) = getMonad(monad_id)
@@ -255,8 +261,8 @@ function Simulation(monad::Monad)
 end
 
 function Monad(simulation::Simulation)
-    min_length = 0 # do not impose a min length on this monad
-    monad = Monad(min_length, simulation.inputs, simulation.variation_ids)
+    n_replicates = 0 # do not impose a min length on this monad
+    monad = Monad(n_replicates, simulation.inputs, simulation.variation_ids)
     addSimulationID!(monad, simulation.id)
     return monad
 end
@@ -277,14 +283,14 @@ end
 struct Sampling <: AbstractSampling
     # sampling is a group of monads with config parameters varied
     id::Int # integer uniquely identifying this sampling
-    monad_min_length::Int # minimum length of each monad belonging to this sampling
+    n_replicates::Int # minimum length of each monad belonging to this sampling
     monad_ids::Vector{Int} # array of monad indices belonging to this sampling
 
     inputs::InputFolders # contains the folder names for this sampling
 
     variation_ids::Vector{VariationIDs} # variation_ids associated with each monad
 
-    function Sampling(id, monad_min_length, monad_ids, inputs, variation_ids)
+    function Sampling(id, n_replicates, monad_ids, inputs, variation_ids)
         @assert id > 0 "id must be positive"
         n_monads = length(monad_ids)
         n_variations = length(variation_ids)
@@ -297,11 +303,11 @@ struct Sampling <: AbstractSampling
             throw(ArgumentError(error_message))
         end
         recordMonadIDs(id, monad_ids) # record the monad ids in a .csv file
-        return new(id, monad_min_length, monad_ids, inputs, variation_ids)
+        return new(id, n_replicates, monad_ids, inputs, variation_ids)
     end
 end
 
-function Sampling(monad_min_length::Int, monad_ids::AbstractVector{<:Integer}, inputs::InputFolders, variation_ids::Vector{VariationIDs})
+function Sampling(n_replicates::Int, monad_ids::AbstractVector{<:Integer}, inputs::InputFolders, variation_ids::Vector{VariationIDs})
     id = -1
     sampling_ids = constructSelectQuery(
         "samplings",
@@ -345,38 +351,38 @@ function Sampling(monad_min_length::Int, monad_ids::AbstractVector{<:Integer}, i
         """
         ) |> DataFrame |> x -> x.sampling_id[1] # get the sampling_id
     end
-    return Sampling(id, monad_min_length, monad_ids, inputs, variation_ids)
+    return Sampling(id, n_replicates, monad_ids, inputs, variation_ids)
 end
 
-function Sampling(monad_min_length::Int, inputs::InputFolders, variation_ids::AbstractArray{VariationIDs}; use_previous_simulations::Bool=true)
-    monad_ids = createMonadIDs(monad_min_length, inputs, variation_ids; use_previous_simulations=use_previous_simulations)
-    return Sampling(monad_min_length, monad_ids, inputs, variation_ids)
+function Sampling(n_replicates::Int, inputs::InputFolders, variation_ids::AbstractArray{VariationIDs}; use_previous::Bool=true)
+    monad_ids = createMonadIDs(n_replicates, inputs, variation_ids; use_previous=use_previous)
+    return Sampling(n_replicates, monad_ids, inputs, variation_ids)
 end
 
 function Sampling(inputs::InputFolders;
-                monad_min_length::Integer=0,
+                n_replicates::Integer=0,
                 config_variation_ids::Union{Int,AbstractArray{<:Integer}}=Int[], 
-                rulesets_variation_ids::Union{Int,AbstractArray{<:Integer}}=fill(inputs.rulesets_collection.folder=="" ? -1 : 0, size(config_variation_ids)),
+                rulesets_collection_variation_ids::Union{Int,AbstractArray{<:Integer}}=fill(inputs.rulesets_collection.folder=="" ? -1 : 0, size(config_variation_ids)),
                 ic_cell_variation_ids::Union{Int,AbstractArray{<:Integer}}=fill(inputs.ic_cell.folder=="" ? -1 : 0, size(config_variation_ids)),
-                use_previous_simulations::Bool=true) 
-    # allow for passing in a single config_variation_id and/or rulesets_variation_id
-    # later, can support passing in (for example) a 3x6 config_variation_ids and a 3x1 rulesets_variation_ids and expanding the rulesets_variation_ids to 3x6, but that can get tricky fast
-    if all(x->x isa Integer, [config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids])
+                use_previous::Bool=true) 
+    # allow for passing in a single config_variation_id and/or rulesets_collection_variation_id
+    # later, can support passing in (for example) a 3x6 config_variation_ids and a 3x1 rulesets_collection_variation_ids and expanding the rulesets_collection_variation_ids to 3x6, but that can get tricky fast
+    if all(x->x isa Integer, [config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids])
         config_variation_ids = [config_variation_ids]
-        rulesets_variation_ids = [rulesets_variation_ids]
+        rulesets_collection_variation_ids = [rulesets_collection_variation_ids]
         ic_cell_variation_ids = [ic_cell_variation_ids]
     else
-        ns = [length(x) for x in [config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids] if !(x isa Integer)]
-        @assert all(x->x==ns[1], ns) "config_variation_ids, rulesets_variation_ids, and ic_cell_variation_ids must have the same length if they are not integers"
+        ns = [length(x) for x in [config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids] if !(x isa Integer)]
+        @assert all(x->x==ns[1], ns) "config_variation_ids, rulesets_collection_variation_ids, and ic_cell_variation_ids must have the same length if they are not integers"
         config_variation_ids = config_variation_ids isa Integer ? fill(config_variation_ids, ns[1]) : config_variation_ids
-        rulesets_variation_ids = rulesets_variation_ids isa Integer ? fill(rulesets_variation_ids, ns[1]) : rulesets_variation_ids
+        rulesets_collection_variation_ids = rulesets_collection_variation_ids isa Integer ? fill(rulesets_collection_variation_ids, ns[1]) : rulesets_collection_variation_ids
         ic_cell_variation_ids = ic_cell_variation_ids isa Integer ? fill(ic_cell_variation_ids, ns[1]) : ic_cell_variation_ids
     end
-    variation_ids = [VariationIDs(config_variation_ids[i], rulesets_variation_ids[i], ic_cell_variation_ids[i]) for i in 1:length(config_variation_ids)]
-    return Sampling(monad_min_length, inputs, variation_ids; use_previous_simulations=use_previous_simulations) 
+    variation_ids = [VariationIDs(config_variation_ids[i], rulesets_collection_variation_ids[i], ic_cell_variation_ids[i]) for i in 1:length(config_variation_ids)]
+    return Sampling(n_replicates, inputs, variation_ids; use_previous=use_previous) 
 end
 
-function Sampling(monad_min_length::Int, monads::AbstractArray{<:AbstractMonad})
+function Sampling(n_replicates::Int, monads::AbstractArray{<:AbstractMonad})
     inputs = monads[1].inputs
     for monad in monads
         if monad.inputs != inputs
@@ -386,15 +392,15 @@ function Sampling(monad_min_length::Int, monads::AbstractArray{<:AbstractMonad})
     end
     variation_ids = [monad.variation_ids for monad in monads]
     monad_ids = [monad.id for monad in monads]
-    return Sampling(monad_min_length, monad_ids, inputs, variation_ids) 
+    return Sampling(n_replicates, monad_ids, inputs, variation_ids) 
 end
 
-function createMonadIDs(monad_min_length::Int, inputs::InputFolders, variation_ids::AbstractArray{VariationIDs}; use_previous_simulations::Bool=true)
+function createMonadIDs(n_replicates::Int, inputs::InputFolders, variation_ids::AbstractArray{VariationIDs}; use_previous::Bool=true)
     _size = length(variation_ids)
     monad_ids = -ones(Int, _size)
     
     for (i, vid) in enumerate(variation_ids) 
-        monad = Monad(monad_min_length, inputs, vid; use_previous_simulations=use_previous_simulations) 
+        monad = Monad(n_replicates, inputs, vid; use_previous=use_previous) 
         monad_ids[i] = monad.id
     end
     return monad_ids
@@ -406,17 +412,22 @@ function getSampling(sampling_id::Int)
     if isempty(df) || isempty(monad_ids)
         error("No samplings found for sampling_id=$sampling_id. This sampling did not run.")
     end
-    monad_min_length = 0 # not running more simulations for this Sampling this way
+    n_replicates = 0 # not running more simulations for this Sampling this way
     inputs = InputFolders(df.config_id[1], df.custom_code_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1])
     monad_df = constructSelectQuery("monads", "WHERE monad_id IN ($(join(monad_ids,",")))") |> queryToDataFrame
-    variation_ids = [VariationIDs(monad_df.config_variation_id[i], monad_df.rulesets_variation_id[i], monad_df.ic_cell_variation_id[i]) for i in 1:length(monad_ids)]
-    return Sampling(sampling_id, monad_min_length, monad_ids, inputs, variation_ids)
+    variation_ids = [VariationIDs(monad_df.config_variation_id[i], monad_df.rulesets_collection_variation_id[i], monad_df.ic_cell_variation_id[i]) for i in 1:length(monad_ids)]
+    return Sampling(sampling_id, n_replicates, monad_ids, inputs, variation_ids)
 end
 
 Sampling(sampling_id::Int) = getSampling(sampling_id)
 
-function Monad(sampling::Sampling, index::Int; use_previous_simulations::Bool=true)
-    return Monad(sampling.monad_min_length, sampling.inputs, sampling.variation_ids[index]; use_previous_simulations=use_previous_simulations)
+function Monad(sampling::Sampling, index::Int; use_previous::Bool=true)
+    return Monad(sampling.n_replicates, sampling.inputs, sampling.variation_ids[index]; use_previous=use_previous)
+end
+
+function Sampling(monads::Vector{Monad})
+    n_replicates = [monad.n_replicates for monad in monads] |> minimum
+    return Sampling(n_replicates, monads)
 end
 
 ##########################################
@@ -426,13 +437,13 @@ end
 struct Trial <: AbstractTrial
     # trial is a group of samplings with different ICs, custom codes, and rulesets
     id::Int # integer uniquely identifying this trial
-    monad_min_length::Int # minimum length of each monad belonging to the samplings in this trial
+    n_replicates::Int # minimum length of each monad belonging to the samplings in this trial
     sampling_ids::Vector{Int} # array of sampling indices belonging to this trial
 
     inputs::Vector{InputFolders} # contains the folder names for the samplings in this trial
     variation_ids::Vector{Vector{VariationIDs}} # variation_ids associated with each monad for each sampling
 
-    function Trial(id::Int, monad_min_length::Int, sampling_ids::Vector{Int}, inputs::Vector{InputFolders}, variation_ids::Vector{Vector{VariationIDs}})
+    function Trial(id::Int, n_replicates::Int, sampling_ids::Vector{Int}, inputs::Vector{InputFolders}, variation_ids::Vector{Vector{VariationIDs}})
         @assert id > 0 "id must be positive"
         n_samplings = length(sampling_ids)
         n_inputs = length(inputs)
@@ -443,30 +454,30 @@ struct Trial <: AbstractTrial
 
         recordSamplingIDs(id, sampling_ids) # record the sampling ids in a .csv file
 
-        return new(id, monad_min_length, sampling_ids, inputs, variation_ids)
+        return new(id, n_replicates, sampling_ids, inputs, variation_ids)
     end
 end
 
-function Trial(monad_min_length::Int, inputs::Vector{InputFolders}, variation_ids::Vector{Vector{VariationIDs}})
-    sampling_ids = createSamplingIDs(monad_min_length, inputs, variation_ids)
+function Trial(n_replicates::Int, inputs::Vector{InputFolders}, variation_ids::Vector{Vector{VariationIDs}})
+    sampling_ids = createSamplingIDs(n_replicates, inputs, variation_ids)
     id = getTrialID(sampling_ids)
-    return Trial(id, monad_min_length, sampling_ids, inputs, variation_ids)
+    return Trial(id, n_replicates, sampling_ids, inputs, variation_ids)
 end
 
-function createSamplingIDs(monad_min_length::Int, inputs::Vector{InputFolders}, variation_ids::Vector{Vector{VariationIDs}}; use_previous_simulations::Bool=true)
+function createSamplingIDs(n_replicates::Int, inputs::Vector{InputFolders}, variation_ids::Vector{Vector{VariationIDs}}; use_previous::Bool=true)
     _size = size(inputs)
     sampling_ids = -ones(Int, _size)
     
     for i in eachindex(sampling_ids)
-        sampling = Sampling(monad_min_length, inputs[i], variation_ids[i]; use_previous_simulations=use_previous_simulations)
+        sampling = Sampling(n_replicates, inputs[i], variation_ids[i]; use_previous=use_previous)
         sampling_ids[i] = sampling.id
     end
     return sampling_ids
 end
 
-function Trial(monad_min_length::Int, sampling_ids::Vector{Int}, inputs::Vector{InputFolders}, variation_ids::Vector{Vector{VariationIDs}}; use_previous_simulations::Bool=true)
+function Trial(n_replicates::Int, sampling_ids::Vector{Int}, inputs::Vector{InputFolders}, variation_ids::Vector{Vector{VariationIDs}}; use_previous::Bool=true)
     id = getTrialID(sampling_ids)
-    return Trial(id, monad_min_length, sampling_ids, inputs, variation_ids)
+    return Trial(id, n_replicates, sampling_ids, inputs, variation_ids)
 end
 
 function getTrialID(sampling_ids::Vector{Int})
@@ -490,24 +501,24 @@ function getTrialID(sampling_ids::Vector{Int})
 end
 
 function Trial(samplings::Vector{Sampling})
-    monad_min_length = samplings[1].monad_min_length
+    n_replicates = samplings[1].n_replicates
     sampling_ids = [sampling.id for sampling in samplings]
     inputs = [sampling.inputs for sampling in samplings]
     variation_ids = [sampling.variation_ids for sampling in samplings]
-    return Trial(monad_min_length, sampling_ids, inputs, variation_ids)
+    return Trial(n_replicates, sampling_ids, inputs, variation_ids)
 end
 
-function Trial(; monad_min_length::Int=0, sampling_ids::AbstractArray{<:Integer}=Int[], config_folders::Vector{<:AbstractString}=String[],
+function Trial(; n_replicates::Int=0, sampling_ids::AbstractArray{<:Integer}=Int[], config_folders::Vector{<:AbstractString}=String[],
                 rulesets_collection_folders::Vector{<:AbstractString}=String[], ic_cell_folders::Vector{<:AbstractString}=String[], 
                 ic_substrate_folders::Vector{<:AbstractString}=String[], ic_ecm_folders::Vector{<:AbstractString}=String[], custom_code_folders::Vector{<:AbstractString}=String[],
                 config_variation_ids::AbstractArray{<:AbstractArray{<:Integer}}=AbstractArray{<:Integer}[],
-                rulesets_variation_ids::AbstractArray{<:AbstractArray{<:Integer}}=AbstractArray{<:Integer}[],
+                rulesets_collection_variation_ids::AbstractArray{<:AbstractArray{<:Integer}}=AbstractArray{<:Integer}[],
                 ic_cell_variation_ids::AbstractArray{<:AbstractArray{<:Integer}}=AbstractArray{<:Integer}[],
-                use_previous_simulations::Bool=true)
+                use_previous::Bool=true)
 
     inputs = [InputFolders(config_folder, custom_code_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder) for (config_folder, custom_code_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder) in zip(config_folders, custom_code_folders, rulesets_collection_folders, ic_cell_folders, ic_substrate_folders, ic_ecm_folders)]
-    variation_ids = [VariationIDs(config_variation_ids[i], rulesets_variation_ids[i], ic_cell_variation_ids[i]) for i in 1:length(config_variation_ids)]
-    return Trial(monad_min_length, sampling_ids, inputs, variation_ids; use_previous_simulations=use_previous_simulations)
+    variation_ids = [VariationIDs(config_variation_ids[i], rulesets_collection_variation_ids[i], ic_cell_variation_ids[i]) for i in 1:length(config_variation_ids)]
+    return Trial(n_replicates, sampling_ids, inputs, variation_ids; use_previous=use_previous)
 end
 
 function getTrial(trial_id::Int)
@@ -521,13 +532,13 @@ end
 
 Trial(trial_id::Int) = getTrial(trial_id)
 
-function Sampling(id::Int, monad_min_length::Int, inputs::InputFolders, variation_ids::Vector{VariationIDs}; use_previous_simulations::Bool=true)
-    monad_ids = createMonadIDs(monad_min_length, inputs, variation_ids; use_previous_simulations=use_previous_simulations)
-    return Sampling(id, monad_min_length, monad_ids, inputs, variation_ids)
+function Sampling(id::Int, n_replicates::Int, inputs::InputFolders, variation_ids::Vector{VariationIDs}; use_previous::Bool=true)
+    monad_ids = createMonadIDs(n_replicates, inputs, variation_ids; use_previous=use_previous)
+    return Sampling(id, n_replicates, monad_ids, inputs, variation_ids)
 end 
 
 function Sampling(trial::Trial, index::Int)
-    return Sampling(trial.sampling_ids[index], trial.monad_min_length, trial.inputs[index], trial.variation_ids[index])
+    return Sampling(trial.sampling_ids[index], trial.n_replicates, trial.inputs[index], trial.variation_ids[index])
 end
 
 ##########################################

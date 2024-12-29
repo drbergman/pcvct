@@ -21,6 +21,8 @@ include("VCTVersion.jl")
 include("VCTPhysiCellVersion.jl")
 include("VCTHPC.jl")
 
+include("VCTUserAPI.jl")
+
 include("VCTLoader.jl")
 
 include("VCTAnalysis.jl")

@@ -1,6 +1,6 @@
 function upgradePCVCT(from_version::VersionNumber, to_version::VersionNumber, auto_upgrade::Bool)
     println("Upgrading pcvct from version $(from_version) to $(to_version)...")
-    milestone_versions = [v"0.0.1", v"0.0.3", v"0.0.10", v"0.0.11"]
+    milestone_versions = [v"0.0.1", v"0.0.3", v"0.0.10", v"0.0.11", v"0.0.13"]
     next_milestone_inds = findall(x -> from_version < x, milestone_versions) # this could be simplified to take advantage of this list being sorted, but who cares? It's already so fast
     next_milestones = milestone_versions[next_milestone_inds]
     success = true
@@ -45,12 +45,12 @@ function upgradeToV0_0_1(::Bool)
                 continue
             end
             db_rulesets_variations = SQLite.DB(path_to_rulesets_variations_db)
-            df = DBInterface.execute(db_rulesets_variations, "INSERT OR IGNORE INTO rulesets_variations (rulesets_variation_id) VALUES(0) RETURNING rulesets_variation_id;") |> DataFrame
+            df = DBInterface.execute(db_rulesets_variations, "INSERT OR IGNORE INTO rulesets_variations (rulesets_collection_variation_id) VALUES(0) RETURNING rulesets_collection_variation_id;") |> DataFrame
             if isempty(df)
                 continue
             end
             column_names = queryToDataFrame("PRAGMA table_info(rulesets_variations);"; db=db_rulesets_variations) |> x -> x[!, :name]
-            filter!(x -> x != "rulesets_variation_id", column_names)
+            filter!(x -> x != "rulesets_collection_variation_id", column_names)
             path_to_xml = joinpath(path_to_rulesets_collections_folder, "base_rulesets.xml")
             if !isfile(path_to_xml)
                 writeRules(path_to_xml, joinpath(path_to_rulesets_collections_folder, "base_rulesets.csv"))
@@ -59,7 +59,7 @@ function upgradeToV0_0_1(::Bool)
             for column_name in column_names
                 xml_path = columnNameToXMLPath(column_name)
                 base_value = getField(xml_doc, xml_path)
-                query = "UPDATE rulesets_variations SET '$(column_name)'=$(base_value) WHERE rulesets_variation_id=0;"
+                query = "UPDATE rulesets_variations SET '$(column_name)'=$(base_value) WHERE rulesets_collection_variation_id=0;"
                 DBInterface.execute(db_rulesets_variations, query)
             end
             closeXML(xml_doc)
@@ -213,6 +213,36 @@ function upgradeToV0_0_11(::Bool)
             DBInterface.execute(db, "UPDATE samplings SET physicell_version_id=$(monad_physicell_versions[1]) WHERE sampling_id=$(row.sampling_id);")
         else
             println("WARNING: Multiple PhysiCell versions found for monads in sampling $(row.sampling_id). Not setting the sampling PhysiCell version.")
+        end
+    end
+end
+
+function upgradeToV0_0_13(::Bool)
+    println("\t- Upgrading to version 0.0.13...")
+    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('simulations') WHERE name='rulesets_variation_id';") |> DataFrame |> isempty
+        DBInterface.execute(db, "ALTER TABLE simulations RENAME COLUMN rulesets_variation_id TO rulesets_collection_variation_id;")
+    end
+    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('monads') WHERE name='rulesets_variation_id';") |> DataFrame |> isempty
+        DBInterface.execute(db, "ALTER TABLE monads RENAME COLUMN rulesets_variation_id TO rulesets_collection_variation_id;")
+    end
+    rulesets_collection_folders = queryToDataFrame(constructSelectQuery("rulesets_collections"; selection="folder_name")) |> x -> x.folder_name
+    for rulesets_collection_folder in rulesets_collection_folders
+        path_to_rulesets_collection_folder = joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder)
+        path_to_new_db = joinpath(path_to_rulesets_collection_folder, "rulesets_collection_variations.db")
+        if isfile(path_to_new_db)
+            continue
+        end
+        path_to_old_db = joinpath(path_to_rulesets_collection_folder, "rulesets_variations.db")
+        if !isfile(path_to_old_db)
+            error("Could not find a rulesets collection variation database file in $(path_to_rulesets_collection_folder).")
+        end
+        mv(path_to_old_db, path_to_new_db)
+        db_rulesets_collection_variations = SQLite.DB(path_to_new_db)
+        if DBInterface.execute(db_rulesets_collection_variations, "SELECT name FROM sqlite_master WHERE type='table' AND name='rulesets_variations';") |> DataFrame |> x -> (length(x.name)==1)
+            DBInterface.execute(db_rulesets_collection_variations, "ALTER TABLE rulesets_variations RENAME TO rulesets_collection_variations;")
+        end
+        if DBInterface.execute(db_rulesets_collection_variations, "SELECT 1 FROM pragma_table_info('rulesets_collection_variations') WHERE name='rulesets_variation_id';") |> DataFrame |> isempty
+            DBInterface.execute(db_rulesets_collection_variations, "ALTER TABLE rulesets_collection_variations RENAME COLUMN rulesets_variation_id TO rulesets_collection_variation_id;")
         end
     end
 end

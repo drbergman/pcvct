@@ -106,12 +106,12 @@ function loadConfiguration(sampling::Sampling)
 end
 
 function loadRulesets(M::AbstractMonad)
-    if M.variation_ids.rulesets == -1 # no rules being used
+    if M.variation_ids.rulesets_collection == -1 # no rules being used
         return
     end
     path_to_rulesets_collections_folder = joinpath(data_dir, "inputs", "rulesets_collections", M.inputs.rulesets_collection.folder)
-    path_to_rulesets_xml = joinpath(path_to_rulesets_collections_folder, "rulesets_collections_variations", "rulesets_variation_$(M.variation_ids.rulesets).xml")
-    if isfile(path_to_rulesets_xml) # already have the rulesets variation created
+    path_to_rulesets_xml = joinpath(path_to_rulesets_collections_folder, "rulesets_collections_variations", "rulesets_variation_$(M.variation_ids.rulesets_collection).xml")
+    if isfile(path_to_rulesets_xml) # already have the rulesets_collection variation created
         return
     end
     mkpath(dirname(path_to_rulesets_xml)) # ensure the directory exists
@@ -124,11 +124,11 @@ function loadRulesets(M::AbstractMonad)
     end
         
     xml_doc = parse_file(path_to_base_xml)
-    if M.variation_ids.rulesets != 0 # only update if not using the base variation for the ruleset
-        query = constructSelectQuery("rulesets_variations", "WHERE rulesets_variation_id=$(M.variation_ids.rulesets);")
+    if M.variation_ids.rulesets_collection != 0 # only update if not using the base variation for the ruleset
+        query = constructSelectQuery("rulesets_collection_variations", "WHERE rulesets_collection_variation_id=$(M.variation_ids.rulesets_collection);")
         variation_row = queryToDataFrame(query; db=rulesetsCollectionDB(M), is_row=true)
         for column_name in names(variation_row)
-            if column_name == "rulesets_variation_id"
+            if column_name == "rulesets_collection_variation_id"
                 continue
             end
             xml_path = columnNameToXMLPath(column_name)
@@ -291,7 +291,7 @@ function simpleConfigVariationNames(name::String)
 end
 
 function simpleRulesetsVariationNames(name::String)
-    if name == "rulesets_variation_id"
+    if name == "rulesets_collection_variation_id"
         return "RulesVarID"
     elseif startswith(name, "hypothesis_ruleset")
         return getRuleParameterName(name)
