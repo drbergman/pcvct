@@ -24,7 +24,7 @@ function _createTrial(inputs::InputFolders, reference_variation_ids::VariationID
     config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), inputs, evs, reference_variation_ids)
     if length(config_variation_ids) == 1
         variation_ids = VariationIDs(config_variation_ids[1], rulesets_collection_variation_ids[1], ic_cell_variation_ids[1])
-        monad = Monad(n_replicates, inputs, variation_ids; use_previous=use_previous)
+        monad = Monad(n_replicates, inputs, variation_ids, use_previous)
         if n_replicates != 1
             return monad
         end
