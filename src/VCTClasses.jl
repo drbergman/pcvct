@@ -170,7 +170,61 @@ struct Monad <: AbstractMonad
 
     variation_ids::VariationIDs
 
-    function Monad(id::Int, n_replicates::Int, simulation_ids::Vector{Int}, inputs::InputFolders, variation_ids::VariationIDs)
+    function Monad(n_replicates::Int, inputs::InputFolders, variation_ids::VariationIDs, use_previous::Bool)
+        monad_id = DBInterface.execute(db,
+                       """
+                       INSERT OR IGNORE INTO monads (physicell_version_id,\
+                       config_id,custom_code_id,\
+                       rulesets_collection_id,\
+                       ic_cell_id,ic_substrate_id,ic_ecm_id,\
+                       $(join(variationIDNames(), ","))\
+                       ) \
+                       VALUES(\
+                           $(physicellVersionDBEntry()),\
+                           $(inputs.config.id),$(inputs.custom_code.id),\
+                           $(inputs.rulesets_collection.id),\
+                           $(inputs.ic_cell.id),$(inputs.ic_substrate.id),\
+                           $(inputs.ic_ecm.id),\
+                           $(join([string(getfield(variation_ids, field)) for field in fieldnames(VariationIDs)],","))
+                       ) \
+                       RETURNING monad_id;
+                       """
+                   ) |> DataFrame |> x -> x.monad_id
+        if isempty(monad_id)
+            monad_id = constructSelectQuery(
+                           "monads",
+                           """
+                           WHERE (physicell_version_id,config_id,custom_code_id,\
+                           rulesets_collection_id,\
+                           ic_cell_id,ic_substrate_id,\
+                           ic_ecm_id,\
+                           $(join(variationIDNames(), ",")))=\
+                           (\
+                               $(physicellVersionDBEntry()),\
+                               $(inputs.config.id),$(inputs.custom_code.id),\
+                               $(inputs.rulesets_collection.id),\
+                               $(inputs.ic_cell.id),$(inputs.ic_substrate.id),\
+                               $(inputs.ic_ecm.id),\
+                               $(join([string(getfield(variation_ids, field)) for field in fieldnames(VariationIDs)],","))
+                           );\
+                           """,
+                           selection="monad_id"
+                       ) |> queryToDataFrame |> x -> x.monad_id[1] # get the monad_id
+        else
+            monad_id = monad_id[1] # get the monad_id
+        end
+        return Monad(monad_id, n_replicates, inputs, variation_ids, use_previous)
+    end
+    function Monad(id::Int, n_replicates::Int, inputs::InputFolders, variation_ids::VariationIDs, use_previous::Bool)
+        simulation_ids = use_previous ? readMonadSimulationIDs(id) : Int[]
+        num_sims_to_add = n_replicates - length(simulation_ids)
+        if num_sims_to_add > 0
+            for _ = 1:num_sims_to_add
+                simulation = Simulation(inputs, variation_ids) # create a new simulation
+                push!(simulation_ids, simulation.id) # add the simulation id to the monad
+            end
+        end
+
         @assert id > 0 "id must be positive"
         @assert n_replicates >= 0 "n_replicates must be non-negative"
 
@@ -180,81 +234,26 @@ struct Monad <: AbstractMonad
 
         return new(id, n_replicates, simulation_ids, inputs, variation_ids)
     end
-end
 
-function Monad(n_replicates::Int, inputs::InputFolders, variation_ids::VariationIDs; use_previous::Bool=true)
-    monad_id = DBInterface.execute(db, 
-    """
-    INSERT OR IGNORE INTO monads (physicell_version_id,\
-    config_id,custom_code_id,\
-    rulesets_collection_id,\
-    ic_cell_id,ic_substrate_id,ic_ecm_id,\
-    $(join(variationIDNames(), ","))\
-    ) \
-    VALUES(\
-        $(physicellVersionDBEntry()),\
-        $(inputs.config.id),$(inputs.custom_code.id),\
-        $(inputs.rulesets_collection.id),\
-        $(inputs.ic_cell.id),$(inputs.ic_substrate.id),\
-        $(inputs.ic_ecm.id),\
-        $(join([string(getfield(variation_ids, field)) for field in fieldnames(VariationIDs)],","))
-    ) \
-    RETURNING monad_id;
-    """
-    ) |> DataFrame |> x -> x.monad_id
-    if isempty(monad_id)
-        monad_id = constructSelectQuery(
-            "monads",
-            """
-            WHERE (physicell_version_id,config_id,custom_code_id,\
-            rulesets_collection_id,\
-            ic_cell_id,ic_substrate_id,\
-            ic_ecm_id,\
-            $(join(variationIDNames(), ",")))=\
-            (\
-                $(physicellVersionDBEntry()),\
-                $(inputs.config.id),$(inputs.custom_code.id),\
-                $(inputs.rulesets_collection.id),\
-                $(inputs.ic_cell.id),$(inputs.ic_substrate.id),\
-                $(inputs.ic_ecm.id),\
-                $(join([string(getfield(variation_ids, field)) for field in fieldnames(VariationIDs)],","))
-            );\
-            """,
-            selection="monad_id"
-        ) |> queryToDataFrame |> x -> x.monad_id[1] # get the monad_id
-    else
-        monad_id = monad_id[1] # get the monad_id
-    end
-    simulation_ids = use_previous ? readMonadSimulationIDs(monad_id) : Int[]
-    num_sims_to_add = n_replicates - length(simulation_ids)
-    if num_sims_to_add > 0
-        for _ = 1:num_sims_to_add
-            simulation = Simulation(inputs, variation_ids) # create a new simulation
-            push!(simulation_ids, simulation.id) # add the simulation id to the monad
-        end
-    end
-
-    return Monad(monad_id, n_replicates, simulation_ids, inputs, variation_ids)
 end
 
 function Monad(inputs::InputFolders, variation_ids::VariationIDs; use_previous::Bool=true)
     n_replicates = 0 # not making a monad to run if not supplying the n_replicates info
-    Monad(n_replicates, inputs, variation_ids; use_previous=use_previous)
+    Monad(n_replicates, inputs, variation_ids, use_previous)
 end
 
-function getMonad(monad_id::Int)
+function getMonad(monad_id::Int, n_replicates::Int)
     df = constructSelectQuery("monads", "WHERE monad_id=$(monad_id);") |> queryToDataFrame
     if isempty(df)
         error("Monad $(monad_id) not in the database.")
     end
-    simulation_ids = readMonadSimulationIDs(monad_id)
-    n_replicates = 0
     inputs = InputFolders(df.config_id[1], df.custom_code_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1])
     variation_ids = VariationIDs(df.config_variation_id[1], df.rulesets_collection_variation_id[1], df.ic_cell_variation_id[1])
-    return Monad(monad_id, n_replicates, simulation_ids, inputs, variation_ids)
+    use_previous = true
+    return Monad(monad_id, n_replicates, inputs, variation_ids, use_previous)
 end
 
-Monad(monad_id::Int) = getMonad(monad_id)
+Monad(monad_id::Integer; n_replicates::Integer=0) = getMonad(monad_id, n_replicates)
 
 function Simulation(monad::Monad)
     return Simulation(monad.inputs, monad.variation_ids)
@@ -262,7 +261,8 @@ end
 
 function Monad(simulation::Simulation)
     n_replicates = 0 # do not impose a min length on this monad
-    monad = Monad(n_replicates, simulation.inputs, simulation.variation_ids)
+    use_previous = true
+    monad = Monad(n_replicates, simulation.inputs, simulation.variation_ids, use_previous)
     addSimulationID!(monad, simulation.id)
     return monad
 end
@@ -400,29 +400,28 @@ function createMonadIDs(n_replicates::Int, inputs::InputFolders, variation_ids::
     monad_ids = -ones(Int, _size)
     
     for (i, vid) in enumerate(variation_ids) 
-        monad = Monad(n_replicates, inputs, vid; use_previous=use_previous) 
+        monad = Monad(n_replicates, inputs, vid, use_previous) 
         monad_ids[i] = monad.id
     end
     return monad_ids
 end
 
-function getSampling(sampling_id::Int)
+function getSampling(sampling_id::Int, n_replicates::Int)
     df = constructSelectQuery("samplings", "WHERE sampling_id=$(sampling_id);") |> queryToDataFrame
     if isempty(df)
         error("Sampling $(sampling_id) not in the database.")
     end
     monad_ids = readSamplingMonadIDs(sampling_id)
-    n_replicates = 0 # not running more simulations for this Sampling this way
     inputs = InputFolders(df.config_id[1], df.custom_code_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1])
     monad_df = constructSelectQuery("monads", "WHERE monad_id IN ($(join(monad_ids,",")))") |> queryToDataFrame
     variation_ids = [VariationIDs(monad_df.config_variation_id[i], monad_df.rulesets_collection_variation_id[i], monad_df.ic_cell_variation_id[i]) for i in 1:length(monad_ids)]
     return Sampling(sampling_id, n_replicates, monad_ids, inputs, variation_ids)
 end
 
-Sampling(sampling_id::Int) = getSampling(sampling_id)
+Sampling(sampling_id::Integer; n_replicates::Integer=0) = getSampling(sampling_id, n_replicates)
 
 function Monad(sampling::Sampling, index::Int; use_previous::Bool=true)
-    return Monad(sampling.n_replicates, sampling.inputs, sampling.variation_ids[index]; use_previous=use_previous)
+    return Monad(sampling.n_replicates, sampling.inputs, sampling.variation_ids[index], use_previous)
 end
 
 function Sampling(monads::Vector{Monad})
@@ -521,16 +520,16 @@ function Trial(; n_replicates::Int=0, sampling_ids::AbstractArray{<:Integer}=Int
     return Trial(n_replicates, sampling_ids, inputs, variation_ids; use_previous=use_previous)
 end
 
-function getTrial(trial_id::Int)
+function getTrial(trial_id::Int, n_replicates::Int)
     df = constructSelectQuery("trials", "WHERE trial_id=$(trial_id);") |> queryToDataFrame
     if isempty(df) || isempty(readTrialSamplingIDs(trial_id))
         error("No samplings found for trial_id=$trial_id. This trial did not run.")
     end
     sampling_ids = readTrialSamplingIDs(trial_id)
-    return Trial([Sampling(id) for id in sampling_ids])
+    return Trial([Sampling(id; n_replicates=n_replicates) for id in sampling_ids])
 end
 
-Trial(trial_id::Int) = getTrial(trial_id)
+Trial(trial_id::Integer; n_replicates::Integer=0) = getTrial(trial_id, n_replicates)
 
 function Sampling(id::Int, n_replicates::Int, inputs::InputFolders, variation_ids::Vector{VariationIDs}; use_previous::Bool=true)
     monad_ids = createMonadIDs(n_replicates, inputs, variation_ids; use_previous=use_previous)
