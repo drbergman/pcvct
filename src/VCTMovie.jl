@@ -1,6 +1,6 @@
-export makeMovie
+export makeMovie_____
 
-function makeMovie(simulation_id::Int)
+function makeMovie_____(simulation_id::Int)
     path_to_output_folder = joinpath(outputFolder("simulation", simulation_id), "output")
     if isfile("$(path_to_output_folder)/out.mp4")
         movie_generated = false
@@ -21,12 +21,12 @@ function makeMovie(simulation_id::Int)
     return movie_generated
 end
 
-function makeMovie(T::AbstractTrial)
+function makeMovie_____(T::AbstractTrial)
     simulation_ids = getSimulationIDs(T)
     println("Making movies for $(typeof(T)) $(T.id) with $(length(simulation_ids)) simulations...")
     for simulation_id in simulation_ids
         print("\tMaking movie for simulation $simulation_id...")
-        makeMovie(simulation_id)
+        makeMovie_____(simulation_id)
         println("done.")
     end
 end

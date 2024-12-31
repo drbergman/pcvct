@@ -9,9 +9,9 @@ custom_code_folder = "0_template"
 inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rulesets_collection_folder)
 
 discrete_variations = DiscreteVariation[]
-push!(discrete_variations, DiscreteVariation(["overall","max_time"], [12.0]))
-push!(discrete_variations, DiscreteVariation(["save","full_data","interval"], [6.0]))
-push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], [6.0]))
+push!(discrete_variations, DiscreteVariation(["overall","max_time"], 12.0))
+push!(discrete_variations, DiscreteVariation(["save","full_data","interval"], 6.0))
+push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], 6.0))
 
 out = run(inputs, discrete_variations; use_previous=false)
 @test out.trial isa Simulation
@@ -28,4 +28,3 @@ end
 
 monad = createTrial(out.trial; n_replicates=0)
 @test monad isa Monad
-mean_speed_dicts = computeMeanSpeed(VCTClassID("Monad", monad.id))

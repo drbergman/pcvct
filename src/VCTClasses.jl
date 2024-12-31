@@ -1,4 +1,4 @@
-export Simulation, Monad, Sampling, Trial, getTrial, VCTClassID, InputFolders
+export Simulation, Monad, Sampling, Trial, getTrial, InputFolders
 
 abstract type AbstractTrial end
 abstract type AbstractSampling <: AbstractTrial end
@@ -457,23 +457,6 @@ struct Trial <: AbstractTrial
     end
 end
 
-function Trial(n_replicates::Int, inputs::Vector{InputFolders}, variation_ids::Vector{Vector{VariationIDs}})
-    sampling_ids = createSamplingIDs(n_replicates, inputs, variation_ids)
-    id = getTrialID(sampling_ids)
-    return Trial(id, n_replicates, sampling_ids, inputs, variation_ids)
-end
-
-function createSamplingIDs(n_replicates::Int, inputs::Vector{InputFolders}, variation_ids::Vector{Vector{VariationIDs}}; use_previous::Bool=true)
-    _size = size(inputs)
-    sampling_ids = -ones(Int, _size)
-    
-    for i in eachindex(sampling_ids)
-        sampling = Sampling(n_replicates, inputs[i], variation_ids[i]; use_previous=use_previous)
-        sampling_ids[i] = sampling.id
-    end
-    return sampling_ids
-end
-
 function Trial(n_replicates::Int, sampling_ids::Vector{Int}, inputs::Vector{InputFolders}, variation_ids::Vector{Vector{VariationIDs}}; use_previous::Bool=true)
     id = getTrialID(sampling_ids)
     return Trial(id, n_replicates, sampling_ids, inputs, variation_ids)
@@ -507,19 +490,6 @@ function Trial(samplings::Vector{Sampling})
     return Trial(n_replicates, sampling_ids, inputs, variation_ids)
 end
 
-function Trial(; n_replicates::Int=0, sampling_ids::AbstractArray{<:Integer}=Int[], config_folders::Vector{<:AbstractString}=String[],
-                rulesets_collection_folders::Vector{<:AbstractString}=String[], ic_cell_folders::Vector{<:AbstractString}=String[], 
-                ic_substrate_folders::Vector{<:AbstractString}=String[], ic_ecm_folders::Vector{<:AbstractString}=String[], custom_code_folders::Vector{<:AbstractString}=String[],
-                config_variation_ids::AbstractArray{<:AbstractArray{<:Integer}}=AbstractArray{<:Integer}[],
-                rulesets_collection_variation_ids::AbstractArray{<:AbstractArray{<:Integer}}=AbstractArray{<:Integer}[],
-                ic_cell_variation_ids::AbstractArray{<:AbstractArray{<:Integer}}=AbstractArray{<:Integer}[],
-                use_previous::Bool=true)
-
-    inputs = [InputFolders(config_folder, custom_code_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder) for (config_folder, custom_code_folder, rulesets_collection_folder, ic_cell_folder, ic_substrate_folder, ic_ecm_folder) in zip(config_folders, custom_code_folders, rulesets_collection_folders, ic_cell_folders, ic_substrate_folders, ic_ecm_folders)]
-    variation_ids = [VariationIDs(config_variation_ids[i], rulesets_collection_variation_ids[i], ic_cell_variation_ids[i]) for i in 1:length(config_variation_ids)]
-    return Trial(n_replicates, sampling_ids, inputs, variation_ids; use_previous=use_previous)
-end
-
 function getTrial(trial_id::Int, n_replicates::Int)
     df = constructSelectQuery("trials", "WHERE trial_id=$(trial_id);") |> queryToDataFrame
     if isempty(df) || isempty(readTrialSamplingIDs(trial_id))
@@ -538,28 +508,4 @@ end
 
 function Sampling(trial::Trial, index::Int)
     return Sampling(trial.sampling_ids[index], trial.n_replicates, trial.inputs[index], trial.variation_ids[index])
-end
-
-##########################################
-#############   VCTClassID   #############
-##########################################
-
-struct VCTClassID{T<:AbstractTrial} 
-    id::Int
-end
-
-getVCTClassIDType(class_id::VCTClassID) = typeof(class_id).parameters[1]
-
-function VCTClassID(class_str::String, id::Int)
-    if class_str == "Simulation"
-        return VCTClassID{Simulation}(id)
-    elseif class_str == "Monad"
-        return VCTClassID{Monad}(id)
-    elseif class_str == "Sampling"
-        return VCTClassID{Sampling}(id)
-    elseif class_str == "Trial"
-        return VCTClassID{Trial}(id)
-    else
-        error("class_str must be one of 'Simulation', 'Monad', 'Sampling', or 'Trial'.")
-    end
 end

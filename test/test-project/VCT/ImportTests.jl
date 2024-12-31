@@ -19,9 +19,9 @@ success = importProject(path_to_project, src, dest)
 inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rulesets_collection_folder, ic_cell=ic_cell_folder)
 
 discrete_variations = DiscreteVariation[]
-push!(discrete_variations, DiscreteVariation(["overall","max_time"], [12.0]))
-push!(discrete_variations, DiscreteVariation(["save","full_data","interval"], [6.0]))
-push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], [6.0]))
+push!(discrete_variations, DiscreteVariation(["overall","max_time"], 12.0))
+push!(discrete_variations, DiscreteVariation(["save","full_data","interval"], 6.0))
+push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], 6.0))
 
 sampling = createTrial(inputs, discrete_variations; n_replicates=1)
 
@@ -73,3 +73,8 @@ end
 
 success = importProject(path_to_bad_project)
 @test !success
+
+# import the ecm project to actually use
+path_to_project = joinpath("test-project", "PhysiCell", "sample_projects", "template-ecm")
+success = importProject(path_to_project)
+@test success

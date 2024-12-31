@@ -3,7 +3,7 @@ using SQLite
 function physicellVersionID()
     if !physicellIsGit()
         tag = readlines(joinpath(physicell_dir, "VERSION.txt"))[1]
-        df = DBInterface.execute(db, "INSERT OR IGNORE INTO physicell_versions commit_hash VALUES '$(tag)-download' RETURNING phsyicell_version_id;") |> DataFrame
+        df = DBInterface.execute(db, "INSERT OR IGNORE INTO physicell_versions (commit_hash) VALUES ('$(tag)-download') RETURNING physicell_version_id;") |> DataFrame
         if isempty(df)
             query = constructSelectQuery("physicell_versions", "WHERE commit_hash='$(tag)-download'"; selection="physicell_version_id")
             df = queryToDataFrame(query; is_row=true)
@@ -88,7 +88,27 @@ end
 function gitDirectoryIsClean(dir::String)
     cmd = `git -C $dir status --porcelain` # -C flag is for changing directory, --porcelain flag is for machine-readable output (much easier to tell if clean this way)
     output = read(cmd, String)
-    return length(output) == 0
+    is_clean = length(output) == 0
+    if is_clean
+        return true
+    end
+    folders_to_ignore = ["beta", "config", "documentation-deprecated", "examples",
+        "licenses", "matlab", "output", "povray", "protocols", "sample_projects",
+        "sample_projects_intracellular", "sample_projects_physipkpd", "tests", "unit_tests",
+        "user_projects"]
+    lines = split(output, "\n")
+    filter!(x -> x != "", lines)
+    for folder in folders_to_ignore
+        filter!(x -> !contains(x, " $folder/"), lines)
+    end
+    is_clean = isempty(lines)
+    if !is_clean
+        println("PhysiCell repository is dirty. The following files are modified in the PhysiCell repository:")
+        println(output)
+        println("\nOf those, the following files are not in the folders to ignore for cleanliness:")
+        println.(lines);
+    end
+    return is_clean
 end
 
 function getCommitHashToTagDict(dir::String)

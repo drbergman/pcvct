@@ -1,6 +1,7 @@
 export deleteSimulation, deleteSimulations
 
-function deleteSimulations(simulation_ids::AbstractVector{<:Integer}; delete_supers::Bool=true, and_constraints::String="")
+function deleteSimulations(simulation_ids::AbstractVector{<:Union{Integer,Missing}}; delete_supers::Bool=true, and_constraints::String="")
+    filter!(x -> !ismissing(x), simulation_ids)
     where_stmt = "WHERE simulation_id IN ($(join(simulation_ids,","))) $(and_constraints);"
     sim_df = constructSelectQuery("simulations", where_stmt) |> queryToDataFrame
     simulation_ids = sim_df.simulation_id # update based on the constraints added
