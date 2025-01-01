@@ -42,3 +42,8 @@ trial = Trial(samplings)
 @test_throws ErrorException Simulation(999)
 @test_throws ErrorException Monad(999)
 @test_throws ErrorException Sampling(999)
+
+# misc tests
+inputs = InputFolders(; config="0_template", custom_code="0_template")
+simulation = Simulation(Monad(1))
+sampling = Sampling(inputs; config_variation_ids=0, rulesets_collection_variation_ids=-1, ic_cell_variation_ids=-1)

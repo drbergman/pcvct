@@ -5,10 +5,11 @@ str = "TESTING WITH $(filename)"
 hashBorderPrint(str)
 
 project_dir = "./test-project"
-pcvct.createProject(project_dir)
+createProject(project_dir)
 
 path_to_data_folder = joinpath(".", "test-project", "data")
 
+# set up ic cell stuff
 mkdir(joinpath(path_to_data_folder, "inputs", "ics", "cells", "1_xml"))
 xml_doc = XMLDocument()
 xml_root = create_root(xml_doc, "ic_cells")

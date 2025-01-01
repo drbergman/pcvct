@@ -96,7 +96,7 @@ function prepareFolder(simulation::Simulation, export_folder::AbstractString)
     # ic ecm
     if row.ic_ecm_id[1] != -1
         ic_ecm_folder = simulation.inputs.ic_ecm.folder
-        path_to_file = joinpath(data_dir, "inputs", "ics", "ecm", ic_ecm_folder, "ecm.csv")
+        path_to_file = joinpath(data_dir, "inputs", "ics", "ecms", ic_ecm_folder, "ecm.csv")
         cp(path_to_file, joinpath(export_folder, "config", "ecm.csv"))
     end
 
@@ -225,14 +225,9 @@ function revertConfig(export_folder::AbstractString, physicell_version::Abstract
     set_content(filename_element, "cells.csv")
 
     # ic ecm
-    ecm_setup_element = retrieveElement(xml_doc, ["microenvironment_setup", "ecm_setup"])
     using_ecm_ics = isfile(joinpath(path_to_config_folder, "ecm.csv"))
     if using_ecm_ics
-        set_attributes(ecm_setup_element; enabled="true", format="csv")
-        folder_element = find_element(ecm_setup_element, "folder")
-        set_content(folder_element, "./config")
-        filename_element = find_element(ecm_setup_element, "filename")
-        set_content(filename_element, "ecm.csv")
+        setECMSetupElement(xml_doc)
     end
     
     # rulesets
@@ -246,6 +241,27 @@ function revertConfig(export_folder::AbstractString, physicell_version::Abstract
 
     closeXML(xml_doc)
     return true
+end
+
+function setECMSetupElement(xml_doc::XMLDocument)
+    ecm_setup_element = retrieveElement(xml_doc, ["microenvironment_setup", "ecm_setup"])
+    if isnothing(ecm_setup_element)
+        xml_root = root(xml_doc)
+        microenvironment_setup_element = find_element(xml_root, "microenvironment_setup")
+        ecm_setup_element = new_child(microenvironment_setup_element, "ecm_setup")
+    end
+    set_attributes(ecm_setup_element; enabled="true", format="csv")
+    folder_element = find_element(ecm_setup_element, "folder")
+    if isnothing(folder_element)
+        folder_element = new_child(ecm_setup_element, "folder")
+    end
+    set_content(folder_element, "./config")
+    filename_element = find_element(ecm_setup_element, "filename")
+    if isnothing(filename_element)
+        filename_element = new_child(ecm_setup_element, "filename")
+    end
+    set_content(filename_element, "ecm.csv")
+    return
 end
 
 function revertCustomModules(export_folder::AbstractString, physicell_version::AbstractString)

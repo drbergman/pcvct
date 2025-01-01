@@ -1,4 +1,4 @@
-using Downloads, JSON3
+using Downloads, JSON3, CSV
 
 export createProject
 
@@ -66,10 +66,14 @@ function setUpPhysiCell(project_dir::String, clone_physicell::Bool)
         # download drbergman/Pysicell main branch
         println("Downloading PhysiCell repository")
         url = "https://api.github.com/repos/drbergman/PhysiCell/releases/latest"
+        headers = haskey(ENV, "PCVCT_PUBLIC_REPO_AUTH") ? Dict("Authorization" => "token $(ENV["PCVCT_PUBLIC_REPO_AUTH"])") : Pair{String,String}[]
+        response = Downloads.download(url; headers=headers)
+        release_data = JSON3.read(response)
+        zipball_url = release_data["zipball_url"]
         zip_path = joinpath(project_dir, "PhysiCell.zip")
-        Downloads.download(url, zip_path)
+        Downloads.download(zipball_url, zip_path)
         extract_path = joinpath(project_dir, "PhysiCell_extract")
-        run(`unzip $zip_path -d $extract_path`)
+        run(pipeline(`unzip $zip_path -d $extract_path`; stdout=devnull))
         rm(zip_path)
         @assert (readdir(extract_path) |> length) == 1
         path_to_extracted_physicell = readdir(extract_path; join=true)[1]
@@ -99,12 +103,29 @@ function setUpInputs(data_dir::String, physicell_dir::String, template_as_defaul
     end
 end
 
+function setUpRequiredFolders(path_to_template::String, inputs_dir::String, folder::String)
+    config_folder = joinpath(inputs_dir, "configs", folder)
+    mkpath(config_folder)
+    cp(joinpath(path_to_template, "config", "PhysiCell_settings.xml"), joinpath(config_folder, "PhysiCell_settings.xml"))
+
+    custom_codes_folder = joinpath(inputs_dir, "custom_codes", folder)
+    mkpath(custom_codes_folder)
+    cp(joinpath(path_to_template, "custom_modules"), joinpath(custom_codes_folder, "custom_modules"))
+    cp(joinpath(path_to_template, "main.cpp"), joinpath(custom_codes_folder, "main.cpp"))
+    cp(joinpath(path_to_template, "Makefile"), joinpath(custom_codes_folder, "Makefile"))
+end
+
+function setUpICFolder(path_to_template::String, inputs_dir::String, ic_name::String, folder::String)
+    ic_folder = joinpath(inputs_dir, "ics", ic_name, folder)
+    mkpath(ic_folder)
+    filename = icFilename(ic_name)
+    cp(joinpath(path_to_template, "config", filename), joinpath(ic_folder, filename))
+end
+
 function setUpTemplate(physicell_dir::String, inputs_dir::String)
     path_to_template = joinpath(physicell_dir, "sample_projects", "template")
 
-    config_folder = joinpath(inputs_dir, "configs", "0_template")
-    mkpath(config_folder)
-    cp(joinpath(path_to_template, "config", "PhysiCell_settings.xml"), joinpath(config_folder, "PhysiCell_settings.xml"))
+    setUpRequiredFolders(path_to_template, inputs_dir, "0_template")
 
     rulesets_collection_folder = joinpath(inputs_dir, "rulesets_collections", "0_template")
     mkpath(rulesets_collection_folder)
@@ -112,15 +133,8 @@ function setUpTemplate(physicell_dir::String, inputs_dir::String)
         write(f, "default,pressure,decreases,cycle entry,0.0,0.5,4,0") # actually add a rule for example's sake
     end
 
-    custom_codes_folder = joinpath(inputs_dir, "custom_codes", "0_template")
-    mkpath(custom_codes_folder)
-    cp(joinpath(path_to_template, "custom_modules"), joinpath(custom_codes_folder, "custom_modules"))
-    cp(joinpath(path_to_template, "main.cpp"), joinpath(custom_codes_folder, "main.cpp"))
-    cp(joinpath(path_to_template, "Makefile"), joinpath(custom_codes_folder, "Makefile"))
-
-    ic_cells_folder = joinpath(inputs_dir, "ics", "cells", "0_template")
-    mkpath(ic_cells_folder)
-    cp(joinpath(path_to_template, "config", "cells.csv"), joinpath(ic_cells_folder, "cells.csv"))
+    setUpICFolder(path_to_template, inputs_dir, "cells", "0_template")
+    setUpICFolder(path_to_template, inputs_dir, "substrates", "0_template")
 end
 
 function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, template_as_default::Bool, terse::Bool)

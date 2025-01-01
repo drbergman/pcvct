@@ -42,4 +42,13 @@ config_db = pcvct.configDB(Simulation(1))
 ic_cell_db = pcvct.icCellDB(Simulation(1))
 @test ic_cell_db isa Missing
 
-printSimulationsTable(VCTClassID("Sampling", 1))
+pcvct.configVariationIDs(Simulation(1))
+pcvct.configVariationIDs(Sampling(1))
+pcvct.rulesetsVariationIDs(Simulation(1))
+pcvct.rulesetsVariationIDs(Sampling(1))
+pcvct.icCellVariationIDs(Simulation(1))
+pcvct.icCellVariationIDs(Sampling(1))
+
+pcvct.configVariationsTable(Sampling(1); remove_constants=true)
+pcvct.rulesetsVariationsTable(Sampling(1); remove_constants=true)
+pcvct.icCellVariationsTable(Sampling(1); remove_constants=true)

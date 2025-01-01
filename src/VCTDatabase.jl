@@ -383,7 +383,7 @@ function rulesetsCollectionDB(rulesets_collection_folder::String)
     path_to_folder = joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder)
     return joinpath(path_to_folder, "rulesets_collection_variations.db") |> SQLite.DB
 end
-rulesetsCollectionDB(M::AbstractMonad) = rulesetsCollectionDB(M.inputs.rulesets_collection.folder)
+rulesetsCollectionDB(S::AbstractSampling) = rulesetsCollectionDB(S.inputs.rulesets_collection.folder)
 rulesetsCollectionDB(rulesets_collection_id::Int) = rulesetsCollectionFolder(rulesets_collection_id) |> rulesetsCollectionDB
 
 function icCellDB(ic_cell_folder::String)
@@ -448,8 +448,6 @@ rulesetsVariationIDs(sampling::Sampling) = [vid.rulesets_collection for vid in s
 icCellVariationIDs(M::AbstractMonad) = [M.variation_ids.ic_cell]
 icCellVariationIDs(sampling::Sampling) = [vid.ic_cell for vid in sampling.variation_ids]
 
-getAbstractTrial(class_id::VCTClassID) = class_id.id |> getVCTClassIDType(class_id)
-
 function variationsTable(query::String, db::SQLite.DB; remove_constants::Bool=false)
     df = queryToDataFrame(query, db=db)
     if remove_constants && size(df, 1) > 1
@@ -468,7 +466,6 @@ function configVariationsTable(config_variations_db::SQLite.DB, config_variation
 end
 
 configVariationsTable(S::AbstractSampling; remove_constants::Bool=false) = configVariationsTable(configDB(S), configVariationIDs(S); remove_constants=remove_constants)
-configVariationsTable(class_id::VCTClassID{<:AbstractSampling}; remove_constants::Bool=false) = getAbstractTrial(class_id) |> x -> configVariationsTable(x; remove_constants=remove_constants)
 
 function rulesetsVariationsTable(rulesets_variations_db::SQLite.DB, rulesets_collection_variation_ids::AbstractVector{<:Integer}; remove_constants::Bool=false)
     rulesets_collection_variation_ids = filter(x -> x != -1, rulesets_collection_variation_ids) # rulesets_collection_variation_id = -1 means no ruleset being used
@@ -484,7 +481,6 @@ function rulesetsVariationsTable(::Nothing, rulesets_collection_variation_ids::A
 end
 
 rulesetsVariationsTable(S::AbstractSampling; remove_constants::Bool=false) = rulesetsVariationsTable(rulesetsCollectionDB(S), rulesetsVariationIDs(S); remove_constants=remove_constants)
-rulesetsVariationsTable(class_id::VCTClassID{<:AbstractSampling}; remove_constants::Bool=false) = getAbstractTrial(class_id) |> x -> rulesetsVariationsTable(x; remove_constants=remove_constants)
 
 function icCellVariationsTable(ic_cell_variations_db::SQLite.DB, ic_cell_variation_ids::AbstractVector{<:Integer}; remove_constants::Bool=false)
     query = constructSelectQuery("ic_cell_variations", "WHERE ic_cell_variation_id IN ($(join(ic_cell_variation_ids,",")));")
@@ -504,7 +500,6 @@ function icCellVariationsTable(::Missing, ic_cell_variation_ids::AbstractVector{
 end
 
 icCellVariationsTable(S::AbstractSampling; remove_constants::Bool=false) = icCellVariationsTable(icCellDB(S), icCellVariationIDs(S); remove_constants=remove_constants)
-icCellVariationsTable(class_id::VCTClassID{<:AbstractSampling}; remove_constants::Bool=false) = getAbstractTrial(class_id) |> x -> icCellVariationsTable(x; remove_constants=remove_constants)
 
 function variationsTableFromSimulations(query::String, id_name::Symbol, getVariationsTableFn::Function; remove_constants::Bool=false)
     df = queryToDataFrame(query)
@@ -605,11 +600,6 @@ end
 
 function simulationsTable(; kwargs...)
     query = constructSelectQuery("simulations")
-    return simulationsTableFromQuery(query; kwargs...)
-end
-
-function simulationsTable(class_id::VCTClassID; kwargs...)
-    query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(getSimulationIDs(class_id),",")));")
     return simulationsTableFromQuery(query; kwargs...)
 end
 

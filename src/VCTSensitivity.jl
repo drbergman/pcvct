@@ -79,11 +79,6 @@ function _runSensitivitySampling(method::MOAT, n_replicates::Int, inputs::InputF
     return MOATSampling(sampling, monad_ids_df)
 end
 
-function moatSensitivity(n_points::Int, n_replicates::Int, inputs::InputFolders, evs::Vector{<:ElementaryVariation}; add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG, orthogonalize::Bool=true, kwargs...)
-    lhs_variation = LHSVariation(n_points; add_noise=add_noise, rng=rng, orthogonalize=orthogonalize)
-    return moatSensitivity(lhs_variation, n_replicates, inputs, evs; kwargs...)
-end
-
 function perturbConfigVariation(ev::ElementaryVariation, config_variation_id::Int, folder::String)
     base_value = configValue(ev, config_variation_id, folder)
     addFn = (discrete_variation) -> gridToDB([discrete_variation], prepareConfigVariationFunctions(retrieveID("configs", folder), [discrete_variation]; reference_config_variation_id=config_variation_id)...)
@@ -229,10 +224,6 @@ function _runSensitivitySampling(method::Sobolʼ, n_replicates::Int, inputs::Inp
     return SobolSampling(sampling, monad_ids_df; sobol_index_methods=method.sobol_index_methods)
 end
 
-function sobolSensitivity(n_points::Int, args...; sobol_index_methods::NamedTuple{(:first_order, :total_order), Tuple{Symbol, Symbol}}=(first_order=:Jansen1999, total_order=:Jansen1999), kwargs...)
-    return sobolSensitivity(Sobolʼ(n_points; sobol_index_methods=sobol_index_methods), args...; kwargs...)
-end
-
 function calculateGSA!(sobol_sampling::SobolSampling, functions::Vector{<:Function})
     for f in functions
         calculateGSA!(sobol_sampling, f)
@@ -315,11 +306,6 @@ function _runSensitivitySampling(method::RBD, n_replicates::Int, inputs::InputFo
     sampling = Sampling(n_replicates, monads)
     out = run(sampling; force_recompile=force_recompile, prune_options=prune_options)
     return RBDSampling(sampling, monad_ids_df, method.rbd_variation.num_cycles; num_harmonics=method.num_harmonics)
-end
-
-function rbdSensitivity(n_points::Int, args...; rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true, num_harmonics::Int=6, num_cycles::Int=missing, kwargs...)
-    method = RBD(n_points; rng=rng, use_sobol=use_sobol, num_harmonics=num_harmonics, num_cycles=num_cycles)
-    return rbdSensitivity(method, args...; kwargs...)
 end
 
 function calculateGSA!(rbd_sampling::RBDSampling, functions::Vector{<:Function})
