@@ -1,6 +1,7 @@
 export deleteSimulation, deleteSimulations
 
-function deleteSimulations(simulation_ids::AbstractVector{<:Integer}; delete_supers::Bool=true, and_constraints::String="")
+function deleteSimulations(simulation_ids::AbstractVector{<:Union{Integer,Missing}}; delete_supers::Bool=true, and_constraints::String="")
+    filter!(x -> !ismissing(x), simulation_ids)
     where_stmt = "WHERE simulation_id IN ($(join(simulation_ids,","))) $(and_constraints);"
     sim_df = constructSelectQuery("simulations", where_stmt) |> queryToDataFrame
     simulation_ids = sim_df.simulation_id # update based on the constraints added
@@ -21,11 +22,11 @@ function deleteSimulations(simulation_ids::AbstractVector{<:Integer}; delete_sup
         rulesets_collection_folder = rulesetsCollectionFolder(row.rulesets_collection_id)
         result_df = constructSelectQuery(
             "simulations",
-            "WHERE rulesets_collection_id = $(row.rulesets_collection_id) AND rulesets_variation_id = $(row.rulesets_variation_id);";
+            "WHERE rulesets_collection_id = $(row.rulesets_collection_id) AND rulesets_collection_variation_id = $(row.rulesets_collection_variation_id);";
             selection="COUNT(*)"
         ) |> queryToDataFrame
         if result_df.var"COUNT(*)"[1] == 0
-            rm(joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder, "rulesets_collections_variations", "rulesets_variation_$(row.rulesets_variation_id).xml"); force=true)
+            rm(joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder, "rulesets_collections_variations", "rulesets_variation_$(row.rulesets_collection_variation_id).xml"); force=true)
         end
 
         ic_cell_folder = icCellFolder(row.ic_cell_id)
@@ -263,7 +264,7 @@ function resetRulesetsCollectionFolder(path_to_rulesets_collection_folder::Strin
     if !isdir(path_to_rulesets_collection_folder)
         return
     end
-    rm(joinpath(path_to_rulesets_collection_folder, "rulesets_variations.db"); force=true)
+    rm(joinpath(path_to_rulesets_collection_folder, "rulesets_collection_variations.db"); force=true)
     rm(joinpath(path_to_rulesets_collection_folder, "rulesets_collections_variations"); force=true, recursive=true)
 end
 
@@ -326,7 +327,7 @@ function eraseSimulationID(simulation_id::Int; monad_id::Union{Missing,Int}=miss
     if ismissing(monad_id)
         query = constructSelectQuery("simulations", "WHERE simulation_id = $(simulation_id);")
         df = queryToDataFrame(query)
-        query = constructSelectQuery("monads", "WHERE (config_id, config_variation_id, rulesets_collection_id, rulesets_variation_id, ic_cell_id, ic_cell_variation_id) = ($(df.config_id[1]), $(df.config_variation_id[1]), $(df.rulesets_collection_id[1]), $(df.rulesets_variation_id[1]), $(df.ic_cell_id[1]), $(df.ic_cell_variation_id[1]));"; selection="monad_id")
+        query = constructSelectQuery("monads", "WHERE (config_id, config_variation_id, rulesets_collection_id, rulesets_collection_variation_id, ic_cell_id, ic_cell_variation_id) = ($(df.config_id[1]), $(df.config_variation_id[1]), $(df.rulesets_collection_id[1]), $(df.rulesets_collection_variation_id[1]), $(df.ic_cell_id[1]), $(df.ic_cell_variation_id[1]));"; selection="monad_id")
         df = queryToDataFrame(query)
         monad_id = df.monad_id[1]
     end

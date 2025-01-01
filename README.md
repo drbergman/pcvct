@@ -28,8 +28,6 @@ When an object `T <: AbstractTrial` is instantiated, immediately add it to the d
 If a simulation fails, remove it from the CSV without removing it from the database/output.
 
 # To dos
-- Figure out how to link pcvct verions to PhysiCell versions
-  - where does PhysiCell submodule fit in? Just for tests? Or for the whole package?
 - Rename for Julia registry. It will be so nice to have user Pkg.add("pcvct") and have it work.
   - PhysiCellVT.jl
   - PhysiVT.jl (possible confusion with the OpenVT project where VT = virtual tissue)

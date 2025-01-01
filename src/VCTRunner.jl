@@ -19,10 +19,10 @@ function prepareSimulationCommand(simulation::Simulation, monad_id::Union{Missin
         end
     end
 
-    executable_str = joinpath(data_dir, "inputs", "custom_codes", simulation.folder_names.custom_code_folder, baseToExecutable("project")) # path to executable
-    config_str = joinpath(data_dir, "inputs", "configs", simulation.folder_names.config_folder, "config_variations", "config_variation_$(simulation.variation_ids.config).xml")
+    executable_str = joinpath(data_dir, "inputs", "custom_codes", simulation.inputs.custom_code.folder, baseToExecutable("project")) # path to executable
+    config_str = joinpath(data_dir, "inputs", "configs", simulation.inputs.config.folder, "config_variations", "config_variation_$(simulation.variation_ids.config).xml")
     flags = ["-o", path_to_simulation_output]
-    if simulation.folder_ids.ic_cell_id != -1
+    if simulation.inputs.ic_cell.id != -1
         try
             append!(flags, ["-i", pathToICCell(simulation)])
         catch e
@@ -31,14 +31,14 @@ function prepareSimulationCommand(simulation::Simulation, monad_id::Union{Missin
             return nothing
         end
     end
-    if simulation.folder_ids.ic_substrate_id != -1
-        append!(flags, ["-s", joinpath(data_dir, "inputs", "ics", "substrates", simulation.folder_names.ic_substrate_folder, "substrates.csv")]) # if ic file included (id != -1), then include this in the command
+    if simulation.inputs.ic_substrate.id != -1
+        append!(flags, ["-s", joinpath(data_dir, "inputs", "ics", "substrates", simulation.inputs.ic_substrate.folder, "substrates.csv")]) # if ic file included (id != -1), then include this in the command
     end
-    if simulation.folder_ids.ic_ecm_id != -1
-        append!(flags, ["-e", joinpath(data_dir, "inputs", "ics", "ecms", simulation.folder_names.ic_ecm_folder, "ecm.csv")]) # if ic file included (id != -1), then include this in the command
+    if simulation.inputs.ic_ecm.id != -1
+        append!(flags, ["-e", joinpath(data_dir, "inputs", "ics", "ecms", simulation.inputs.ic_ecm.folder, "ecm.csv")]) # if ic file included (id != -1), then include this in the command
     end
-    if simulation.variation_ids.rulesets != -1
-        path_to_rules_file = joinpath(data_dir, "inputs", "rulesets_collections", simulation.folder_names.rulesets_collection_folder, "rulesets_collections_variations", "rulesets_variation_$(simulation.variation_ids.rulesets).xml")
+    if simulation.variation_ids.rulesets_collection != -1
+        path_to_rules_file = joinpath(data_dir, "inputs", "rulesets_collections", simulation.inputs.rulesets_collection.folder, "rulesets_collections_variations", "rulesets_variation_$(simulation.variation_ids.rulesets_collection).xml")
         append!(flags, ["-r", path_to_rules_file])
     end
     return `$executable_str $config_str $flags`
@@ -167,7 +167,7 @@ function runSampling(sampling::Sampling; force_recompile::Bool=false)
     return simulation_tasks
 end
 
-function runTrial(trial::Trial; force_recompile::Bool=true)
+function runTrial(trial::Trial; force_recompile::Bool=false)
     mkpath(outputFolder(trial))
 
     simulation_tasks = []
@@ -196,8 +196,15 @@ See also [`run`](@ref).
 """
 function collectSimulationTasks(T::AbstractTrial; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions=PruneOptions()) end
 
+
+struct PCVCTOutput
+    trial::AbstractTrial
+    n_scheduled::Int
+    n_success::Int
+end
+
 """
-    run(T::AbstractTrial[; force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions()])`
+    run(T::AbstractTrial[; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions()])`
 
 Run the given simulation, monad, sampling, or trial.
 
@@ -206,10 +213,10 @@ Also print out messages to the console to inform the user about the progress and
 
 # Arguments
 - `T::AbstractTrial`: The trial, sampling, monad, or simulation to run.
-- `force_recompile::Bool=true`: If `true`, forces a recompilation of all files by removing all `.o` files in the PhysiCell directory.
+- `force_recompile::Bool=false`: If `true`, forces a recompilation of all files by removing all `.o` files in the PhysiCell directory.
 - `prune_options::PruneOptions=PruneOptions()`: Options for pruning simulations.
 """
-function run(T::AbstractTrial; force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
+function run(T::AbstractTrial; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions())
     cd(()->run(pipeline(`make clean`; stdout=devnull)), physicell_dir) # remove all *.o files so that a future recompile will re-compile all the files
 
     simulation_tasks = collectSimulationTasks(T; force_recompile=force_recompile)
@@ -268,15 +275,15 @@ function run(T::AbstractTrial; force_recompile::Bool=true, prune_options::PruneO
         println("\n($(repeat("*", asterisks["low_success_warning"]))) Some simulations did not complete successfully. Check the output.err files for more information.")
     end
     println("\n--------------------------------------------------\n")
-    return n_success
+    return PCVCTOutput(T, n_simulation_tasks, n_success)
 end
 
 """
-    runAbstractTrial(T::AbstractTrial; force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions())
+    runAbstractTrial(T::AbstractTrial; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions())
     
 Alias for `run`.
 """
-function runAbstractTrial(T::AbstractTrial; force_recompile::Bool=true, prune_options::PruneOptions=PruneOptions()) 
+function runAbstractTrial(T::AbstractTrial; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions()) 
     Base.depwarn("`runAbstractTrial` is deprecated. Use `run` instead.", :runAbstractTrial; force=true)
     return run(T; force_recompile=force_recompile, prune_options=prune_options)
 end

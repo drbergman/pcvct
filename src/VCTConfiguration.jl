@@ -75,17 +75,17 @@ end
 ################## Configuration Functions ##################
 
 function loadConfiguration(M::AbstractMonad)
-    path_to_xml = joinpath(data_dir, "inputs", "configs", M.folder_names.config_folder, "config_variations", "config_variation_$(M.variation_ids.config).xml")
+    path_to_xml = joinpath(data_dir, "inputs", "configs", M.inputs.config.folder, "config_variations", "config_variation_$(M.variation_ids.config).xml")
     if isfile(path_to_xml)
         return
     end
     mkpath(dirname(path_to_xml))
-    path_to_xml_src = joinpath(data_dir, "inputs", "configs", M.folder_names.config_folder, "PhysiCell_settings.xml")
+    path_to_xml_src = joinpath(data_dir, "inputs", "configs", M.inputs.config.folder, "PhysiCell_settings.xml")
     cp(path_to_xml_src, path_to_xml, force=true)
 
     xml_doc = openXML(path_to_xml)
     query = constructSelectQuery("config_variations", "WHERE config_variation_id=$(M.variation_ids.config);")
-    variation_row = queryToDataFrame(query; db=configDB(M.folder_names.config_folder), is_row=true)
+    variation_row = queryToDataFrame(query; db=configDB(M.inputs.config.folder), is_row=true)
     for column_name in names(variation_row)
         if column_name == "config_variation_id"
             continue
@@ -106,12 +106,12 @@ function loadConfiguration(sampling::Sampling)
 end
 
 function loadRulesets(M::AbstractMonad)
-    if M.variation_ids.rulesets == -1 # no rules being used
+    if M.variation_ids.rulesets_collection == -1 # no rules being used
         return
     end
-    path_to_rulesets_collections_folder = joinpath(data_dir, "inputs", "rulesets_collections", M.folder_names.rulesets_collection_folder)
-    path_to_rulesets_xml = joinpath(path_to_rulesets_collections_folder, "rulesets_collections_variations", "rulesets_variation_$(M.variation_ids.rulesets).xml")
-    if isfile(path_to_rulesets_xml) # already have the rulesets variation created
+    path_to_rulesets_collections_folder = joinpath(data_dir, "inputs", "rulesets_collections", M.inputs.rulesets_collection.folder)
+    path_to_rulesets_xml = joinpath(path_to_rulesets_collections_folder, "rulesets_collections_variations", "rulesets_variation_$(M.variation_ids.rulesets_collection).xml")
+    if isfile(path_to_rulesets_xml) # already have the rulesets_collection variation created
         return
     end
     mkpath(dirname(path_to_rulesets_xml)) # ensure the directory exists
@@ -124,11 +124,11 @@ function loadRulesets(M::AbstractMonad)
     end
         
     xml_doc = parse_file(path_to_base_xml)
-    if M.variation_ids.rulesets != 0 # only update if not using the base variation for the ruleset
-        query = constructSelectQuery("rulesets_variations", "WHERE rulesets_variation_id=$(M.variation_ids.rulesets);")
+    if M.variation_ids.rulesets_collection != 0 # only update if not using the base variation for the ruleset
+        query = constructSelectQuery("rulesets_collection_variations", "WHERE rulesets_collection_variation_id=$(M.variation_ids.rulesets_collection);")
         variation_row = queryToDataFrame(query; db=rulesetsCollectionDB(M), is_row=true)
         for column_name in names(variation_row)
-            if column_name == "rulesets_variation_id"
+            if column_name == "rulesets_collection_variation_id"
                 continue
             end
             xml_path = columnNameToXMLPath(column_name)
@@ -141,10 +141,10 @@ function loadRulesets(M::AbstractMonad)
 end
 
 function loadICCells(M::AbstractMonad)
-    if M.folder_ids.ic_cell_id == -1 # no ic cells being used
+    if M.inputs.ic_cell.id == -1 # no ic cells being used
         return
     end
-    path_to_ic_cells_folder = joinpath(data_dir, "inputs", "ics", "cells", M.folder_names.ic_cell_folder)
+    path_to_ic_cells_folder = joinpath(data_dir, "inputs", "ics", "cells", M.inputs.ic_cell.folder)
     if isfile(joinpath(path_to_ic_cells_folder, "cells.csv")) # ic already given by cells.csv
         return
     end
@@ -158,7 +158,7 @@ function loadICCells(M::AbstractMonad)
     xml_doc = parse_file(path_to_base_xml)
     if M.variation_ids.ic_cell != 0 # only update if not using the base variation for the ic cells
         query = constructSelectQuery("ic_cell_variations", "WHERE ic_cell_variation_id=$(M.variation_ids.ic_cell);")
-        variation_row = queryToDataFrame(query; db=icCellDB(M.folder_names.ic_cell_folder), is_row=true)
+        variation_row = queryToDataFrame(query; db=icCellDB(M.inputs.ic_cell.folder), is_row=true)
         for column_name in names(variation_row)
             if column_name == "ic_cell_variation_id"
                 continue
@@ -173,8 +173,8 @@ function loadICCells(M::AbstractMonad)
 end
 
 function pathToICCell(simulation::Simulation)
-    @assert simulation.folder_ids.ic_cell_id != -1 "No IC cell variation being used" # we should have already checked this before calling this function
-    path_to_ic_cell_folder = joinpath(data_dir, "inputs", "ics", "cells", simulation.folder_names.ic_cell_folder)
+    @assert simulation.inputs.ic_cell.id != -1 "No IC cell variation being used" # we should have already checked this before calling this function
+    path_to_ic_cell_folder = joinpath(data_dir, "inputs", "ics", "cells", simulation.inputs.ic_cell.folder)
     if isfile(joinpath(path_to_ic_cell_folder, "cells.csv")) # ic already given by cells.csv
         return joinpath(path_to_ic_cell_folder, "cells.csv")
     end
@@ -291,7 +291,7 @@ function simpleConfigVariationNames(name::String)
 end
 
 function simpleRulesetsVariationNames(name::String)
-    if name == "rulesets_variation_id"
+    if name == "rulesets_collection_variation_id"
         return "RulesVarID"
     elseif startswith(name, "hypothesis_ruleset")
         return getRuleParameterName(name)

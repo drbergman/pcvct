@@ -3,10 +3,12 @@ filename = split(filename, "/") |> last
 str = "TESTING WITH $(filename)"
 hashBorderPrint(str)
 
+config_folder = "immune_sample"
+custom_code_folder = rulesets_collection_folder = ic_cell_folder = "immune_function"
+
 path_to_project = "./test-project/PhysiCell/sample_projects/immune_function"
 
 dest = Dict()
-config_folder = "immune_sample"
 dest["config"] = config_folder
 
 src = Dict()
@@ -14,27 +16,18 @@ src["config"] = "PhysiCell_settings.xml"
 success = importProject(path_to_project, src, dest)
 @test success
 
-custom_code_folder = rulesets_collection_folder = ic_cell_folder = "immune_function"
+inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rulesets_collection_folder, ic_cell=ic_cell_folder)
 
 discrete_variations = DiscreteVariation[]
-push!(discrete_variations, DiscreteVariation(["overall","max_time"], [12.0]))
-push!(discrete_variations, DiscreteVariation(["save","full_data","interval"], [6.0]))
-push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], [6.0]))
+push!(discrete_variations, DiscreteVariation(["overall","max_time"], 12.0))
+push!(discrete_variations, DiscreteVariation(["save","full_data","interval"], 6.0))
+push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], 6.0))
 
-config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, discrete_variations)
+sampling = createTrial(inputs, discrete_variations; n_replicates=1)
 
-sampling = Sampling(config_folder, custom_code_folder;
-    monad_min_length=1,
-    rulesets_collection_folder=rulesets_collection_folder,
-    ic_cell_folder=ic_cell_folder,
-    config_variation_ids=config_variation_ids,
-    rulesets_variation_ids=rulesets_variation_ids,
-    ic_cell_variation_ids=ic_cell_variation_ids
-)
+out = run(sampling; force_recompile=false)
 
-n_success = run(sampling; force_recompile=false)
-
-@test n_success == length(sampling)
+@test out.n_success == length(sampling)
 
 success = importProject(path_to_project, src, dest)
 @test success
@@ -80,3 +73,8 @@ end
 
 success = importProject(path_to_bad_project)
 @test !success
+
+# import the ecm project to actually use
+path_to_project = joinpath("test-project", "PhysiCell", "sample_projects", "template-ecm")
+success = importProject(path_to_project)
+@test success

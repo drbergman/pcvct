@@ -1,4 +1,4 @@
-using Downloads, JSON3
+using Downloads, JSON3, CSV
 
 export createProject
 
@@ -66,10 +66,14 @@ function setUpPhysiCell(project_dir::String, clone_physicell::Bool)
         # download drbergman/Pysicell main branch
         println("Downloading PhysiCell repository")
         url = "https://api.github.com/repos/drbergman/PhysiCell/releases/latest"
+        headers = haskey(ENV, "PCVCT_PUBLIC_REPO_AUTH") ? Dict("Authorization" => "token $(ENV["PCVCT_PUBLIC_REPO_AUTH"])") : Pair{String,String}[]
+        response = Downloads.download(url; headers=headers)
+        release_data = JSON3.read(response)
+        zipball_url = release_data["zipball_url"]
         zip_path = joinpath(project_dir, "PhysiCell.zip")
-        Downloads.download(url, zip_path)
+        Downloads.download(zipball_url, zip_path)
         extract_path = joinpath(project_dir, "PhysiCell_extract")
-        run(`unzip $zip_path -d $extract_path`)
+        run(pipeline(`unzip $zip_path -d $extract_path`; stdout=devnull))
         rm(zip_path)
         @assert (readdir(extract_path) |> length) == 1
         path_to_extracted_physicell = readdir(extract_path; join=true)[1]
@@ -99,12 +103,29 @@ function setUpInputs(data_dir::String, physicell_dir::String, template_as_defaul
     end
 end
 
+function setUpRequiredFolders(path_to_template::String, inputs_dir::String, folder::String)
+    config_folder = joinpath(inputs_dir, "configs", folder)
+    mkpath(config_folder)
+    cp(joinpath(path_to_template, "config", "PhysiCell_settings.xml"), joinpath(config_folder, "PhysiCell_settings.xml"))
+
+    custom_codes_folder = joinpath(inputs_dir, "custom_codes", folder)
+    mkpath(custom_codes_folder)
+    cp(joinpath(path_to_template, "custom_modules"), joinpath(custom_codes_folder, "custom_modules"))
+    cp(joinpath(path_to_template, "main.cpp"), joinpath(custom_codes_folder, "main.cpp"))
+    cp(joinpath(path_to_template, "Makefile"), joinpath(custom_codes_folder, "Makefile"))
+end
+
+function setUpICFolder(path_to_template::String, inputs_dir::String, ic_name::String, folder::String)
+    ic_folder = joinpath(inputs_dir, "ics", ic_name, folder)
+    mkpath(ic_folder)
+    filename = icFilename(ic_name)
+    cp(joinpath(path_to_template, "config", filename), joinpath(ic_folder, filename))
+end
+
 function setUpTemplate(physicell_dir::String, inputs_dir::String)
     path_to_template = joinpath(physicell_dir, "sample_projects", "template")
 
-    config_folder = joinpath(inputs_dir, "configs", "0_template")
-    mkpath(config_folder)
-    cp(joinpath(path_to_template, "config", "PhysiCell_settings.xml"), joinpath(config_folder, "PhysiCell_settings.xml"))
+    setUpRequiredFolders(path_to_template, inputs_dir, "0_template")
 
     rulesets_collection_folder = joinpath(inputs_dir, "rulesets_collections", "0_template")
     mkpath(rulesets_collection_folder)
@@ -112,15 +133,8 @@ function setUpTemplate(physicell_dir::String, inputs_dir::String)
         write(f, "default,pressure,decreases,cycle entry,0.0,0.5,4,0") # actually add a rule for example's sake
     end
 
-    custom_codes_folder = joinpath(inputs_dir, "custom_codes", "0_template")
-    mkpath(custom_codes_folder)
-    cp(joinpath(path_to_template, "custom_modules"), joinpath(custom_codes_folder, "custom_modules"))
-    cp(joinpath(path_to_template, "main.cpp"), joinpath(custom_codes_folder, "main.cpp"))
-    cp(joinpath(path_to_template, "Makefile"), joinpath(custom_codes_folder, "Makefile"))
-
-    ic_cells_folder = joinpath(inputs_dir, "ics", "cells", "0_template")
-    mkpath(ic_cells_folder)
-    cp(joinpath(path_to_template, "config", "cells.csv"), joinpath(ic_cells_folder, "cells.csv"))
+    setUpICFolder(path_to_template, inputs_dir, "cells", "0_template")
+    setUpICFolder(path_to_template, inputs_dir, "substrates", "0_template")
 end
 
 function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, template_as_default::Bool, terse::Bool)
@@ -160,19 +174,25 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         ic_substrate_folder = \"\" # optionally add this folder with substrates.csv to $(joinpath(path_to_ics, "substrates"))
         ic_ecm_folder = \"\" # optionally add this folder with ecms.csv to $(joinpath(path_to_ics, "ecms"))
 
+        $(tersify("""
+        # package them all together into a single object
+        """))\
+        inputs = InputFolders(config_folder, custom_code_folder;
+                              rulesets_collection=rulesets_collection_folder,
+                              ic_cell=ic_cell_folder,
+                              ic_substrate=ic_substrate_folder,
+                              ic_ecm=ic_ecm_folder)
+
         ############ make the simulations short ############
 
         $(tersify("""
-        # see below for a more thorough explanation of these steps...
-        # ...for now, just know we're setting the max time to 60 minutes
+        # We will set the default simulations to have a lower max time.
+        # This will serve as a reference for the following simulations.
         """))\
         xml_path = [\"overall\"; \"max_time\"]
         value = 60.0
         dv_max_time = DiscreteVariation(xml_path, value)
-        config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = addVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder, [dv_max_time])
-        reference_config_variation_id = config_variation_ids[1]
-        reference_rulesets_variation_id = rulesets_variation_ids[1]
-        reference_ic_cell_variation_id = ic_cell_variation_ids[1]
+        reference = createTrial(inputs, dv_max_time; n_replicates=0) # since we don't want to run this, set the n_replicates to 0
 
         ############ set up variables to control running simulations ############
 
@@ -187,17 +207,17 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         # pcvct records which simulations all use the same parameter vector...
         # ...to reuse them (unless the user opts out)
         """))\
-        use_previous_simulations = true # if true, will attempt to reuse simulations with the same parameters; otherwise run new simulations
+        use_previous = true # if true, will attempt to reuse simulations with the same parameters; otherwise run new simulations
 
         $(tersify("""
         # a monad refers to a single collection of identical simulations...
         # except for randomness (could be do to the initial seed or stochasticity introduced by omp threading)
-        # monad_min_length is the number of replicates to run for each parameter vector...
+        # n_replicates is the number of replicates to run for each parameter vector...
         # ...pcvct records which simulations all use the same parameter vector...
         # ...and will attempt to reuse these (unless the user opts out)...
         # ...so this parameter is the _min_ because there may already be many sims with the same parameters
         """))\
-        monad_min_length = 1
+        n_replicates = 1
 
         ############ set up parameter variations ############
 
@@ -211,15 +231,15 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         # \t2) the name of a tag along with the value of one attribute (name:attribute_name:attribute_value)
         """))\
         xml_path = [pcvct.cyclePath(\"default\"); \"phase_durations\"; \"duration:index:0\"]
-        values = [200.0, 300.0, 400.0] # choose 3 discrete values to vary the duration of phase 0
-        dv_phase_0_duration = DiscreteVariation(xml_path, values)
+        vals = [200.0, 300.0, 400.0] # choose 3 discrete values to vary the duration of phase 0
+        dv_phase_0_duration = DiscreteVariation(xml_path, vals)
 
         $(tersify("""
         # now do the same, but for the apoptosis rate
         """))\
         xml_path = [pcvct.apoptosisPath(\"default\"); \"death_rate\"]
-        values = [4.31667e-05, 5.31667e-05, 6.31667e-05] # choose 3 discrete values to vary the apoptosis rate
-        dv_apoptosis_rate = DiscreteVariation(xml_path, values)
+        vals = [4.31667e-05, 5.31667e-05, 6.31667e-05] # choose 3 discrete values to vary the apoptosis rate
+        dv_apoptosis_rate = DiscreteVariation(xml_path, vals)
 
         $(tersify("""
         # now combine them into a list:
@@ -229,47 +249,30 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         ############ run the sampling ############
 
         $(tersify("""
-        # add the variations to the database and note the ids
-        # in this case, we are not varying the rulesets parameters, so those will all be 0 (indicating the base values found in base_rulesets.csv)
-        # by default, addVariations will start from the \"base\" values found in the config file...
-        # ...but you can specify values from a previous variation using the keywords seen at the end...
-        # ...Here, we are using the variations with short max time from above.
+        # now create the sampling (varied parameter values) with these parameters
+        # we will give it a reference to the monad with the short max time
         """))\
-        config_variation_ids, rulesets_variation_ids, ic_cell_variation_ids = 
-        \taddVariations(GridVariation(), config_folder, rulesets_collection_folder, ic_cell_folder,
-        \tdiscrete_variations;
-        \treference_config_variation_id=reference_config_variation_id,
-        \treference_rulesets_variation_id=reference_rulesets_variation_id,
-        \treference_ic_cell_variation_id=reference_ic_cell_variation_id
-        )
-
-        $(tersify("""
-        # now we create the sampling, which will add the sampling, monads, and simulations to the database
-        # Note: all these entries can be keyword arguments, so you can specify only the ones you want to change
-        # monad_min_length defaults to 0 (which means no new simulations will be created)
-        """))\
-        sampling = Sampling(config_folder, custom_code_folder;
-        \tmonad_min_length=monad_min_length,
-        \trulesets_collection_folder=rulesets_collection_folder,
-        \tic_cell_folder=ic_cell_folder,
-        \tic_substrate_folder=ic_substrate_folder,
-        \tic_ecm_folder=ic_ecm_folder, 
-        \tconfig_variation_ids=config_variation_ids,
-        \trulesets_variation_ids=rulesets_variation_ids,
-        \tic_cell_variation_ids=ic_cell_variation_ids,
-        \tuse_previous_simulations=use_previous_simulations) # use_previous_simulations defaults to true, so you can omit it if you want to reuse simulations
+        sampling = createTrial(reference, discrete_variations; n_replicates=n_replicates)
 
         $(tersify("""
         # at this point, we have only added the sampling to the database...
         # ...along with the monads and simulations that make it up
         # now, we run the sampling
-        # pcvct will parallelize the simulations based on the number of threads julia is using...
-        # ...check this value with Threads.nthreads()...
-        # Note: this depends on if you run from the REPL or a script
-        # running from a script, just add the -t flag:
-        # julia -t 4 joinpath("data", "GenerateData.jl")
         """))\
-        run(sampling; force_recompile=force_recompile)
+        out = run(sampling; force_recompile=force_recompile)
+
+        $(tersify("""
+        # When running locally, pcvct using a shell environment variable to determine...
+        # ...the number of concurrent siulations to run. This is set to 1 by default.
+        # The variable is called PCVCT_NUM_PARALLEL_SIMS.
+        # A simple way to set this when running the script is to run in your shell:
+        # `PCVCT_NUM_PARALLEL_SIMS=4 julia $(path_to_generate_data)`
+        """))\
+
+        $(tersify("""
+        # If you are running on an SLURM-based HPC, pcvct will detect this and calls to `sbatch`...
+        # ...to parallelize the simulations, batching out each simulation to its own job.
+        """))\
     """
 
     # Remove leading whitespace

@@ -348,8 +348,3 @@ end
 function computeMeanSpeed(simulation_id::Int; direction=:any)::NTuple{3,Vector{Dict{String,Float64}}}
     return joinpath(outputFolder("simulation", simulation_id), "output") |> x -> computeMeanSpeed(x; direction=direction)
 end
-
-function computeMeanSpeed(class_id::Union{VCTClassID,AbstractTrial}; direction=:any)
-    simulation_ids = getSimulationIDs(class_id)
-    return [simulation_id => computeMeanSpeed(simulation_id; direction=direction) for simulation_id in simulation_ids] |> Dict
-end

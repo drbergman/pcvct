@@ -21,6 +21,8 @@ include("VCTVersion.jl")
 include("VCTPhysiCellVersion.jl")
 include("VCTHPC.jl")
 
+include("VCTUserAPI.jl")
+
 include("VCTLoader.jl")
 
 include("VCTAnalysis.jl")
@@ -126,27 +128,6 @@ function readConstituentIDs(path_to_csv::String)
     return ids
 end
 
-
-"""
-    constituentsType(T::AbstractTrial)
-
-Return the type of constituents for a given AbstractTrial.
-"""
-constituentsType(trial::Trial) = Sampling
-constituentsType(sampling::Sampling) = Monad
-constituentsType(monad::Monad) = Simulation
-
-"""
-    readConstituentIDs(T::AbstractTrial)
-
-Reads the constituent IDs for a given trial type `T`.
-"""
-function readConstituentIDs(T::AbstractTrial)
-    path_to_folder = outputFolder(T)
-    filename = lowercase(string(constituentsType(T))) * "s"
-    return readConstituentIDs(joinpath(path_to_folder, filename * ".csv"))
-end
-
 readMonadSimulationIDs(monad_id::Int) = readConstituentIDs(joinpath(outputFolder("monad", monad_id), "simulations.csv"))
 readMonadSimulationIDs(monad::Monad) = readMonadSimulationIDs(monad.id)
 readSamplingMonadIDs(sampling_id::Int) = readConstituentIDs(joinpath(outputFolder("sampling", sampling_id), "monads.csv"))
@@ -166,7 +147,7 @@ end
 
 getSimulationIDs() = constructSelectQuery("simulations"; selection="simulation_id") |> queryToDataFrame |> x -> x.simulation_id
 getSimulationIDs(simulation::Simulation) = [simulation.id]
-getSimulationIDs(monad::Monad) = readMonadSimulationIDs(monad.id)
+getSimulationIDs(monad::Monad) = readMonadSimulationIDs(monad)
 getSimulationIDs(sampling::Sampling) = getSamplingSimulationIDs(sampling.id)
 getSimulationIDs(trial::Trial) = getTrialSimulationIDs(trial.id)
 getSimulationIDs(Ts::AbstractArray{<:AbstractTrial}) = vcat([getSimulationIDs(T) for T in Ts]...)
@@ -178,23 +159,8 @@ end
 
 getMonadIDs() = constructSelectQuery("monads"; selection="monad_id") |> queryToDataFrame |> x -> x.monad_id
 getMonadIDs(monad::Monad) = [monad.id]
-getMonadIDs(sampling::Sampling) = readSamplingMonadIDs(sampling.id)
+getMonadIDs(sampling::Sampling) = readSamplingMonadIDs(sampling)
 getMonadIDs(trial::Trial) = getTrialMonads(trial.id)
-
-function getSimulationIDs(class_id::VCTClassID) 
-    class_id_type = getVCTClassIDType(class_id)
-    if class_id_type == Simulation
-        return [class_id.id]
-    elseif class_id_type == Monad
-        return readMonadSimulationIDs(class_id.id)
-    elseif class_id_type == Sampling
-        return getSamplingSimulationIDs(class_id.id)
-    elseif class_id_type == Trial
-        return getTrialSimulationIDs(class_id.id)
-    else
-        error(error_string)
-    end
-end
 
 ################## Miscellaneous Functions ##################
 
