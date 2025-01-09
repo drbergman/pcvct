@@ -2,6 +2,40 @@ import Base.run
 
 export createTrial
 
+"""
+    createTrial(inputs::InputFolders, evs::Vector{<:ElementaryVariation}=ElementaryVariation[]; n_replicates::Integer=1,
+                use_previous::Bool=true)
+
+Return an object of type `<:AbstractTrial` (simulation, monad, sampling, trial) with the given input folders and elementary variations.
+
+Uses the `evs` and `n_replicates` to determine whether to create a simulation, monad, or sampling.
+Despite its name, trials cannot yet be created by this function.
+If `n_replicates` is 0, and each variation has a single value, a simulation will be created.
+
+Alternate forms:
+Only supplying a single `ElementaryVariation`:
+```
+createTrial(inputs::InputFolders, ev::ElementaryVariation; n_replicates::Integer=1, use_previous::Bool=true)
+```
+Using a reference simulation or monad:
+```
+createTrial(reference::AbstractMonad, evs::Vector{<:ElementaryVariation}=ElementaryVariation[]; n_replicates::Integer=1,
+            use_previous::Bool=true)
+```
+```
+createTrial(reference::AbstractMonad, ev::ElementaryVariation; n_replicates::Integer=1, use_previous::Bool=true)
+```
+
+# Examples
+```
+inputs = InputFolders(config_folder, custom_code_folder)
+dv_max_time = DiscreteVariation([\"overall\", \"max_time\"], 1440)
+dv_apoptosis = DiscreteVariation([pcvct.apoptosisPath(cell_type); "rate"], [1e-6, 1e-5])
+simulation = createTrial(inputs, dv_max_time)
+monad = createTrial(inputs, dv_max_time; n_replicates=2)
+sampling = createTrial(monad, dv_apoptosis; n_replicates=2) # uses the max time defined for monad
+```
+"""
 function createTrial(inputs::InputFolders, evs::Vector{<:ElementaryVariation}=ElementaryVariation[]; n_replicates::Integer=1,
                      use_previous::Bool=true)
     return _createTrial(inputs, VariationIDs(inputs), evs, n_replicates, use_previous)
@@ -38,6 +72,11 @@ function _createTrial(inputs::InputFolders, reference_variation_ids::VariationID
     end
 end
 
+"""
+    run(args...; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions(), kwargs...)
+
+Run a simulation, monad, sampling, or trial with the same signatures available to [`createTrial`](@ref).
+"""
 function run(inputs::InputFolders, args...; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions(), kwargs...)
     trial = createTrial(inputs, args...; kwargs...)
     return run(trial; force_recompile=force_recompile, prune_options=prune_options)

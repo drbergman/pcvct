@@ -1,8 +1,9 @@
 using Distributions
 import Distributions: cdf
 
-export AbstractVariation, ElementaryVariation, DiscreteVariation, DistributedVariation
-export GridVariation, LHSVariation, addVariations
+export ElementaryVariation, DiscreteVariation, DistributedVariation
+export UniformDistributedVariation, NormalDistributedVariation
+export GridVariation, LHSVariation, SobolVariation
 
 ################## Abstract Variations ##################
 
@@ -10,21 +11,33 @@ abstract type AbstractVariation end
 abstract type ElementaryVariation <: AbstractVariation end
 
 """
-    DiscreteVariation{T}(xml_path::Vector{<:AbstractString}, values::Vector{T}) where T
+    DiscreteVariation
 
-Create a `DiscreteVariation` object with the given `xml_path` and `values`.
+The location, target, and values of a discrete variation.
 
-The type `T` is inferred from the type of the `values` argument.
+# Fields
+- `location::Symbol`: The location of the variation. Can be `:config`, `:rulesets`, or `:ic_cell`. The location is inferred from the target.
+- `target::Vector{<:AbstractString}`: The target of the variation. The target is a vector of strings that represent the XML path to the element being varied.
+- `values::Vector{T}`: The values of the variation. The values are the possible values that the target can take on.
+
 A singleton value can be passed in place of `values` for convenience.
 
 # Examples
 ```jldoctest
-julia> dv = DiscreteVariation(["overall","max_time"], [1440.0, 2880.0])
+julia> dv = DiscreteVariation(["overall", "max_time"], [1440.0, 2880.0])
 DiscreteVariation{Float64}(:config, ["overall", "max_time"], [1440.0, 2880.0])
 ```
 ```jldoctest
-julia> dv = DiscreteVariation(["overall","max_time"], 1440)
-DiscreteVariation{Int64}(:config, ["overall", "max_time"], [1440])
+xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","max_response"]
+DiscreteVariation(xml_path, 0)
+# output
+DiscreteVariation{Int64}(:rulesets, ["hypothesis_ruleset:name:default", "behavior:name:cycle entry", "decreasing_signals", "max_response"], [0])
+```
+```jldoctest
+xml_path = ["cell_patches:name:default","patch_collection:type:disc","patch:ID:1","x0"]
+DiscreteVariation(xml_path, [0.0, 100.0])
+# output
+DiscreteVariation{Float64}(:ic_cell, ["cell_patches:name:default", "patch_collection:type:disc", "patch:ID:1", "x0"], [0.0, 100.0])
 ```
 """
 struct DiscreteVariation{T} <: ElementaryVariation
@@ -46,6 +59,28 @@ function ElementaryVariation(args...; kwargs...)
     return DiscreteVariation(args...; kwargs...)
 end
 
+"""
+    DistributedVariation
+
+The location, target, and distribution of a distributed variation.
+
+Analagousy to [`DiscreteVariation`](@ref), instances of `DistributedVariation` can be initialized with a `target` (XML path) and a `distribution` (a distribution from the `Distributions` package).
+Alternatively, users can use the [`UniformDistributedVariation`](@ref) and [`NormalDistributedVariation`](@ref) functions to create instances of `DistributedVariation`.
+
+# Fields
+- `location::Symbol`: The location of the variation. Can be `:config`, `:rulesets`, or `:ic_cell`. The location is inferred from the target.
+- `target::Vector{<:AbstractString}`: The target of the variation. The target is a vector of strings that represent the XML path to the element being varied.
+- `distribution::Distribution`: The distribution of the variation.
+
+# Examples
+```jldoctest
+using Distributions
+d = Uniform(1, 2)
+DistributedVariation([pcvct.apoptosisPath("default"); "rate"], d)
+# output
+DistributedVariation(:config, ["cell_definitions", "cell_definition:name:default", "phenotype", "death", "model:code:100", "rate"], Distributions.Uniform{Float64}(a=1.0, b=2.0))
+```
+"""
 struct DistributedVariation <: ElementaryVariation
     location::Symbol
     target::Vector{<:AbstractString}
@@ -61,10 +96,20 @@ target(ev::ElementaryVariation) = ev.target::Vector{<:AbstractString}
 location(ev::ElementaryVariation) = ev.location
 columnName(ev::ElementaryVariation) = target(ev) |> xmlPathToColumnName
 
+"""
+    UniformDistributedVariation(xml_path::Vector{<:AbstractString}, lb::T, ub::T) where {T<:Real}
+
+Create a distributed variation with a uniform distribution.
+"""
 function UniformDistributedVariation(xml_path::Vector{<:AbstractString}, lb::T, ub::T) where {T<:Real}
     return DistributedVariation(xml_path, Uniform(lb, ub))
 end
 
+"""
+    NormalDistributedVariation(xml_path::Vector{<:AbstractString}, mu::T, sigma::T; lb::Real=-Inf, ub::Real=Inf) where {T<:Real}
+
+Create a (possibly truncated) distributed variation with a normal distribution.
+"""
 function NormalDistributedVariation(xml_path::Vector{<:AbstractString}, mu::T, sigma::T; lb::Real=-Inf, ub::Real=Inf) where {T<:Real}
     return DistributedVariation(xml_path, truncated(Normal(mu, sigma), lb, ub))
 end
@@ -271,7 +316,44 @@ end
 ################## Specialized Variations ##################
 
 abstract type AddVariationMethod end
+
+"""
+    GridVariation
+
+A variation method that creates a grid of all possible combinations of the values of the variations.
+
+# Examples
+```jldoctest
+julia> GridVariation() # the only method for GridVariation
+GridVariation()
+```
+"""
 struct GridVariation <: AddVariationMethod end
+
+"""
+    LHSVariation
+
+A variation method that creates a Latin Hypercube Sample of the values of the variations.
+
+# Fields
+Default values from constructors are shown.
+- `n::Int`: The number of samples to take.
+- `add_noise::Bool=false`: Whether to add noise to the samples or have them be in the center of the bins.
+- `rng::AbstractRNG=Random.GLOBAL_RNG`: The random number generator to use.
+- `orthogonalize::Bool=true`: Whether to orthogonalize the samples. See https://en.wikipedia.org/wiki/Latin_hypercube_sampling#:~:text=In%20orthogonal%20sampling
+
+# Examples
+```jldoctest
+julia> LHSVariation(4) # set `n` and use default values for the rest
+LHSVariation(4, false, Random.TaskLocalRNG(), true)
+```
+```jldoctest
+using Random
+LHSVariation(; n=4, add_noise=true, rng=MersenneTwister(1234), orthogonalize=false)
+# output
+LHSVariation(4, true, MersenneTwister(1234), false)
+```
+"""
 struct LHSVariation <: AddVariationMethod
     n::Int
     add_noise::Bool
@@ -281,6 +363,48 @@ end
 LHSVariation(n; add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG, orthogonalize::Bool=true) = LHSVariation(n, add_noise, rng, orthogonalize)
 LHSVariation(; n::Int=4, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG, orthogonalize::Bool=true) = LHSVariation(n, add_noise, rng, orthogonalize)
 
+"""
+    SobolVariation
+
+A variation method that creates a Sobol sequence of the values of the variations.
+
+The subsequence of the Sobol sequence is chosen based on the value of `n` and the value of `include_one`.
+If it is one less than a power of 2, e.g. `n=7`, skip 0 and start from 0.5.
+Otherwise, it will always start from 0.
+If it is one more than a power of 2, e.g. `n=9`, include 1 (unless `include_one` is `false`).
+
+The `skip_start` field can be used to control this by skipping the start of the sequence.
+If `skip_start` is `true`, skip to the smallest consecutive subsequence with the same denominator that has at least `n` elements.
+If `skip_start` is `false`, start from 0.
+If `skip_start` is an integer, skip that many elements in the sequence, .e.g., `skip_start=1` skips 0 and starts at 0.5.
+
+If you want to include 1 in the sequence, set `include_one` to `true`.
+If you want to exlude 1 (in the case of `n=9`, e.g.), set `include_one` to `false`.
+
+See the GlobalSensitivity.jl package for more information on `RandomizationMethod`'s to use.
+
+# Fields
+Default values from constructors are shown.
+- `n::Int`: The number of samples to take.
+- `n_matrices::Int=1`: The number of matrices to use in the Sobol sequence.
+- `randomization::RandomizationMethod=NoRand()`: The randomization method to use on the deterministic Sobol sequence.
+- `skip_start::Union{Missing, Bool, Int}=missing`: Whether to skip the start of the sequence. Missing means pcvct will choose the best option.
+- `include_one::Union{Missing, Bool}=missing`: Whether to include 1 in the sequence. Missing means pcvct will choose the best option.
+
+# Examples
+```jldoctest
+julia> SobolVariation(9) # set `n` and use default values for the rest; will use [0, 0.5, 0.25, 0.75, 0.125, 0.375, 0.625, 0.875, 1]
+SobolVariation(9, 1, QuasiMonteCarlo.NoRand(), missing, missing)
+```
+```jldoctest
+julia> SobolVariation(15; skip_start=true) # use [0.5, 0.25, 0.75, ..., 1/16, 3/16, ..., 15/16]
+SobolVariation(15, 1, QuasiMonteCarlo.NoRand(), true, missing)
+```
+```jldoctest
+julia> SobolVariation(4; include_one=true) # use [0, 0.5, 1] and one of [0.25, 0.75]
+SobolVariation(4, 1, QuasiMonteCarlo.NoRand(), missing, true)
+```
+"""
 struct SobolVariation <: AddVariationMethod
     n::Int
     n_matrices::Int
@@ -291,6 +415,34 @@ end
 SobolVariation(n::Int; n_matrices::Int=1, randomization::RandomizationMethod=NoRand(), skip_start::Union{Missing, Bool, Int}=missing, include_one::Union{Missing, Bool}=missing) = SobolVariation(n, n_matrices, randomization, skip_start, include_one)
 SobolVariation(; pow2::Int=1, n_matrices::Int=1, randomization::RandomizationMethod=NoRand(), skip_start::Union{Missing, Bool, Int}=missing, include_one::Union{Missing, Bool}=missing) = SobolVariation(2^pow2, n_matrices, randomization, skip_start, include_one)
 
+"""
+    RBDVariation
+
+A variation method that creates a Random Balanced Design of the values of the variations.
+
+This creates `n` sample points where the values in each dimension are uniformly distributed.
+By default, this will use Sobol sequences (see [`SobolVariation`](@ref)) to create the sample points.
+If `use_sobol` is `false`, it will use random permutations of uniformly spaced points for each dimension.
+
+# Fields
+Default values from constructors are shown.
+- `n::Int`: The number of samples to take.
+- `rng::AbstractRNG=Random.GLOBAL_RNG`: The random number generator to use.
+- `use_sobol::Bool=true`: Whether to use Sobol sequences to create the sample points.
+Do not set these next two fields unless you know what you are doing. Let pcvct compute them.
+- `pow2_diff::Union{Missing, Int}=missing`: The difference between `n` and the nearest power of 2. Missing means pcvct will compute it if using Sobol sequences.
+- `num_cycles::Union{Missing, Int, Rational}=missing`: The number of cycles to use in the Sobol sequence. Missing means pcvct will set it.
+
+# Examples
+```jldoctest
+julia> pcvct.RBDVariation(4) # set `n` and use default values for the rest
+pcvct.RBDVariation(4, Random.TaskLocalRNG(), true, 0, 1//2)
+```
+```jldoctest
+julia> pcvct.RBDVariation(4; use_sobol=false) # use random permutations of uniformly spaced points
+pcvct.RBDVariation(4, Random.TaskLocalRNG(), false, missing, 1//1)
+```
+"""
 struct RBDVariation <: AddVariationMethod
     n::Int
     rng::AbstractRNG
@@ -323,6 +475,7 @@ struct RBDVariation <: AddVariationMethod
         return new(n, rng, use_sobol, pow2_diff, num_cycles)
     end
 end
+
 RBDVariation(n::Int; rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true, pow2_diff=missing, num_cycles=missing) = RBDVariation(n, rng, use_sobol, pow2_diff, num_cycles)
 
 function addVariations(method::AddVariationMethod, inputs::InputFolders, evs::Vector{<:ElementaryVariation};

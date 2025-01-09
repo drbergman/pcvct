@@ -5,6 +5,17 @@ export runStudio
 path_to_python = haskey(ENV, "PCVCT_PYTHON_PATH") ? ENV["PCVCT_PYTHON_PATH"] : missing 
 path_to_studio = haskey(ENV, "PCVCT_STUDIO_PATH") ? ENV["PCVCT_STUDIO_PATH"] : missing
 
+"""
+    runStudio(simulation_id::Int; python_path::Union{Missing,String}=path_to_python, studio_path::Union{Missing,String}=path_to_studio)
+
+Launch PhysiCell Studio for a given simulation.
+
+Creates temporary config and rules files to avoid overwriting the original files in the output folder.
+The intent of this function is to allow users to visualize the results of a simulation with Studio, rather than to modify the simulation itself.
+
+The path to the python executable and the Studio folder must be set.
+pcvct will look for these in the environment variables `PCVCT_PYTHON_PATH` and `PCVCT_STUDIO_PATH`, respectively.
+"""
 function runStudio(simulation_id::Int; python_path::Union{Missing,String}=path_to_python, studio_path::Union{Missing,String}=path_to_studio)
     if ismissing(python_path)
         println("Path to python not set. Please set the PCVCT_PYTHON_PATH environment variable or pass the path as an argument.")

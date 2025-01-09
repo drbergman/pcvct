@@ -17,7 +17,7 @@ dv_save_full_data_interval = DiscreteVariation(["save", "full_data", "interval"]
 dv_save_svg_data_interval = DiscreteVariation(["save","SVG","interval"], 6.0)
 discrete_variations = [dv_max_time, dv_save_full_data_interval, dv_save_svg_data_interval]
 
-reference_config_variation_id, reference_rulesets_variation_id, reference_ic_cell_variation_id = addVariations(GridVariation(), inputs, discrete_variations)
+reference_config_variation_id, reference_rulesets_variation_id, reference_ic_cell_variation_id = pcvct.addVariations(GridVariation(), inputs, discrete_variations)
 reference_config_variation_id = reference_config_variation_id[1]
 reference_rulesets_variation_id = reference_rulesets_variation_id[1]
 reference_ic_cell_variation_id = reference_ic_cell_variation_id[1]
@@ -63,7 +63,7 @@ dv_save_full_data_interval = DiscreteVariation(["save", "full_data", "interval"]
 dv_save_svg_data_interval = DiscreteVariation(["save","SVG","interval"], 6.0)
 discrete_variations = [dv_max_time, dv_save_full_data_interval, dv_save_svg_data_interval]
 
-reference_config_variation_id, reference_rulesets_variation_id, reference_ic_cell_variation_id = addVariations(GridVariation(), inputs, discrete_variations)
+reference_config_variation_id, reference_rulesets_variation_id, reference_ic_cell_variation_id = pcvct.addVariations(GridVariation(), inputs, discrete_variations)
 reference_config_variation_id = reference_config_variation_id[1]
 reference_rulesets_variation_id = reference_rulesets_variation_id[1]
 reference_ic_cell_variation_id = reference_ic_cell_variation_id[1]
@@ -88,3 +88,6 @@ sobol_index_methods = (first_order=:Sobol1993, total_order=:Homma1996)
 sobol_sampling = run(Sobolʼ(n_points; sobol_index_methods=sobol_index_methods), n_replicates, inputs, evs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
 sobol_index_methods = (first_order=:Saltelli2010, total_order=:Sobol2007)
 sobol_sampling = run(Sobolʼ(n_points; sobol_index_methods=sobol_index_methods), n_replicates, inputs, evs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
+
+reference = getSimulationIDs(sobol_sampling)[1] |> Simulation
+sobol_sampling = run(Sobolʼ(2), n_replicates, reference, evs[1])
