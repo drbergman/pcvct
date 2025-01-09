@@ -162,7 +162,21 @@ function gitRemotes(dir::String)
     return remotes
 end
 
-function physicellVersion()
+function physicellVersion(physicell_version_id::Int)
+    query = constructSelectQuery("physicell_versions", "WHERE physicell_version_id = $(physicell_version_id)")
+    df = queryToDataFrame(query; is_row=true)
+    return ismissing(df.tag[1]) ? df.commit_hash[1] : df.tag[1]
+end
+
+physicellVersion() = physicellVersion(current_physicell_version_id)
+
+function physicellVersion(simulation::Simulation)
+    query = constructSelectQuery("simulations", "WHERE simulation_id = $(simulation.id)"; selection="physicell_version_id")
+    df = queryToDataFrame(query; is_row=true)
+    return physicellVersion(df.physicell_version_id[1])
+end
+
+function physicellInfo()
     query = constructSelectQuery("physicell_versions", "WHERE physicell_version_id = $(current_physicell_version_id)")
     df = queryToDataFrame(query; is_row=true)
     str_begin = ismissing(df.repo_owner[1]) ? "" : "($(df.repo_owner[1])) "
