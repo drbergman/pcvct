@@ -33,7 +33,7 @@ add pcvct
 Leave the Pkg REPL by pressing `backspace`.
 Then, create a new project by running:
 ```
-createProject([path_to_project_folder]) # createProject() will use the current directory as the project folder
+createProject(path_to_project_folder) # createProject() will use the current directory as the project folder
 ```
 This creates three folders inside the `path_to_project_folder` folder: `data/`, `PhysiCell/`, and `VCT/`.
 <!-- The `data/` folder will currently contain the PhysiCell template project split across multiple folders within `data/inputs/`.
