@@ -303,11 +303,10 @@ function deleteSimulationsByStatus(status_codes_to_delete::Vector{String}=["Fail
         if user_check
             println("Are you sure you want to delete all $(length(simulation_ids)) simulations with status code '$status_code'? (y/n)")
             response = readline()
+            println("You entered '$response'.")
             if response != "y" # make user be very specific about resetting
-                println("You entered '$response'.\n\tDeleting simulations with status code '$status_code' has been cancelled.")
+                println("\tDeleting simulations with status code '$status_code' has been cancelled.")
                 continue
-            else
-                println("You entered '$response'.")
             end
         end
         println("\tDeleting $(length(simulation_ids)) simulations with status code '$status_code'.")
