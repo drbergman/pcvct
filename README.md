@@ -1,4 +1,4 @@
-# pcvct
+****# pcvct
 
 [![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://drbergman.github.io/pcvct/stable/)
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://drbergman.github.io/pcvct/dev/)
@@ -80,6 +80,30 @@ Alternatively, you can run the script via the REPL.
 Run the script a second time and observe that no new simulations are run.
 This is because pcvct looks for matching simulations first before running new ones.
 The `use_previous` optional keyword argument can control this behavior if new simulations are desired.
+
+## Using PhysiCell Studio
+If you want to use PhysiCell Studio to visualize the output of your simulations, first launch julia.
+Then, make sure the project is initialized by running:
+```
+# if you used createProject(), these are the first two lines of GenerateData.jl
+using pcvct
+initializeVCT(path_to_physicell, path_to_data)
+```
+Finally, run the following command to launch PhysiCell Studio for a simulation with id `sim_id`:
+```
+runStudio(sim_id; python_path=path_to_python, studio_path=path_to_studio)
+```
+where `path_to_python` is the path to the python executable and `path_to_studio` is the path to the PhysiCell Studio __folder__.
+For example,
+```
+runStudio(1; python_path="/usr/bin/python3", studio_path="/home/user/PhysiCell-Studio")
+```
+Note: if using a python executable that is on your PATH, you can supply just the name of it, e.g. `path_to_python="python3"`.
+
+The shell environment variables `PCVCT_PYTHON_PATH` and `PCVCT_STUDIO_PATH` can be set to avoid needing to pass these arguments each time.
+
+Running the studio this way generates temporary config and rules files.
+Any edits to the parameters in studio will be lost when the studio is closed.
 
 # Best practices
 
