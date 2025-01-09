@@ -172,7 +172,7 @@ function upgradeToV0_0_10(auto_upgrade::Bool)
     createPCVCTTable("physicell_versions", physicellVersionsSchema())
     global current_physicell_version_id = physicellVersionID()
 
-    println("\t\tPhysiCell version: $(physicellVersion())")
+    println("\t\tPhysiCell version: $(physicellInfo())")
     println("\n\t\tAssuming all output has been generated with this version...")
 
     if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('simulations') WHERE name='physicell_version_id';") |> DataFrame |> isempty

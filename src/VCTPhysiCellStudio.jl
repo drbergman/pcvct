@@ -1,5 +1,7 @@
 using CSV, DataFrames
 
+export runStudio
+
 path_to_python = haskey(ENV, "PCVCT_PYTHON_PATH") ? ENV["PCVCT_PYTHON_PATH"] : missing 
 path_to_studio = haskey(ENV, "PCVCT_STUDIO_PATH") ? ENV["PCVCT_STUDIO_PATH"] : missing
 
@@ -22,17 +24,31 @@ function runStudio(simulation_id::Int; python_path::Union{Missing,String}=path_t
     end
 
     path_to_output = joinpath(outputFolder("simulation", simulation_id), "output")
+    
+    physicell_version = physicellVersion(Simulation(simulation_id))
+    upstream_version = split(physicell_version, "-")[1] |> VersionNumber
+    rules_header = ["cell_type", "signal", "response", "behavior", "base_response", "max_response", "half_max", "hill_power", "applies_to_dead"]
+    if upstream_version < v"1.14.0"
+        output_rules_file = "cell_rules.csv"
+    else # starting in 1.14.1, export the v3 rules to cell_rules_parsed.csv
+        output_rules_file = "cell_rules_parsed.csv"
+        filter!(h -> h != "base_response", rules_header)
+    end
+    
+    rules_df = CSV.read(joinpath(path_to_output, output_rules_file), DataFrame; header=rules_header)
+    if "base_response" in rules_header
+        select!(rules_df, Not(:base_response))
+    end
+    
+    input_rules_file = "cell_rules_temp.csv"
+    path_to_input_rules = joinpath(path_to_output, input_rules_file)
+    CSV.write(path_to_input_rules, rules_df, writeheader=false)
+    
     path_to_xml = joinpath(path_to_output, "PhysiCell_settings.xml")
     xml_doc = openXML(path_to_xml)
     updateField(xml_doc, ["save", "folder"], path_to_output)
     updateField(xml_doc, ["cell_rules", "rulesets", "ruleset", "folder"], path_to_output)
-    updateField(xml_doc, ["cell_rules", "rulesets", "ruleset", "filename"], "cell_rules_temp.csv")
-
-    rules_header = ["cell_type", "signal", "response", "behavior", "base_response", "max_response", "half_max", "hill_power", "applies_to_dead"]
-    rules_df = CSV.read(joinpath(path_to_output, "cell_rules.csv"), DataFrame; header=rules_header)
-    select!(rules_df, Not(:base_response))
-    path_to_temp_rules = joinpath(path_to_output, "cell_rules_temp.csv")
-    CSV.write(path_to_temp_rules, rules_df, writeheader=false)
+    updateField(xml_doc, ["cell_rules", "rulesets", "ruleset", "filename"], input_rules_file)
 
     path_to_temp_xml = joinpath(path_to_output, "PhysiCell_settings_temp.xml")
     save_file(xml_doc, path_to_temp_xml)
@@ -41,5 +57,5 @@ function runStudio(simulation_id::Int; python_path::Union{Missing,String}=path_t
     cmd = `$path_to_python $(joinpath(path_to_studio, "bin", "studio.py")) -c $(path_to_temp_xml)`
     cd(() -> run(pipeline(cmd; stdout=devnull, stderr=devnull)), physicell_dir) # compile the custom code in the PhysiCell directory and return to the original directory; make sure the macro ADDON_PHYSIECM is defined (should work even if multiply defined, e.g., by Makefile)
     rm(path_to_temp_xml, force=true)
-    rm(path_to_temp_rules, force=true)
+    rm(path_to_input_rules, force=true)
 end
