@@ -354,7 +354,7 @@ If `new_status_code` is provided, update the status of the simulation to this va
 The check and status update are done in a transaction to ensure that the status is not changed by another process.
 """
 function isStarted(simulation_id::Int; new_status_code::Union{Missing,String}=missing)
-    query = constructSelectQuery("simulations", "WHERE simulation_id=$(simulation_id);"; selection="status_code_id")
+    query = constructSelectQuery("simulations", "WHERE simulation_id=$(simulation_id)"; selection="status_code_id")
     mode = ismissing(new_status_code) ? "DEFERRED" : "EXCLUSIVE" # if we are possibly going to update, then set to exclusive mode
     SQLite.transaction(db, mode)
     status_code = queryToDataFrame(query; is_row=true) |> x -> x[1,:status_code_id]

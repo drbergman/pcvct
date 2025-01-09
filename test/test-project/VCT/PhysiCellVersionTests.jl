@@ -3,6 +3,8 @@ filename = split(filename, "/") |> last
 str = "TESTING WITH $(filename)"
 hashBorderPrint(str)
 
+@test pcvct.physicellVersion() == readchomp(joinpath(pcvct.physicell_dir, "VERSION.txt"))
+
 path_to_file = "./test-project/PhysiCell/Makefile"
 
 lines = readlines(path_to_file)
