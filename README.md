@@ -31,6 +31,10 @@ add pcvct
 
 4. Create a pcvct-enabled project:
 Leave the Pkg REPL by pressing `backspace`.
+Load the pcvct module by running:
+```
+using pcvct
+```
 Then, create a new project by running:
 ```
 createProject(path_to_project_folder) # createProject() will use the current directory as the project folder
