@@ -252,22 +252,31 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         # now create the sampling (varied parameter values) with these parameters
         # we will give it a reference to the monad with the short max time
         """))\
-        sampling = createTrial(reference, discrete_variations; n_replicates=n_replicates)
+        sampling = createTrial(reference, discrete_variations; n_replicates=n_replicates, use_previous=use_previous)
 
         $(tersify("""
         # at this point, we have only added the sampling to the database...
         # ...along with the monads and simulations that make it up
-        # now, we run the sampling
+        # before running, we will set the number of parallel simulations to run.
+        # note: this will only be used when running locally, i.e., not on an HPC
+        # by default, pcvct will run the simulations serially, i.e., 1 in \"parallel\".
+        # change this by calling:
         """))\
-        out = run(sampling; force_recompile=force_recompile)
+        setNumberOfParallelSims(4) # for example, to run 4 simulations in parallel
 
         $(tersify("""
-        # When running locally, pcvct using a shell environment variable to determine...
-        # ...the number of concurrent siulations to run. This is set to 1 by default.
-        # The variable is called PCVCT_NUM_PARALLEL_SIMS.
-        # A simple way to set this when running the script is to run in your shell:
+        # you can change this default behavior on your machine by setting an environment variable...
+        # called PCVCT_NUM_PARALLEL_SIMS
+        # this is read during `initializeVCT`...
+        # meaning subsequent calls to `setNumberOfParallelSims` will overwrite the value
+        # A simple way to use this when running the script is to run in your shell:
         # `PCVCT_NUM_PARALLEL_SIMS=4 julia $(path_to_generate_data)`
         """))\
+
+        $(tersify("""
+        # now run the sampling
+        """))\
+        out = run(sampling; force_recompile=force_recompile)
 
         $(tersify("""
         # If you are running on an SLURM-based HPC, pcvct will detect this and calls to `sbatch`...

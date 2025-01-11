@@ -55,6 +55,7 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
         Check $(joinpath(path_to_input_custom_codes, "compilation.err")) for more information.
         """
         )
+        rm(temp_physicell_dir; force=true, recursive=true)
         return false
     end
     
