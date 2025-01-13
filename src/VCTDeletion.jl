@@ -294,6 +294,9 @@ function resetRulesetsCollectionFolder(path_to_rulesets_collection_folder::Strin
     if !isdir(path_to_rulesets_collection_folder)
         return
     end
+    if isfile(joinpath(path_to_rulesets_collection_folder, "base_rulesets.csv"))
+        rm(joinpath(path_to_rulesets_collection_folder, "base_rulesets.xml"); force=true)
+    end
     rm(joinpath(path_to_rulesets_collection_folder, "rulesets_collection_variations.db"); force=true)
     rm(joinpath(path_to_rulesets_collection_folder, "rulesets_collections_variations"); force=true, recursive=true)
 end

@@ -1,7 +1,7 @@
 using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables, Distributions, Statistics, Random, QuasiMonteCarlo, Sobol
 using PhysiCellXMLRules
 
-export initializeVCT, getSimulationIDs
+export initializeVCT, getSimulationIDs, setNumberOfParallelSims
 
 # put these first as they define classes the rest rely on
 include("VCTClasses.jl")
@@ -198,4 +198,13 @@ end
 
 function setMarchFlag(flag::String)
     global march_flag = flag
+end
+
+"""
+    setNumberOfParallelSims(n::Int)
+
+Set the maximum number of parallel simulations to `n`.
+"""
+function setNumberOfParallelSims(n::Int)
+    global max_number_of_parallel_simulations = n
 end

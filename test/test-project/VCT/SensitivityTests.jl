@@ -3,6 +3,7 @@ filename = split(filename, "/") |> last
 str = "TESTING WITH $(filename)"
 hashBorderPrint(str)
 
+setNumberOfParallelSims(12)
 
 config_folder = "0_template"
 rulesets_collection_folder = "0_template"
