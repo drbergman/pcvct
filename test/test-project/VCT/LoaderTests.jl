@@ -15,12 +15,12 @@ push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], 6.0))
 
 out = run(inputs, discrete_variations; use_previous=false)
 @test out.trial isa Simulation
-sequence = PhysiCellSequence(joinpath(path_to_data_folder, "outputs", "simulations", string(out.trial.id), "output"); include_cells=true, include_substrates=true)
+sequence = pcvct.PhysiCellSequence(joinpath(path_to_data_folder, "outputs", "simulations", string(out.trial.id), "output"); include_cells=true, include_substrates=true)
 
 seq_dict = getCellDataSequence(sequence, "elapsed_time_in_phase"; include_dead=true)
 
-simulation_population_time_series = populationTimeSeries(out.trial; include_dead=true)
-simulation_population_time_series = populationTimeSeries(out.trial; include_dead=false)
+simulation_population_time_series = pcvct.populationTimeSeries(out.trial; include_dead=true)
+simulation_population_time_series = pcvct.populationTimeSeries(out.trial; include_dead=false)
 
 for direction in [:x, :y, :z, :any]
     local mean_speed_dicts = computeMeanSpeed(out.trial.id; direction=direction)

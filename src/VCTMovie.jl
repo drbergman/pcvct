@@ -21,6 +21,22 @@ function makeMovie(simulation_id::Int)
     return movie_generated
 end
 
+"""
+    makeMovie(T::AbstractTrial)
+
+Make movies for all simulations in `T`, a simulation, monad, sampling, or trial.
+
+Uses the PhysiCell Makefile to generate the movies.
+Deletes the JPEG files after the movie is generated.    
+
+Passing a single simulation ID into `makeMovie` will generate a movie for that simulation.
+
+# Examples
+```
+makeMovie(123) # make a movie for simulation 123
+makeMovie(sampling) # make movies for all simulations in sampling
+```
+"""
 function makeMovie(T::AbstractTrial)
     simulation_ids = getSimulationIDs(T)
     println("Making movies for $(typeof(T)) $(T.id) with $(length(simulation_ids)) simulations...")

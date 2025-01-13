@@ -90,8 +90,7 @@ Import a project from the structured in the format of PhysiCell sample projects 
 The following keys are recognized: $(join(["`$fn`" for fn in fieldnames(ImportSources)], ", ", ", and ")).
 - `dest::Dict`: Dictionary of the inputs folders to create in the pcvct structure. If absent, taken from the project name.
 The following keys are recognized: $(join(["`$fn`" for fn in fieldnames(ImportDestFolders)], ", ", ", and ")).
-- `extreme_caution::Bool`: If true, will ask for confirmation before deleting any folders created during the import process. Care has been taken to ensure this is unnecessary.
-This option is provided for users who want to be extra cautious.
+- `extreme_caution::Bool`: If true, will ask for confirmation before deleting any folders created during the import process. Care has been taken to ensure this is unnecessary. Provided for users who want to be extra cautious.
 """
 function importProject(path_to_project::AbstractString, src=Dict(), dest=Dict(); extreme_caution::Bool=false)
     project_sources = ImportSources(src)

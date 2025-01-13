@@ -1,5 +1,7 @@
 using LightXML, CSV, DataFrames, LinearAlgebra
 
+export createICCellXMLTemplate
+
 function generateICCell(path_to_ic_cell_xml::String, path_to_ic_cell_file::String)
     xml_doc = openXML(path_to_ic_cell_xml)
     ic_cells = root(xml_doc)
@@ -98,4 +100,50 @@ function generatePatch(::Type{AnnulusPatch}, patch::XMLElement, cell_type::Strin
     end
     r_fn(number) = sqrt.(inner_radius^2 .+ (outer_radius^2 - inner_radius^2) * rand(number))
     place_annulus(r_fn, patch, cell_type, path_to_ic_cell_file)
+end
+
+"""
+    createICCellXMLTemplate(folder::String)
+
+Create folder `data/inputs/ics/cells/folder` and create a template XML file for IC cells.
+
+pcvct introduces a new way to initialize cells in a simulation, wholly contained within pcvct.
+It will not work in PhysiCell!
+This function creates a template XML file for IC cells, showing all the current functionality of this initialization scheme.
+It uses the cell type \"default\".
+Create ICs for more cell types by copying the `cell_patches` element.
+The `ID` attribute in `patch` elements is there exactly to allow variations to target specific patches.
+Manually maintain these or you will not be able to vary specific patches effectively.
+
+Each time a simulation is run that is using a cells.xml file, a new CSV file will be created, drawing randomly from the patches defined in the XML file.
+These will all be stored with `data/inputs/ics/cells/folder/ic_cell_variations` as `ic_cell_variation_#_s#.csv` where the first `#` is the variation ID associated with variation on the XML file and the second `#` is the simulation ID.
+Importantly, no two simulations will use the same CSV file.
+"""
+function createICCellXMLTemplate(folder::String)
+    path_to_ic_cell_xml = joinpath(data_dir, "inputs", "ics", "cells", folder, "cells.xml")
+    mkpath(dirname(path_to_ic_cell_xml))
+    xml_doc = XMLDocument()
+    xml_root = create_root(xml_doc, "ic_cells")
+
+    e_patches = new_child(xml_root, "cell_patches")
+    set_attribute(e_patches, "name", "default")
+
+    e_discs = new_child(e_patches, "patch_collection")
+    set_attribute(e_discs, "type", "disc")
+    e_patch = new_child(e_discs, "patch")
+    set_attribute(e_patch, "ID", "1")
+    for (name, value) in [("x0", "0.0"), ("y0", "0.0"), ("z0", "0.0"), ("radius", "10.0"), ("number", "50")]
+        e = new_child(e_patch, name)
+        set_content(e, value)
+    end
+
+    e_annuli = new_child(e_patches, "patch_collection")
+    set_attribute(e_annuli, "type", "annulus")
+    e_patch = new_child(e_annuli, "patch")
+    set_attribute(e_patch, "ID", "1")
+    for (name, value) in [("x0", "50.0"), ("y0", "50.0"), ("z0", "0.0"), ("inner_radius", "10.0"), ("outer_radius", "200.0"), ("number", "50")]
+        e = new_child(e_patch, name)
+        set_content(e, value)
+    end
+    save_file(xml_doc, path_to_ic_cell_xml)
 end

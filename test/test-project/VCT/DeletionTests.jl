@@ -21,10 +21,10 @@ pcvct.deleteTrial(1)
 input_buffer = IOBuffer("n")
 old_stdin = stdin  # Save the original stdin
 Base.stdin = input_buffer
-pcvct.deleteSimulationsByStatus(["Queued", "Failed"])
+deleteSimulationsByStatus(["Queued", "Failed"])
 Base.stdin = old_stdin
 
-pcvct.deleteSimulationsByStatus(; user_check=false)
+deleteSimulationsByStatus(; user_check=false)
 
 pcvct.deleteAllSimulations()
 resetDatabase(; force_reset=true)

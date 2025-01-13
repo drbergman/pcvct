@@ -1,5 +1,7 @@
 import Base.run
 
+export runAbstractTrial
+
 function prepareSimulationCommand(simulation::Simulation, monad_id::Union{Missing,Int}, do_full_setup::Bool, force_recompile::Bool)
     if ismissing(monad_id)
         monad = Monad(simulation)
@@ -281,7 +283,8 @@ end
 """
     runAbstractTrial(T::AbstractTrial; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions())
     
-Alias for `run`.
+Alias for [`run`](@ref), but only with this particular signature. Does not work on `Cmd` objects as `Base.run` is built for.
+Also, does not work with `run`ning sensitivity samplings.
 """
 function runAbstractTrial(T::AbstractTrial; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions()) 
     Base.depwarn("`runAbstractTrial` is deprecated. Use `run` instead.", :runAbstractTrial; force=true)

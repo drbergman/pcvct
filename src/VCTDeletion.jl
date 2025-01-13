@@ -1,8 +1,26 @@
-export deleteSimulation, deleteSimulations
+export deleteSimulation, deleteSimulations, deleteSimulationsByStatus, resetDatabase
 
+"""
+    deleteSimulations(simulation_ids::AbstractVector{<:Union{Integer,Missing}}; delete_supers::Bool=true, and_constraints::String="")
+
+Deletes the simulations with the input IDs from the database and from the `data/outputs/simulations` folder.
+
+Works with any vector of integers or a single integer.
+If `delete_supers` is `true`, it will also delete any monads, samplings, and trials that no longer have any simulations associated with them.
+It is recommended to leave this to `true` to keep the database clean.
+The `and_constraints` argument allows for additional SQLite conditions to be added to the `WHERE` clause of the SQLite query. Use this only after inspecting the `simulations` table in the `data/vct.db` database.
+    Note: `deleteSimulation` is an alias for `deleteSimulations`.
+
+# Examples
+```
+deleteSimulations(1:3)
+deleteSimulations(4)
+deleteSimulations(1:100; and_constraints="AND config_id = 1") # delete simulations with IDs 1 to 100 that have config_id = 1
+```
+"""
 function deleteSimulations(simulation_ids::AbstractVector{<:Union{Integer,Missing}}; delete_supers::Bool=true, and_constraints::String="")
     filter!(x -> !ismissing(x), simulation_ids)
-    where_stmt = "WHERE simulation_id IN ($(join(simulation_ids,","))) $(and_constraints);"
+    where_stmt = "WHERE simulation_id IN ($(join(simulation_ids,","))) $(and_constraints)"
     sim_df = constructSelectQuery("simulations", where_stmt) |> queryToDataFrame
     simulation_ids = sim_df.simulation_id # update based on the constraints added
     DBInterface.execute(db,"DELETE FROM simulations WHERE simulation_id IN ($(join(simulation_ids,",")));")
@@ -181,6 +199,18 @@ end
 
 deleteTrial(trial_id::Int; delete_subs::Bool=true) = deleteTrial([trial_id]; delete_subs=delete_subs)
 
+"""
+    resetDatabase()
+
+Reset the database (after user confirmation) by deleting all simulations, monads, samplings, and trials.
+
+All the base inputs files will be kept, so previously run scripts should still work as expected.
+If the user aborts the reset, the user will then be asked if they want to continue with the script.
+
+# Keyword Arguments
+- `force_reset::Bool`: If `true`, skips the user confirmation prompt. Default is `false`.
+- `force_continue::Bool`: If `true`, skips the user confirmation prompt for continuing with the script after aborting the reset. Default is `false`.
+"""
 function resetDatabase(; force_reset::Bool=false, force_continue::Bool=false)
     if !force_reset
         # prompt user to confirm
@@ -320,10 +350,11 @@ end
 """
     eraseSimulationID(simulation_id::Int[; monad_id::Union{Missing,Int}=missing])
 
-Erase a simulation ID from the monad it belongs to `simulations.csv`.
+Erase a simulation ID from the `simulations.csv` file of the monad it belongs to.
 
 If `monad_id` is not provided, the function will infer it from the simulation ID.
 If the monad contains only the given simulation ID, the monad will be deleted.
+This is used when running simulations if they error so that the monads no longer rely on them, but the simulation output can still be checked.
 """
 function eraseSimulationID(simulation_id::Int; monad_id::Union{Missing,Int}=missing)
     if ismissing(monad_id)
