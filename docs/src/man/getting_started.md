@@ -37,9 +37,9 @@ See [Data directory structure](@ref) for information about the `data/` folder.
 
 ## (Optional) Import from `user_projects`
 ### Inputs
-If you have a project in the `PhysiCell/user_projects/` folder that you would like to import, you can do so by running:
-```@docs
-importProject
+If you have a project in the `PhysiCell/user_projects/` folder that you would like to import, you can do so by running [`importProject`](@ref):
+```julia-repl
+julia> importProject(path_to_project_folder)
 ```
 The `path_to_project_folder` string can be either the absolute path (recommended) or the relative path (from the directory julia was launched) to the project folder.
 
@@ -59,10 +59,14 @@ Note the `Default location` column shows the path relative to `path_to_project_f
 
 If any of these files are not located in the standard location, you can define a dictionary with keys taken from the table above to specify the location of each file.
 For example, if the config file is instead located at `PhysiCell/user_projects/[project_name]/config/config.xml`, you would run:
-```julia
-src = Dict("config" => "config/config.xml")
+```julia-repl
+julia> src = Dict("config" => "config/config.xml")
 ```
 Additional entries can be added in a comma-separated list into `Dict` or added later with `src[key] = rel_path`.
+Pass the dictionary in as the second argument as follows:
+```julia-repl
+julia> importProject(path_to_project_folder, src)
+```
 
 ### Outputs
 If you use this option, then the GenerateData.jl script must be updated to reflect the new project folders.
