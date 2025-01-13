@@ -1,5 +1,5 @@
 # each file (includes below) has their own export statements
-export initializeVCT, resetDatabase, runAbstractTrial, readTrialSamplingIDs, getSimulationIDs
+export initializeVCT, resetDatabase, runAbstractTrial, getSimulationIDs, setNumberOfParallelSims
 
 using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables, Distributions, Statistics, Random, QuasiMonteCarlo, Sobol
 using PhysiCellXMLRules
@@ -46,7 +46,7 @@ else
 end
 
 run_on_hpc = isRunningOnHPC()
-max_number_of_parallel_simulations = haskey(ENV, "PCVCT_NUM_PARALLEL_SIMS") ? parse(Int, ENV["PCVCT_NUM_PARALLEL_SIMS"]) : 1
+max_number_of_parallel_simulations = 1
 march_flag = run_on_hpc ? "x86-64" : "native"
 
 sbatch_options = defaultJobOptions() # this is a dictionary that will be used to pass options to the sbatch command
@@ -176,4 +176,8 @@ end
 
 function setMarchFlag(flag::String)
     global march_flag = flag
+end
+
+function setNumberOfParallelSims(n::Int)
+    global max_number_of_parallel_simulations = n
 end
