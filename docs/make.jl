@@ -32,6 +32,6 @@ makedocs(;
 
 deploydocs(;
     repo="github.com/drbergman/pcvct",
-    devbranch="test-doc-updates",
+    devbranch="development",
     push_preview=true,
 )

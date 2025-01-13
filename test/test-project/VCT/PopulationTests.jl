@@ -15,6 +15,6 @@ plotbycelltype(Sampling(1), "default")
 
 # misc tests
 out = Monad(1; n_replicates=3) |> run
-MonadPopulationTimeSeries(1)
+pcvct.MonadPopulationTimeSeries(1)
 plot(out.trial)
 plotbycelltype(out.trial)
