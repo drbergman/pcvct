@@ -28,13 +28,13 @@ function useHPC(use::Bool=true)
     global run_on_hpc = use
 end
 
-"""
+raw"""
     defaultJobOptions()
 
 Return a dictionary with default options for a job script for use with SLURM. See [`setJobOptions`](@ref) for setting these options and others.
 
 Current defaults are:
-- `"job-name"`: simulation_id -> "S\$(simulation_id)"
+- `"job-name"`: simulation_id -> "S$(simulation_id)"
 - `"mem"`: "1G"
 ```
 """

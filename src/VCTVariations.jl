@@ -418,7 +418,7 @@ SobolVariation(; pow2::Int=1, n_matrices::Int=1, randomization::RandomizationMet
 """
     RBDVariation
 
-A variation method that creates a Random Balanced Design of the values of the variations.
+A variation method that creates a Random Balance Design of the values of the variations.
 
 This creates `n` sample points where the values in each dimension are uniformly distributed.
 By default, this will use Sobol sequences (see [`SobolVariation`](@ref)) to create the sample points.
@@ -721,7 +721,7 @@ function addVariations(sobol_variation::SobolVariation, inputs::InputFolders, ev
     return config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids, cdfs, pvs
 end
 
-################## Random Balanced Design Sampling Functions ##################
+################## Random Balance Design Sampling Functions ##################
 
 function generateRBDCDFs(rbd_variation::RBDVariation, d::Int)
     if rbd_variation.use_sobol

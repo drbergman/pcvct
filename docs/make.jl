@@ -19,6 +19,7 @@ makedocs(;
             "Data directory" => "man/data_directory.md",
             "Known limitations" => "man/known_limitations.md",
             "PhysiCell Studio" => "man/physicell_studio.md",
+            "Sensitivity Analysis" => "man/sensitivity_analysis.md",
         ],
         "Documentation" => map(
             s -> "lib/$(s)",
