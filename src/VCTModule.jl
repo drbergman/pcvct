@@ -1,4 +1,4 @@
-using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables, Distributions, Statistics, Random, QuasiMonteCarlo, Sobol
+using SQLite, DataFrames, LightXML, Dates, CSV, Tables, Distributions, Statistics, Random, QuasiMonteCarlo, Sobol
 using PhysiCellXMLRules
 
 export initializeVCT, getSimulationIDs, setNumberOfParallelSims

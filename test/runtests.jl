@@ -9,6 +9,7 @@ include("./test-project/VCT/PrintHelpers.jl")
     include("./test-project/VCT/GenerateData.jl") # this file is created by CreateProjectTests.jl
 
     include("./test-project/VCT/RunnerTests.jl")
+    include("./test-project/VCT/UserAPITests.jl")
     include("./test-project/VCT/ImportTests.jl")
     include("./test-project/VCT/PrunerTests.jl")
     include("./test-project/VCT/ConfigurationTests.jl")

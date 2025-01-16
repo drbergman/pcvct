@@ -120,7 +120,11 @@ These will all be stored with `data/inputs/ics/cells/folder/ic_cell_variations` 
 Importantly, no two simulations will use the same CSV file.
 """
 function createICCellXMLTemplate(folder::String)
-    path_to_ic_cell_xml = joinpath(data_dir, "inputs", "ics", "cells", folder, "cells.xml")
+    if length(splitpath(folder)) == 1
+        # then the folder is just the name of the ics/cells/folder folder
+        folder = joinpath(data_dir, "inputs", "ics", "cells", folder)
+    end
+    path_to_ic_cell_xml = joinpath(folder, "cells.xml")
     mkpath(dirname(path_to_ic_cell_xml))
     xml_doc = XMLDocument()
     xml_root = create_root(xml_doc, "ic_cells")
@@ -146,4 +150,5 @@ function createICCellXMLTemplate(folder::String)
         set_content(e, value)
     end
     save_file(xml_doc, path_to_ic_cell_xml)
+    closeXML(xml_doc)
 end

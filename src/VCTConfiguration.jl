@@ -345,8 +345,18 @@ function getCellParameterName(column_name::String)
     cell_type = split(xml_path[2], ":")[3]
     target_name = ""
     for component in xml_path[3:end]
-        if occursin(":name:", component)
+        if contains(component, ":name:")
             target_name = split(component, ":")[3]
+            break
+        elseif contains(component, ":code:")
+            target_code = split(component, ":")[3]
+            if target_code == "100"
+                target_name = "apop"
+            elseif target_code == "101"
+                target_name = "necr"
+            else
+                throw(ArgumentError("Unknown code in xml path: $(target_code)"))
+            end
             break
         end
     end
