@@ -92,3 +92,37 @@ sobol_sampling = run(Sobolʼ(n_points; sobol_index_methods=sobol_index_methods),
 
 reference = getSimulationIDs(sobol_sampling)[1] |> Simulation
 sobol_sampling = run(Sobolʼ(2), n_replicates, reference, evs[1])
+
+# Testing sensitivity with CoVariations
+config_folder = "0_template"
+custom_code_folder = "0_template"
+rulesets_collection_folder = "0_template"
+ic_cell_folder = "1_xml"
+inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rulesets_collection_folder, ic_cell=ic_cell_folder)
+
+dv_max_time = DiscreteVariation(["overall", "max_time"], 12.0)
+
+reference = createTrial(inputs, dv_max_time; n_replicates=0)
+
+flip = true
+dv_apop = UniformDistributedVariation([pcvct.apoptosisPath("default"); "death_rate"], 0.0, 1.0)
+dv_cycle = UniformDistributedVariation([pcvct.cyclePath("default"); "phase_durations"; "duration:index:0"], 1000.0, 2000.0, flip)
+dv_necr = NormalDistributedVariation([pcvct.necrosisPath("default"); "death_rate"], 1e-4, 1e-5; lb=0.0, ub=1.0)
+dv_pressure_hfm = UniformDistributedVariation(["hypothesis_ruleset:name:default", "behavior:name:cycle entry", "decreasing_signals", "signal:name:pressure", "half_max"], 0.1, 0.25)
+dv_x0 = UniformDistributedVariation(["cell_patches:name:default", "patch_collection:type:disc", "patch:ID:1", "x0"], -100.0, 0.0, flip)
+
+cv1 = CoVariation([dv_apop, dv_cycle])
+cv2 = CoVariation([dv_necr, dv_pressure_hfm, dv_x0])
+avs = [cv1, cv2]
+
+method = MOAT(4)
+gsa_sampling = run(method, n_replicates, reference, avs)
+@test size(gsa_sampling.monad_ids_df) == (4, 3)
+
+method = Sobolʼ(5)
+gsa_sampling = run(method, n_replicates, reference, avs)
+@test size(gsa_sampling.monad_ids_df) == (5, 4)
+
+method = RBD(5)
+gsa_sampling = run(method, n_replicates, reference, avs)
+@test size(gsa_sampling.monad_ids_df) == (5, 2)

@@ -205,6 +205,8 @@ struct PCVCTOutput
     n_success::Int
 end
 
+getSimulationIDs(output::PCVCTOutput) = getSimulationIDs(output.trial)
+
 """
     run(T::AbstractTrial[; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions()])`
 

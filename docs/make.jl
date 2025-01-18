@@ -16,6 +16,7 @@ makedocs(;
         "Manual" => Any[
             "Best practices" => "man/best_practices.md",
             "Getting started" => "man/getting_started.md",
+            "CoVariations" => "man/covariations.md",
             "Data directory" => "man/data_directory.md",
             "Known limitations" => "man/known_limitations.md",
             "PhysiCell Studio" => "man/physicell_studio.md",

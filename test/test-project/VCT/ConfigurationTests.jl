@@ -10,7 +10,7 @@ inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rul
 
 n_replicates = 2
 
-path_to_xml = "$(path_to_data_folder)/inputs/configs/$(config_folder)/PhysiCell_settings.xml"
+path_to_xml = joinpath("test-project", "data", "inputs", "configs", config_folder, "PhysiCell_settings.xml")
 
 cell_type = "default"
 

@@ -120,3 +120,29 @@ evs = [NormalDistributedVariation([pcvct.apoptosisPath("cancer"); "rate"], 1e-3,
 method = MOAT(15)
 sensitivity_sampling = run(method, inputs, n_replicates, evs)
 ```
+
+## Post-processing
+The object `sensitivity_sampling` is of type [`pcvct.GSASampling`](@ref), meaning you can use [`pcvct.calculateGSA!`](@ref) to compute sensitivity analyses.
+```julia
+f = simulation_id -> finalPopulationCount(simulation_id)["default"] # count the final population of cell type "default"
+calculateGSA!(sensitivity_sampling, f)
+```
+These results are stored in a `Dict` in the `sensitivity_sampling` object:
+```julia
+println(sensitivity_sampling.results[f])
+```
+
+The exact concrete type of `sensitivity_sampling` will depend on the `method` used.
+This, in turn, is used by `calculateGSA!` to determine how to compute the sensitivity indices.
+
+Likewise, the `method` will determine how the sensitivity scheme is saved
+After running the simulations, pcvct will print a CSV in the `data/outputs/sampling/$(sampling)` folder named based on the `method`.
+This can later be used to reload the `GSASampling` and continue doing analysis.
+Currently, this requires some ingenuity by the user.
+A future version of pcvct could provide convenience functions for simplifying this.
+```julia
+using CSV, DataFrames
+sampling_id = 1 # for example
+monad_ids_df = CSV.read("data/outputs/samplings/$(sampling_id)/moat_scheme.csv", DataFrame) # if this was a MOAT scheme
+moat_sampling = MOATSampling(Sampling(sampling_id), monad_ids_df, Dict{Function, GlobalSensitivity.MorrisResult}())
+```
