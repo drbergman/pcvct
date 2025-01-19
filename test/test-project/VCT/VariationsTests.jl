@@ -122,8 +122,7 @@ sampling = createTrial(LHSVariation(5), inputs, cv; n_replicates=3)
 @test length(sampling.monad_ids) == 5
 @test length(sampling) == 15
 @test pcvct.location(cv) == [:config, :config]
-@test pcvct.target(cv) == [apoptosis_rate_path, cycle_rate_path]
-# @test cdf(dv, ) = 
+@test pcvct.target(cv) == pcvct.XMLPath.([apoptosis_rate_path, cycle_rate_path])
 
 cv = CoVariation(cv.variations[1], cv.variations[2]) # CoVariation(ev1, ev2, ...)
 sampling = createTrial(SobolVariation(7), inputs, cv; n_replicates=2)

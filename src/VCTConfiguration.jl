@@ -1,5 +1,3 @@
-export addDomainVariationDimension!, addCustomDataVariationDimension!, addAttackRateVariationDimension!
-
 ################## XML Functions ##################
 
 function openXML(path_to_xml::String)
@@ -214,92 +212,12 @@ function customDataPath(cell_definition::String, field_name::String)::Vector{Str
     return [customDataPath(cell_definition); field_name]
 end
 
-function customDataPath(cell_definition::String, field_names::Vector{<:AbstractString})
-    return [customDataPath(cell_definition, field_name) for field_name in field_names]
-end
-
 function userParameterPath(field_name::String)::Vector{String}
     return ["user_parameters"; field_name]
 end
 
-function userParameterPath(field_names::Vector{<:AbstractString})
-    return [userParameterPath(field_name) for field_name in field_names]
-end
-
 function initialConditionPath()
     return ["initial_conditions"; "cell_positions"; "filename"]
-end
-
-################## Variation Dimension Functions ##################
-
-"""
-    addDomainVariationDimension!(evs::Vector{<:ElementaryVariation}, domain::NamedTuple)
-
-Pushes variations onto `evs` for each domain boundary named in `domain`.
-
-The names in `domain` can be flexibly named as long as they contain either `min` or `max` and one of `x`, `y`, or `z` (other than the the `x` in `max`).
-It is not required to include all three dimensions and their boundaries.
-The values for each boundary can be a single value or a vector of values.
-
-# Examples:
-```
-evs = ElementaryVariation[]
-addDomainVariationDimension!(evs, (x_min=-78, xmax=78, min_y=-30, maxy=[30, 60], z_max=10))
-"""
-function addDomainVariationDimension!(evs::Vector{<:ElementaryVariation}, domain::NamedTuple)
-    dim_chars = ["z", "y", "x"]
-    for (tag, value) in pairs(domain)
-        tag = String(tag)
-        if contains(tag, "min")
-            remaining_characters = replace(tag, "min" => "")
-            dim_side = "min"
-        elseif contains(tag, "max")
-            remaining_characters = replace(tag, "max" => "")
-            dim_side = "max"
-        else
-            msg = """
-            Invalid tag for a domain dimension: $(tag)
-            It must contain either 'min' or 'max'
-            """
-            throw(ArgumentError(msg))
-        end
-        ind = findfirst(contains.(remaining_characters, dim_chars))
-        @assert !isnothing(ind) "Invalid domain dimension: $(tag)"
-        dim_char = dim_chars[ind]
-        tag = "$(dim_char)_$(dim_side)"
-        xml_path = ["domain", tag]
-        push!(evs, DiscreteVariation(xml_path, value)) # do this to make sure that singletons and vectors are converted to vectors
-    end
-end
-
-"""
-    addAttackRateVariationDimension!(evs::Vector{<:ElementaryVariation}, cell_definition::String, target_name::String, values::Vector{T} where T)
-
-Pushes a variation onto `evs` for the attack rate of a cell type against a target cell type.
-
-# Examples:
-```
-addAttackRateVariationDimension!(evs, "immune", "cancer", [0.1, 0.2, 0.3])
-```
-"""
-function addAttackRateVariationDimension!(evs::Vector{<:ElementaryVariation}, cell_definition::String, target_name::String, values::Vector{T} where T)
-    xml_path = attackRatesPath(cell_definition, target_name)
-    push!(evs, DiscreteVariation(xml_path, values))
-end
-
-"""
-    addCustomDataVariationDimension!(evs::Vector{<:ElementaryVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
-
-Pushes a variation onto `evs` for a custom data field of a cell type.
-
-# Examples:
-```
-addCustomDataVariationDimension!(evs, "immune", "perforin", [0.1, 0.2, 0.3])
-```
-"""
-function addCustomDataVariationDimension!(evs::Vector{<:ElementaryVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
-    xml_path = customDataPath(cell_definition, field_name)
-    push!(evs, DiscreteVariation(xml_path, values))
 end
 
 ################## Simplify Name Functions ##################

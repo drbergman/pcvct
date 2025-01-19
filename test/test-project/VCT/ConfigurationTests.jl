@@ -46,20 +46,16 @@ node_paths = [
 "attack_rate_default_path" => pcvct.attackRatesPath(cell_type, cell_type)
 
 "custom_data_path" => pcvct.customDataPath(cell_type, "sample")
-"custom_data_paths" => pcvct.customDataPath(cell_type, ["sample"])
 
 "number_of_cells_path" => pcvct.userParameterPath("number_of_cells")
-"number_of_cells_paths" => pcvct.userParameterPath(["number_of_cells"])
 ] |> Dict
 
 discrete_variations = DiscreteVariation[]
 for (i, xml_path) in enumerate(values(node_paths))
-    if typeof(xml_path[1])==String # do not add the custom_datas_path since they also vary "sample"
-        if xml_path[end] == "number_of_cells"
-            push!(discrete_variations, DiscreteVariation(xml_path, [1, 2]))
-        else
-            push!(discrete_variations, DiscreteVariation(xml_path, float(i)))
-        end
+    if xml_path[end] == "number_of_cells"
+        push!(discrete_variations, DiscreteVariation(xml_path, [1, 2]))
+    else
+        push!(discrete_variations, DiscreteVariation(xml_path, float(i)))
     end
 end
 
