@@ -23,33 +23,34 @@ reference_config_variation_id = reference_config_variation_id[1]
 reference_rulesets_variation_id = reference_rulesets_variation_id[1]
 reference_ic_cell_variation_id = reference_ic_cell_variation_id[1]
 
-evs = ElementaryVariation[]
 xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:0"]
 lower_bound = 250.0 - 50.0
 upper_bound = 350.0 + 50.0
-push!(evs, UniformDistributedVariation(xml_path, lower_bound, upper_bound))
+dv1 = UniformDistributedVariation(xml_path, lower_bound, upper_bound)
 
 xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:1"]
 vals = [100.0, 200.0, 300.0]
-push!(evs, DiscreteVariation(xml_path, vals))
+dv2 = DiscreteVariation(xml_path, vals)
 
 xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:2"]
 mu = 300.0
 sigma = 50.0
 lb = 10.0
 ub = 1000.0
-push!(evs, NormalDistributedVariation(xml_path, mu, sigma; lb=lb, ub=ub))
+dv3 = NormalDistributedVariation(xml_path, mu, sigma; lb=lb, ub=ub)
 
-n_points = 2^3-1
+avs = [CoVariation(dv1, dv3), dv2]
+
+n_points = 2^1-1
 n_replicates = 1
 
 gs_fn(simulation_id::Int) = finalPopulationCount(simulation_id)[cell_type]
 
-moat_sampling = run(MOAT(n_points), n_replicates, inputs, evs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
-moat_sampling = run(MOAT(), n_replicates, inputs, evs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
-moat_sampling = run(MOAT(8; orthogonalize=true), n_replicates, inputs, evs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
-sobol_sampling = run(Sobolʼ(n_points), n_replicates, inputs, evs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
-rbd_sampling = run(RBD(n_points), n_replicates, inputs, evs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
+moat_sampling = run(MOAT(n_points), n_replicates, inputs, avs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
+moat_sampling = run(MOAT(), n_replicates, inputs, avs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
+moat_sampling = run(MOAT(4; orthogonalize=true), n_replicates, inputs, avs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
+sobol_sampling = run(Sobolʼ(n_points), n_replicates, inputs, avs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
+rbd_sampling = run(RBD(n_points), n_replicates, inputs, avs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
 
 pcvct.calculateGSA!(moat_sampling, gs_fn)
 pcvct.calculateGSA!(sobol_sampling, gs_fn)
@@ -69,29 +70,30 @@ reference_config_variation_id = reference_config_variation_id[1]
 reference_rulesets_variation_id = reference_rulesets_variation_id[1]
 reference_ic_cell_variation_id = reference_ic_cell_variation_id[1]
 
-evs = ElementaryVariation[]
 xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:0"]
 lower_bound = 250.0 - 50.0
 upper_bound = 350.0 + 50.0
-push!(evs, UniformDistributedVariation(xml_path, lower_bound, upper_bound))
+dv1 = UniformDistributedVariation(xml_path, lower_bound, upper_bound)
 
 xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","max_response"]
-push!(evs, UniformDistributedVariation(xml_path, 0.0, 1.0e-8))
+dv2 = UniformDistributedVariation(xml_path, 0.0, 1.0e-8)
 
 xml_path = ["cell_patches:name:default", "patch_collection:type:annulus", "patch:ID:1", "inner_radius"]
-push!(evs, UniformDistributedVariation(xml_path, 0.0, 1.0))
+dv3 = UniformDistributedVariation(xml_path, 0.0, 1.0)
 
-moat_sampling = run(MOAT(n_points), n_replicates, inputs, evs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
-n_simulations_expected = n_points * (length(evs) + 1) * n_replicates
+av = CoVariation(dv1, dv2, dv3)
+
+moat_sampling = run(MOAT(n_points), n_replicates, inputs, av; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
+n_simulations_expected = n_points * (1 + 1) * n_replicates
 @test length(moat_sampling.sampling) == n_simulations_expected
 
 sobol_index_methods = (first_order=:Sobol1993, total_order=:Homma1996)
-sobol_sampling = run(Sobolʼ(n_points; sobol_index_methods=sobol_index_methods), n_replicates, inputs, evs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
+sobol_sampling = run(Sobolʼ(n_points; sobol_index_methods=sobol_index_methods), n_replicates, inputs, av; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
 sobol_index_methods = (first_order=:Saltelli2010, total_order=:Sobol2007)
-sobol_sampling = run(Sobolʼ(n_points; sobol_index_methods=sobol_index_methods), n_replicates, inputs, evs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
+sobol_sampling = run(Sobolʼ(n_points; sobol_index_methods=sobol_index_methods), n_replicates, inputs, av; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
 
 reference = getSimulationIDs(sobol_sampling)[1] |> Simulation
-sobol_sampling = run(Sobolʼ(2), n_replicates, reference, evs[1])
+sobol_sampling = run(Sobolʼ(2), n_replicates, reference, av)
 
 # Testing sensitivity with CoVariations
 config_folder = "0_template"

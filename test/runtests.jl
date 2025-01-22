@@ -28,6 +28,7 @@ include("./test-project/VCT/PrintHelpers.jl")
     include("./test-project/VCT/HPCTests.jl")
     include("./test-project/VCT/ModuleTests.jl")
     include("./test-project/VCT/PhysiCellVersionTests.jl")
+    include("./test-project/VCT/PhysiCellStudioTests.jl")
 
     # probably want this one last (it deletes/resets things)
     include("./test-project/VCT/DeletionTests.jl")

@@ -201,10 +201,10 @@ function perturbVariation(pv::ParsedVariations, reference_variation_id::Int, fol
 end
 
 function makePerturbation(evs::Vector{<:ElementaryVariation}, base_values::Vector{<:Real}, addFn::Function)
-    cdfs_at_base = cdf(evs[1], base_values[1])
-    @assert all(cdf(evs[i], base_values[i]) == cdfs_at_base for i in 2:length(evs)) "All base values must have the same CDF"
-    dcdf = cdfs_at_base < 0.5 ? 0.5 : -0.5
-    new_values = _values.(evs, cdfs_at_base + dcdf) # note, this is a vector of values
+    cdfs_at_base = [cdf(ev, bv) for (ev, bv) in zip(evs, base_values)]
+    @assert maximum(cdfs_at_base) - minimum(cdfs_at_base) < 1e-10 "All base values must have the same CDF (within tolerance).\nInstead, got $cdfs_at_base."
+    dcdf = cdfs_at_base[1] < 0.5 ? 0.5 : -0.5
+    new_values = _values.(evs, cdfs_at_base[1] + dcdf) # note, this is a vector of values
 
     discrete_variations = [DiscreteVariation(target(ev), new_value) for (ev, new_value) in zip(evs, new_values)]
 
@@ -475,13 +475,13 @@ function calculateGSA!(rbd_sampling::RBDSampling, f::Function)
         return
     end
     values = evaluateFunctionOnSampling(rbd_sampling, f)
-    if rbd_sampling.num_cycles == 1//2
-        values = vcat(values, values[end-1:-1:2,:])
+    if rbd_sampling.num_cycles == 1 // 2
+        values = vcat(values, values[end-1:-1:2, :])
     end
     ys = fft(values, 1) .|> abs2
     ys ./= size(values, 1)
     V = sum(ys[2:end, :], dims=1)
-    Vi = 2 * sum(ys[2:(rbd_sampling.num_harmonics+1), :], dims=1)
+    Vi = 2 * sum(ys[2:(min(size(ys, 1), rbd_sampling.num_harmonics + 1)), :], dims=1)
     rbd_sampling.results[f] = (Vi ./ V) |> vec
     return
 end
