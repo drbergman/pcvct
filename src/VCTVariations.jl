@@ -4,6 +4,30 @@ import Distributions: cdf
 export ElementaryVariation, DiscreteVariation, DistributedVariation, CoVariation
 export UniformDistributedVariation, NormalDistributedVariation
 export GridVariation, LHSVariation, SobolVariation
+export addDomainVariationDimension!, addCustomDataVariationDimension!, addAttackRateVariationDimension!
+
+################## XMLPath ##################
+"""
+    XMLPath
+
+Hold the XML path as a vector of strings.
+
+PhysiCell uses a `:` in names for signals/behaviors from cell custom data.
+For example, `custom:sample` is the default way to represent the `sample` custom data in a PhysiCell rule.
+pcvct uses `:` to indicate an attribute in an XML path and thus splits on `:` when looking for attribute values.
+To avoid this conflict, pcvct will internally replace `custom:<name>` and `custom: <name>` with `custom <name>`.
+Users should never have to think about this.
+Any pcvct function that uses XML paths will automatically handle this replacement.
+"""
+struct XMLPath
+    xml_path::Vector{String}
+
+    function XMLPath(xml_path::Vector{<:AbstractString})
+        custom_fields = startswith.(xml_path, "custom:")
+        xml_path[custom_fields] = "custom " .* [lstrip(p[8:end]) for p in xml_path[custom_fields]]
+        new(xml_path)
+    end
+end
 
 ################## Abstract Variations ##################
 
@@ -17,7 +41,7 @@ The location, target, and values of a discrete variation.
 
 # Fields
 - `location::Symbol`: The location of the variation. Can be `:config`, `:rulesets`, or `:ic_cell`. The location is inferred from the target.
-- `target::Vector{<:AbstractString}`: The target of the variation. The target is a vector of strings that represent the XML path to the element being varied.
+- `target::XMLPath`: The target of the variation. The target is a vector of strings that represent the XML path to the element being varied. See [`XMLPath`](@ref) for more information.
 - `values::Vector{T}`: The values of the variation. The values are the possible values that the target can take on.
 
 A singleton value can be passed in place of `values` for convenience.
@@ -25,27 +49,30 @@ A singleton value can be passed in place of `values` for convenience.
 # Examples
 ```jldoctest
 julia> dv = DiscreteVariation(["overall", "max_time"], [1440.0, 2880.0])
-DiscreteVariation{Float64}(:config, ["overall", "max_time"], [1440.0, 2880.0])
+DiscreteVariation{Float64}(:config, pcvct.XMLPath(["overall", "max_time"]), [1440.0, 2880.0])
 ```
 ```jldoctest
 xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","max_response"]
 DiscreteVariation(xml_path, 0)
 # output
-DiscreteVariation{Int64}(:rulesets, ["hypothesis_ruleset:name:default", "behavior:name:cycle entry", "decreasing_signals", "max_response"], [0])
+DiscreteVariation{Int64}(:rulesets, pcvct.XMLPath(["hypothesis_ruleset:name:default", "behavior:name:cycle entry", "decreasing_signals", "max_response"]), [0])
 ```
 ```jldoctest
 xml_path = ["cell_patches:name:default","patch_collection:type:disc","patch:ID:1","x0"]
 DiscreteVariation(xml_path, [0.0, 100.0])
 # output
-DiscreteVariation{Float64}(:ic_cell, ["cell_patches:name:default", "patch_collection:type:disc", "patch:ID:1", "x0"], [0.0, 100.0])
+DiscreteVariation{Float64}(:ic_cell, pcvct.XMLPath(["cell_patches:name:default", "patch_collection:type:disc", "patch:ID:1", "x0"]), [0.0, 100.0])
 ```
 """
 struct DiscreteVariation{T} <: ElementaryVariation
     location::Symbol
-    target::Vector{<:AbstractString}
+    target::XMLPath
     values::Vector{T}
     
     function DiscreteVariation(target::Vector{<:AbstractString}, values::Vector{T}) where T
+        return DiscreteVariation(XMLPath(target), values)
+    end
+    function DiscreteVariation(target::XMLPath, values::Vector{T}) where T
         location = variationLocation(target)
         return new{T}(location, target, values)
     end
@@ -70,7 +97,7 @@ Alternatively, users can use the [`UniformDistributedVariation`](@ref) and [`Nor
 
 # Fields
 - `location::Symbol`: The location of the variation. Can be `:config`, `:rulesets`, or `:ic_cell`. The location is inferred from the target.
-- `target::Vector{<:AbstractString}`: The target of the variation. The target is a vector of strings that represent the XML path to the element being varied.
+- `target::XMLPath`: The target of the variation. The target is a vector of strings that represent the XML path to the element being varied. See [`XMLPath`](@ref) for more information.
 - `distribution::Distribution`: The distribution of the variation.
 - `flip::Bool=false`: Whether to flip the distribution, i.e., when asked for the iCDF of `x`, return the iCDF of `1-x`. Useful for [`CoVariation`](@ref)'s.
 
@@ -80,7 +107,7 @@ using Distributions
 d = Uniform(1, 2)
 DistributedVariation([pcvct.apoptosisPath("default"); "death_rate"], d)
 # output
-DistributedVariation(:config, ["cell_definitions", "cell_definition:name:default", "phenotype", "death", "model:code:100", "death_rate"], Distributions.Uniform{Float64}(a=1.0, b=2.0), false)
+DistributedVariation(:config, pcvct.XMLPath(["cell_definitions", "cell_definition:name:default", "phenotype", "death", "model:code:100", "death_rate"]), Distributions.Uniform{Float64}(a=1.0, b=2.0), false)
 ```
 ```jldoctest
 using Distributions
@@ -88,23 +115,26 @@ d = Uniform(1, 2)
 flip = true # the cdf on this variation will decrease from 1 to 0 as the value increases from 1 to 2
 DistributedVariation([pcvct.necrosisPath("default"); "death_rate"], d, flip)
 # output
-DistributedVariation(:config, ["cell_definitions", "cell_definition:name:default", "phenotype", "death", "model:code:101", "death_rate"], Distributions.Uniform{Float64}(a=1.0, b=2.0), true)
+DistributedVariation(:config, pcvct.XMLPath(["cell_definitions", "cell_definition:name:default", "phenotype", "death", "model:code:101", "death_rate"]), Distributions.Uniform{Float64}(a=1.0, b=2.0), true)
 """
 struct DistributedVariation <: ElementaryVariation
     location::Symbol
-    target::Vector{<:AbstractString}
+    target::XMLPath
     distribution::Distribution
     flip::Bool
 
     function DistributedVariation(target::Vector{<:AbstractString}, distribution::Distribution, flip::Bool=false)
+        return DistributedVariation(XMLPath(target), distribution, flip)
+    end
+    function DistributedVariation(target::XMLPath, distribution::Distribution, flip::Bool=false)
         location = variationLocation(target)
         return new(location, target, distribution, flip)
     end
 end
 
-target(ev::ElementaryVariation) = ev.target::Vector{<:AbstractString}
+target(ev::ElementaryVariation) = ev.target
 location(ev::ElementaryVariation) = ev.location
-columnName(ev::ElementaryVariation) = target(ev) |> xmlPathToColumnName
+columnName(ev::ElementaryVariation) = target(ev).xml_path |> xmlPathToColumnName
 
 Base.length(::DistributedVariation) = -1 # set to -1 to be a convention
 
@@ -172,10 +202,10 @@ end
 
 cdf(ev::ElementaryVariation, ::Real) = error("cdf not defined for $(typeof(ev))")
 
-function variationLocation(xml_path::Vector{<:AbstractString})
-    if startswith(xml_path[1], "hypothesis_ruleset:name:")
+function variationLocation(xp::XMLPath)
+    if startswith(xp.xml_path[1], "hypothesis_ruleset:name:")
         return :rulesets
-    elseif startswith(xml_path[1], "cell_patches:name:")
+    elseif startswith(xp.xml_path[1], "cell_patches:name:")
         return :ic_cell
     else
         return :config
@@ -240,18 +270,90 @@ function Base.length(cv::CoVariation)
     return length(cv.variations[1])
 end
 
+################## Variation Dimension Functions ##################
+
+"""
+    addDomainVariationDimension!(evs::Vector{<:ElementaryVariation}, domain::NamedTuple)
+
+Pushes variations onto `evs` for each domain boundary named in `domain`.
+
+The names in `domain` can be flexibly named as long as they contain either `min` or `max` and one of `x`, `y`, or `z` (other than the the `x` in `max`).
+It is not required to include all three dimensions and their boundaries.
+The values for each boundary can be a single value or a vector of values.
+
+# Examples:
+```
+evs = ElementaryVariation[]
+addDomainVariationDimension!(evs, (x_min=-78, xmax=78, min_y=-30, maxy=[30, 60], z_max=10))
+"""
+function addDomainVariationDimension!(evs::Vector{<:ElementaryVariation}, domain::NamedTuple)
+    dim_chars = ["z", "y", "x"]
+    for (tag, value) in pairs(domain)
+        tag = String(tag)
+        if contains(tag, "min")
+            remaining_characters = replace(tag, "min" => "")
+            dim_side = "min"
+        elseif contains(tag, "max")
+            remaining_characters = replace(tag, "max" => "")
+            dim_side = "max"
+        else
+            msg = """
+            Invalid tag for a domain dimension: $(tag)
+            It must contain either 'min' or 'max'
+            """
+            throw(ArgumentError(msg))
+        end
+        ind = findfirst(contains.(remaining_characters, dim_chars))
+        @assert !isnothing(ind) "Invalid domain dimension: $(tag)"
+        dim_char = dim_chars[ind]
+        tag = "$(dim_char)_$(dim_side)"
+        xml_path = ["domain", tag]
+        push!(evs, DiscreteVariation(xml_path, value)) # do this to make sure that singletons and vectors are converted to vectors
+    end
+end
+
+"""
+    addAttackRateVariationDimension!(evs::Vector{<:ElementaryVariation}, cell_definition::String, target_name::String, values::Vector{T} where T)
+
+Pushes a variation onto `evs` for the attack rate of a cell type against a target cell type.
+
+# Examples:
+```
+addAttackRateVariationDimension!(evs, "immune", "cancer", [0.1, 0.2, 0.3])
+```
+"""
+function addAttackRateVariationDimension!(evs::Vector{<:ElementaryVariation}, cell_definition::String, target_name::String, values::Vector{T} where T)
+    xml_path = attackRatesPath(cell_definition, target_name)
+    push!(evs, DiscreteVariation(xml_path, values))
+end
+
+"""
+    addCustomDataVariationDimension!(evs::Vector{<:ElementaryVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
+
+Pushes a variation onto `evs` for a custom data field of a cell type.
+
+# Examples:
+```
+addCustomDataVariationDimension!(evs, "immune", "perforin", [0.1, 0.2, 0.3])
+```
+"""
+function addCustomDataVariationDimension!(evs::Vector{<:ElementaryVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
+    xml_path = customDataPath(cell_definition, field_name)
+    push!(evs, DiscreteVariation(xml_path, values))
+end
+
 ################## Database Interface Functions ##################
 
-function addColumns(xml_paths::Vector{Vector{String}}, table_name::String, id_column_name::String, db_columns::SQLite.DB, path_to_xml::String, dataTypeRulesFn::Function)
+function addColumns(xps::Vector{XMLPath}, table_name::String, id_column_name::String, db_columns::SQLite.DB, path_to_xml::String, dataTypeRulesFn::Function)
     column_names = queryToDataFrame("PRAGMA table_info($(table_name));"; db=db_columns) |> x->x[!,:name]
     filter!(x -> x != id_column_name, column_names)
-    varied_column_names = [xmlPathToColumnName(xml_path) for xml_path in xml_paths]
+    varied_column_names = [xmlPathToColumnName(xp.xml_path) for xp in xps]
 
     is_new_column = [!(varied_column_name in column_names) for varied_column_name in varied_column_names]
     if any(is_new_column)
         new_column_names = varied_column_names[is_new_column]
         xml_doc = openXML(path_to_xml)
-        default_values_for_new = [getField(xml_doc, xml_path) for xml_path in xml_paths[is_new_column]]
+        default_values_for_new = [getField(xml_doc, xp.xml_path) for xp in xps[is_new_column]]
         closeXML(xml_doc)
         for (i, new_column_name) in enumerate(new_column_names)
             sqlite_data_type = dataTypeRulesFn(i, new_column_name)
@@ -273,7 +375,7 @@ function addColumns(xml_paths::Vector{Vector{String}}, table_name::String, id_co
     return static_column_names, varied_column_names
 end
 
-function addConfigVariationColumns(config_id::Int, xml_paths::Vector{Vector{String}}, variable_types::Vector{DataType})
+function addConfigVariationColumns(config_id::Int, xps::Vector{XMLPath}, variable_types::Vector{DataType})
     config_folder = configFolder(config_id)
     db_columns = configDB(config_folder)
     path_to_xml = joinpath(data_dir, "inputs", "configs", config_folder, "PhysiCell_settings.xml")
@@ -288,10 +390,10 @@ function addConfigVariationColumns(config_id::Int, xml_paths::Vector{Vector{Stri
             "TEXT"
         end
     end
-    return addColumns(xml_paths, "config_variations", "config_variation_id", db_columns, path_to_xml, dataTypeRulesFn)
+    return addColumns(xps, "config_variations", "config_variation_id", db_columns, path_to_xml, dataTypeRulesFn)
 end
 
-function addRulesetsVariationsColumns(rulesets_collection_id::Int, xml_paths::Vector{Vector{String}})
+function addRulesetsVariationsColumns(rulesets_collection_id::Int, xps::Vector{XMLPath})
     rulesets_collection_folder = rulesetsCollectionFolder(rulesets_collection_id)
     db_columns = rulesetsCollectionDB(rulesets_collection_folder)
     path_to_rulesets_collection_folder = joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder)
@@ -300,17 +402,17 @@ function addRulesetsVariationsColumns(rulesets_collection_id::Int, xml_paths::Ve
         writeRules(path_to_base_xml, joinpath(path_to_rulesets_collection_folder, "base_rulesets.csv"))
     end
     dataTypeRulesFn = (_, name) -> occursin("applies_to_dead", name) ? "INT" : "REAL"
-    return addColumns(xml_paths, "rulesets_collection_variations", "rulesets_collection_variation_id", db_columns, path_to_base_xml, dataTypeRulesFn)
+    return addColumns(xps, "rulesets_collection_variations", "rulesets_collection_variation_id", db_columns, path_to_base_xml, dataTypeRulesFn)
 end
 
-function addICCellVariationColumns(ic_cell_id::Int, xml_paths::Vector{Vector{String}})
+function addICCellVariationColumns(ic_cell_id::Int, xps::Vector{XMLPath})
     ic_cell_folder = icCellFolder(ic_cell_id)
     db_columns = icCellDB(ic_cell_folder)
     @assert db_columns isa SQLite.DB "ic_cell_folder must contain a cells.xml file to support variations."
     path_to_ic_cell_folder = joinpath(data_dir, "inputs", "ics", "cells", ic_cell_folder)
     path_to_base_xml = joinpath(path_to_ic_cell_folder, "cells.xml")
     dataTypeRulesFn = (_, name) -> endswith(name, "number") ? "INT" : "REAL"
-    return addColumns(xml_paths, "ic_cell_variations", "ic_cell_variation_id", db_columns, path_to_base_xml, dataTypeRulesFn)
+    return addColumns(xps, "ic_cell_variations", "ic_cell_variation_id", db_columns, path_to_base_xml, dataTypeRulesFn)
 end
 
 function addRow(db_columns::SQLite.DB, table_name::String, id_name::String, table_features::String, values::String)
@@ -351,9 +453,8 @@ function addICCellVariationRow(ic_cell_id::Int, table_features::String, static_v
 end
 
 function setUpColumns(evs::Vector{<:ElementaryVariation}, addColumnsByPathsFn::Function, prepareAddNewFn::Function)
-    xml_paths = target.(evs)
-
-    static_column_names, varied_column_names = addColumnsByPathsFn(xml_paths)
+    xps = target.(evs)
+    static_column_names, varied_column_names = addColumnsByPathsFn(xps)
     return prepareAddNewFn(static_column_names, varied_column_names)
 end
 
