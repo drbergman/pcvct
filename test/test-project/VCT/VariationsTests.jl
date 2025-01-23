@@ -111,6 +111,7 @@ x0_path = ["cell_patches:name:default", "patch_collection:type:disc", "patch:ID:
 x0s = [0.0, -100.0]
 
 cv_new = CoVariation([cv.variations; DiscreteVariation(max_response_path, mrs); DiscreteVariation(x0_path, x0s)])
+cv_test = CoVariation(cv_new.variations...)
 sampling = createTrial(inputs, [dv_max_time, cv_new]; n_replicates=3)
 @test length(sampling.monad_ids) == 2
 @test length(sampling) == 6

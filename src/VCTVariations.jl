@@ -247,18 +247,16 @@ struct CoVariation{T<:ElementaryVariation} <: AbstractVariation
         end
         return new{DiscreteVariation}(variations)
     end
-    function CoVariation(ev::T) where {T<:ElementaryVariation}
-        return new{T}([ev])
-    end
-    function CoVariation(evs::Vector{T}) where {T<:ElementaryVariation}
-        if T == DistributedVariation
-            return new{T}(evs)
-        end
+    CoVariation(evs::Vector{DistributedVariation}) = return new{DistributedVariation}(evs)
+    function CoVariation(evs::Vector{<:DiscreteVariation})
         @assert (length.(evs) |> unique |> length) == 1 "All DiscreteVariations in a CoVariation must have the same length."
         return new{DiscreteVariation}(evs)
     end
-    function CoVariation(inputs::Vararg{T,N}) where {T<:ElementaryVariation,N}
-        return CoVariation(Vector{T}([inputs...]))
+    function CoVariation(inputs::Vararg{DistributedVariation,N}) where {N}
+        return CoVariation(Vector{DistributedVariation}([inputs...]))
+    end
+    function CoVariation(inputs::Vararg{<:DiscreteVariation,N}) where {N}
+        return CoVariation(Vector{DiscreteVariation}([inputs...]))
     end
 end
 
