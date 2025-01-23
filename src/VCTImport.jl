@@ -123,7 +123,7 @@ function importProject(path_to_project::AbstractString, src=Dict(), dest=Dict();
         end
         println(msg)
         println("Re-initializing the database to include these new entries...")
-        initializeDatabase(joinpath(data_dir, "vct.db"); auto_upgrade=true)
+        reinitializeDatabase()
     else
         msg = """
         Failed to import user_project from $(path_to_project) into $(joinpath(data_dir, "inputs")).
