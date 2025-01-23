@@ -13,13 +13,32 @@ function initializeDatabase(path_to_database::String; auto_upgrade::Bool=false)
     SQLite.transaction(db, "EXCLUSIVE")
     success = createSchema(is_new_db; auto_upgrade=auto_upgrade)
     SQLite.commit(db)
+    if success
+        global initialized = true
+    end
     return success
 end
 
 function initializeDatabase()
     global db = SQLite.DB()
     is_new_db = true
-    return createSchema(is_new_db)
+    success = createSchema(is_new_db)
+    if success
+        global initialized = true
+    end
+    return success
+end
+
+function reinitializeDatabase()
+    if !initialized
+        return
+    end
+    global initialized = false
+    if db.file == ":memory:" # if the database is in memory, re-initialize it
+        initializeDatabase()
+    else
+        initializeDatabase(db.file; auto_upgrade=true)
+    end
 end
 
 function createSchema(is_new_db::Bool; auto_upgrade::Bool=false)
@@ -608,4 +627,25 @@ end
 printConfigVariationsTable(args...; kwargs...) = configVariationsTable(args...; kwargs...) |> println
 printRulesetsVariationsTable(args...; kwargs...) = rulesetsVariationsTable(args...; kwargs...) |> println
 
+"""
+    printSimulationsTable()
+
+Print a table of simulations and their varied values. See keyword arguments below for more control of the output.
+
+There are many methods for this function. The simplest is `printSimulationsTable()`, which prints all simulations in the database.
+You can also pass in any number of simulations, monads, samplings, and trials to print a table of those simulations:
+```
+printSimulationsTable([simulation_1, monad_3, sampling_2, trial_1])
+```
+Finally, a vector of simulation IDs can be passed in:
+```
+printSimulationsTable([1, 2, 3])
+```
+Keyword arguments can be used with any of these methods to control the output:
+# Keyword Arguments
+- `sink`: A function to print the table. Defaults to `println`. Note, the table is a DataFrame, so you can also use `CSV.write` to write the table to a CSV file.
+- `remove_constants::Bool`: If true, removes columns that have the same value for all simulations. Defaults to true.
+- `sort_by::Vector{String}`: A vector of column names to sort the table by. Defaults to all columns. To populate this argument, first print the table to see the column names.
+- `sort_ignore::Vector{String}`: A vector of column names to ignore when sorting. Defaults to the database IDs associated with the simulations.
+"""
 printSimulationsTable(args...; sink=println, kwargs...) = simulationsTable(args...; kwargs...) |> sink

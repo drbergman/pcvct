@@ -2,7 +2,7 @@
 """
     loadCustomCode(S::AbstractSampling[; force_recompile::Bool=false])
 
-Load and compile custom code for a given `Sampling` instance.
+Load and compile custom code for a simulation, monad, or sampling.
 
 Determines if recompilation is necessary based on the previously used macros.
 If compilation is required, copy the PhysiCell directory to a temporary directory to avoid conflicts.
@@ -55,6 +55,7 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
         Check $(joinpath(path_to_input_custom_codes, "compilation.err")) for more information.
         """
         )
+        rm(temp_physicell_dir; force=true, recursive=true)
         return false
     end
     

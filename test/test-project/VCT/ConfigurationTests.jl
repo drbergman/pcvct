@@ -10,7 +10,7 @@ inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rul
 
 n_replicates = 2
 
-path_to_xml = "$(path_to_data_folder)/inputs/configs/$(config_folder)/PhysiCell_settings.xml"
+path_to_xml = joinpath("test-project", "data", "inputs", "configs", config_folder, "PhysiCell_settings.xml")
 
 cell_type = "default"
 
@@ -46,20 +46,16 @@ node_paths = [
 "attack_rate_default_path" => pcvct.attackRatesPath(cell_type, cell_type)
 
 "custom_data_path" => pcvct.customDataPath(cell_type, "sample")
-"custom_data_paths" => pcvct.customDataPath(cell_type, ["sample"])
 
 "number_of_cells_path" => pcvct.userParameterPath("number_of_cells")
-"number_of_cells_paths" => pcvct.userParameterPath(["number_of_cells"])
 ] |> Dict
 
 discrete_variations = DiscreteVariation[]
 for (i, xml_path) in enumerate(values(node_paths))
-    if typeof(xml_path[1])==String # do not add the custom_datas_path since they also vary "sample"
-        if xml_path[end] == "number_of_cells"
-            push!(discrete_variations, DiscreteVariation(xml_path, [1, 2]))
-        else
-            push!(discrete_variations, DiscreteVariation(xml_path, float(i)))
-        end
+    if xml_path[end] == "number_of_cells"
+        push!(discrete_variations, DiscreteVariation(xml_path, [1, 2]))
+    else
+        push!(discrete_variations, DiscreteVariation(xml_path, float(i)))
     end
 end
 
@@ -76,11 +72,6 @@ reference_monad = Monad(out.trial.monad_ids[1])
 
 monads = Monad[]
 discrete_variations = DiscreteVariation[]
-addDomainVariationDimension!(discrete_variations, (-78.0, 78.0, -30.0, 30.0, -10.0, 10.0))
-monad = createTrial(reference_monad, discrete_variations; n_replicates=n_replicates)
-push!(monads, monad)
-
-discrete_variations = DiscreteVariation[]
 addDomainVariationDimension!(discrete_variations, (x_min=-78.1, x_max=78.1, y_min=-30.1, y_max=30.1, z_min=-10.1, z_max=10.1))
 monad = createTrial(reference_monad, discrete_variations; n_replicates=n_replicates)
 push!(monads, monad)
@@ -90,10 +81,14 @@ addDomainVariationDimension!(discrete_variations, (min_x=-78.2, maxy=30.2))
 monad = createTrial(reference_monad, discrete_variations; n_replicates=n_replicates)
 push!(monads, monad)
 
+@test_throws ArgumentError addDomainVariationDimension!(discrete_variations, (x=70, ))
+@test_throws AssertionError addDomainVariationDimension!(discrete_variations, (u_min=70, ))
+
 sampling_1 = Sampling(monads)
 
 discrete_variations = DiscreteVariation[]
-addMotilityVariationDimension!(discrete_variations, cell_type, "speed", [0.1, 1.0])
+xml_path = pcvct.motilityPath(cell_type, "speed")
+push!(discrete_variations, DiscreteVariation(xml_path, [0.1, 1.0]))
 addCustomDataVariationDimension!(discrete_variations, cell_type, "sample", [0.1, 1.0])
 sampling_2 = createTrial(reference_monad, discrete_variations; n_replicates=n_replicates)
 
@@ -118,7 +113,8 @@ out = run(reference_monad, discrete_variations; n_replicates=n_replicates)
 hashBorderPrint("SUCCESSFULLY VARIED RULESETS PARAMETERS!")
 
 discrete_variations = DiscreteVariation[]
-addMotilityVariationDimension!(discrete_variations, cell_type, "speed", [0.1, 1.0])
+xml_path = pcvct.motilityPath(cell_type, "speed")
+push!(discrete_variations, DiscreteVariation(xml_path, [0.1, 1.0]))
 xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","signal:name:pressure","half_max"]
 push!(discrete_variations, DiscreteVariation(xml_path, [0.3, 0.6]))
 

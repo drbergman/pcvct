@@ -41,3 +41,6 @@ push!(discrete_variations, DiscreteVariation(xml_path, 300.0))
 
 out = run(Monad(out.trial.monad_ids[1]), discrete_variations; n_replicates=n_replicates)
 @test out.n_success == 0
+
+createICCellXMLTemplate("2_xml")
+@test isdir(joinpath(pcvct.data_dir, "inputs", "ics", "cells", "2_xml"))

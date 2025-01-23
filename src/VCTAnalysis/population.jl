@@ -1,6 +1,6 @@
 using RecipesBase
 
-export finalPopulationCount, populationTimeSeries
+export finalPopulationCount
 
 function populationCount(snapshot::PhysiCellSnapshot; include_dead::Bool=false, cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}())
     data = Dict{String, Int}()
@@ -19,6 +19,26 @@ end
 
 abstract type AbstractPopulationTimeSeries end
 
+"""
+    SimulationPopulationTimeSeries <: AbstractPopulationTimeSeries
+
+Holds the data for a simulation's population time series.
+
+If constructed using a `Simulation` or an `Integer` (representing a simulation ID), it will save the time series inside the `simulations/simulation_id/summary/` folder.
+It will also look for previously computed time series there to avoid recomputing them.
+
+# Examples
+```
+spts = SimulationPopulationTimeSeries(1) # first checks if the population time series is already computed and if not, computes it
+spts = SimulationPopulationTimeSeries(Simulation(1)) # first checks if the population time series is already computed and if not, computes it
+spts = SimulationPopulationTimeSeries(1; include_dead=true) # similar, but counts dead cells as well; the file name has \"_include_dead\" appended
+```
+
+# Fields
+- `folder::String`: The folder containing the simulation's output.
+- `time::Vector{Real}`: The time points of the population time series.
+- `cell_count::Dict{String, Vector{Integer}}`: A dictionary where keys are cell type names and values are vectors of cell counts over time.
+"""
 struct SimulationPopulationTimeSeries <: AbstractPopulationTimeSeries
     folder::String
     time::Vector{Real}
@@ -68,6 +88,24 @@ end
 
 SimulationPopulationTimeSeries(simulation::Simulation; include_dead::Bool=false) = SimulationPopulationTimeSeries(simulation.id; include_dead=include_dead)
 
+"""
+    finalPopulationCount(simulation::Simulation[; include_dead::Bool=false])
+
+Return the final population count of a simulation as a dictionary with cell type names as keys and their counts as values.
+
+Also works with the simulation ID:
+```
+fpc = finalPopulationCount(1)
+```
+
+# Example
+```
+fpc = finalPopulationCount(simulation)
+final_default_count = fpc["default"]
+```
+"""
+function finalPopulationCount end
+
 function finalPopulationCount(folder::String; include_dead::Bool=false)
     final_snapshot = PhysiCellSnapshot(folder, :final; include_cells=true)
     return populationCount(final_snapshot; include_dead=include_dead)
@@ -77,6 +115,32 @@ function finalPopulationCount(simulation_id::Int; include_dead::Bool=false)
     return joinpath(outputFolder("simulation", simulation_id), "output") |> x -> finalPopulationCount(x; include_dead=include_dead)
 end
 
+function finalPopulationCount(simulation::Simulation; include_dead::Bool=false)
+    return finalPopulationCount(simulation.id; include_dead=include_dead)
+end
+
+"""
+    MonadPopulationTimeSeries <: AbstractPopulationTimeSeries
+
+Holds the data for a monad's population time series.
+
+Note: unlike `SimulationPopulationTimeSeries`, this type does not save the data to a file.
+
+# Examples
+
+```
+mpts = MonadPopulationTimeSeries(1)
+mpts = MonadPopulationTimeSeries(monad(1))
+```
+
+# Fields
+- `monad_id::Int`: The ID of the monad.
+- `monad_length::Int`: The number of simulations in the monad.
+- `time::Vector{Real}`: The time points of the population time series.
+- `cell_count_arrays::Dict{String, Array{Integer,2}}`: A dictionary where keys are cell type names and values are `(length(time), monad_length)`-sized arrays of cell counts over time for each simulation in the monad.
+- `cell_count_means::Dict{String, Vector{Real}}`: A dictionary where keys are cell type names and values are vectors of mean cell counts over time for each simulation in the monad.
+- `cell_count_stds::Dict{String, Vector{Real}}`: A dictionary where keys are cell type names and values are vectors of standard deviation of cell counts over time for each simulation in the monad.
+"""
 struct MonadPopulationTimeSeries <: AbstractPopulationTimeSeries
     monad_id::Int
     monad_length::Int
@@ -114,6 +178,15 @@ function MonadPopulationTimeSeries(monad::Monad; include_dead::Bool=false)
     return MonadPopulationTimeSeries(monad.id, monad_length, time, cell_count_arrays, cell_count_means, cell_count_stds)
 end
 
+MonadPopulationTimeSeries(monad_id::Integer; include_dead::Bool=false) = MonadPopulationTimeSeries(Monad(monad_id); include_dead=include_dead)
+
+"""
+    populationTimeSeries(M::AbstractMonad[; include_dead::Bool=false])
+
+Return the population time series of a simulation or a monad.
+
+See `SimulationPopulationTimeSeries` and `MonadPopulationTimeSeries` for more details.
+"""
 function populationTimeSeries(M::AbstractMonad; include_dead::Bool=false)
     if M isa Simulation
         return SimulationPopulationTimeSeries(M; include_dead=include_dead)

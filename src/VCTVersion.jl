@@ -1,7 +1,5 @@
 using Pkg
 
-include("VCTUp.jl")
-
 function pcvctVersion()
     proj = Pkg.project()
     version = if proj.name == "pcvct"

@@ -1,4 +1,4 @@
-export Simulation, Monad, Sampling, Trial, getTrial, InputFolders
+export Simulation, Monad, Sampling, Trial, InputFolders
 
 abstract type AbstractTrial end
 abstract type AbstractSampling <: AbstractTrial end
@@ -16,7 +16,7 @@ struct InputFolder
 end
 
 """
-    struct InputFolders
+    InputFolders
 
 Consolidate the folder information for a simulation/monad/sampling.
 
@@ -24,8 +24,12 @@ Pass the folder names within the `inputs/<input_type>` directory to create an `I
 Pass them in the order of `config`, `custom_code`, `rulesets_collection`, `ic_cell`, `ic_substrate`, and `ic_ecm`.
 Or use the keyword-based constructors:
 
-`InputFolders(config, custom_code; rulesets_collection="", ic_cell="", ic_substrate="", ic_ecm="")`
-`InputFolders(; config="", custom_code="", rulesets_collection="", ic_cell="", ic_substrate="", ic_ecm="")`
+```julia
+InputFolders(config, custom_code; rulesets_collection="", ic_cell="", ic_substrate="", ic_ecm="")
+```
+```julia
+InputFolders(; config="", custom_code="", rulesets_collection="", ic_cell="", ic_substrate="", ic_ecm="")
+```
 
 # Fields
 - `config::InputFolder`: id and folder name for the base configuration folder.
@@ -97,6 +101,30 @@ variationIDNames() = (fieldnames(VariationIDs) .|> string) .* "_variation_id"
 #############   Simulation   #############
 ##########################################
 
+"""
+    Simulation
+
+A simulation that represents a single run of the model.
+
+To create a new simulation, best practice is to use `createTrial` and supply it with the `InputFolders` and any number of single-valued DiscreteVariations:
+```
+inputs = InputFolders(config_folder, custom_code_folder)
+simulation = createTrial(inputs) # uses the default config file as-is
+
+ev = DiscreteVariation(["overall","max_time"], 1440)
+simulation = createTrial(inputs, ev) # uses the config file with the specified variation
+```
+
+If there is a previously created simulation that you wish to access, you can use its ID to create a `Simulation` object:
+```
+simulation = Simulation(simulation_id)
+```
+
+# Fields
+- `id::Int`: integer uniquely identifying this simulation. Matches with the folder in `data/outputs/simulations/`
+- `inputs::InputFolders`: contains the folder info for this simulation.
+- `variation_ids::VariationIDs`: contains the variation IDs for this simulation.
+"""
 struct Simulation <: AbstractMonad
     id::Int # integer uniquely identifying this simulation
     inputs::InputFolders 
@@ -160,6 +188,38 @@ Base.length(simulation::Simulation) = 1
 ###############   Monad   ################
 ##########################################
 
+"""
+    Monad
+
+A group of simulations that are identical up to randomness.
+
+To create a new monad, best practice is to use `createTrial` and supply it with the `InputFolders` and any number of single-valued DiscreteVariations.
+Set `n_replicates=0` to avoid adding new simulations to the database. This is useful for creating references for later use.
+Otherwise, set `n_replicates` > 1 to create the simulations to go with this monad.
+If `n_replicates` = 1, it will return a `Simulation` object.
+```
+inputs = InputFolders(config_folder, custom_code_folder)
+monad = createTrial(inputs; n_replicates=0) # uses the default config file as-is
+
+ev = DiscreteVariation(["overall","max_time"], 1440)
+monad = createTrial(inputs, ev; n_replicates=10) # uses the config file with the specified variation
+
+monad = createTrial(inputs, ev; n_replicates=10, use_previous=false) # changes the default behavior and creates 10 new simulations for this monad
+```
+
+If there is a previously created monad that you wish to access, you can use its ID to create a `Monad` object:
+```
+monad = Monad(monad_id)
+monad = Monad(monad_id; n_replicates=5) # ensures at least 5 simulations in the monad (using previous sims)
+```
+
+# Fields
+- `id::Int`: integer uniquely identifying this monad. Matches with the folder in `data/outputs/monads/`
+- `n_replicates::Int`: minimum number of simulations to ensure are part of this monad when running this monad.
+- `simulation_ids::Vector{Int}`: array of simulation IDs belonging to this monad. This need not have length equal to `n_replicates`.
+- `inputs::InputFolders`: contains the folder info for this monad.
+- `variation_ids::VariationIDs`: contains the variation IDs for this monad.
+"""
 struct Monad <: AbstractMonad
     # a monad is a group of simulation replicates, i.e. identical up to randomness
     id::Int # integer uniquely identifying this monad
@@ -280,6 +340,32 @@ end
 ##############   Sampling   ##############
 ##########################################
 
+"""
+    Sampling
+
+A group of monads that have the same input folders, but differ in parameter values.
+
+To create a new sampling, best practice is to use `createTrial` and supply it with the `InputFolders` and any number of DiscreteVariations.
+At least one should have multiple values to create a sampling.
+```
+inputs = InputFolders(config_folder, custom_code_folder)
+ev = DiscreteVariation(["overall","max_time"], [1440, 2880]))
+sampling = createTrial(inputs, ev; n_replicates=3, use_previous=true)
+```
+
+If there is a previously created sampling that you wish to access, you can use its ID to create a `Sampling` object:
+```
+sampling = Sampling(sampling_id)
+sampling = Sampling(sampling_id; n_replicates=5) # ensures at least 5 simulations in each monad (using previous sims)
+```
+
+# Fields
+- `id::Int`: integer uniquely identifying this sampling. Matches with the folder in `data/outputs/samplings/`
+- `n_replicates::Int`: minimum number of simulations to ensure are part of each monad when running this sampling.
+- `monad_ids::Vector{Int}`: array of monad IDs belonging to this sampling.
+- `inputs::InputFolders`: contains the folder info for this sampling.
+- `variation_ids::Vector{VariationIDs}`: contains the variation IDs for each monad.
+"""
 struct Sampling <: AbstractSampling
     # sampling is a group of monads with config parameters varied
     id::Int # integer uniquely identifying this sampling
@@ -433,6 +519,34 @@ end
 ###############   Trial   ################
 ##########################################
 
+"""
+    Trial
+
+A group of samplings that can have different input folders.
+
+To create a new trial, best practice currently is to create a vector of `Sampling` objects and passing them to `Trial`.
+```
+inputs_1 = InputFolders(config_folder_1, custom_code_folder_1)
+inputs_2 = InputFolders(config_folder_2, custom_code_folder_2)
+ev = DiscreteVariation(["overall","max_time"], [1440, 2880]))
+sampling_1 = createTrial(inputs_1, ev; n_replicates=3, use_previous=true)
+sampling_2 = createTrial(inputs_2, ev; n_replicates=3, use_previous=true)
+trial = Trial([sampling_1, sampling_2])
+```
+
+If there is a previous trial that you wish to access, you can use its ID to create a `Trial` object:
+```
+trial = Trial(trial_id)
+trial = Trial(trial_id; n_replicates=5) # ensures at least 5 simulations in each monad (using previous sims)
+```
+
+# Fields
+- `id::Int`: integer uniquely identifying this trial. Matches with the folder in `data/outputs/trials/`
+- `n_replicates::Int`: minimum number of simulations to ensure are part of each monad in each sampling in this trial.
+- `sampling_ids::Vector{Int}`: array of sampling IDs belonging to this trial.
+- `inputs::Vector{InputFolders}`: contains the folder info for each sampling in this trial.
+- `variation_ids::Vector{Vector{VariationIDs}}`: contains the variation IDs for each monad in each sampling in this trial.
+"""
 struct Trial <: AbstractTrial
     # trial is a group of samplings with different ICs, custom codes, and rulesets
     id::Int # integer uniquely identifying this trial

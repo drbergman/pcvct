@@ -3,6 +3,7 @@ test.jl
 /data
 *.db
 .vscode
+studio_debug.log
 
 # from PkgTemplate.jl
 *.jl.*.cov

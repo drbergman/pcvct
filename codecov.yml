@@ -1,4 +1,3 @@
 ignore:
   - "src/public.jl"
-  - "src/VCTPhysiCellStudio.jl"
   - "src/VCTUp.jl"
