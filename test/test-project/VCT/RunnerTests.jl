@@ -10,12 +10,12 @@ rulesets_collection_folder = "0_template"
 custom_code_folder = "0_template"
 inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rulesets_collection_folder)
 
-n_replicates = 2
+n_replicates = 1
 
 discrete_variations = DiscreteVariation[]
-push!(discrete_variations, DiscreteVariation(["overall","max_time"], [12.0]))
-push!(discrete_variations, DiscreteVariation(["save","full_data","interval"], [6.0]))
-push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], [6.0]))
+push!(discrete_variations, DiscreteVariation(["overall","max_time"], 12.0))
+push!(discrete_variations, DiscreteVariation(["save","full_data","interval"], 6.0))
+push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], 6.0))
 
 simulation = createTrial(inputs, discrete_variations)
 
@@ -45,11 +45,11 @@ discrete_variations = DiscreteVariation[]
 xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:0"]
 push!(discrete_variations, DiscreteVariation(xml_path, [1.0, 2.0]))
 xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:1"]
-push!(discrete_variations, DiscreteVariation(xml_path, [3.0, 4.0]))
+push!(discrete_variations, DiscreteVariation(xml_path, 3.0))
 xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:2"]
-push!(discrete_variations, DiscreteVariation(xml_path, [5.0, 6.0]))
+push!(discrete_variations, DiscreteVariation(xml_path, 4.0))
 xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:3"]
-push!(discrete_variations, DiscreteVariation(xml_path, [7.0, 8.0]))
+push!(discrete_variations, DiscreteVariation(xml_path, 5.0))
 
 sampling = createTrial(simulation, discrete_variations; n_replicates=n_replicates)
 

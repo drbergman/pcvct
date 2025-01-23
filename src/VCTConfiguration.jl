@@ -6,6 +6,17 @@ end
 
 closeXML(xml_doc::XMLDocument) = free(xml_doc)
 
+function getChildByAttribute(parent_element::XMLElement, path_element_split::Vector{<:AbstractString})
+    path_element_name, attribute_name, attribute_value = path_element_split
+    candidate_elements = get_elements_by_tagname(parent_element, path_element_name)
+    for ce in candidate_elements
+        if attribute(ce, attribute_name) == attribute_value
+            return ce
+        end
+    end
+    return nothing
+end
+
 function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString}; required::Bool=true)
     current_element = root(xml_doc)
     for path_element in xml_path
@@ -17,18 +28,8 @@ function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString
             continue
         end
         # Deal with checking attributes
-        path_element_name, attribute_check = split(path_element, ":", limit=2)
-        attribute_name, attribute_value = split(attribute_check, ":") # if I need to add a check for multiple attributes, we can do that later
-        candidate_elements = get_elements_by_tagname(current_element, path_element_name)
-        found = false
-        for ce in candidate_elements
-            if attribute(ce, attribute_name) == attribute_value
-                found = true
-                current_element = ce
-                break
-            end
-        end
-        if !found
+        current_element = getChildByAttribute(current_element, split(path_element, ":"))
+        if isnothing(current_element)
             required ? retrieveElementError(xml_path, path_element) : return nothing
         end
     end
@@ -66,6 +67,31 @@ function updateFieldsFromCSV(xml_doc::XMLDocument, path_to_csv::String)
     for i = axes(df,1)
         df[i, :] |> Vector |> x -> filter!(!ismissing, x) |> x -> updateField(xml_doc, x)
     end
+end
+
+function makeXMLPath(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString})
+    current_element = root(xml_doc)
+    for path_element in xml_path
+        if !occursin(":",path_element)
+            child_element = find_element(current_element, path_element)
+            if isnothing(child_element)
+                current_element = new_child(current_element, path_element)
+            else
+                current_element = child_element
+            end
+            continue
+        end
+        # Deal with checking attributes
+        path_element_split = split(path_element, ":")
+        child_element = getChildByAttribute(current_element, path_element_split)
+        if isnothing(child_element)
+            path_element_name, attribute_name, attribute_value = path_element_split
+            child_element = new_child(current_element, path_element_name)
+            set_attribute(child_element, attribute_name, attribute_value)
+        end
+        current_element = child_element
+    end
+    return nothing
 end
 
 ################## Configuration Functions ##################
