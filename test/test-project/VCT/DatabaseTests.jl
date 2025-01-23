@@ -27,6 +27,7 @@ mv(custom_code_dest_folder, custom_code_src_folder)
 
 # test memory db
 pcvct.initializeDatabase()
+pcvct.reinitializeDatabase()
 pcvct.initializeDatabase(joinpath(pcvct.data_dir, "vct.db"))
 
 # test bad table

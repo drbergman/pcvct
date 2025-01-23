@@ -35,6 +35,8 @@ include("VCTExport.jl")
 
 VERSION >= v"1.11" && include("public.julia")
 
+initialized = false
+
 physicell_dir::String = abspath("PhysiCell")
 current_physicell_version_id = missing
 data_dir::String = abspath("data")

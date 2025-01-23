@@ -13,13 +13,32 @@ function initializeDatabase(path_to_database::String; auto_upgrade::Bool=false)
     SQLite.transaction(db, "EXCLUSIVE")
     success = createSchema(is_new_db; auto_upgrade=auto_upgrade)
     SQLite.commit(db)
+    if success
+        global initialized = true
+    end
     return success
 end
 
 function initializeDatabase()
     global db = SQLite.DB()
     is_new_db = true
-    return createSchema(is_new_db)
+    success = createSchema(is_new_db)
+    if success
+        global initialized = true
+    end
+    return success
+end
+
+function reinitializeDatabase()
+    if !initialized
+        return
+    end
+    global initialized = false
+    if db.file == ":memory:" # if the database is in memory, re-initialize it
+        initializeDatabase()
+    else
+        initializeDatabase(db.file; auto_upgrade=true)
+    end
 end
 
 function createSchema(is_new_db::Bool; auto_upgrade::Bool=false)
