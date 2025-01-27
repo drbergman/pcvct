@@ -39,8 +39,13 @@ discrete_variations = DiscreteVariation[]
 xml_path = ["cell_patches:name:default", "patch_collection:type:annulus", "patch:ID:1", "inner_radius"]
 push!(discrete_variations, DiscreteVariation(xml_path, 300.0))
 
-out = run(Monad(out.trial.monad_ids[1]), discrete_variations; n_replicates=n_replicates)
-@test out.n_success == 0
+out_fail = run(Monad(out.trial.monad_ids[1]), discrete_variations; n_replicates=n_replicates)
+@test out_fail.n_success == 0
 
 createICCellXMLTemplate("2_xml")
 @test isdir(joinpath(pcvct.data_dir, "inputs", "ics", "cells", "2_xml"))
+
+xml_path = ["cell_patches:name:default", "patch_collection:type:disc", "patch:ID:1", "x0"]
+dv1 = DiscreteVariation(xml_path, -1e6) # outside the domain so none can be placed
+out = run(inputs, dv1)
+@test out.n_success == 0

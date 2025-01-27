@@ -200,10 +200,21 @@ function pathToICCell(simulation::Simulation)
     if isfile(joinpath(path_to_ic_cell_folder, "cells.csv")) # ic already given by cells.csv
         return joinpath(path_to_ic_cell_folder, "cells.csv")
     end
+    path_to_config_xml = joinpath(data_dir, "inputs", "configs", simulation.inputs.config.folder, "config_variations", "config_variation_$(simulation.variation_ids.config).xml")
+    xml_doc = openXML(path_to_config_xml)
+    domain_dict = Dict{String,Float64}()
+    for d in ["x", "y", "z"]
+        for side in ["min", "max"]
+            key = "$(d)_$(side)"
+            xml_path = ["domain"; key]
+            domain_dict[key] = getField(xml_doc, xml_path) |> x -> parse(Float64, x)
+        end
+    end
+    closeXML(xml_doc)
     path_to_ic_cell_variations = joinpath(path_to_ic_cell_folder, "ic_cell_variations")
     path_to_ic_cell_xml = joinpath(path_to_ic_cell_variations, "ic_cell_variation_$(simulation.variation_ids.ic_cell).xml")
     path_to_ic_cell_file = joinpath(path_to_ic_cell_variations, "ic_cell_variation_$(simulation.variation_ids.ic_cell)_s$(simulation.id).csv")
-    generateICCell(path_to_ic_cell_xml, path_to_ic_cell_file)
+    generateICCell(path_to_ic_cell_xml, path_to_ic_cell_file, domain_dict)
     return path_to_ic_cell_file
 end
 
