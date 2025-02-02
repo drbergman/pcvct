@@ -36,6 +36,8 @@ table_name_not_end_in_s = "test"
 schema_without_primary_id = ""
 @test_throws ErrorException pcvct.createPCVCTTable("simulations", schema_without_primary_id)
 
+@test_throws ArgumentError pcvct.icFilename("ecm")
+
 # misc tests
 config_db = pcvct.configDB(Simulation(1))
 @test config_db isa SQLite.DB

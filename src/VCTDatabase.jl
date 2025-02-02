@@ -331,7 +331,7 @@ function icFilename(table_name::String)
     elseif table_name == "dcs"
         return "dcs.csv"
     else
-        error("table_name must be 'cells', 'substrates', 'ecms', or `dcs`.")
+        throw(ArgumentError("table_name must be 'cells', 'substrates', 'ecms', or `dcs`."))
     end
 end
 

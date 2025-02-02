@@ -411,7 +411,7 @@ function Sampling(n_replicates::Int, monad_ids::AbstractVector{<:Integer}, input
             $(physicellVersionDBEntry()),\
             $(inputs.config.id),$(inputs.custom_code.id),\
             $(inputs.rulesets_collection.id),\
-            $(inputs.ic_cell.id),$(inputs.ic_substrate.id),$(inputs.ic_ecm.id),$(inputs.ic_dc.id),\
+            $(inputs.ic_cell.id),$(inputs.ic_substrate.id),$(inputs.ic_ecm.id),$(inputs.ic_dc.id)\
         );\
         """;
         selection="sampling_id"
