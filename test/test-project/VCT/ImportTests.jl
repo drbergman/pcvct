@@ -78,3 +78,8 @@ success = importProject(path_to_bad_project)
 path_to_project = joinpath("test-project", "PhysiCell", "sample_projects", "template-ecm")
 success = importProject(path_to_project)
 @test success
+
+# import the dirichlet conditions from file project
+path_to_project = joinpath("test-project", "PhysiCell", "sample_projects", "dirichlet_from_file")
+success = importProject(path_to_project)
+@test success

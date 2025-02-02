@@ -93,7 +93,7 @@ function setUpInputs(data_dir::String, physicell_dir::String, template_as_defaul
 
     mkpath(joinpath(inputs_dir, "configs"))
     mkpath(joinpath(inputs_dir, "custom_codes"))
-    for ic in ["cells", "substrates", "ecms"]
+    for ic in ["cells", "substrates", "ecms", "dcs"]
         mkpath(joinpath(inputs_dir, "ics", ic))
     end
     mkpath(joinpath(inputs_dir, "rulesets_collections"))
@@ -176,6 +176,7 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         ic_cell_folder = $(ic_cell_folder)
         ic_substrate_folder = \"\" # optionally add this folder with substrates.csv to $(joinpath(path_to_ics, "substrates"))
         ic_ecm_folder = \"\" # optionally add this folder with ecms.csv to $(joinpath(path_to_ics, "ecms"))
+        ic_dc_folder = \"\" # optionally add this folder with dcs.csv to $(joinpath(path_to_ics, "dcs"))
 
         $(tersify("""
         # package them all together into a single object
@@ -184,7 +185,8 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
                               rulesets_collection=rulesets_collection_folder,
                               ic_cell=ic_cell_folder,
                               ic_substrate=ic_substrate_folder,
-                              ic_ecm=ic_ecm_folder)
+                              ic_ecm=ic_ecm_folder,
+                              ic_dc=ic_dc_folder)
 
         ############ make the simulations short ############
 

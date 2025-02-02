@@ -100,6 +100,13 @@ function prepareFolder(simulation::Simulation, export_folder::AbstractString)
         cp(path_to_file, joinpath(export_folder, "config", "ecm.csv"))
     end
 
+    # ic dcs
+    if row.ic_dc_id[1] != -1
+        ic_dc_folder = simulation.inputs.ic_dc.folder
+        path_to_file = joinpath(data_dir, "inputs", "ics", "dcs", ic_dc_folder, "dcs.csv")
+        cp(path_to_file, joinpath(export_folder, "config", "dcs.csv"))
+    end
+
     # get physicell version
     physicell_version_id = row.physicell_version_id[1]
     query = constructSelectQuery("physicell_versions", "WHERE physicell_version_id = $physicell_version_id")
@@ -228,6 +235,15 @@ function revertConfig(export_folder::AbstractString, physicell_version::Abstract
     using_ecm_ics = isfile(joinpath(path_to_config_folder, "ecm.csv"))
     if using_ecm_ics
         setECMSetupElement(xml_doc)
+    end
+
+    # ic dcs
+    using_dc_ics = isfile(joinpath(path_to_config_folder, "dcs.csv"))
+    if using_dc_ics
+        dc_ic_element = retrieveElement(xml_doc, ["microenvironment_setup", "options", "dirichlet_nodes"])
+        set_attributes(dc_ic_element; type="csv", enabled="true")
+        filename_element = find_element(dc_ic_element, "filename")
+        set_content(filename_element, joinpath("config", "dcs.csv"))
     end
     
     # rulesets

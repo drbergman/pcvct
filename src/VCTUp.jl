@@ -1,6 +1,6 @@
 function upgradePCVCT(from_version::VersionNumber, to_version::VersionNumber, auto_upgrade::Bool)
     println("Upgrading pcvct from version $(from_version) to $(to_version)...")
-    milestone_versions = [v"0.0.1", v"0.0.3", v"0.0.10", v"0.0.11", v"0.0.13"]
+    milestone_versions = [v"0.0.1", v"0.0.3", v"0.0.10", v"0.0.11", v"0.0.13", v"0.0.15"]
     next_milestone_inds = findall(x -> from_version < x, milestone_versions) # this could be simplified to take advantage of this list being sorted, but who cares? It's already so fast
     next_milestones = milestone_versions[next_milestone_inds]
     success = true
@@ -245,4 +245,22 @@ function upgradeToV0_0_13(::Bool)
             DBInterface.execute(db_rulesets_collection_variations, "ALTER TABLE rulesets_collection_variations RENAME COLUMN rulesets_variation_id TO rulesets_collection_variation_id;")
         end
     end
+end
+
+function upgradeToV0_0_15(::Bool)
+    println("\t- Upgrading to version 0.0.15...")
+    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('simulations') WHERE name='ic_dc_id';") |> DataFrame |> isempty
+        DBInterface.execute(db, "ALTER TABLE simulations ADD COLUMN ic_dc_id INTEGER;")
+        DBInterface.execute(db, "UPDATE simulations SET ic_dc_id=-1;")
+    end
+    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('monads') WHERE name='ic_dc_id';") |> DataFrame |> isempty
+        DBInterface.execute(db, "ALTER TABLE monads ADD COLUMN ic_dc_id INTEGER;")
+        DBInterface.execute(db, "CREATE TABLE monads_temp AS SELECT * FROM monads;")
+        DBInterface.execute(db, "UPDATE monads_temp SET ic_dc_id=-1;")
+        DBInterface.execute(db, "DROP TABLE monads;")
+        createPCVCTTable("monads", monadsSchema())
+        populateTableOnFeatureSubset(db, "monads_temp", "monads")
+        DBInterface.execute(db, "DROP TABLE monads_temp;")
+    end
+    return true
 end

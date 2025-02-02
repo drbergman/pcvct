@@ -79,6 +79,7 @@ function createSchema(is_new_db::Bool; auto_upgrade::Bool=false)
     createICTable("cells"; data_dir_contents=data_dir_contents)
     createICTable("substrates"; data_dir_contents=data_dir_contents)
     createICTable("ecms"; data_dir_contents=data_dir_contents)
+    createICTable("dcs"; data_dir_contents=data_dir_contents)
 
     # initialize and populate configs table
     configs_schema = """
@@ -148,6 +149,7 @@ function createSchema(is_new_db::Bool; auto_upgrade::Bool=false)
         ic_cell_id INTEGER,
         ic_substrate_id INTEGER,
         ic_ecm_id INTEGER,
+        ic_dc_id INTEGER,
         config_id INTEGER,
         rulesets_collection_id INTEGER,
         config_variation_id INTEGER,
@@ -164,6 +166,8 @@ function createSchema(is_new_db::Bool; auto_upgrade::Bool=false)
             REFERENCES ic_substrates (ic_substrate_id),
         FOREIGN KEY (ic_ecm_id)
             REFERENCES ic_ecms (ic_ecm_id),
+        FOREIGN KEY (ic_dc_id)
+            REFERENCES ic_dcs (ic_dc_id),
         FOREIGN KEY (config_id)
             REFERENCES configs (config_id),
         FOREIGN KEY (rulesets_collection_id)
@@ -223,6 +227,7 @@ function monadsSchema()
     ic_cell_id INTEGER,
     ic_substrate_id INTEGER,
     ic_ecm_id INTEGER,
+    ic_dc_id INTEGER,
     config_id INTEGER,
     rulesets_collection_id INTEGER,
     config_variation_id INTEGER,
@@ -238,11 +243,13 @@ function monadsSchema()
         REFERENCES ic_substrates (ic_substrate_id),
     FOREIGN KEY (ic_ecm_id)
         REFERENCES ic_ecms (ic_ecm_id),
+    FOREIGN KEY (ic_dc_id)
+        REFERENCES ic_dcs (ic_dc_id),
     FOREIGN KEY (config_id)
         REFERENCES configs (config_id),
     FOREIGN KEY (rulesets_collection_id)
         REFERENCES rulesets_collections (rulesets_collection_id),
-    UNIQUE (physicell_version_id,custom_code_id,ic_cell_id,ic_substrate_id,ic_ecm_id,config_id,rulesets_collection_id,config_variation_id,rulesets_collection_variation_id,ic_cell_variation_id)
+    UNIQUE (physicell_version_id,custom_code_id,ic_cell_id,ic_substrate_id,ic_ecm_id,ic_dc_id,config_id,rulesets_collection_id,config_variation_id,rulesets_collection_variation_id,ic_cell_variation_id)
    """
 end
 
@@ -254,6 +261,7 @@ function samplingsSchema()
     ic_cell_id INTEGER,
     ic_substrate_id INTEGER,
     ic_ecm_id INTEGER,
+    ic_dc_id INTEGER,
     config_id INTEGER,
     rulesets_collection_id INTEGER,
     FOREIGN KEY (physicell_version_id)
@@ -266,6 +274,8 @@ function samplingsSchema()
         REFERENCES ic_substrates (ic_substrate_id),
     FOREIGN KEY (ic_ecm_id)
         REFERENCES ic_ecms (ic_ecm_id),
+    FOREIGN KEY (ic_dc_id)
+        REFERENCES ic_dcs (ic_dc_id),
     FOREIGN KEY (config_id)
         REFERENCES configs (config_id),
     FOREIGN KEY (rulesets_collection_id)
@@ -318,8 +328,10 @@ function icFilename(table_name::String)
         return "substrates.csv"
     elseif table_name == "ecms"
         return "ecm.csv"
+    elseif table_name == "dcs"
+        return "dcs.csv"
     else
-        error("table_name must be 'cells', 'substrates', or 'ecms'.")
+        error("table_name must be 'cells', 'substrates', 'ecms', or `dcs`.")
     end
 end
 
@@ -443,6 +455,7 @@ configFolder(config_id::Int) = getFolder("configs", "config_id", config_id)
 icCellFolder(ic_cell_id::Int) = getOptionalFolder("ic_cells", "ic_cell_id", ic_cell_id)
 icSubstrateFolder(ic_substrate_id::Int) = getOptionalFolder("ic_substrates", "ic_substrate_id", ic_substrate_id)
 icECMFolder(ic_ecm_id::Int) = getOptionalFolder("ic_ecms", "ic_ecm_id", ic_ecm_id)
+icDCFolder(ic_dc_id::Int) = getOptionalFolder("ic_dcs", "ic_dc_id", ic_dc_id)
 rulesetsCollectionFolder(rulesets_collection_id::Int) = getOptionalFolder("rulesets_collections", "rulesets_collection_id", rulesets_collection_id)
 customCodesFolder(custom_code_id::Int) = getFolder("custom_codes", "custom_code_id", custom_code_id)
 
@@ -555,7 +568,7 @@ function icCellVariationsTable(simulation_ids::AbstractVector{<:Integer}; remove
 end
 
 function addFolderColumns!(df::DataFrame)
-    col_names = ["custom_code", "config", "rulesets_collection", "ic_cell", "ic_substrate", "ic_ecm"]
+    col_names = ["custom_code", "config", "rulesets_collection", "ic_cell", "ic_substrate", "ic_ecm", "ic_dc"]
     get_function = [getFolder, getFolder, getOptionalFolder, getOptionalFolder, getOptionalFolder, getOptionalFolder]
     for (col_name, get_function) in zip(col_names, get_function)
         if !("$(col_name)_id" in names(df))
