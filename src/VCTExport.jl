@@ -220,14 +220,14 @@ function revertConfig(export_folder::AbstractString, physicell_version::Abstract
     using_substrate_ics = isfile(joinpath(path_to_config_folder, "substrates.csv"))
     set_attributes(substrate_ic_element; type="csv", enabled=string(using_substrate_ics))
     filename_element = find_element(substrate_ic_element, "filename")
-    set_content(filename_element, "./config/substrates.csv")
+    set_content(filename_element, joinpath(".", "config", "substrates.csv"))
     
     # ic cells
     cell_ic_element = retrieveElement(xml_doc, ["initial_conditions", "cell_positions"])
     using_cell_ics = isfile(joinpath(path_to_config_folder, "cells.csv"))
     set_attributes(cell_ic_element; type="csv", enabled=string(using_substrate_ics))
     folder_element = find_element(cell_ic_element, "folder")
-    set_content(filename_element, "./config")
+    set_content(filename_element, joinpath(".", "config"))
     filename_element = find_element(cell_ic_element, "filename")
     set_content(filename_element, "cells.csv")
 
@@ -238,20 +238,18 @@ function revertConfig(export_folder::AbstractString, physicell_version::Abstract
     end
 
     # ic dcs
+    dc_ic_element = retrieveElement(xml_doc, ["microenvironment_setup", "options", "dirichlet_nodes"])
     using_dc_ics = isfile(joinpath(path_to_config_folder, "dcs.csv"))
-    if using_dc_ics
-        dc_ic_element = retrieveElement(xml_doc, ["microenvironment_setup", "options", "dirichlet_nodes"])
-        set_attributes(dc_ic_element; type="csv", enabled="true")
-        filename_element = find_element(dc_ic_element, "filename")
-        set_content(filename_element, joinpath("config", "dcs.csv"))
-    end
+    set_attributes(dc_ic_element; type="csv", enabled=string(using_substrate_ics))
+    filename_element = find_element(dc_ic_element, "filename")
+    set_content(filename_element, joinpath("config", "dcs.csv"))
     
     # rulesets
     rules_element = retrieveElement(xml_doc, ["cell_rules", "rulesets", "ruleset"])
     using_cell_ics = isfile(joinpath(path_to_config_folder, "cell_rules.csv"))
     set_attributes(rules_element; type="csv", enabled=string(using_substrate_ics))
     folder_element = find_element(rules_element, "folder")
-    set_content(filename_element, "./config")
+    set_content(filename_element, joinpath(".", "config"))
     filename_element = find_element(rules_element, "filename")
     set_content(filename_element, "cell_rules.csv")
 
@@ -271,7 +269,7 @@ function setECMSetupElement(xml_doc::XMLDocument)
     if isnothing(folder_element)
         folder_element = new_child(ecm_setup_element, "folder")
     end
-    set_content(folder_element, "./config")
+    set_content(folder_element, joinpath(".", "config"))
     filename_element = find_element(ecm_setup_element, "filename")
     if isnothing(filename_element)
         filename_element = new_child(ecm_setup_element, "filename")
