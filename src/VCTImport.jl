@@ -29,6 +29,7 @@ struct ImportSources
     ic_cell::ImportSource
     ic_substrate::ImportSource
     ic_ecm::ImportSource
+    ic_dc::ImportSource
 end
 
 function ImportSources(src::Dict)
@@ -43,7 +44,8 @@ function ImportSources(src::Dict)
     ic_cell = ImportSource(src, "ic_cell", "config", "cells.csv", "file", required)
     ic_substrate = ImportSource(src, "ic_substrate", "config", "substrates.csv", "file", required)
     ic_ecm = ImportSource(src, "ic_ecm", "config", "ecm.csv", "file", required)
-    return ImportSources(config, main, makefile, custom_modules, rules, ic_cell, ic_substrate, ic_ecm)
+    ic_dc = ImportSource(src, "ic_dc", "config", "dcs.csv", "file", required)
+    return ImportSources(config, main, makefile, custom_modules, rules, ic_cell, ic_substrate, ic_ecm, ic_dc)
 end
 
 mutable struct ImportDestFolder
@@ -59,6 +61,7 @@ struct ImportDestFolders
     ic_cell::ImportDestFolder
     ic_substrate::ImportDestFolder
     ic_ecm::ImportDestFolder
+    ic_dc::ImportDestFolder
 end
 
 function ImportDestFolders(path_to_project::AbstractString, dest::Dict)
@@ -76,7 +79,8 @@ function ImportDestFolders(path_to_project::AbstractString, dest::Dict)
     ic_cell = ImportDestFolder(path_fn("ic_cell", joinpath("ics", "cells")), created, description)
     ic_substrate = ImportDestFolder(path_fn("ic_substrate", joinpath("ics", "substrates")), created, description)
     ic_ecm = ImportDestFolder(path_fn("ic_ecm", joinpath("ics", "ecms")), created, description)
-    return ImportDestFolders(config, custom_code, rules, ic_cell, ic_substrate, ic_ecm)
+    ic_dc = ImportDestFolder(path_fn("ic_dc", joinpath("ics", "dcs")), created, description)
+    return ImportDestFolders(config, custom_code, rules, ic_cell, ic_substrate, ic_ecm, ic_dc)
 end
 
 """
@@ -111,7 +115,7 @@ function importProject(path_to_project::AbstractString, src=Dict(), dest=Dict();
             msg *= "    - $(input_folders.rules.path_from_inputs)"
         end
         ics_started = false
-        for ic in ["cell", "substrate", "ecm"]
+        for ic in ["cell", "substrate", "ecm", "dc"]
             input_folder = getfield(input_folders, Symbol("ic_$(ic)"))::ImportDestFolder
             if input_folder.created
                 if !ics_started

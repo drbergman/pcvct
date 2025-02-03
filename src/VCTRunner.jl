@@ -39,6 +39,9 @@ function prepareSimulationCommand(simulation::Simulation, monad_id::Union{Missin
     if simulation.inputs.ic_ecm.id != -1
         append!(flags, ["-e", joinpath(data_dir, "inputs", "ics", "ecms", simulation.inputs.ic_ecm.folder, "ecm.csv")]) # if ic file included (id != -1), then include this in the command
     end
+    if simulation.inputs.ic_dc.id != -1
+        append!(flags, ["-d", joinpath(data_dir, "inputs", "ics", "dcs", simulation.inputs.ic_dc.folder, "dcs.csv")]) # if ic file included (id != -1), then include this in the command
+    end
     if simulation.variation_ids.rulesets_collection != -1
         path_to_rules_file = joinpath(data_dir, "inputs", "rulesets_collections", simulation.inputs.rulesets_collection.folder, "rulesets_collections_variations", "rulesets_variation_$(simulation.variation_ids.rulesets_collection).xml")
         append!(flags, ["-r", path_to_rules_file])

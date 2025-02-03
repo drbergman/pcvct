@@ -10,6 +10,7 @@ project-dir/
 │       ├── custom_codes/
 │       ├── ics/
 │       │   ├── cells/
+│       │   ├── dcs/
 │       │   ├── ecms/
 │       │   └── substrates/
 │       ├── rulesets_collections/
@@ -44,7 +45,7 @@ cells/
 ```
 **Note:** Place the files in their corresponding folders and rename to `cells.csv`.
 
-Proceed similarly for `ecms/` and `substrates/`, renaming those files to `ecm.csv` and `substrates.csv` respectively.
+Proceed similarly for `dcs/`, `ecms/`, and `substrates/`, renaming those files to `dcs.csv`, `ecm.csv`, and `substrates.csv`, respectively.
 
 ## Rulesets collections
 

@@ -21,14 +21,14 @@ end
 Consolidate the folder information for a simulation/monad/sampling.
 
 Pass the folder names within the `inputs/<input_type>` directory to create an `InputFolders` object.
-Pass them in the order of `config`, `custom_code`, `rulesets_collection`, `ic_cell`, `ic_substrate`, and `ic_ecm`.
+Pass them in the order of `config`, `custom_code`, `rulesets_collection`, `ic_cell`, `ic_substrate`, `ic_ecm`, `ic_dc`.
 Or use the keyword-based constructors:
 
 ```julia
-InputFolders(config, custom_code; rulesets_collection="", ic_cell="", ic_substrate="", ic_ecm="")
+InputFolders(config, custom_code; rulesets_collection="", ic_cell="", ic_substrate="", ic_ecm="", ic_dc="")
 ```
 ```julia
-InputFolders(; config="", custom_code="", rulesets_collection="", ic_cell="", ic_substrate="", ic_ecm="")
+InputFolders(; config="", custom_code="", rulesets_collection="", ic_cell="", ic_substrate="", ic_ecm="", ic_dc="")
 ```
 
 # Fields
@@ -38,6 +38,7 @@ InputFolders(; config="", custom_code="", rulesets_collection="", ic_cell="", ic
 - `ic_cell::InputFolder`: id and folder name for the initial condition (IC) cells folder.
 - `ic_substrate::InputFolder`: id and folder name for the initial condition (IC) substrate folder.
 - `ic_ecm::InputFolder`: id and folder name for the initial condition (IC) extracellular matrix (ECM) folder.
+- `ic_dc::InputFolder`: id and folder name for the initial condition (IC) dirichlet conditions (DC) folder.
 """
 struct InputFolders
     config::InputFolder # id and folder name for the base configuration folder
@@ -46,8 +47,9 @@ struct InputFolders
     ic_cell::InputFolder # id and folder name for the initial condition (IC) cells folder
     ic_substrate::InputFolder # id and folder name for the initial condition (IC) substrate folder
     ic_ecm::InputFolder # id and folder name for the initial condition (IC) extracellular matrix (ECM) folder
+    ic_dc::InputFolder # id and folder name for the initial condition (IC) dirichlet conditions (DC) folder
 
-    function InputFolders(config_folder::String, custom_code_folder::String, rulesets_collection_folder::String, ic_cell_folder::String, ic_substrate_folder::String, ic_ecm_folder::String)
+    function InputFolders(config_folder::String, custom_code_folder::String, rulesets_collection_folder::String, ic_cell_folder::String, ic_substrate_folder::String, ic_ecm_folder::String, ic_dc_folder::String)
         @assert config_folder != "" "config_folder must be provided"
         @assert custom_code_folder != "" "custom_code_folder must be provided"
         config = InputFolder(retrieveID("configs", config_folder), config_folder)
@@ -56,9 +58,10 @@ struct InputFolders
         ic_cell = InputFolder(retrieveID("ic_cells", ic_cell_folder), ic_cell_folder)
         ic_substrate = InputFolder(retrieveID("ic_substrates", ic_substrate_folder), ic_substrate_folder)
         ic_ecm = InputFolder(retrieveID("ic_ecms", ic_ecm_folder), ic_ecm_folder)
-        return new(config, custom_code, rulesets_collection, ic_cell, ic_substrate, ic_ecm)
+        ic_dc = InputFolder(retrieveID("ic_dcs", ic_dc_folder), ic_dc_folder)
+        return new(config, custom_code, rulesets_collection, ic_cell, ic_substrate, ic_ecm, ic_dc)
     end
-    function InputFolders(config_id::Int, custom_code_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, ic_substrate_id::Int, ic_ecm_id::Int)
+    function InputFolders(config_id::Int, custom_code_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, ic_substrate_id::Int, ic_ecm_id::Int, ic_dc_id::Int)
         @assert config_id > 0 "config_id must be positive"
         @assert custom_code_id > 0 "custom_code_id must be positive"
         config = InputFolder(config_id, configFolder(config_id))
@@ -67,16 +70,17 @@ struct InputFolders
         ic_cell = InputFolder(ic_cell_id, icCellFolder(ic_cell_id))
         ic_substrate = InputFolder(ic_substrate_id, icSubstrateFolder(ic_substrate_id))
         ic_ecm = InputFolder(ic_ecm_id, icECMFolder(ic_ecm_id))
-        return new(config, custom_code, rulesets_collection, ic_cell, ic_substrate, ic_ecm)
+        ic_dc = InputFolder(ic_dc_id, icDCFolder(ic_dc_id))
+        return new(config, custom_code, rulesets_collection, ic_cell, ic_substrate, ic_ecm, ic_dc)
     end
 end
 
-function InputFolders(config::String, custom_code::String; rulesets_collection::String="", ic_cell::String="", ic_substrate::String="", ic_ecm::String="")
-    return InputFolders(config, custom_code, rulesets_collection, ic_cell, ic_substrate, ic_ecm)
+function InputFolders(config::String, custom_code::String; rulesets_collection::String="", ic_cell::String="", ic_substrate::String="", ic_ecm::String="", ic_dc::String="")
+    return InputFolders(config, custom_code, rulesets_collection, ic_cell, ic_substrate, ic_ecm, ic_dc)
 end
 
-function InputFolders(; config::String="", custom_code::String="", rulesets_collection::String="", ic_cell::String="", ic_substrate::String="", ic_ecm::String="")
-    return InputFolders(config, custom_code, rulesets_collection, ic_cell, ic_substrate, ic_ecm)
+function InputFolders(; config::String="", custom_code::String="", rulesets_collection::String="", ic_cell::String="", ic_substrate::String="", ic_ecm::String="", ic_dc::String="")
+    return InputFolders(config, custom_code, rulesets_collection, ic_cell, ic_substrate, ic_ecm, ic_dc)
 end
 
 ##########################################
@@ -153,14 +157,15 @@ function Simulation(inputs::InputFolders, variation_ids::VariationIDs=VariationI
     """
     INSERT INTO simulations (physicell_version_id,\
     config_id,rulesets_collection_id,\
-    ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id,\
+    ic_cell_id,ic_substrate_id,ic_ecm_id,ic_dc_id,\
+    custom_code_id,\
     $(join(variationIDNames(), ",")),\
     status_code_id) \
     VALUES(\
         $(physicellVersionDBEntry()),\
         $(inputs.config.id),$(inputs.rulesets_collection.id),\
         $(inputs.ic_cell.id),$(inputs.ic_substrate.id),\
-        $(inputs.ic_ecm.id),$(inputs.custom_code.id),\
+        $(inputs.ic_ecm.id),$(inputs.ic_dc.id),$(inputs.custom_code.id),\
         $(join([string(getfield(variation_ids, field)) for field in fieldnames(VariationIDs)],",")),\
         $(getStatusCodeID("Not Started"))
     )
@@ -175,7 +180,7 @@ function getSimulation(simulation_id::Int)
     if isempty(df)
         error("Simulation $(simulation_id) not in the database.")
     end
-    inputs = InputFolders(df.config_id[1], df.custom_code_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1])
+    inputs = InputFolders(df.config_id[1], df.custom_code_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1], df.ic_dc_id[1])
     variation_ids = VariationIDs(df.config_variation_id[1], df.rulesets_collection_variation_id[1], df.ic_cell_variation_id[1])
     return Simulation(simulation_id, inputs, variation_ids)
 end
@@ -236,7 +241,7 @@ struct Monad <: AbstractMonad
                        INSERT OR IGNORE INTO monads (physicell_version_id,\
                        config_id,custom_code_id,\
                        rulesets_collection_id,\
-                       ic_cell_id,ic_substrate_id,ic_ecm_id,\
+                       ic_cell_id,ic_substrate_id,ic_ecm_id,ic_dc_id,\
                        $(join(variationIDNames(), ","))\
                        ) \
                        VALUES(\
@@ -244,7 +249,7 @@ struct Monad <: AbstractMonad
                            $(inputs.config.id),$(inputs.custom_code.id),\
                            $(inputs.rulesets_collection.id),\
                            $(inputs.ic_cell.id),$(inputs.ic_substrate.id),\
-                           $(inputs.ic_ecm.id),\
+                           $(inputs.ic_ecm.id),$(inputs.ic_dc.id),\
                            $(join([string(getfield(variation_ids, field)) for field in fieldnames(VariationIDs)],","))
                        ) \
                        RETURNING monad_id;
@@ -257,14 +262,14 @@ struct Monad <: AbstractMonad
                            WHERE (physicell_version_id,config_id,custom_code_id,\
                            rulesets_collection_id,\
                            ic_cell_id,ic_substrate_id,\
-                           ic_ecm_id,\
+                           ic_ecm_id,ic_dc_id,\
                            $(join(variationIDNames(), ",")))=\
                            (\
                                $(physicellVersionDBEntry()),\
                                $(inputs.config.id),$(inputs.custom_code.id),\
                                $(inputs.rulesets_collection.id),\
                                $(inputs.ic_cell.id),$(inputs.ic_substrate.id),\
-                               $(inputs.ic_ecm.id),\
+                               $(inputs.ic_ecm.id),$(inputs.ic_dc.id),\
                                $(join([string(getfield(variation_ids, field)) for field in fieldnames(VariationIDs)],","))
                            );\
                            """,
@@ -307,7 +312,7 @@ function getMonad(monad_id::Int, n_replicates::Int)
     if isempty(df)
         error("Monad $(monad_id) not in the database.")
     end
-    inputs = InputFolders(df.config_id[1], df.custom_code_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1])
+    inputs = InputFolders(df.config_id[1], df.custom_code_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1], df.ic_dc_id[1])
     variation_ids = VariationIDs(df.config_variation_id[1], df.rulesets_collection_variation_id[1], df.ic_cell_variation_id[1])
     use_previous = true
     return Monad(monad_id, n_replicates, inputs, variation_ids, use_previous)
@@ -401,12 +406,12 @@ function Sampling(n_replicates::Int, monad_ids::AbstractVector{<:Integer}, input
         WHERE (physicell_version_id,\
         config_id,custom_code_id,\
         rulesets_collection_id,\
-        ic_cell_id,ic_substrate_id,ic_ecm_id)=\
+        ic_cell_id,ic_substrate_id,ic_ecm_id,ic_dc_id)=\
         (\
             $(physicellVersionDBEntry()),\
             $(inputs.config.id),$(inputs.custom_code.id),\
             $(inputs.rulesets_collection.id),\
-            $(inputs.ic_cell.id),$(inputs.ic_substrate.id),$(inputs.ic_ecm.id)\
+            $(inputs.ic_cell.id),$(inputs.ic_substrate.id),$(inputs.ic_ecm.id),$(inputs.ic_dc.id)\
         );\
         """;
         selection="sampling_id"
@@ -428,12 +433,12 @@ function Sampling(n_replicates::Int, monad_ids::AbstractVector{<:Integer}, input
         (physicell_version_id,\
         config_id,custom_code_id,\
         rulesets_collection_id,\
-        ic_cell_id,ic_substrate_id,ic_ecm_id) \
+        ic_cell_id,ic_substrate_id,ic_ecm_id,ic_dc_id) \
         VALUES($(physicellVersionDBEntry()),\
         $(inputs.config.id),$(inputs.custom_code.id),\
         $(inputs.rulesets_collection.id),\
         $(inputs.ic_cell.id),$(inputs.ic_substrate.id),\
-        $(inputs.ic_ecm.id)) RETURNING sampling_id;
+        $(inputs.ic_ecm.id),$(inputs.ic_dc.id)) RETURNING sampling_id;
         """
         ) |> DataFrame |> x -> x.sampling_id[1] # get the sampling_id
     end
@@ -498,7 +503,7 @@ function getSampling(sampling_id::Int, n_replicates::Int)
         error("Sampling $(sampling_id) not in the database.")
     end
     monad_ids = readSamplingMonadIDs(sampling_id)
-    inputs = InputFolders(df.config_id[1], df.custom_code_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1])
+    inputs = InputFolders(df.config_id[1], df.custom_code_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1], df.ic_dc_id[1])
     monad_df = constructSelectQuery("monads", "WHERE monad_id IN ($(join(monad_ids,",")))") |> queryToDataFrame
     variation_ids = [VariationIDs(monad_df.config_variation_id[i], monad_df.rulesets_collection_variation_id[i], monad_df.ic_cell_variation_id[i]) for i in 1:length(monad_ids)]
     return Sampling(sampling_id, n_replicates, monad_ids, inputs, variation_ids)
