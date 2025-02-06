@@ -2,11 +2,7 @@ import Base.run
 
 export runAbstractTrial
 
-function prepareSimulationCommand(simulation::Simulation, monad_id::Union{Missing,Int}, do_full_setup::Bool, force_recompile::Bool)
-    if ismissing(monad_id)
-        monad = Monad(simulation)
-        monad_id = monad.id
-    end
+function prepareSimulationCommand(simulation::Simulation, monad_id::Int, do_full_setup::Bool, force_recompile::Bool)
     path_to_simulation_output = joinpath(outputFolder(simulation), "output")
     mkpath(path_to_simulation_output)
 
@@ -52,26 +48,37 @@ end
 function simulationFailedToRun(simulation::Simulation, monad_id::Int)
     DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Failed")) WHERE simulation_id=$(simulation.id);" )
     eraseSimulationID(simulation.id; monad_id=monad_id)
+    return
 end
 
-function simulationProcess(simulation::Simulation; monad_id::Union{Missing,Int}=missing, do_full_setup::Bool=true, force_recompile::Bool=false)
+struct SimulationProcess
+    simulation::Simulation
+    monad_id::Int
+    process::Union{Nothing,Base.Process}
+end
+
+function SimulationProcess(simulation::Simulation; monad_id::Union{Missing,Int}=missing, do_full_setup::Bool=true, force_recompile::Bool=false)
+    if ismissing(monad_id)
+        monad = Monad(simulation)
+        monad_id = monad.id
+    end
+
     cmd = prepareSimulationCommand(simulation, monad_id, do_full_setup, force_recompile)
     if isnothing(cmd)
-        return false
+        return SimulationProcess(simulation, monad_id, nothing)
     end
-    return simulationProcess(cmd, simulation.id)
-end
 
-function simulationProcess(cmd::Cmd, simulation_id::Int)
-    path_to_simulation_folder = outputFolder("simulation", simulation_id)
-    DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Running")) WHERE simulation_id=$(simulation_id);" )
-    println("\tRunning simulation: $(simulation_id)...")
+    path_to_simulation_folder = outputFolder("simulation", simulation.id)
+    DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Running")) WHERE simulation_id=$(simulation.id);" )
+    println("\tRunning simulation: $(simulation.id)...")
     flush(stdout)
     if run_on_hpc
-        cmd = prepareHPCCommand(cmd, simulation_id)
-        return run(pipeline(ignorestatus(cmd); stdout=joinpath(path_to_simulation_folder, "hpc.out"), stderr=joinpath(path_to_simulation_folder, "hpc.err")); wait=true)
+        cmd = prepareHPCCommand(cmd, simulation.id)
+        p = run(pipeline(ignorestatus(cmd); stdout=joinpath(path_to_simulation_folder, "hpc.out"), stderr=joinpath(path_to_simulation_folder, "hpc.err")); wait=true)
+    else
+        p = run(pipeline(ignorestatus(cmd); stdout=joinpath(path_to_simulation_folder, "output.log"), stderr=joinpath(path_to_simulation_folder, "output.err")); wait=true)
     end
-    return run(pipeline(ignorestatus(cmd); stdout=joinpath(path_to_simulation_folder, "output.log"), stderr=joinpath(path_to_simulation_folder, "output.err")); wait=true)
+    return SimulationProcess(simulation, monad_id, p)
 end
 
 function prepCmdForWrap(cmd::Cmd)
@@ -101,7 +108,10 @@ function prepareHPCCommand(cmd::Cmd, simulation_id::Int)
     return `$base_cmd_str $flags`
 end
 
-function resolveSimulation(simulation::Simulation, p::Base.Process, prune_options::PruneOptions)
+function resolveSimulation(simulation_process::SimulationProcess, prune_options::PruneOptions)
+    simulation = simulation_process.simulation
+    monad_id = simulation_process.monad_id
+    p = simulation_process.process
     success = p.exitcode == 0
     path_to_simulation_folder = outputFolder(simulation)
     path_to_err = joinpath(path_to_simulation_folder, "output.err")
@@ -115,7 +125,7 @@ function resolveSimulation(simulation::Simulation, p::Base.Process, prune_option
         lines = readlines(path_to_err)
         open(path_to_err, "w+") do io
             # read the lines of the output.err file
-            println(io, "Execution command: $cmd")
+            println(io, "Execution command: $(p.cmd)")
             println(io, "\n---stderr from PhysiCell---")
             for line in lines
                 println(io, line)
@@ -149,7 +159,7 @@ function runMonad(monad::Monad; do_full_setup::Bool=true, force_recompile::Bool=
         end
         simulation = Simulation(simulation_id)
        
-        push!(simulation_tasks, @task (simulation, simulationProcess(simulation; monad_id=monad.id, do_full_setup=false, force_recompile=false)))
+        push!(simulation_tasks, @task SimulationProcess(simulation; monad_id=monad.id, do_full_setup=false, force_recompile=false))
     end
 
     return simulation_tasks
@@ -185,7 +195,7 @@ function runTrial(trial::Trial; force_recompile::Bool=false)
 end
 
 collectSimulationTasks(simulation::Simulation; force_recompile::Bool=false) = 
-    isStarted(simulation; new_status_code="Queued") ? Task[] : [@task (simulation, simulationProcess(simulation; do_full_setup=true, force_recompile=force_recompile))]
+    isStarted(simulation; new_status_code="Queued") ? Task[] : [@task SimulationProcess(simulation; do_full_setup=true, force_recompile=force_recompile)]
 collectSimulationTasks(monad::Monad; force_recompile::Bool=false) = runMonad(monad; do_full_setup=true, force_recompile=force_recompile)
 collectSimulationTasks(sampling::Sampling; force_recompile::Bool=false) = runSampling(sampling; force_recompile=force_recompile)
 collectSimulationTasks(trial::Trial; force_recompile::Bool=false) = runTrial(trial; force_recompile=force_recompile)
@@ -298,9 +308,9 @@ end
 
 function processSimulationTask(simulation_task, prune_options)
     schedule(simulation_task)
-    simulation, p = fetch(simulation_task)
-    if p==false
+    simulation_process = fetch(simulation_task)
+    if isnothing(simulation_process.process)
         return false
     end
-    return resolveSimulation(simulation, p, prune_options)
+    return resolveSimulation(simulation_process, prune_options)
 end

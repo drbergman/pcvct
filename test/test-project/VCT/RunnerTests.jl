@@ -103,3 +103,8 @@ out = run(trial; force_recompile=false)
 hashBorderPrint("SUCCESSFULLY RAN TRIAL!")
 
 @test_warn "`runAbstractTrial` is deprecated. Use `run` instead." runAbstractTrial(trial; force_recompile=false)
+
+# run a sim that will produce an error
+dv = DiscreteVariation(["hypothesis_ruleset:name:default", "behavior:name:cycle entry", "decreasing_signals", "max_response"], 100.0)
+out = run(inputs, dv)
+@test out.n_success == 0
