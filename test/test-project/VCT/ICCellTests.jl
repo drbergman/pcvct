@@ -1,4 +1,5 @@
-using LightXML
+using LightXML, PhysiCellCellCreator
+
 filename = @__FILE__
 filename = split(filename, "/") |> last
 str = "TESTING WITH $(filename)"
@@ -42,7 +43,7 @@ push!(discrete_variations, DiscreteVariation(xml_path, 300.0))
 out_fail = run(Monad(out.trial.monad_ids[1]), discrete_variations; n_replicates=n_replicates)
 @test out_fail.n_success == 0
 
-createICCellXMLTemplate("2_xml")
+pcvct.createICCellXMLTemplate("2_xml")
 @test isdir(joinpath(pcvct.data_dir, "inputs", "ics", "cells", "2_xml"))
 
 xml_path = ["cell_patches:name:default", "patch_collection:type:disc", "patch:ID:1", "x0"]

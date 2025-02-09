@@ -1,4 +1,4 @@
-using Downloads, JSON3, CSV
+using Downloads, JSON3, CSV, PhysiCellCellCreator
 
 export createProject
 
@@ -137,7 +137,7 @@ function setUpTemplate(physicell_dir::String, inputs_dir::String)
     setUpICFolder(path_to_template, inputs_dir, "substrates", "0_template")
 
     # also set up a ic cell folder using the xml-based version
-    createICCellXMLTemplate(joinpath(inputs_dir, "ics", "cells", "1_xml"))
+    pcvct.createICCellXMLTemplate(joinpath(inputs_dir, "ics", "cells", "1_xml"))
 end
 
 function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, template_as_default::Bool, terse::Bool)

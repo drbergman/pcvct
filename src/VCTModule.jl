@@ -1,5 +1,5 @@
 using SQLite, DataFrames, LightXML, Dates, CSV, Tables, Distributions, Statistics, Random, QuasiMonteCarlo, Sobol
-using PhysiCellXMLRules
+using PhysiCellXMLRules, PhysiCellCellCreator
 
 export initializeVCT, getSimulationIDs, setNumberOfParallelSims
 
