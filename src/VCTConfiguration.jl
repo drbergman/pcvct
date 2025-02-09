@@ -1,3 +1,5 @@
+using PhysiCellCellCreator
+
 ################## XML Functions ##################
 
 function openXML(path_to_xml::String)
