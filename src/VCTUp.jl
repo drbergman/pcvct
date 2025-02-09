@@ -72,7 +72,7 @@ function upgradeToV0_0_3(auto_upgrade::Bool)
     warning_msg = """
     \t- Upgrading to version 0.0.3...
     \nWARNING: Upgrading to version 0.0.3 will change the database schema.
-    See info at https://github.com/drbergman/pcvct?tab=readme-ov-file#to-v003
+    See info at https://drbergman.github.io/pcvct/stable/misc/database_upgrades/
 
     ------IF ANOTHER INSTANCE OF PCVCT IS USING THIS DATABASE, PLEASE CLOSE IT BEFORE PROCEEDING.------
 
@@ -98,15 +98,15 @@ function upgradeToV0_0_3(auto_upgrade::Bool)
     end
     if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('monads') WHERE name='ic_cell_variation_id';") |> DataFrame |> isempty
         DBInterface.execute(db, "ALTER TABLE monads ADD COLUMN ic_cell_variation_id INTEGER;")
+        DBInterface.execute(db, "CREATE TABLE monads_temp AS SELECT * FROM monads;")
+        DBInterface.execute(db, "UPDATE monads_temp SET ic_cell_variation_id=CASE WHEN ic_cell_id=-1 THEN -1 ELSE 0 END;")
+        DBInterface.execute(db, "DROP TABLE monads;")
+        createPCVCTTable("monads", monadsSchema())
+        # drop the previous unique constraint on monads
+        # insert from monads_temp all values except ic_cell_variation_id (set that to -1 if ic_cell_id is -1 and to 0 if ic_cell_id is not -1)
+        populateTableOnFeatureSubset(db, "monads_temp", "monads")
+        DBInterface.execute(db, "DROP TABLE monads_temp;")
     end
-    DBInterface.execute(db, "CREATE TABLE monads_temp AS SELECT * FROM monads;")
-    DBInterface.execute(db, "UPDATE monads_temp SET ic_cell_variation_id=CASE WHEN ic_cell_id=-1 THEN -1 ELSE 0 END;")
-    DBInterface.execute(db, "DROP TABLE monads;")
-    createPCVCTTable("monads", monadsSchema())
-    # drop the previous unique constraint on monads
-    # insert from monads_temp all values except ic_cell_variation_id (set that to -1 if ic_cell_id is -1 and to 0 if ic_cell_id is not -1)
-    populateTableOnFeatureSubset(db, "monads_temp", "monads")
-    DBInterface.execute(db, "DROP TABLE monads_temp;")
 
     # now get the config_variations.db's right
     config_folders = queryToDataFrame(constructSelectQuery("configs"; selection="folder_name")) |> x -> x.folder_name
@@ -247,8 +247,40 @@ function upgradeToV0_0_13(::Bool)
     end
 end
 
-function upgradeToV0_0_15(::Bool)
+function upgradeToV0_0_15(auto_upgrade::Bool)
+    warning_msg = """
+    \t- Upgrading to version 0.0.15...
+    \nWARNING: Upgrading to version 0.0.15 will change the database schema.
+    See info at https://drbergman.github.io/pcvct/stable/misc/database_upgrades/
+
+    ------IF ANOTHER INSTANCE OF PCVCT IS USING THIS DATABASE, PLEASE CLOSE IT BEFORE PROCEEDING.------
+
+    Continue upgrading to version 0.0.15? (y/n):
+    """
+    println(warning_msg)
+    response = auto_upgrade ? "y" : readline()
+    if response != "y"
+        println("Upgrade to version 0.0.15 aborted.")
+        return false
+    end
     println("\t- Upgrading to version 0.0.15...")
+
+    # first include ic_ecm_variation_id in simulations and monads tables
+    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('simulations') WHERE name='ic_ecm_variation_id';") |> DataFrame |> isempty
+        DBInterface.execute(db, "ALTER TABLE simulations ADD COLUMN ic_ecm_variation_id INTEGER;")
+        DBInterface.execute(db, "UPDATE simulations SET ic_ecm_variation_id=CASE WHEN ic_ecm_id=-1 THEN -1 ELSE 0 END;")
+    end 
+    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('monads') WHERE name='ic_ecm_variation_id';") |> DataFrame |> isempty
+        DBInterface.execute(db, "ALTER TABLE monads ADD COLUMN ic_ecm_variation_id INTEGER;")
+        DBInterface.execute(db, "CREATE TABLE monads_temp AS SELECT * FROM monads;")
+        DBInterface.execute(db, "UPDATE monads_temp SET ic_ecm_variation_id=CASE WHEN ic_ecm_id=-1 THEN -1 ELSE 0 END;")
+        DBInterface.execute(db, "DROP TABLE monads;")
+        createPCVCTTable("monads", monadsSchema())
+        populateTableOnFeatureSubset(db, "monads_temp", "monads")
+        DBInterface.execute(db, "DROP TABLE monads_temp;")
+    end
+
+    # now add ic_dc_id to simulations and monads tables
     if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('simulations') WHERE name='ic_dc_id';") |> DataFrame |> isempty
         DBInterface.execute(db, "ALTER TABLE simulations ADD COLUMN ic_dc_id INTEGER;")
         DBInterface.execute(db, "UPDATE simulations SET ic_dc_id=-1;")

@@ -58,6 +58,16 @@ function deleteSimulations(simulation_ids::AbstractVector{<:Union{Integer,Missin
         if result_df.var"COUNT(*)"[1] == 0
             rm_hpc_safe(joinpath(data_dir, "inputs", "ic_cells", ic_cell_folder, "ic_cell_variations", "ic_cell_variation_$(row.ic_cell_variation_id).xml"); force=true)
         end
+
+        ic_ecm_folder = icECMFolder(row.ic_ecm_id)
+        result_df = constructSelectQuery(
+            "simulations",
+            "WHERE ic_ecm_id = $(row.ic_ecm_id) AND ic_ecm_variation_id = $(row.ic_ecm_variation_id);";
+            selection="COUNT(*)"
+        ) |> queryToDataFrame
+        if result_df.var"COUNT(*)"[1] == 0
+            rm_hpc_safe(joinpath(data_dir, "inputs", "ic_ecms", ic_ecm_folder, "ic_ecm_variations", "ic_ecm_variation_$(row.ic_ecm_variation_id).xml"); force=true)
+        end
     end
 
     if !delete_supers
@@ -262,6 +272,15 @@ function resetDatabase(; force_reset::Bool=false, force_continue::Bool=false)
     for ic_cell_folder in ic_cell_folders
         resetICCellFolder(joinpath(data_dir, "inputs", "ics", "cells", ic_cell_folder))
     end
+
+    for ic_ecm_folder in (readdir(joinpath(data_dir, "inputs", "ics", "ecms"), sort=false, join=true) |> filter(x -> isdir(x)))
+        resetICECMFolder(joinpath(ic_ecm_folder, "ic_ecm_variations"))
+    end
+
+    ic_ecm_folders = constructSelectQuery("ic_ecms"; selection="folder_name") |> queryToDataFrame |> x -> x.folder_name
+    for ic_ecm_folder in ic_ecm_folders
+        resetICECMFolder(joinpath(data_dir, "inputs", "ics", "ecms", ic_ecm_folder, "ic_ecm_variations"))
+    end
     
     for custom_code_folder in (readdir(joinpath(data_dir, "inputs", "custom_codes"), sort=false, join=true) |> filter(x->isdir(x)))
         files = [baseToExecutable("project"), "compilation.log", "compilation.err", "macros.txt"]
@@ -309,6 +328,14 @@ function resetICCellFolder(path_to_ic_cell_folder::String)
     end
     rm_hpc_safe(joinpath(path_to_ic_cell_folder, "ic_cell_variations.db"); force=true)
     rm_hpc_safe(joinpath(path_to_ic_cell_folder, "ic_cell_variations"); force=true, recursive=true)
+end
+
+function resetICECMFolder(path_to_ic_ecm_folder::String)
+    if !isdir(path_to_ic_ecm_folder) || !isfile(joinpath(path_to_ic_ecm_folder, "ecm.xml"))
+        return
+    end
+    rm_hpc_safe(joinpath(path_to_ic_ecm_folder, "ic_ecm_variations.db"); force=true)
+    rm_hpc_safe(joinpath(path_to_ic_ecm_folder, "ic_ecm_variations"); force=true, recursive=true)
 end
 
 """
@@ -362,7 +389,18 @@ function eraseSimulationID(simulation_id::Int; monad_id::Union{Missing,Int}=miss
     if ismissing(monad_id)
         query = constructSelectQuery("simulations", "WHERE simulation_id = $(simulation_id);")
         df = queryToDataFrame(query)
-        query = constructSelectQuery("monads", "WHERE (config_id, config_variation_id, rulesets_collection_id, rulesets_collection_variation_id, ic_cell_id, ic_cell_variation_id) = ($(df.config_id[1]), $(df.config_variation_id[1]), $(df.rulesets_collection_id[1]), $(df.rulesets_collection_variation_id[1]), $(df.ic_cell_id[1]), $(df.ic_cell_variation_id[1]));"; selection="monad_id")
+        where_stmt = """
+        WHERE (config_id, config_variation_id,\
+               rulesets_collection_id, rulesets_collection_variation_id,\
+               ic_cell_id, ic_cell_variation_id,\
+               ic_ecm_id, ic_ecm_variation_id) = \
+               ($(df.config_id[1]), $(df.config_variation_id[1]),\
+               $(df.rulesets_collection_id[1]),\
+               $(df.rulesets_collection_variation_id[1]),\
+               $(df.ic_cell_id[1]), $(df.ic_cell_variation_id[1]),\
+               $(df.ic_ecm_id[1]), $(df.ic_ecm_variation_id[1]));
+        """
+        query = constructSelectQuery("monads", where_stmt; selection="monad_id")
         df = queryToDataFrame(query)
         monad_id = df.monad_id[1]
     end

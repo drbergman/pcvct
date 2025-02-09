@@ -53,6 +53,7 @@ The three `reference_` keyword arguments are only compatible when the third argu
 - `reference_config_variation_id::Int=0`: the reference config variation ID
 - `reference_rulesets_variation_id::Int=0`: the reference rulesets variation ID
 - `reference_ic_cell_variation_id::Int=0`: the reference IC cell variation ID
+- `reference_ic_ecm_variation_id::Int=0`: the reference IC ECM variation ID
 - `ignore_indices::Vector{Int}=[]`: indices into `avs` to ignore when perturbing the parameters. Only used for Sobolʼ. See [`Sobolʼ`](@ref) for a use case.
 - `force_recompile::Bool=false`: whether to force recompilation of the simulation code
 - `prune_options::PruneOptions=PruneOptions()`: the options for pruning the simulation results
@@ -74,6 +75,7 @@ function run(method::GSAMethod, n_replicates::Integer, reference::AbstractMonad,
                reference_config_variation_id=reference.variation_ids.config,
                reference_rulesets_variation_id=reference.variation_ids.rulesets_collection,
                reference_ic_cell_variation_id=reference.variation_ids.ic_cell,
+               reference_ic_ecm_variation_id=reference.variation_ids.ic_ecm,
                functions=functions, kwargs...)
 end
 
@@ -149,27 +151,31 @@ MOATSampling(sampling::Sampling, monad_ids_df::DataFrame) = MOATSampling(samplin
 function _runSensitivitySampling(method::MOAT, n_replicates::Int, inputs::InputFolders, pv::ParsedVariations;
     reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0,
     reference_ic_cell_variation_id::Int=inputs.ic_cell.folder=="" ? -1 : 0,
+    reference_ic_ecm_variation_id::Int=inputs.ic_ecm.folder=="" ? -1 : 0,
     ignore_indices::Vector{Int}=Int[], force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions(), use_previous::Bool=true)
 
     if !isempty(ignore_indices)
         error("MOAT does not support ignoring indices...yet? Only Sobolʼ does for now.")
     end
-    reference_variation_ids = VariationIDs(reference_config_variation_id, reference_rulesets_variation_id, reference_ic_cell_variation_id)
-    config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids = addVariations(method.lhs_variation, inputs, pv, reference_variation_ids)
+    reference_variation_ids = VariationIDs(reference_config_variation_id, reference_rulesets_variation_id, reference_ic_cell_variation_id, reference_ic_ecm_variation_id)
+    config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids, ic_ecm_variation_ids = addVariations(method.lhs_variation, inputs, pv, reference_variation_ids)
     perturbed_config_variation_ids = repeat(config_variation_ids, 1, length(pv.sz))
     perturbed_rulesets_variation_ids = repeat(rulesets_collection_variation_ids, 1, length(pv.sz))
     perturbed_ic_cell_variation_ids = repeat(ic_cell_variation_ids, 1, length(pv.sz))
-    for (base_point_ind, (config_variation_id, rulesets_collection_variation_id, ic_cell_variation_id)) in enumerate(zip(config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids)) # for each base point in the LHS
+    perturbed_ic_ecm_variation_ids = repeat(ic_ecm_variation_ids, 1, length(pv.sz))
+    for (base_point_ind, (config_variation_id, rulesets_collection_variation_id, ic_cell_variation_id, ic_ecm_variation_id)) in enumerate(zip(config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids, ic_ecm_variation_ids)) # for each base point in the LHS
         for d in eachindex(pv.sz) # perturb each feature one time
             perturbed_config_variation_ids[base_point_ind, d] = perturbVariation(pv, config_variation_id, inputs.config.folder, d, :config)
             perturbed_rulesets_variation_ids[base_point_ind, d] = perturbVariation(pv, rulesets_collection_variation_id, inputs.rulesets_collection.folder, d, :rulesets_collection)
             perturbed_ic_cell_variation_ids[base_point_ind, d] = perturbVariation(pv, ic_cell_variation_id, inputs.ic_cell.folder, d, :ic_cell)
+            perturbed_ic_ecm_variation_ids[base_point_ind, d] = perturbVariation(pv, ic_ecm_variation_id, inputs.ic_ecm.folder, d, :ic_ecm)
         end
     end
     all_config_variation_ids = hcat(config_variation_ids, perturbed_config_variation_ids)
     all_rulesets_variation_ids = hcat(rulesets_collection_variation_ids, perturbed_rulesets_variation_ids)
     all_ic_cell_variation_ids = hcat(ic_cell_variation_ids, perturbed_ic_cell_variation_ids)
-    monad_dict, monad_ids = variationsToMonads(inputs, all_config_variation_ids, all_rulesets_variation_ids, all_ic_cell_variation_ids, use_previous)
+    all_ic_ecm_variation_ids = hcat(ic_ecm_variation_ids, perturbed_ic_ecm_variation_ids)
+    monad_dict, monad_ids = variationsToMonads(inputs, all_config_variation_ids, all_rulesets_variation_ids, all_ic_cell_variation_ids, all_ic_ecm_variation_ids, use_previous)
     header_line = ["base"; columnName.(pv.variations)]
     monad_ids_df = DataFrame(monad_ids, header_line)
     sampling = Sampling(n_replicates, monad_dict |> values |> collect)
@@ -192,6 +198,9 @@ function perturbVariation(pv::ParsedVariations, reference_variation_id::Int, fol
     elseif location == :ic_cell
         baseValFn = icCellBaseValue
         fns = prepareICCellVariationFunctions(retrieveID("ic_cells", folder); reference_ic_cell_variation_id=reference_variation_id)
+    elseif location == :ic_ecm
+        baseValFn = icECMBaseValue
+        fns = prepareICECMVariationFunctions(retrieveID("ic_ecms", folder); reference_ic_ecm_variation_id=reference_variation_id)
     else
         error("Unknown location: $location")
     end
@@ -234,6 +243,14 @@ icCellBaseValue(ev::ElementaryVariation, args...) = icCellBaseValue(columnName(e
 function icCellBaseValue(column_name::String, ic_cell_variation_id::Int, folder::String)
     query = constructSelectQuery("ic_cell_variations", "WHERE ic_cell_variation_id=$ic_cell_variation_id;"; selection="\"$(column_name)\"")
     variation_value_df = queryToDataFrame(query; db=icCellDB(folder), is_row=true)
+    return variation_value_df[1,1]
+end
+
+icECMBaseValue(ev::ElementaryVariation, args...) = icECMBaseValue(columnName(ev), args...)
+
+function icECMBaseValue(column_name::String, ic_ecm_variation_id::Int, folder::String)
+    query = constructSelectQuery("ic_ecm_variations", "WHERE ic_ecm_variation_id=$ic_ecm_variation_id;"; selection="\"$(column_name)\"")
+    variation_value_df = queryToDataFrame(query; db=icECMDB(folder), is_row=true)
     return variation_value_df[1,1]
 end
 
@@ -308,28 +325,33 @@ SobolSampling(sampling::Sampling, monad_ids_df::DataFrame; sobol_index_methods::
 function _runSensitivitySampling(method::Sobolʼ, n_replicates::Int, inputs::InputFolders, pv::ParsedVariations;
     reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0,
     reference_ic_cell_variation_id::Int=inputs.ic_cell.folder=="" ? -1 : 0,
+    reference_ic_ecm_variation_id::Int=inputs.ic_ecm.folder=="" ? -1 : 0,
     ignore_indices::Vector{Int}=Int[], force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions(), use_previous::Bool=true)
 
     config_id = retrieveID("configs", inputs.config.folder)
     rulesets_collection_id = retrieveID("rulesets_collections", inputs.rulesets_collection.folder)
     ic_cell_id = retrieveID("ic_cells", inputs.ic_cell.folder)
-    reference_variation_ids = VariationIDs(reference_config_variation_id, reference_rulesets_variation_id, reference_ic_cell_variation_id)
-    config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids, cdfs =
+    ic_ecm_id = retrieveID("ic_ecms", inputs.ic_ecm.folder)
+    reference_variation_ids = VariationIDs(reference_config_variation_id, reference_rulesets_variation_id, reference_ic_cell_variation_id, reference_ic_ecm_variation_id)
+    config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids, ic_ecm_variation_ids, cdfs =
         addVariations(method.sobol_variation, inputs, pv, reference_variation_ids)
     d = length(pv.sz)
     focus_indices = [i for i in 1:d if !(i in ignore_indices)]
     config_variation_ids_A = config_variation_ids[:,1]
     rulesets_variation_ids_A = rulesets_collection_variation_ids[:,1]
     ic_cell_variation_ids_A = ic_cell_variation_ids[:,1]
+    ic_ecm_variation_ids_A = ic_ecm_variation_ids[:,1]
     A = cdfs[:,1,:] # cdfs is of size (d, 2, n)
     config_variation_ids_B = config_variation_ids[:,2]
     rulesets_variation_ids_B = rulesets_collection_variation_ids[:,2]
     ic_cell_variation_ids_B = ic_cell_variation_ids[:,2]
+    ic_ecm_variation_ids_B = ic_ecm_variation_ids[:,2]
     B = cdfs[:,2,:]
     Aᵦ = [i => copy(A) for i in focus_indices] |> Dict
     config_variation_ids_Aᵦ = [i => copy(config_variation_ids_A) for i in focus_indices] |> Dict
     rulesets_variation_ids_Aᵦ = [i => copy(rulesets_variation_ids_A) for i in focus_indices] |> Dict
     ic_cell_variation_ids_Aᵦ = [i => copy(ic_cell_variation_ids_A) for i in focus_indices] |> Dict
+    ic_ecm_variation_ids_Aᵦ = [i => copy(ic_ecm_variation_ids_A) for i in focus_indices] |> Dict
     for i in focus_indices
         Aᵦ[i][i,:] .= B[i,:]
         if i in pv.config_variation_indices
@@ -344,11 +366,16 @@ function _runSensitivitySampling(method::Sobolʼ, n_replicates::Int, inputs::Inp
             fns = prepareICCellVariationFunctions(ic_cell_id; reference_ic_cell_variation_id=reference_ic_cell_variation_id)
             ic_cell_variation_ids_Aᵦ[i][:] .= cdfsToVariations(Aᵦ[i]', pv.ic_cell_variations, fns..., pv.ic_cell_variation_indices)
         end
+        if i in pv.ic_ecm_variation_indices
+            fns = prepareICECMVariationFunctions(ic_ecm_id; reference_ic_ecm_variation_id=reference_ic_ecm_variation_id)
+            ic_ecm_variation_ids_Aᵦ[i][:] .= cdfsToVariations(Aᵦ[i]', pv.ic_ecm_variations, fns..., pv.ic_ecm_variation_indices)
+        end
     end
     all_config_variation_ids = hcat(config_variation_ids_A, config_variation_ids_B, [config_variation_ids_Aᵦ[i] for i in focus_indices]...) # make sure to the values from the dict in the expected order
     all_rulesets_variation_ids = hcat(rulesets_variation_ids_A, rulesets_variation_ids_B, [rulesets_variation_ids_Aᵦ[i] for i in focus_indices]...)
     all_ic_cell_variation_ids = hcat(ic_cell_variation_ids_A, ic_cell_variation_ids_B, [ic_cell_variation_ids_Aᵦ[i] for i in focus_indices]...)
-    monad_dict, monad_ids = variationsToMonads(inputs, all_config_variation_ids, all_rulesets_variation_ids, all_ic_cell_variation_ids, use_previous)
+    all_ic_ecm_variation_ids = hcat(ic_ecm_variation_ids_A, ic_ecm_variation_ids_B, [ic_ecm_variation_ids_Aᵦ[i] for i in focus_indices]...)
+    monad_dict, monad_ids = variationsToMonads(inputs, all_config_variation_ids, all_rulesets_variation_ids, all_ic_cell_variation_ids, all_ic_ecm_variation_ids, use_previous)
     monads = monad_dict |> values |> collect
     header_line = ["A"; "B"; columnName.(pv.variations[focus_indices])]
     monad_ids_df = DataFrame(monad_ids, header_line)
@@ -454,14 +481,16 @@ end
 RBDSampling(sampling::Sampling, monad_ids_df::DataFrame, num_cycles; num_harmonics::Int=6) = RBDSampling(sampling, monad_ids_df, Dict{Function, GlobalSensitivity.SobolResult}(), num_harmonics, num_cycles)
 
 function _runSensitivitySampling(method::RBD, n_replicates::Int, inputs::InputFolders, pv::ParsedVariations;
-    reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0, reference_ic_cell_variation_id::Int=inputs.ic_cell.folder=="" ? -1 : 0,
+    reference_config_variation_id::Int=0, reference_rulesets_variation_id::Int=0,
+    reference_ic_cell_variation_id::Int=inputs.ic_cell.folder=="" ? -1 : 0,
+    reference_ic_ecm_variation_id::Int=inputs.ic_ecm.folder=="" ? -1 : 0,
     ignore_indices::Vector{Int}=Int[], force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions(), use_previous::Bool=true)
     if !isempty(ignore_indices)
         error("RBD does not support ignoring indices...yet? Only Sobolʼ does for now.")
     end
-    reference_variation_ids = VariationIDs(reference_config_variation_id, reference_rulesets_variation_id, reference_ic_cell_variation_id)
-    config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids, config_variations_matrix, rulesets_variations_matrix, ic_cell_variations_matrix = addVariations(method.rbd_variation, inputs, pv, reference_variation_ids)
-    monad_dict, monad_ids = variationsToMonads(inputs, config_variations_matrix, rulesets_variations_matrix, ic_cell_variations_matrix, use_previous)
+    reference_variation_ids = VariationIDs(reference_config_variation_id, reference_rulesets_variation_id, reference_ic_cell_variation_id, reference_ic_ecm_variation_id)
+    config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids, ic_ecm_variation_ids, config_variations_matrix, rulesets_variations_matrix, ic_cell_variations_matrix, ic_ecm_variations_matrix = addVariations(method.rbd_variation, inputs, pv, reference_variation_ids)
+    monad_dict, monad_ids = variationsToMonads(inputs, config_variations_matrix, rulesets_variations_matrix, ic_cell_variations_matrix, ic_ecm_variations_matrix, use_previous)
     monads = monad_dict |> values |> collect
     header_line = columnName.(pv.variations)
     monad_ids_df = DataFrame(monad_ids, header_line)
@@ -511,11 +540,11 @@ function evaluateFunctionOnSampling(gsa_sampling::GSASampling, f::Function)
 end
 
 """
-    variationsToMonads(inputs::InputFolders, all_config_variation_ids::Matrix{Int}, all_rulesets_variation_ids::Matrix{Int}, all_ic_cell_variation_ids::Matrix{Int}, use_previous::Bool)
+    variationsToMonads(inputs::InputFolders, all_config_variation_ids::Matrix{Int}, all_rulesets_variation_ids::Matrix{Int}, all_ic_cell_variation_ids::Matrix{Int}, all_ic_ecm_variation_ids::Matrix{Int}, use_previous::Bool)
 
 Return a dictionary of monads and a matrix of monad IDs based on the given variation IDs.
 
-The three matrix inputs together define a single matrix of variation IDs.
+The four matrix inputs together define a single matrix of variation IDs.
 This information, together with the `inputs`, identifies the monads to be used.
 The `use_previous` flag determines whether to use previous simulations, if they exist.
 
@@ -523,11 +552,11 @@ The `use_previous` flag determines whether to use previous simulations, if they 
 - `monad_dict::Dict{VariationIDs, Monad}`: a dictionary of the monads to be used without duplicates.
 - `monad_ids::Matrix{Int}`: a matrix of the monad IDs to be used. Matches the shape of the input IDs matrices.
 """
-function variationsToMonads(inputs::InputFolders, all_config_variation_ids::Matrix{Int}, all_rulesets_variation_ids::Matrix{Int}, all_ic_cell_variation_ids::Matrix{Int}, use_previous::Bool)
+function variationsToMonads(inputs::InputFolders, all_config_variation_ids::Matrix{Int}, all_rulesets_variation_ids::Matrix{Int}, all_ic_cell_variation_ids::Matrix{Int}, all_ic_ecm_variation_ids::Matrix{Int}, use_previous::Bool)
     monad_dict = Dict{VariationIDs, Monad}()
     monad_ids = zeros(Int, size(all_config_variation_ids))
-    for (i, (config_variation_id, rulesets_collection_variation_id, ic_cell_variation_id)) in enumerate(zip(all_config_variation_ids, all_rulesets_variation_ids, all_ic_cell_variation_ids))
-        variation_ids = VariationIDs(config_variation_id, rulesets_collection_variation_id, ic_cell_variation_id)
+    for (i, (config_variation_id, rulesets_collection_variation_id, ic_cell_variation_id, ic_ecm_variation_id)) in enumerate(zip(all_config_variation_ids, all_rulesets_variation_ids, all_ic_cell_variation_ids, all_ic_ecm_variation_ids))
+        variation_ids = VariationIDs(config_variation_id, rulesets_collection_variation_id, ic_cell_variation_id, ic_ecm_variation_id)
         if variation_ids in keys(monad_dict)
             monad_ids[i] = monad_dict[variation_ids].id
             continue

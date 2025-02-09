@@ -65,9 +65,9 @@ createTrial(reference::AbstractMonad, args...; kwargs...) = createTrial(GridVari
 function _createTrial(method::AddVariationMethod, inputs::InputFolders, reference_variation_ids::VariationIDs,
                       avs::Vector{<:AbstractVariation}, n_replicates::Integer, use_previous::Bool)
                       
-    config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids = addVariations(method, inputs, avs, reference_variation_ids)
+    config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids, ic_ecm_variation_ids = addVariations(method, inputs, avs, reference_variation_ids)
     if length(config_variation_ids) == 1
-        variation_ids = VariationIDs(config_variation_ids[1], rulesets_collection_variation_ids[1], ic_cell_variation_ids[1])
+        variation_ids = VariationIDs(config_variation_ids[1], rulesets_collection_variation_ids[1], ic_cell_variation_ids[1], ic_ecm_variation_ids[1])
         monad = Monad(n_replicates, inputs, variation_ids, use_previous)
         if n_replicates != 1
             return monad
@@ -78,6 +78,7 @@ function _createTrial(method::AddVariationMethod, inputs::InputFolders, referenc
                         config_variation_ids=config_variation_ids,
                         rulesets_collection_variation_ids=rulesets_collection_variation_ids,
                         ic_cell_variation_ids=ic_cell_variation_ids,
+                        ic_ecm_variation_ids=ic_ecm_variation_ids,
                         use_previous=use_previous)
     end
 end

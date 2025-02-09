@@ -4,7 +4,7 @@ CollapsedDocStrings = true
 
 # VCTICCell
 
-Functionality for the pcvct-specific XML-based cell initial conditions.
+Functionality for the using [PhysiCellCellCreator.jl](https://github.com/drbergman/PhysiCellECMCreator.jl) to create and use PhysiCell IC cell XML files.
 
 ```@autodocs
 Modules = [pcvct]
