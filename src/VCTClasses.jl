@@ -91,6 +91,7 @@ struct VariationIDs
     config::Int # integer identifying which variation on the base config file to use (config_variations.db)
     rulesets_collection::Int # integer identifying which variation on the ruleset file to use (rulesets_collection_variations.db)
     ic_cell::Int # integer identifying which variation on the ic cell file to use (ic_cell_variations.db) (only used if cells.xml, not used for cells.csv)
+    ic_ecm::Int # integer identifying which variation on the ic ecm file to use (ic_ecm_variations.db) (only used if ecm.xml, not used for ecm.csv)
 end
 
 function VariationIDs(inputs::InputFolders)
@@ -139,6 +140,7 @@ struct Simulation <: AbstractMonad
         @assert variation_ids.config >= 0 "config variation id must be non-negative"
         @assert variation_ids.rulesets_collection >= -1 "rulesets_collection variation id must be non-negative or -1 (indicating no rules)"
         @assert variation_ids.ic_cell >= -1 "ic_cell variation id must be non-negative or -1 (indicating no ic cells)"
+        @assert variation_ids.ic_ecm >= -1 "ic_ecm variation id must be non-negative or -1 (indicating no ic ecm)"
         if variation_ids.rulesets_collection != -1
             @assert inputs.rulesets_collection.folder != "" "rulesets_collection folder must be provided if rulesets_collection variation id is not -1 (indicating that the rules are in use)"
         end
@@ -147,6 +149,12 @@ struct Simulation <: AbstractMonad
         else
             @assert inputs.ic_cell.folder != "" "ic_cell folder must be provided if ic_cell variation_id is not -1 (indicating that the cells are in use)"
             @assert variation_ids.ic_cell == 0 || isfile(joinpath(data_dir, "inputs", "ics", "cells", inputs.ic_cell.folder, "cells.xml")) "cells.xml must be provided if ic_cell variation_id is >1 (indicating that the cell ic parameters are being varied)"
+        end
+        if variation_ids.ic_ecm == -1
+            @assert inputs.ic_ecm.folder == "" "ic_ecm variation_id must be >=0 if ic_ecm folder is provided"
+        else
+            @assert inputs.ic_ecm.folder != "" "ic_ecm folder must be provided if ic_ecm variation_id is not -1 (indicating that the ecm is in use)"
+            @assert variation_ids.ic_ecm == 0 || isfile(joinpath(data_dir, "inputs", "ics", "ecms", inputs.ic_ecm.folder, "ecm.xml")) "ecm.xml must be provided if ic_ecm variation_id is >1 (indicating that the ecm ic parameters are being varied)"
         end
         return new(id, inputs, variation_ids)
     end
@@ -181,7 +189,7 @@ function getSimulation(simulation_id::Int)
         error("Simulation $(simulation_id) not in the database.")
     end
     inputs = InputFolders(df.config_id[1], df.custom_code_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1], df.ic_dc_id[1])
-    variation_ids = VariationIDs(df.config_variation_id[1], df.rulesets_collection_variation_id[1], df.ic_cell_variation_id[1])
+    variation_ids = VariationIDs(df.config_variation_id[1], df.rulesets_collection_variation_id[1], df.ic_cell_variation_id[1], df.ic_ecm_variation_id[1])
     return Simulation(simulation_id, inputs, variation_ids)
 end
 
@@ -313,7 +321,7 @@ function getMonad(monad_id::Int, n_replicates::Int)
         error("Monad $(monad_id) not in the database.")
     end
     inputs = InputFolders(df.config_id[1], df.custom_code_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1], df.ic_dc_id[1])
-    variation_ids = VariationIDs(df.config_variation_id[1], df.rulesets_collection_variation_id[1], df.ic_cell_variation_id[1])
+    variation_ids = VariationIDs(df.config_variation_id[1], df.rulesets_collection_variation_id[1], df.ic_cell_variation_id[1], df.ic_ecm_variation_id[1])
     use_previous = true
     return Monad(monad_id, n_replicates, inputs, variation_ids, use_previous)
 end
@@ -455,21 +463,24 @@ function Sampling(inputs::InputFolders;
                 config_variation_ids::Union{Int,AbstractArray{<:Integer}}=Int[], 
                 rulesets_collection_variation_ids::Union{Int,AbstractArray{<:Integer}}=fill(inputs.rulesets_collection.folder=="" ? -1 : 0, size(config_variation_ids)),
                 ic_cell_variation_ids::Union{Int,AbstractArray{<:Integer}}=fill(inputs.ic_cell.folder=="" ? -1 : 0, size(config_variation_ids)),
+                ic_ecm_variation_ids::Union{Int,AbstractArray{<:Integer}}=fill(inputs.ic_ecm.folder=="" ? -1 : 0, size(config_variation_ids)),
                 use_previous::Bool=true) 
     # allow for passing in a single config_variation_id and/or rulesets_collection_variation_id
     # later, can support passing in (for example) a 3x6 config_variation_ids and a 3x1 rulesets_collection_variation_ids and expanding the rulesets_collection_variation_ids to 3x6, but that can get tricky fast
-    if all(x->x isa Integer, [config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids])
+    if all(x->x isa Integer, [config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids, ic_ecm_variation_ids])
         config_variation_ids = [config_variation_ids]
         rulesets_collection_variation_ids = [rulesets_collection_variation_ids]
         ic_cell_variation_ids = [ic_cell_variation_ids]
+        ic_ecm_variation_ids = [ic_ecm_variation_ids]
     else
-        ns = [length(x) for x in [config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids] if !(x isa Integer)]
-        @assert all(x->x==ns[1], ns) "config_variation_ids, rulesets_collection_variation_ids, and ic_cell_variation_ids must have the same length if they are not integers"
+        ns = [length(x) for x in [config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids, ic_ecm_variation_ids] if !(x isa Integer)]
+        @assert all(x->x==ns[1], ns) "config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids, ic_ecm_variation_ids must have the same length if they are not integers"
         config_variation_ids = config_variation_ids isa Integer ? fill(config_variation_ids, ns[1]) : config_variation_ids
         rulesets_collection_variation_ids = rulesets_collection_variation_ids isa Integer ? fill(rulesets_collection_variation_ids, ns[1]) : rulesets_collection_variation_ids
         ic_cell_variation_ids = ic_cell_variation_ids isa Integer ? fill(ic_cell_variation_ids, ns[1]) : ic_cell_variation_ids
+        ic_ecm_variation_ids = ic_ecm_variation_ids isa Integer ? fill(ic_ecm_variation_ids, ns[1]) : ic_ecm_variation_ids
     end
-    variation_ids = [VariationIDs(config_variation_ids[i], rulesets_collection_variation_ids[i], ic_cell_variation_ids[i]) for i in 1:length(config_variation_ids)]
+    variation_ids = [VariationIDs(config_variation_ids[i], rulesets_collection_variation_ids[i], ic_cell_variation_ids[i], ic_ecm_variation_ids[i]) for i in 1:length(config_variation_ids)]
     return Sampling(n_replicates, inputs, variation_ids; use_previous=use_previous) 
 end
 
@@ -505,7 +516,7 @@ function getSampling(sampling_id::Int, n_replicates::Int)
     monad_ids = readSamplingMonadIDs(sampling_id)
     inputs = InputFolders(df.config_id[1], df.custom_code_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1], df.ic_dc_id[1])
     monad_df = constructSelectQuery("monads", "WHERE monad_id IN ($(join(monad_ids,",")))") |> queryToDataFrame
-    variation_ids = [VariationIDs(monad_df.config_variation_id[i], monad_df.rulesets_collection_variation_id[i], monad_df.ic_cell_variation_id[i]) for i in 1:length(monad_ids)]
+    variation_ids = [VariationIDs(monad_df.config_variation_id[i], monad_df.rulesets_collection_variation_id[i], monad_df.ic_cell_variation_id[i], monad_df.ic_ecm_variation_id[i]) for i in 1:length(monad_ids)]
     return Sampling(sampling_id, n_replicates, monad_ids, inputs, variation_ids)
 end
 

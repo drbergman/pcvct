@@ -20,13 +20,14 @@ makedocs(;
             "Data directory" => "man/data_directory.md",
             "Known limitations" => "man/known_limitations.md",
             "PhysiCell Studio" => "man/physicell_studio.md",
-            "Sensitivity Analysis" => "man/sensitivity_analysis.md",
+            "Sensitivity analysis" => "man/sensitivity_analysis.md",
         ],
         "Documentation" => map(
             s -> "lib/$(s)",
             sort(readdir(joinpath(@__DIR__, "src/lib")))
         ),
         "Miscellaneous" => Any[
+            "Database upgrades" => "misc/database_upgrades.md",
             "Renaming" => "misc/renaming.md",
         ],
     ],

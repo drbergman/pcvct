@@ -10,6 +10,7 @@ function prepareSimulationCommand(simulation::Simulation, monad_id::Int, do_full
         loadConfiguration(simulation)
         loadRulesets(simulation)
         loadICCells(simulation)
+        loadICECM(simulation)
         success = loadCustomCode(simulation; force_recompile=force_recompile)
         if !success
             simulationFailedToRun(simulation, monad_id)
@@ -33,7 +34,13 @@ function prepareSimulationCommand(simulation::Simulation, monad_id::Int, do_full
         append!(flags, ["-s", joinpath(data_dir, "inputs", "ics", "substrates", simulation.inputs.ic_substrate.folder, "substrates.csv")]) # if ic file included (id != -1), then include this in the command
     end
     if simulation.inputs.ic_ecm.id != -1
-        append!(flags, ["-e", joinpath(data_dir, "inputs", "ics", "ecms", simulation.inputs.ic_ecm.folder, "ecm.csv")]) # if ic file included (id != -1), then include this in the command
+        try
+            append!(flags, ["-e", pathToICECM(simulation)]) # if ic file included (id != -1), then include this in the command
+        catch e
+            println("\nWARNING: Simulation $(simulation.id) failed to initialize the IC ECM file.\n\tCause: $e\n")
+            simulationFailedToRun(simulation, monad_id)
+            return nothing
+        end
     end
     if simulation.inputs.ic_dc.id != -1
         append!(flags, ["-d", joinpath(data_dir, "inputs", "ics", "dcs", simulation.inputs.ic_dc.folder, "dcs.csv")]) # if ic file included (id != -1), then include this in the command
@@ -151,6 +158,7 @@ function runMonad(monad::Monad; do_full_setup::Bool=true, force_recompile::Bool=
     loadConfiguration(monad)
     loadRulesets(monad)
     loadICCells(monad)
+    loadICECM(monad)
 
     simulation_tasks = Task[]
     for simulation_id in monad.simulation_ids

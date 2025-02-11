@@ -56,9 +56,13 @@ pcvct.calculateGSA!(moat_sampling, gs_fn)
 pcvct.calculateGSA!(sobol_sampling, gs_fn)
 pcvct.calculateGSA!(rbd_sampling, gs_fn)
 
-# test sensitivity with config, rules, and ic_cells at once
+# test sensitivity with config, rules, ic_cells, and ic_ecm at once
+config_folder = "template-ecm"
+rulesets_collection_folder = "0_template"
+custom_code_folder = "template-ecm"
 ic_cell_folder = "1_xml"
-inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rulesets_collection_folder, ic_cell=ic_cell_folder)
+ic_ecm_folder = "1_xml"
+inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rulesets_collection_folder, ic_cell=ic_cell_folder, ic_ecm=ic_ecm_folder)
 
 dv_max_time = DiscreteVariation(["overall", "max_time"], 12.0)
 dv_save_full_data_interval = DiscreteVariation(["save", "full_data", "interval"], 6.0)
@@ -81,7 +85,10 @@ dv2 = UniformDistributedVariation(xml_path, 0.0, 1.0e-8)
 xml_path = ["cell_patches:name:default", "patch_collection:type:annulus", "patch:ID:1", "inner_radius"]
 dv3 = UniformDistributedVariation(xml_path, 0.0, 1.0)
 
-av = CoVariation(dv1, dv2, dv3)
+xml_path = ["layer:ID:2", "patch_collection:type:ellipse", "patch:ID:1", "density"]
+dv4 = UniformDistributedVariation(xml_path, 0.25, 0.75)
+
+av = CoVariation(dv1, dv2, dv3, dv4)
 
 moat_sampling = run(MOAT(n_points), n_replicates, inputs, av; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
 n_simulations_expected = n_points * (1 + 1) * n_replicates
@@ -96,12 +103,6 @@ reference = getSimulationIDs(sobol_sampling)[1] |> Simulation
 sobol_sampling = run(Sobolʼ(2), n_replicates, reference, av)
 
 # Testing sensitivity with CoVariations
-config_folder = "0_template"
-custom_code_folder = "0_template"
-rulesets_collection_folder = "0_template"
-ic_cell_folder = "1_xml"
-inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rulesets_collection_folder, ic_cell=ic_cell_folder)
-
 dv_max_time = DiscreteVariation(["overall", "max_time"], 12.0)
 
 reference = createTrial(inputs, dv_max_time; n_replicates=0)
@@ -112,9 +113,10 @@ dv_cycle = UniformDistributedVariation([pcvct.cyclePath("default"); "phase_durat
 dv_necr = NormalDistributedVariation([pcvct.necrosisPath("default"); "death_rate"], 1e-4, 1e-5; lb=0.0, ub=1.0)
 dv_pressure_hfm = UniformDistributedVariation(["hypothesis_ruleset:name:default", "behavior:name:cycle entry", "decreasing_signals", "signal:name:pressure", "half_max"], 0.1, 0.25)
 dv_x0 = UniformDistributedVariation(["cell_patches:name:default", "patch_collection:type:disc", "patch:ID:1", "x0"], -100.0, 0.0, flip)
+dv_anisotropy = UniformDistributedVariation(["layer:ID:2", "patch_collection:type:elliptical_disc", "patch:ID:1", "anisotropy"], 0.0, 1.0)
 
-cv1 = CoVariation([dv_apop, dv_cycle])
-cv2 = CoVariation([dv_necr, dv_pressure_hfm, dv_x0])
+cv1 = CoVariation([dv_apop, dv_cycle]) # I think wanted these to only be config variations?
+cv2 = CoVariation([dv_necr, dv_pressure_hfm, dv_x0, dv_anisotropy]) # I think I wanted these to be all different locations?
 avs = [cv1, cv2]
 
 method = MOAT(4)

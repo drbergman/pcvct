@@ -4,6 +4,11 @@ Not every release will change the database structure, but when one does in a way
 The warning will link to this page and the function will wait for user input to proceed.
 Changes are listed in reverse chronological order.
 
+## to v0.0.15
+Introduce XML-based ECM initial conditions. This introduces `ic_ecm_variations`.
+Also, introduce Dirichlet initial conditions from file, which introduces the `ic_dc_id` in the database.
+For any simulations in the database before upgrading, both of these will be set to `-1` (i.e., no initial conditions) except if  `ic_ecm_id` is not `-1`, in which case `ic_ecm_variation_id` will be set to `0` (i.e., the default ECM initial conditions which is all the original CSV version can handle).
+
 ## to v0.0.10
 Start tracking the PhysiCell version used in the simulation.
 This introduces the `physicell_versions` table which tracks the PhysiCell versions used in simulations.
@@ -15,7 +20,8 @@ Key changes include:
   - If `PhysiCell` is not a git-tracked repo, it will read the `VERSION.txt` file and store that as the `commit_hash` with `-download` appended to the version.
 
 ## to v0.0.3
-Introduce XML-based cell initial conditions. This introduces `ic_cell_variations`. Also, standardized the use of `config_variation` in place of `variation`. Key changes include:
+Introduce XML-based cell initial conditions. This introduces `ic_cell_variations`.
+Also, standardized the use of `config_variation` in place of `variation`. Key changes include:
 - Renaming the `variation_id` column in the `simulations` and `monads` tables to `config_variation_id`.
 - Adding the `ic_cell_variation_id` column to the `simulations` and `monads` tables.
 - In `data/inputs/configs`, renaming all instances of "variation" to "config_variation" in filenames and databases.

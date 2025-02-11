@@ -353,17 +353,6 @@ function adaptCustomModules(path_from_inputs::AbstractString)
 end
 
 function adaptCustomHeader(path_from_inputs::AbstractString)
-    # path_to_custom_h = joinpath(data_dir, "inputs", path_from_inputs, "custom.h")
-    # lines = readlines(path_to_custom_h)
-    # idx = findfirst(x->contains(x, "setup_tissue"), lines)
-
-    # insert!(lines, idx+1, "void setup_tissue_domain( void );")
-
-    # open(path_to_custom_h, "w") do f
-    #     for line in lines
-    #         println(f, line)
-    #     end
-    # end
     return true # nothing to do for now
 end
 
