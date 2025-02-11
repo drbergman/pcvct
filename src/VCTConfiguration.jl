@@ -1,6 +1,4 @@
-export addDomainVariationDimension!, addCustomDataVariationDimension!, addAttackRateVariationDimension!, addMotilityVariationDimension!
-export UniformDistributedVariation, NormalDistributedVariation
-
+using PhysiCellCellCreator
 
 ################## XML Functions ##################
 
@@ -9,6 +7,17 @@ function openXML(path_to_xml::String)
 end
 
 closeXML(xml_doc::XMLDocument) = free(xml_doc)
+
+function getChildByAttribute(parent_element::XMLElement, path_element_split::Vector{<:AbstractString})
+    path_element_name, attribute_name, attribute_value = path_element_split
+    candidate_elements = get_elements_by_tagname(parent_element, path_element_name)
+    for ce in candidate_elements
+        if attribute(ce, attribute_name) == attribute_value
+            return ce
+        end
+    end
+    return nothing
+end
 
 function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString}; required::Bool=true)
     current_element = root(xml_doc)
@@ -21,18 +30,8 @@ function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString
             continue
         end
         # Deal with checking attributes
-        path_element_name, attribute_check = split(path_element, ":", limit=2)
-        attribute_name, attribute_value = split(attribute_check, ":") # if I need to add a check for multiple attributes, we can do that later
-        candidate_elements = get_elements_by_tagname(current_element, path_element_name)
-        found = false
-        for ce in candidate_elements
-            if attribute(ce, attribute_name) == attribute_value
-                found = true
-                current_element = ce
-                break
-            end
-        end
-        if !found
+        current_element = getChildByAttribute(current_element, split(path_element, ":"))
+        if isnothing(current_element)
             required ? retrieveElementError(xml_path, path_element) : return nothing
         end
     end
@@ -70,6 +69,31 @@ function updateFieldsFromCSV(xml_doc::XMLDocument, path_to_csv::String)
     for i = axes(df,1)
         df[i, :] |> Vector |> x -> filter!(!ismissing, x) |> x -> updateField(xml_doc, x)
     end
+end
+
+function makeXMLPath(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString})
+    current_element = root(xml_doc)
+    for path_element in xml_path
+        if !occursin(":",path_element)
+            child_element = find_element(current_element, path_element)
+            if isnothing(child_element)
+                current_element = new_child(current_element, path_element)
+            else
+                current_element = child_element
+            end
+            continue
+        end
+        # Deal with checking attributes
+        path_element_split = split(path_element, ":")
+        child_element = getChildByAttribute(current_element, path_element_split)
+        if isnothing(child_element)
+            path_element_name, attribute_name, attribute_value = path_element_split
+            child_element = new_child(current_element, path_element_name)
+            set_attribute(child_element, attribute_name, attribute_value)
+        end
+        current_element = child_element
+    end
+    return nothing
 end
 
 ################## Configuration Functions ##################
@@ -178,11 +202,81 @@ function pathToICCell(simulation::Simulation)
     if isfile(joinpath(path_to_ic_cell_folder, "cells.csv")) # ic already given by cells.csv
         return joinpath(path_to_ic_cell_folder, "cells.csv")
     end
+    path_to_config_xml = joinpath(data_dir, "inputs", "configs", simulation.inputs.config.folder, "config_variations", "config_variation_$(simulation.variation_ids.config).xml")
+    xml_doc = openXML(path_to_config_xml)
+    domain_dict = Dict{String,Float64}()
+    for d in ["x", "y", "z"]
+        for side in ["min", "max"]
+            key = "$(d)_$(side)"
+            xml_path = ["domain"; key]
+            domain_dict[key] = getField(xml_doc, xml_path) |> x -> parse(Float64, x)
+        end
+    end
+    closeXML(xml_doc)
     path_to_ic_cell_variations = joinpath(path_to_ic_cell_folder, "ic_cell_variations")
     path_to_ic_cell_xml = joinpath(path_to_ic_cell_variations, "ic_cell_variation_$(simulation.variation_ids.ic_cell).xml")
     path_to_ic_cell_file = joinpath(path_to_ic_cell_variations, "ic_cell_variation_$(simulation.variation_ids.ic_cell)_s$(simulation.id).csv")
-    generateICCell(path_to_ic_cell_xml, path_to_ic_cell_file)
+    generateICCell(path_to_ic_cell_xml, path_to_ic_cell_file, domain_dict)
     return path_to_ic_cell_file
+end
+
+function loadICECM(M::AbstractMonad)
+    if M.inputs.ic_ecm.id == -1 # no ic ecm being used
+        return
+    end
+    path_to_ic_ecm_folder = joinpath(data_dir, "inputs", "ics", "ecms", M.inputs.ic_ecm.folder)
+    if isfile(joinpath(path_to_ic_ecm_folder, "ecm.csv")) # ic already given by ecm.csv
+        return
+    end
+    path_to_ic_ecm_xml = joinpath(path_to_ic_ecm_folder, "ic_ecm_variations", "ic_ecm_variation_$(M.variation_ids.ic_ecm).xml")
+    if isfile(path_to_ic_ecm_xml) # already have the ic ecm variation created
+        return
+    end
+    mkpath(dirname(path_to_ic_ecm_xml))
+
+    path_to_base_xml = joinpath(path_to_ic_ecm_folder, "ecm.xml")
+    xml_doc = parse_file(path_to_base_xml)
+    if M.variation_ids.ic_ecm != 0 # only update if not using the base variation for the ic ecm
+        query = constructSelectQuery("ic_ecm_variations", "WHERE ic_ecm_variation_id=$(M.variation_ids.ic_ecm);")
+        variation_row = queryToDataFrame(query; db=icECMDB(M.inputs.ic_ecm.folder), is_row=true)
+        for column_name in names(variation_row)
+            if column_name == "ic_ecm_variation_id"
+                continue
+            end
+            xml_path = columnNameToXMLPath(column_name)
+            updateField(xml_doc, xml_path, variation_row[1, column_name])
+        end
+    end
+    save_file(xml_doc, path_to_ic_ecm_xml)
+    closeXML(xml_doc)
+    return
+end
+
+function pathToICECM(simulation::Simulation)
+    @assert simulation.inputs.ic_ecm.id != -1 "No IC ecm variation being used" # we should have already checked this before calling this function
+    path_to_ic_ecm_folder = joinpath(data_dir, "inputs", "ics", "ecms", simulation.inputs.ic_ecm.folder)
+    if isfile(joinpath(path_to_ic_ecm_folder, "ecm.csv")) # ic already given by ecm.csv
+        return joinpath(path_to_ic_ecm_folder, "ecm.csv")
+    end
+    path_to_config_xml = joinpath(data_dir, "inputs", "configs", simulation.inputs.config.folder, "config_variations", "config_variation_$(simulation.variation_ids.config).xml")
+    xml_doc = openXML(path_to_config_xml)
+    config_dict = Dict{String,Float64}()
+    for d in ["x", "y"] # does not (yet?) support 3D
+        for side in ["min", "max"]
+            key = "$(d)_$(side)"
+            xml_path = ["domain"; key]
+            config_dict[key] = getField(xml_doc, xml_path) |> x -> parse(Float64, x)
+        end
+        key = "d$(d)" # d$(d) looks funny but it's just dx and dy
+        xml_path = ["domain"; key]
+        config_dict[key] = getField(xml_doc, xml_path) |> x -> parse(Float64, x)
+    end
+    closeXML(xml_doc)
+    path_to_ic_ecm_variations = joinpath(path_to_ic_ecm_folder, "ic_ecm_variations")
+    path_to_ic_ecm_xml = joinpath(path_to_ic_ecm_variations, "ic_ecm_variation_$(simulation.variation_ids.ic_ecm).xml")
+    path_to_ic_ecm_file = joinpath(path_to_ic_ecm_variations, "ic_ecm_variation_$(simulation.variation_ids.ic_ecm)_s$(simulation.id).csv")
+    generateICECM(path_to_ic_ecm_xml, path_to_ic_ecm_file, config_dict)
+    return path_to_ic_ecm_file
 end
 
 ################## XML Path Helper Functions ##################
@@ -216,60 +310,12 @@ function customDataPath(cell_definition::String, field_name::String)::Vector{Str
     return [customDataPath(cell_definition); field_name]
 end
 
-function customDataPath(cell_definition::String, field_names::Vector{<:AbstractString})
-    return [customDataPath(cell_definition, field_name) for field_name in field_names]
-end
-
 function userParameterPath(field_name::String)::Vector{String}
     return ["user_parameters"; field_name]
 end
 
-function userParameterPath(field_names::Vector{<:AbstractString})
-    return [userParameterPath(field_name) for field_name in field_names]
-end
-
 function initialConditionPath()
     return ["initial_conditions"; "cell_positions"; "filename"]
-end
-
-################## Variation Dimension Functions ##################
-
-function addDomainVariationDimension!(evs::Vector{<:ElementaryVariation}, domain::NTuple{N,Real} where N) 
-    bounds_tags = ["x_min", "x_max", "y_min", "y_max", "z_min", "z_max"]
-    for (tag, value) in zip(bounds_tags, domain)
-        xml_path = ["domain", tag]
-        push!(evs, DiscreteVariation(xml_path, [value]))
-    end
-end
-
-function addDomainVariationDimension!(evs::Vector{<:ElementaryVariation}, domain::NamedTuple)
-    for (tag, value) in pairs(domain)
-        tag = String(tag)
-        if startswith(tag, "min")
-            last_character = tag[end]
-            tag = "$(last_character)_min"
-        elseif startswith(tag, "max")
-            last_character = tag[end]
-            tag = "$(last_character)_max"
-        end
-        xml_path = ["domain", tag]
-        push!(evs, DiscreteVariation(xml_path, [value...])) # do this to make sure that singletons and vectors are converted to vectors
-    end
-end
-
-function addMotilityVariationDimension!(evs::Vector{<:ElementaryVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
-    xml_path = motilityPath(cell_definition, field_name)
-    push!(evs, DiscreteVariation(xml_path, values))
-end
-
-function addAttackRateVariationDimension!(evs::Vector{<:ElementaryVariation}, cell_definition::String, target_name::String, values::Vector{T} where T)
-    xml_path = attackRatesPath(cell_definition, target_name)
-    push!(evs, DiscreteVariation(xml_path, values))
-end
-
-function addCustomDataVariationDimension!(evs::Vector{<:ElementaryVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
-    xml_path = customDataPath(cell_definition, field_name)
-    push!(evs, DiscreteVariation(xml_path, values))
 end
 
 ################## Simplify Name Functions ##################
@@ -310,13 +356,33 @@ function simpleICCellVariationNames(name::String)
     end
 end
 
+function simpleICECMVariationNames(name::String)
+    if name == "ic_ecm_variation_id"
+        return "ICECMVarID"
+    elseif startswith(name, "layer")
+        return getICECMParameterName(name)
+    else
+        return name
+    end
+end
+
 function getCellParameterName(column_name::String)
     xml_path = columnNameToXMLPath(column_name)
     cell_type = split(xml_path[2], ":")[3]
     target_name = ""
     for component in xml_path[3:end]
-        if occursin(":name:", component)
+        if contains(component, ":name:")
             target_name = split(component, ":")[3]
+            break
+        elseif contains(component, ":code:")
+            target_code = split(component, ":")[3]
+            if target_code == "100"
+                target_name = "apop"
+            elseif target_code == "101"
+                target_name = "necr"
+            else
+                throw(ArgumentError("Unknown code in xml path: $(target_code)"))
+            end
             break
         end
     end
@@ -349,4 +415,13 @@ function getICCellParameterName(name::String)
     id = split(xml_path[3], ":")[3]
     parameter = xml_path[4]
     return "$(cell_type) IC: $(patch_type)[$(id)] $(parameter)" |> x->replace(x, '_' => ' ')
+end
+
+function getICECMParameterName(name::String)
+    xml_path = columnNameToXMLPath(name)
+    layer_id = split(xml_path[1], ":")[3]
+    patch_type = split(xml_path[2], ":")[3]
+    patch_id = split(xml_path[3], ":")[3]
+    parameter = join(xml_path[4:end], "-")
+    return "L$(layer_id)-$(patch_type)-P$(patch_id): $(parameter)" |> x->replace(x, '_' => ' ')
 end

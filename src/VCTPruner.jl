@@ -2,6 +2,18 @@ using Glob, Parameters
 
 export PruneOptions
 
+"""
+    PruneOptions
+
+Automatically prune some of the generated output files from a simulation.
+
+# Fields
+- `prune_svg::Bool=false`: Prune SVG files
+- `prune_txt::Bool=false`: Prune TXT files
+- `prune_mat::Bool=false`: Prune MAT files
+- `prune_initial::Bool=false`: If any of the above are true, also prune the initial files for that type
+- `prune_final::Bool=false`: If any of the above are true, also prune the final files for that type
+"""
 @with_kw struct PruneOptions
     prune_svg::Bool = false
     prune_txt::Bool = false

@@ -2,7 +2,7 @@
 """
     loadCustomCode(S::AbstractSampling[; force_recompile::Bool=false])
 
-Load and compile custom code for a given `Sampling` instance.
+Load and compile custom code for a simulation, monad, or sampling.
 
 Determines if recompilation is necessary based on the previously used macros.
 If compilation is required, copy the PhysiCell directory to a temporary directory to avoid conflicts.
@@ -40,9 +40,6 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
 
     executable_name = baseToExecutable("project_ccid_$(S.inputs.custom_code.id)")
     cmd = `make -j 8 CC=$(PHYSICELL_CPP) PROGRAM_NAME=$(executable_name) CFLAGS=$(cflags)`
-    # if Sys.isapple() # hacky way to say the -j flag works on my machine but not on the HPC
-    #     cmd = `$cmd -j 20`
-    # end
 
     println("Compiling custom code for $(S.inputs.custom_code.folder) with flags: $cflags")
 
@@ -55,6 +52,7 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
         Check $(joinpath(path_to_input_custom_codes, "compilation.err")) for more information.
         """
         )
+        rm(temp_physicell_dir; force=true, recursive=true)
         return false
     end
     

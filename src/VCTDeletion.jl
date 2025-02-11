@@ -1,13 +1,33 @@
-export deleteSimulation, deleteSimulations
+using Dates
 
+export deleteSimulation, deleteSimulations, deleteSimulationsByStatus, resetDatabase
+
+"""
+    deleteSimulations(simulation_ids::AbstractVector{<:Union{Integer,Missing}}; delete_supers::Bool=true, and_constraints::String="")
+
+Deletes the simulations with the input IDs from the database and from the `data/outputs/simulations` folder.
+
+Works with any vector of integers or a single integer.
+If `delete_supers` is `true`, it will also delete any monads, samplings, and trials that no longer have any simulations associated with them.
+It is recommended to leave this to `true` to keep the database clean.
+The `and_constraints` argument allows for additional SQLite conditions to be added to the `WHERE` clause of the SQLite query. Use this only after inspecting the `simulations` table in the `data/vct.db` database.
+    Note: `deleteSimulation` is an alias for `deleteSimulations`.
+
+# Examples
+```
+deleteSimulations(1:3)
+deleteSimulations(4)
+deleteSimulations(1:100; and_constraints="AND config_id = 1") # delete simulations with IDs 1 to 100 that have config_id = 1
+```
+"""
 function deleteSimulations(simulation_ids::AbstractVector{<:Union{Integer,Missing}}; delete_supers::Bool=true, and_constraints::String="")
     filter!(x -> !ismissing(x), simulation_ids)
-    where_stmt = "WHERE simulation_id IN ($(join(simulation_ids,","))) $(and_constraints);"
+    where_stmt = "WHERE simulation_id IN ($(join(simulation_ids,","))) $(and_constraints)"
     sim_df = constructSelectQuery("simulations", where_stmt) |> queryToDataFrame
     simulation_ids = sim_df.simulation_id # update based on the constraints added
     DBInterface.execute(db,"DELETE FROM simulations WHERE simulation_id IN ($(join(simulation_ids,",")));")
     for row in eachrow(sim_df)
-        rm(outputFolder("simulation", row.simulation_id); force=true, recursive=true)
+        rm_hpc_safe(outputFolder("simulation", row.simulation_id); force=true, recursive=true)
 
         config_folder = configFolder(row.config_id)
         result_df = constructSelectQuery(
@@ -16,7 +36,7 @@ function deleteSimulations(simulation_ids::AbstractVector{<:Union{Integer,Missin
             selection="COUNT(*)"
         ) |> queryToDataFrame
         if result_df.var"COUNT(*)"[1] == 0
-            rm(joinpath(data_dir, "inputs", "configs", config_folder, "config_variations", "config_variation_$(row.config_variation_id).xml"); force=true)
+            rm_hpc_safe(joinpath(data_dir, "inputs", "configs", config_folder, "config_variations", "config_variation_$(row.config_variation_id).xml"); force=true)
         end
 
         rulesets_collection_folder = rulesetsCollectionFolder(row.rulesets_collection_id)
@@ -26,7 +46,7 @@ function deleteSimulations(simulation_ids::AbstractVector{<:Union{Integer,Missin
             selection="COUNT(*)"
         ) |> queryToDataFrame
         if result_df.var"COUNT(*)"[1] == 0
-            rm(joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder, "rulesets_collections_variations", "rulesets_variation_$(row.rulesets_collection_variation_id).xml"); force=true)
+            rm_hpc_safe(joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder, "rulesets_collections_variations", "rulesets_variation_$(row.rulesets_collection_variation_id).xml"); force=true)
         end
 
         ic_cell_folder = icCellFolder(row.ic_cell_id)
@@ -36,7 +56,17 @@ function deleteSimulations(simulation_ids::AbstractVector{<:Union{Integer,Missin
             selection="COUNT(*)"
         ) |> queryToDataFrame
         if result_df.var"COUNT(*)"[1] == 0
-            rm(joinpath(data_dir, "inputs", "ic_cells", ic_cell_folder, "ic_cell_variations", "ic_cell_variation_$(row.ic_cell_variation_id).xml"); force=true)
+            rm_hpc_safe(joinpath(data_dir, "inputs", "ic_cells", ic_cell_folder, "ic_cell_variations", "ic_cell_variation_$(row.ic_cell_variation_id).xml"); force=true)
+        end
+
+        ic_ecm_folder = icECMFolder(row.ic_ecm_id)
+        result_df = constructSelectQuery(
+            "simulations",
+            "WHERE ic_ecm_id = $(row.ic_ecm_id) AND ic_ecm_variation_id = $(row.ic_ecm_variation_id);";
+            selection="COUNT(*)"
+        ) |> queryToDataFrame
+        if result_df.var"COUNT(*)"[1] == 0
+            rm_hpc_safe(joinpath(data_dir, "inputs", "ic_ecms", ic_ecm_folder, "ic_ecm_variations", "ic_ecm_variation_$(row.ic_ecm_variation_id).xml"); force=true)
         end
     end
 
@@ -75,7 +105,7 @@ function deleteMonad(monad_ids::AbstractVector{<:Integer}; delete_subs::Bool=tru
         if delete_subs
             append!(simulation_ids_to_delete, readMonadSimulationIDs(monad_id))
         end
-        rm(outputFolder("monad", monad_id); force=true, recursive=true)
+        rm_hpc_safe(outputFolder("monad", monad_id); force=true, recursive=true)
     end
     if !isempty(simulation_ids_to_delete)
         deleteSimulations(simulation_ids_to_delete; delete_supers=false)
@@ -114,7 +144,7 @@ function deleteSampling(sampling_ids::AbstractVector{<:Integer}; delete_subs::Bo
         if delete_subs
             append!(monad_ids_to_delete, readSamplingMonadIDs(sampling_id))
         end
-        rm(outputFolder("sampling", sampling_id); force=true, recursive=true)
+        rm_hpc_safe(outputFolder("sampling", sampling_id); force=true, recursive=true)
     end
     if !isempty(monad_ids_to_delete)
         all_sampling_ids = constructSelectQuery("samplings"; selection="sampling_id") |> queryToDataFrame |> x -> x.sampling_id
@@ -162,7 +192,7 @@ function deleteTrial(trial_ids::AbstractVector{<:Integer}; delete_subs::Bool=tru
         if delete_subs
             append!(sampling_ids_to_delete, readTrialSamplingIDs(trial_id))
         end
-        rm(outputFolder("trial", trial_id); force=true, recursive=true)
+        rm_hpc_safe(outputFolder("trial", trial_id); force=true, recursive=true)
     end
     if !isempty(sampling_ids_to_delete)
         all_trial_ids = constructSelectQuery("trials"; selection="trial_id") |> queryToDataFrame |> x -> x.trial_id
@@ -181,6 +211,18 @@ end
 
 deleteTrial(trial_id::Int; delete_subs::Bool=true) = deleteTrial([trial_id]; delete_subs=delete_subs)
 
+"""
+    resetDatabase()
+
+Reset the database (after user confirmation) by deleting all simulations, monads, samplings, and trials.
+
+All the base inputs files will be kept, so previously run scripts should still work as expected.
+If the user aborts the reset, the user will then be asked if they want to continue with the script.
+
+# Keyword Arguments
+- `force_reset::Bool`: If `true`, skips the user confirmation prompt. Default is `false`.
+- `force_continue::Bool`: If `true`, skips the user confirmation prompt for continuing with the script after aborting the reset. Default is `false`.
+"""
 function resetDatabase(; force_reset::Bool=false, force_continue::Bool=false)
     if !force_reset
         # prompt user to confirm
@@ -201,7 +243,7 @@ function resetDatabase(; force_reset::Bool=false, force_continue::Bool=false)
         end
     end
     for folder in ["simulations", "monads", "samplings", "trials"]
-        rm(joinpath(data_dir, "outputs", folder); force=true, recursive=true)
+        rm_hpc_safe(joinpath(data_dir, "outputs", folder); force=true, recursive=true)
     end
 
     for config_folder in (readdir(joinpath(data_dir, "inputs", "configs"), sort=false, join=true) |> filter(x -> isdir(x)))
@@ -230,23 +272,32 @@ function resetDatabase(; force_reset::Bool=false, force_continue::Bool=false)
     for ic_cell_folder in ic_cell_folders
         resetICCellFolder(joinpath(data_dir, "inputs", "ics", "cells", ic_cell_folder))
     end
+
+    for ic_ecm_folder in (readdir(joinpath(data_dir, "inputs", "ics", "ecms"), sort=false, join=true) |> filter(x -> isdir(x)))
+        resetICECMFolder(joinpath(ic_ecm_folder, "ic_ecm_variations"))
+    end
+
+    ic_ecm_folders = constructSelectQuery("ic_ecms"; selection="folder_name") |> queryToDataFrame |> x -> x.folder_name
+    for ic_ecm_folder in ic_ecm_folders
+        resetICECMFolder(joinpath(data_dir, "inputs", "ics", "ecms", ic_ecm_folder, "ic_ecm_variations"))
+    end
     
     for custom_code_folder in (readdir(joinpath(data_dir, "inputs", "custom_codes"), sort=false, join=true) |> filter(x->isdir(x)))
         files = [baseToExecutable("project"), "compilation.log", "compilation.err", "macros.txt"]
         for file in files
-            rm(joinpath(custom_code_folder, file); force=true)
+            rm_hpc_safe(joinpath(custom_code_folder, file); force=true)
         end
     end
 
     custom_code_folders = constructSelectQuery("custom_codes"; selection="folder_name") |> queryToDataFrame |> x -> x.folder_name
     for custom_code_folder in custom_code_folders
-        rm(joinpath(data_dir, "inputs", "custom_codes", custom_code_folder, baseToExecutable("project")); force=true)
+        rm_hpc_safe(joinpath(data_dir, "inputs", "custom_codes", custom_code_folder, baseToExecutable("project")); force=true)
     end
 
     if db.file == ":memory:"
         initializeDatabase()
     else
-        rm("$(db.file)"; force=true)
+        rm_hpc_safe("$(db.file)"; force=true)
         initializeDatabase("$(db.file)")
     end
     return nothing
@@ -256,24 +307,35 @@ function resetConfigFolder(path_to_config_folder::String)
     if !isdir(path_to_config_folder)
     return
     end
-    rm(joinpath(path_to_config_folder, "config_variations.db"); force=true)
-    rm(joinpath(path_to_config_folder, "config_variations"); force=true, recursive=true)
+    rm_hpc_safe(joinpath(path_to_config_folder, "config_variations.db"); force=true)
+    rm_hpc_safe(joinpath(path_to_config_folder, "config_variations"); force=true, recursive=true)
 end
 
 function resetRulesetsCollectionFolder(path_to_rulesets_collection_folder::String)
     if !isdir(path_to_rulesets_collection_folder)
         return
     end
-    rm(joinpath(path_to_rulesets_collection_folder, "rulesets_collection_variations.db"); force=true)
-    rm(joinpath(path_to_rulesets_collection_folder, "rulesets_collections_variations"); force=true, recursive=true)
+    if isfile(joinpath(path_to_rulesets_collection_folder, "base_rulesets.csv"))
+        rm_hpc_safe(joinpath(path_to_rulesets_collection_folder, "base_rulesets.xml"); force=true)
+    end
+    rm_hpc_safe(joinpath(path_to_rulesets_collection_folder, "rulesets_collection_variations.db"); force=true)
+    rm_hpc_safe(joinpath(path_to_rulesets_collection_folder, "rulesets_collections_variations"); force=true, recursive=true)
 end
 
 function resetICCellFolder(path_to_ic_cell_folder::String)
     if !isdir(path_to_ic_cell_folder) || !isfile(joinpath(path_to_ic_cell_folder, "cells.xml"))
         return
     end
-    rm(joinpath(path_to_ic_cell_folder, "ic_cell_variations.db"); force=true)
-    rm(joinpath(path_to_ic_cell_folder, "ic_cell_variations"); force=true, recursive=true)
+    rm_hpc_safe(joinpath(path_to_ic_cell_folder, "ic_cell_variations.db"); force=true)
+    rm_hpc_safe(joinpath(path_to_ic_cell_folder, "ic_cell_variations"); force=true, recursive=true)
+end
+
+function resetICECMFolder(path_to_ic_ecm_folder::String)
+    if !isdir(path_to_ic_ecm_folder) || !isfile(joinpath(path_to_ic_ecm_folder, "ecm.xml"))
+        return
+    end
+    rm_hpc_safe(joinpath(path_to_ic_ecm_folder, "ic_ecm_variations.db"); force=true)
+    rm_hpc_safe(joinpath(path_to_ic_ecm_folder, "ic_ecm_variations"); force=true, recursive=true)
 end
 
 """
@@ -317,16 +379,28 @@ end
 """
     eraseSimulationID(simulation_id::Int[; monad_id::Union{Missing,Int}=missing])
 
-Erase a simulation ID from the monad it belongs to `simulations.csv`.
+Erase a simulation ID from the `simulations.csv` file of the monad it belongs to.
 
 If `monad_id` is not provided, the function will infer it from the simulation ID.
 If the monad contains only the given simulation ID, the monad will be deleted.
+This is used when running simulations if they error so that the monads no longer rely on them, but the simulation output can still be checked.
 """
 function eraseSimulationID(simulation_id::Int; monad_id::Union{Missing,Int}=missing)
     if ismissing(monad_id)
         query = constructSelectQuery("simulations", "WHERE simulation_id = $(simulation_id);")
         df = queryToDataFrame(query)
-        query = constructSelectQuery("monads", "WHERE (config_id, config_variation_id, rulesets_collection_id, rulesets_collection_variation_id, ic_cell_id, ic_cell_variation_id) = ($(df.config_id[1]), $(df.config_variation_id[1]), $(df.rulesets_collection_id[1]), $(df.rulesets_collection_variation_id[1]), $(df.ic_cell_id[1]), $(df.ic_cell_variation_id[1]));"; selection="monad_id")
+        where_stmt = """
+        WHERE (config_id, config_variation_id,\
+               rulesets_collection_id, rulesets_collection_variation_id,\
+               ic_cell_id, ic_cell_variation_id,\
+               ic_ecm_id, ic_ecm_variation_id) = \
+               ($(df.config_id[1]), $(df.config_variation_id[1]),\
+               $(df.rulesets_collection_id[1]),\
+               $(df.rulesets_collection_variation_id[1]),\
+               $(df.ic_cell_id[1]), $(df.ic_cell_variation_id[1]),\
+               $(df.ic_ecm_id[1]), $(df.ic_ecm_variation_id[1]));
+        """
+        query = constructSelectQuery("monads", where_stmt; selection="monad_id")
         df = queryToDataFrame(query)
         monad_id = df.monad_id[1]
     end
@@ -343,4 +417,28 @@ function eraseSimulationID(simulation_id::Int; monad_id::Union{Missing,Int}=miss
     end
     deleteat!(simulation_ids, index)
     recordSimulationIDs(monad_id, simulation_ids)
+end
+
+function rm_hpc_safe(path::String; force::Bool=false, recursive::Bool=false)
+    if !run_on_hpc
+        rm(path; force=force, recursive=recursive)
+        return
+    end
+    if !ispath(path)
+        return
+    end
+    # NFS filesystem could stop the deletion by putting a lock on the folder or something
+    src = path
+    path_rel_to_data = replace(path, "$(data_dir)/" => "")
+    date_time = Dates.format(now(),"yymmdd")
+    initial_dest = joinpath(data_dir, ".trash", "data-$(date_time)", path_rel_to_data)
+    main_path, file_ext = splitext(initial_dest)
+    suffix = ""
+    path_to_dest(main_path, suffix, file_ext) = suffix == "" ? "$(main_path)$(file_ext)" : "$(main_path)-$(suffix)$(file_ext)"
+    while ispath(path_to_dest(main_path, suffix, file_ext))
+        suffix = suffix == "" ? "1" : string(parse(Int, suffix) + 1)
+    end
+    dest = path_to_dest(main_path, suffix, file_ext)
+    mkpath(dirname(dest))
+    mv(src, dest; force=force)
 end

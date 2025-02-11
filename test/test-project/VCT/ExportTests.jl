@@ -48,3 +48,14 @@ out = run(inputs, dv)
 @test out.trial isa Simulation
 export_folder = exportSimulation(out.trial.id)
 export_test(export_folder)
+
+# make sim with id dc
+config = "dirichlet_from_file"
+custom_code = "dirichlet_from_file"
+ic_dc = "dirichlet_from_file"
+inputs = InputFolders(config, custom_code; ic_dc=ic_dc)
+dv = DiscreteVariation(["overall", "max_time"], 12)
+out = run(inputs, dv)
+@test out.trial isa Simulation
+export_folder = exportSimulation(out.trial.id)
+export_test(export_folder)

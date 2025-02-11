@@ -13,13 +13,32 @@ function initializeDatabase(path_to_database::String; auto_upgrade::Bool=false)
     SQLite.transaction(db, "EXCLUSIVE")
     success = createSchema(is_new_db; auto_upgrade=auto_upgrade)
     SQLite.commit(db)
+    if success
+        global initialized = true
+    end
     return success
 end
 
 function initializeDatabase()
     global db = SQLite.DB()
     is_new_db = true
-    return createSchema(is_new_db)
+    success = createSchema(is_new_db)
+    if success
+        global initialized = true
+    end
+    return success
+end
+
+function reinitializeDatabase()
+    if !initialized
+        return
+    end
+    global initialized = false
+    if db.file == ":memory:" # if the database is in memory, re-initialize it
+        initializeDatabase()
+    else
+        initializeDatabase(db.file; auto_upgrade=true)
+    end
 end
 
 function createSchema(is_new_db::Bool; auto_upgrade::Bool=false)
@@ -60,6 +79,7 @@ function createSchema(is_new_db::Bool; auto_upgrade::Bool=false)
     createICTable("cells"; data_dir_contents=data_dir_contents)
     createICTable("substrates"; data_dir_contents=data_dir_contents)
     createICTable("ecms"; data_dir_contents=data_dir_contents)
+    createICTable("dcs"; data_dir_contents=data_dir_contents)
 
     # initialize and populate configs table
     configs_schema = """
@@ -117,7 +137,26 @@ function createSchema(is_new_db::Bool; auto_upgrade::Bool=false)
             end
             db_ic_cell = joinpath(path_to_folder, "ic_cell_variations.db") |> SQLite.DB
             createPCVCTTable("ic_cell_variations", "ic_cell_variation_id INTEGER PRIMARY KEY"; db=db_ic_cell)
-            DBInterface.execute(db_ic_cell, "INSERT OR IGNORE INTO ic_cell_variations (ic_cell_variation_id) VALUES(0) RETURNING ic_cell_variation_id;")
+            DBInterface.execute(db_ic_cell, "INSERT OR IGNORE INTO ic_cell_variations (ic_cell_variation_id) VALUES(0);")
+        end
+    end
+
+    # initialize and populate ic_ecms variations dbs
+    path_to_ic_ecms = joinpath(path_to_ics, "ecms")
+    if "ics" in data_dir_contents && "ecms" in readdir(path_to_ics, sort=false)
+        ic_ecms_folders = readdir(path_to_ic_ecms, sort=false) |> filter(x -> isdir(joinpath(path_to_ic_ecms, x)))
+        for ic_ecm_folder in ic_ecms_folders
+            DBInterface.execute(db, "INSERT OR IGNORE INTO ic_ecms (folder_name) VALUES ('$(ic_ecm_folder)');")
+            path_to_folder = joinpath(path_to_ic_ecms, ic_ecm_folder)
+            is_csv = isfile(joinpath(path_to_folder, "ecm.csv"))
+            # ⊻ = XOR (make sure exactly one of the files is present)
+            @assert is_csv ⊻ isfile(joinpath(path_to_folder, "ecm.xml")) "Must have one of ecm.csv or ecm.xml in $(joinpath(path_to_folder))"
+            if is_csv
+                continue # no variations allowed on csv files
+            end
+            db_ic_ecm = joinpath(path_to_folder, "ic_ecm_variations.db") |> SQLite.DB
+            createPCVCTTable("ic_ecm_variations", "ic_ecm_variation_id INTEGER PRIMARY KEY"; db=db_ic_ecm)
+            DBInterface.execute(db_ic_ecm, "INSERT OR IGNORE INTO ic_ecm_variations (ic_ecm_variation_id) VALUES(0);")
         end
     end
             
@@ -129,11 +168,13 @@ function createSchema(is_new_db::Bool; auto_upgrade::Bool=false)
         ic_cell_id INTEGER,
         ic_substrate_id INTEGER,
         ic_ecm_id INTEGER,
+        ic_dc_id INTEGER,
         config_id INTEGER,
         rulesets_collection_id INTEGER,
         config_variation_id INTEGER,
         rulesets_collection_variation_id INTEGER,
         ic_cell_variation_id INTEGER,
+        ic_ecm_variation_id INTEGER,
         status_code_id INTEGER,
         FOREIGN KEY (physicell_version_id)
             REFERENCES physicell_versions (physicell_version_id),
@@ -145,6 +186,8 @@ function createSchema(is_new_db::Bool; auto_upgrade::Bool=false)
             REFERENCES ic_substrates (ic_substrate_id),
         FOREIGN KEY (ic_ecm_id)
             REFERENCES ic_ecms (ic_ecm_id),
+        FOREIGN KEY (ic_dc_id)
+            REFERENCES ic_dcs (ic_dc_id),
         FOREIGN KEY (config_id)
             REFERENCES configs (config_id),
         FOREIGN KEY (rulesets_collection_id)
@@ -204,11 +247,13 @@ function monadsSchema()
     ic_cell_id INTEGER,
     ic_substrate_id INTEGER,
     ic_ecm_id INTEGER,
+    ic_dc_id INTEGER,
     config_id INTEGER,
     rulesets_collection_id INTEGER,
     config_variation_id INTEGER,
     rulesets_collection_variation_id INTEGER,
     ic_cell_variation_id INTEGER,
+    ic_ecm_variation_id INTEGER,
     FOREIGN KEY (physicell_version_id)
         REFERENCES physicell_versions (physicell_version_id),
     FOREIGN KEY (custom_code_id)
@@ -219,11 +264,13 @@ function monadsSchema()
         REFERENCES ic_substrates (ic_substrate_id),
     FOREIGN KEY (ic_ecm_id)
         REFERENCES ic_ecms (ic_ecm_id),
+    FOREIGN KEY (ic_dc_id)
+        REFERENCES ic_dcs (ic_dc_id),
     FOREIGN KEY (config_id)
         REFERENCES configs (config_id),
     FOREIGN KEY (rulesets_collection_id)
         REFERENCES rulesets_collections (rulesets_collection_id),
-    UNIQUE (physicell_version_id,custom_code_id,ic_cell_id,ic_substrate_id,ic_ecm_id,config_id,rulesets_collection_id,config_variation_id,rulesets_collection_variation_id,ic_cell_variation_id)
+    UNIQUE (physicell_version_id,custom_code_id,ic_cell_id,ic_substrate_id,ic_ecm_id,ic_dc_id,config_id,rulesets_collection_id,config_variation_id,rulesets_collection_variation_id,ic_cell_variation_id,ic_ecm_variation_id)
    """
 end
 
@@ -235,6 +282,7 @@ function samplingsSchema()
     ic_cell_id INTEGER,
     ic_substrate_id INTEGER,
     ic_ecm_id INTEGER,
+    ic_dc_id INTEGER,
     config_id INTEGER,
     rulesets_collection_id INTEGER,
     FOREIGN KEY (physicell_version_id)
@@ -247,6 +295,8 @@ function samplingsSchema()
         REFERENCES ic_substrates (ic_substrate_id),
     FOREIGN KEY (ic_ecm_id)
         REFERENCES ic_ecms (ic_ecm_id),
+    FOREIGN KEY (ic_dc_id)
+        REFERENCES ic_dcs (ic_dc_id),
     FOREIGN KEY (config_id)
         REFERENCES configs (config_id),
     FOREIGN KEY (rulesets_collection_id)
@@ -299,8 +349,10 @@ function icFilename(table_name::String)
         return "substrates.csv"
     elseif table_name == "ecms"
         return "ecm.csv"
+    elseif table_name == "dcs"
+        return "dcs.csv"
     else
-        error("table_name must be 'cells', 'substrates', or 'ecms'.")
+        throw(ArgumentError("table_name must be 'cells', 'substrates', 'ecms', or `dcs`."))
     end
 end
 
@@ -399,6 +451,19 @@ end
 icCellDB(ic_cell_id::Int) = icCellFolder(ic_cell_id) |> icCellDB
 icCellDB(S::AbstractSampling) = icCellDB(S.inputs.ic_cell.folder)
 
+function icECMDB(ic_ecm_folder::String)
+    if ic_ecm_folder == ""
+        return nothing
+    end
+    path_to_folder = joinpath(data_dir, "inputs", "ics", "ecms", ic_ecm_folder)
+    if isfile(joinpath(path_to_folder, "ecm.csv"))
+        return missing
+    end
+    return joinpath(path_to_folder, "ic_ecm_variations.db") |> SQLite.DB
+end
+icECMDB(ic_ecm_id::Int) = icECMFolder(ic_ecm_id) |> icECMDB
+icECMDB(S::AbstractSampling) = icECMDB(S.inputs.ic_ecm.folder)
+
 ########### Retrieving Database Information Functions ###########
 
 vctDBQuery(query::String; db::SQLite.DB=db) = DBInterface.execute(db, query)
@@ -424,6 +489,7 @@ configFolder(config_id::Int) = getFolder("configs", "config_id", config_id)
 icCellFolder(ic_cell_id::Int) = getOptionalFolder("ic_cells", "ic_cell_id", ic_cell_id)
 icSubstrateFolder(ic_substrate_id::Int) = getOptionalFolder("ic_substrates", "ic_substrate_id", ic_substrate_id)
 icECMFolder(ic_ecm_id::Int) = getOptionalFolder("ic_ecms", "ic_ecm_id", ic_ecm_id)
+icDCFolder(ic_dc_id::Int) = getOptionalFolder("ic_dcs", "ic_dc_id", ic_dc_id)
 rulesetsCollectionFolder(rulesets_collection_id::Int) = getOptionalFolder("rulesets_collections", "rulesets_collection_id", rulesets_collection_id)
 customCodesFolder(custom_code_id::Int) = getFolder("custom_codes", "custom_code_id", custom_code_id)
 
@@ -447,6 +513,9 @@ rulesetsVariationIDs(sampling::Sampling) = [vid.rulesets_collection for vid in s
 
 icCellVariationIDs(M::AbstractMonad) = [M.variation_ids.ic_cell]
 icCellVariationIDs(sampling::Sampling) = [vid.ic_cell for vid in sampling.variation_ids]
+
+icECMVariationIDs(M::AbstractMonad) = [M.variation_ids.ic_ecm]
+icECMVariationIDs(sampling::Sampling) = [vid.ic_ecm for vid in sampling.variation_ids]
 
 function variationsTable(query::String, db::SQLite.DB; remove_constants::Bool=false)
     df = queryToDataFrame(query, db=db)
@@ -501,6 +570,25 @@ end
 
 icCellVariationsTable(S::AbstractSampling; remove_constants::Bool=false) = icCellVariationsTable(icCellDB(S), icCellVariationIDs(S); remove_constants=remove_constants)
 
+function icECMVariationsTable(ic_ecm_variations_db::SQLite.DB, ic_ecm_variation_ids::AbstractVector{<:Integer}; remove_constants::Bool=false)
+    query = constructSelectQuery("ic_ecm_variations", "WHERE ic_ecm_variation_id IN ($(join(ic_ecm_variation_ids,",")));")
+    df = variationsTable(query, ic_ecm_variations_db; remove_constants=remove_constants)
+    rename!(simpleICECMVariationNames, df)
+    return df
+end
+
+function icECMVariationsTable(::Nothing, ic_ecm_variation_ids::AbstractVector{<:Integer}; kwargs...)
+    @assert all(x -> x == -1, ic_ecm_variation_ids) "If no ic_ecm_folder is given, then all ic_ecm_variation_ids must be -1."
+    return DataFrame(ICECMVarID=ic_ecm_variation_ids)
+end
+
+function icECMVariationsTable(::Missing, ic_ecm_variation_ids::AbstractVector{<:Integer}; kwargs...)
+    @assert all(x -> x == 0, ic_ecm_variation_ids) "If the ic_ecm_folder contains a ecm.csv, then all ic_ecm_variation_ids must be 0."
+    return DataFrame(ICECMVarID=ic_ecm_variation_ids)
+end
+
+icECMVariationsTable(S::AbstractSampling; remove_constants::Bool=false) = icECMVariationsTable(icECMDB(S), icECMVariationIDs(S); remove_constants=remove_constants)
+
 function variationsTableFromSimulations(query::String, id_name::Symbol, getVariationsTableFn::Function; remove_constants::Bool=false)
     df = queryToDataFrame(query)
     unique_tuples = [(row[1], row[2]) for row in eachrow(df)] |> unique
@@ -535,8 +623,14 @@ function icCellVariationsTable(simulation_ids::AbstractVector{<:Integer}; remove
     return variationsTableFromSimulations(query, :ICCellVarID, getVariationsTableFn)
 end
 
+function icECMVariationsTable(simulation_ids::AbstractVector{<:Integer}; remove_constants::Bool=false)
+    query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(simulation_ids,",")));", selection="ic_ecm_id, ic_ecm_variation_id")
+    getVariationsTableFn = x -> icECMVariationsTable(icECMDB(x[1]), [x[2]]; remove_constants=remove_constants)
+    return variationsTableFromSimulations(query, :ICECMVarID, getVariationsTableFn)
+end
+
 function addFolderColumns!(df::DataFrame)
-    col_names = ["custom_code", "config", "rulesets_collection", "ic_cell", "ic_substrate", "ic_ecm"]
+    col_names = ["custom_code", "config", "rulesets_collection", "ic_cell", "ic_substrate", "ic_ecm", "ic_dc"]
     get_function = [getFolder, getFolder, getOptionalFolder, getOptionalFolder, getOptionalFolder, getOptionalFolder]
     for (col_name, get_function) in zip(col_names, get_function)
         if !("$(col_name)_id" in names(df))
@@ -555,16 +649,21 @@ end
 function simulationsTableFromQuery(query::String; remove_constants::Bool=true, sort_by::Vector{String}=String[], sort_ignore::Vector{String}=["SimID", "ConfigVarID", "RulesVarID", "ICCellVarID"])
     df = queryToDataFrame(query)
     id_col_names_to_remove = names(df) # a bunch of ids that we don't want to show
-    filter!(n -> !(n in ["simulation_id", "config_variation_id", "ic_cell_id", "rulesets_collection_variation_id", "ic_cell_variation_id"]), id_col_names_to_remove) # keep the simulation_id and config_variation_id columns
+    filter!(n -> !(n in ["simulation_id", "config_variation_id", "ic_cell_id", "rulesets_collection_variation_id", "ic_cell_variation_id", "ic_ecm_variation_id"]), id_col_names_to_remove) # keep the simulation_id and config_variation_id columns
     addFolderColumns!(df) # add the folder columns
     select!(df, Not(id_col_names_to_remove)) # remove the id columns
-    unique_tuples = [(row.config_folder, row.config_variation_id) for row in eachrow(df)] |> unique
-    df = appendVariations(df, unique_tuples, configDB, configVariationsTable, :config_folder => :folder_name, :config_variation_id => :ConfigVarID)
-    unique_tuples = [(row.rulesets_collection_folder, row.rulesets_collection_variation_id) for row in eachrow(df)] |> unique
-    df = appendVariations(df, unique_tuples, rulesetsCollectionDB, rulesetsVariationsTable, :rulesets_collection_folder => :folder_name, :rulesets_collection_variation_id => :RulesVarID)
-    unique_tuples = [(row.ic_cell_folder, row.ic_cell_variation_id) for row in eachrow(df)] |> unique
-    df = appendVariations(df, unique_tuples, icCellDB, icCellVariationsTable, :ic_cell_folder => :folder_name, :ic_cell_variation_id => :ICCellVarID)
-    rename!(df, [:simulation_id => :SimID, :config_variation_id => :ConfigVarID, :rulesets_collection_variation_id => :RulesVarID, :ic_cell_variation_id => :ICCellVarID])
+
+    # handle each of the varying inputs
+    unique_tuples_config = [(row.config_folder, row.config_variation_id) for row in eachrow(df)] |> unique
+    df = appendVariations(df, unique_tuples_config, configDB, configVariationsTable, :config_folder => :folder_name, :config_variation_id => :ConfigVarID)
+    unique_tuples_rulesets_collection = [(row.rulesets_collection_folder, row.rulesets_collection_variation_id) for row in eachrow(df)] |> unique
+    df = appendVariations(df, unique_tuples_rulesets_collection, rulesetsCollectionDB, rulesetsVariationsTable, :rulesets_collection_folder => :folder_name, :rulesets_collection_variation_id => :RulesVarID)
+    unique_tuples_ic_cell = [(row.ic_cell_folder, row.ic_cell_variation_id) for row in eachrow(df)] |> unique
+    df = appendVariations(df, unique_tuples_ic_cell, icCellDB, icCellVariationsTable, :ic_cell_folder => :folder_name, :ic_cell_variation_id => :ICCellVarID)
+    unique_tuples_ic_ecm = [(row.ic_ecm_folder, row.ic_ecm_variation_id) for row in eachrow(df)] |> unique
+    df = appendVariations(df, unique_tuples_ic_ecm, icECMDB, icECMVariationsTable, :ic_ecm_folder => :folder_name, :ic_ecm_variation_id => :ICECMVarID)
+
+    rename!(df, [:simulation_id => :SimID, :config_variation_id => :ConfigVarID, :rulesets_collection_variation_id => :RulesVarID, :ic_cell_variation_id => :ICCellVarID, :ic_ecm_variation_id => :ICECMVarID])
     col_names = names(df)
     if remove_constants && size(df, 1) > 1
         filter!(n -> length(unique(df[!, n])) > 1, col_names)
@@ -607,5 +706,28 @@ end
 
 printConfigVariationsTable(args...; kwargs...) = configVariationsTable(args...; kwargs...) |> println
 printRulesetsVariationsTable(args...; kwargs...) = rulesetsVariationsTable(args...; kwargs...) |> println
+printICCellVariationsTable(args...; kwargs...) = icCellVariationsTable(args...; kwargs...) |> println
+printICECMVariationsTable(args...; kwargs...) = icECMVariationsTable(args...; kwargs...) |> println
 
+"""
+    printSimulationsTable()
+
+Print a table of simulations and their varied values. See keyword arguments below for more control of the output.
+
+There are many methods for this function. The simplest is `printSimulationsTable()`, which prints all simulations in the database.
+You can also pass in any number of simulations, monads, samplings, and trials to print a table of those simulations:
+```
+printSimulationsTable([simulation_1, monad_3, sampling_2, trial_1])
+```
+Finally, a vector of simulation IDs can be passed in:
+```
+printSimulationsTable([1, 2, 3])
+```
+Keyword arguments can be used with any of these methods to control the output:
+# Keyword Arguments
+- `sink`: A function to print the table. Defaults to `println`. Note, the table is a DataFrame, so you can also use `CSV.write` to write the table to a CSV file.
+- `remove_constants::Bool`: If true, removes columns that have the same value for all simulations. Defaults to true.
+- `sort_by::Vector{String}`: A vector of column names to sort the table by. Defaults to all columns. To populate this argument, first print the table to see the column names.
+- `sort_ignore::Vector{String}`: A vector of column names to ignore when sorting. Defaults to the database IDs associated with the simulations.
+"""
 printSimulationsTable(args...; sink=println, kwargs...) = simulationsTable(args...; kwargs...) |> sink

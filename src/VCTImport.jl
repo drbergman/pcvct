@@ -29,6 +29,7 @@ struct ImportSources
     ic_cell::ImportSource
     ic_substrate::ImportSource
     ic_ecm::ImportSource
+    ic_dc::ImportSource
 end
 
 function ImportSources(src::Dict)
@@ -43,7 +44,8 @@ function ImportSources(src::Dict)
     ic_cell = ImportSource(src, "ic_cell", "config", "cells.csv", "file", required)
     ic_substrate = ImportSource(src, "ic_substrate", "config", "substrates.csv", "file", required)
     ic_ecm = ImportSource(src, "ic_ecm", "config", "ecm.csv", "file", required)
-    return ImportSources(config, main, makefile, custom_modules, rules, ic_cell, ic_substrate, ic_ecm)
+    ic_dc = ImportSource(src, "ic_dc", "config", "dcs.csv", "file", required)
+    return ImportSources(config, main, makefile, custom_modules, rules, ic_cell, ic_substrate, ic_ecm, ic_dc)
 end
 
 mutable struct ImportDestFolder
@@ -59,6 +61,7 @@ struct ImportDestFolders
     ic_cell::ImportDestFolder
     ic_substrate::ImportDestFolder
     ic_ecm::ImportDestFolder
+    ic_dc::ImportDestFolder
 end
 
 function ImportDestFolders(path_to_project::AbstractString, dest::Dict)
@@ -76,7 +79,8 @@ function ImportDestFolders(path_to_project::AbstractString, dest::Dict)
     ic_cell = ImportDestFolder(path_fn("ic_cell", joinpath("ics", "cells")), created, description)
     ic_substrate = ImportDestFolder(path_fn("ic_substrate", joinpath("ics", "substrates")), created, description)
     ic_ecm = ImportDestFolder(path_fn("ic_ecm", joinpath("ics", "ecms")), created, description)
-    return ImportDestFolders(config, custom_code, rules, ic_cell, ic_substrate, ic_ecm)
+    ic_dc = ImportDestFolder(path_fn("ic_dc", joinpath("ics", "dcs")), created, description)
+    return ImportDestFolders(config, custom_code, rules, ic_cell, ic_substrate, ic_ecm, ic_dc)
 end
 
 """
@@ -90,8 +94,7 @@ Import a project from the structured in the format of PhysiCell sample projects 
 The following keys are recognized: $(join(["`$fn`" for fn in fieldnames(ImportSources)], ", ", ", and ")).
 - `dest::Dict`: Dictionary of the inputs folders to create in the pcvct structure. If absent, taken from the project name.
 The following keys are recognized: $(join(["`$fn`" for fn in fieldnames(ImportDestFolders)], ", ", ", and ")).
-- `extreme_caution::Bool`: If true, will ask for confirmation before deleting any folders created during the import process. Care has been taken to ensure this is unnecessary.
-This option is provided for users who want to be extra cautious.
+- `extreme_caution::Bool`: If true, will ask for confirmation before deleting any folders created during the import process. Care has been taken to ensure this is unnecessary. Provided for users who want to be extra cautious.
 """
 function importProject(path_to_project::AbstractString, src=Dict(), dest=Dict(); extreme_caution::Bool=false)
     project_sources = ImportSources(src)
@@ -112,7 +115,7 @@ function importProject(path_to_project::AbstractString, src=Dict(), dest=Dict();
             msg *= "    - $(input_folders.rules.path_from_inputs)"
         end
         ics_started = false
-        for ic in ["cell", "substrate", "ecm"]
+        for ic in ["cell", "substrate", "ecm", "dc"]
             input_folder = getfield(input_folders, Symbol("ic_$(ic)"))::ImportDestFolder
             if input_folder.created
                 if !ics_started
@@ -124,7 +127,7 @@ function importProject(path_to_project::AbstractString, src=Dict(), dest=Dict();
         end
         println(msg)
         println("Re-initializing the database to include these new entries...")
-        initializeDatabase(joinpath(data_dir, "vct.db"); auto_upgrade=true)
+        reinitializeDatabase()
     else
         msg = """
         Failed to import user_project from $(path_to_project) into $(joinpath(data_dir, "inputs")).
@@ -350,17 +353,6 @@ function adaptCustomModules(path_from_inputs::AbstractString)
 end
 
 function adaptCustomHeader(path_from_inputs::AbstractString)
-    # path_to_custom_h = joinpath(data_dir, "inputs", path_from_inputs, "custom.h")
-    # lines = readlines(path_to_custom_h)
-    # idx = findfirst(x->contains(x, "setup_tissue"), lines)
-
-    # insert!(lines, idx+1, "void setup_tissue_domain( void );")
-
-    # open(path_to_custom_h, "w") do f
-    #     for line in lines
-    #         println(f, line)
-    #     end
-    # end
     return true # nothing to do for now
 end
 

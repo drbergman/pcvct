@@ -1,9 +1,24 @@
 using DataFrames, MAT
 
-export PhysiCellSnapshot, PhysiCellSequence, getCellPositionSequence, getCellDataSequence, computeMeanSpeed
+export getCellDataSequence
 
 abstract type AbstractPhysiCellSequence end
 
+"""
+    PhysiCellSnapshot
+
+A single snapshot of a PhysiCell simulation.
+
+The `cells`, `substrates`, and `mesh` fields may remain empty until they are needed for analysis.
+
+# Fields
+- `folder::String`: The folder containing the PhysiCell simulation output.
+- `index::Union{Int, Symbol}`: The index of the snapshot. Can be an integer or a symbol (`:initial` or `:final`).
+- `time::Float64`: The time of the snapshot.
+- `cells::DataFrame`: A DataFrame containing cell data.
+- `substrates::DataFrame`: A DataFrame containing substrate data.
+- `mesh::Dict{String, Vector{Float64}}`: A dictionary containing mesh data.
+"""
 struct PhysiCellSnapshot <: AbstractPhysiCellSequence
     folder::String
     index::Union{Int, Symbol}
@@ -13,6 +28,17 @@ struct PhysiCellSnapshot <: AbstractPhysiCellSequence
     mesh::Dict{String, Vector{Float64}}
 end
 
+"""
+    PhysiCellSequence
+
+A sequence of PhysiCell snapshots.
+
+# Fields
+- `folder::String`: The folder containing the PhysiCell simulation output.
+- `snapshots::Vector{PhysiCellSnapshot}`: A vector of PhysiCell snapshots.
+- `cell_type_to_name_dict::Dict{Int, String}`: A dictionary mapping cell type IDs to cell type names.
+- `substrate_names::Vector{String}`: A vector of substrate names.
+"""
 struct PhysiCellSequence <: AbstractPhysiCellSequence
     folder::String
     snapshots::Vector{PhysiCellSnapshot}
@@ -133,6 +159,7 @@ function indexToFilename(index::Symbol)
     @assert index in [:initial, :final] "The non-integer index must be either :initial or :final"
     return string(index)
 end
+
 indexToFilename(index::Int) = "output$(lpad(index,8,"0"))"
 
 function PhysiCellSnapshot(folder::String, index::Union{Int, Symbol}; include_cells::Bool=false, cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}(), labels::Vector{String}=String[], include_substrates::Bool=false, substrate_names::Vector{String}=String[], include_mesh::Bool=false)
@@ -243,6 +270,21 @@ function getCellDataSequence(sequence::PhysiCellSequence, label::String; include
     return getCellDataSequence(sequence, [label]; include_dead=include_dead, include_cell_type=include_cell_type)
 end
 
+"""
+    getCellDataSequence(sequence::PhysiCellSequence, labels::Vector{String}; include_dead::Bool=false, include_cell_type::Bool=false)
+
+Return a dictionary where the keys are cell IDs from the PhysiCell simulation and the values are NamedTuples containing the time and the values of the specified labels for that cell.
+In the case of a label that has multiple columns, such as `position`, the values are concatenated into a length(snapshots) x number of columns array.
+
+# Examples
+```
+data = getCellDataSequence(sequence, ["position", "elapsed_time_in_phase"]; include_dead=true, include_cell_type=true)
+data[1] # the first cell's data
+data[1].position # an Nx3 array of the cell's position over time
+data[1].elapsed_time_in_phase # an Nx1 array of the cell's elapsed time in phase over time
+data[1].cell_type_name # the cell type name of the first cell
+```
+"""
 function getCellDataSequence(sequence::PhysiCellSequence, labels::Vector{String}; include_dead::Bool=false, include_cell_type::Bool=false)
     cell_features = sequence.snapshots[1].cells |> names
     label_features = Symbol[]
@@ -296,55 +338,4 @@ function getCellDataSequence(sequence::PhysiCellSequence, labels::Vector{String}
         return hcat(v[temp_dict[label]]...)
     end
     return [ID => NamedTuple{(:time, labels...)}([[v.time]; [C(v,label) for label in labels]]) for (ID, v) in data] |> Dict
-end
-
-# speed functions
-
-function getCellPositionSequence(sequence::PhysiCellSequence; include_dead::Bool=false, include_cell_type::Bool=true)
-    return getCellDataSequence(sequence, "position"; include_dead=include_dead, include_cell_type=include_cell_type)
-end
-
-function meanSpeed(p; direction=:any)::NTuple{3,Dict{String,Float64}}
-    x, y, z = [col for col in eachcol(p.position)]
-    cell_type_name = p.cell_type_name
-    dx = x[2:end] .- x[1:end-1]
-    dy = y[2:end] .- y[1:end-1]
-    dz = z[2:end] .- z[1:end-1]
-    if direction == :x
-        dist_fn = (dx, dy, dz) -> dx
-    elseif direction == :y
-        dist_fn = (dx, dy, dz) -> dy
-    elseif direction == :z
-        dist_fn = (dx, dy, dz) -> dz
-    elseif direction == :any
-        dist_fn = (dx, dy, dz) -> sqrt(dx ^ 2 + dy ^ 2 + dz ^ 2)
-    else
-        error("Invalid direction: $direction")
-    end
-    type_change = cell_type_name[2:end] .!= cell_type_name[1:end-1]
-    start_ind = 1
-    cell_type_names = unique(cell_type_name)
-    distance_dict = Dict{String, Float64}(zip(cell_type_names, zeros(Float64, length(cell_type_names))))
-    time_dict = Dict{String, Float64}(zip(cell_type_names, zeros(Float64, length(cell_type_names))))
-    while start_ind <= length(type_change) 
-        I = findfirst(type_change[start_ind:end]) # from s to I, cell_type_name is constant. at I+1 it changes
-        I = isnothing(I) ? length(type_change)+2-start_ind : I # if the cell_type_name is constant till the end, set I to be at the end
-        # If start_ind = 1 (at start of sim) and I = 2 (so cell_type_name[3] != cell_type_name[2], meaning that for steps [1,2] cell_type_name is constnat), only use dx in stepping from 1->2 since somewhere in 2->3 the type changes. That is, use dx[1]
-        distance_dict[cell_type_name[start_ind]] += sum(dist_fn.(dx[start_ind:I-1], dy[start_ind:I-1], dz[start_ind:I-1]))  # only count distance travelled while remaining in the initial cell_type_name
-        time_dict[cell_type_name[start_ind]] += p.time[start_ind+I-1] - p.time[start_ind] # record time spent in this cell_type_name (note p.time is not diffs like dx and dy are, hence the difference in indices)
-        start_ind += I # advance the start to the first instance of a new cell_type_name
-    end
-    speed_dict = [k => distance_dict[k] / time_dict[k] for k in cell_type_names] |> Dict{String,Float64} # convert to speed
-    return speed_dict, distance_dict, time_dict
-end
-
-function computeMeanSpeed(folder::String; direction=:any)::NTuple{3,Vector{Dict{String,Float64}}}
-    sequence = PhysiCellSequence(folder; include_cells=true)
-    pos = getCellPositionSequence(sequence; include_dead=false, include_cell_type=true)
-    dicts = [meanSpeed(p; direction=direction) for p in values(pos) if length(p.time) > 1]
-    return [dict[1] for dict in dicts], [dict[2] for dict in dicts], [dict[3] for dict in dicts]
-end
-
-function computeMeanSpeed(simulation_id::Int; direction=:any)::NTuple{3,Vector{Dict{String,Float64}}}
-    return joinpath(outputFolder("simulation", simulation_id), "output") |> x -> computeMeanSpeed(x; direction=direction)
 end

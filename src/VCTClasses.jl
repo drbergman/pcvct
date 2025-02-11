@@ -1,4 +1,4 @@
-export Simulation, Monad, Sampling, Trial, getTrial, InputFolders
+export Simulation, Monad, Sampling, Trial, InputFolders
 
 abstract type AbstractTrial end
 abstract type AbstractSampling <: AbstractTrial end
@@ -16,16 +16,20 @@ struct InputFolder
 end
 
 """
-    struct InputFolders
+    InputFolders
 
 Consolidate the folder information for a simulation/monad/sampling.
 
 Pass the folder names within the `inputs/<input_type>` directory to create an `InputFolders` object.
-Pass them in the order of `config`, `custom_code`, `rulesets_collection`, `ic_cell`, `ic_substrate`, and `ic_ecm`.
+Pass them in the order of `config`, `custom_code`, `rulesets_collection`, `ic_cell`, `ic_substrate`, `ic_ecm`, `ic_dc`.
 Or use the keyword-based constructors:
 
-`InputFolders(config, custom_code; rulesets_collection="", ic_cell="", ic_substrate="", ic_ecm="")`
-`InputFolders(; config="", custom_code="", rulesets_collection="", ic_cell="", ic_substrate="", ic_ecm="")`
+```julia
+InputFolders(config, custom_code; rulesets_collection="", ic_cell="", ic_substrate="", ic_ecm="", ic_dc="")
+```
+```julia
+InputFolders(; config="", custom_code="", rulesets_collection="", ic_cell="", ic_substrate="", ic_ecm="", ic_dc="")
+```
 
 # Fields
 - `config::InputFolder`: id and folder name for the base configuration folder.
@@ -34,6 +38,7 @@ Or use the keyword-based constructors:
 - `ic_cell::InputFolder`: id and folder name for the initial condition (IC) cells folder.
 - `ic_substrate::InputFolder`: id and folder name for the initial condition (IC) substrate folder.
 - `ic_ecm::InputFolder`: id and folder name for the initial condition (IC) extracellular matrix (ECM) folder.
+- `ic_dc::InputFolder`: id and folder name for the initial condition (IC) dirichlet conditions (DC) folder.
 """
 struct InputFolders
     config::InputFolder # id and folder name for the base configuration folder
@@ -42,8 +47,9 @@ struct InputFolders
     ic_cell::InputFolder # id and folder name for the initial condition (IC) cells folder
     ic_substrate::InputFolder # id and folder name for the initial condition (IC) substrate folder
     ic_ecm::InputFolder # id and folder name for the initial condition (IC) extracellular matrix (ECM) folder
+    ic_dc::InputFolder # id and folder name for the initial condition (IC) dirichlet conditions (DC) folder
 
-    function InputFolders(config_folder::String, custom_code_folder::String, rulesets_collection_folder::String, ic_cell_folder::String, ic_substrate_folder::String, ic_ecm_folder::String)
+    function InputFolders(config_folder::String, custom_code_folder::String, rulesets_collection_folder::String, ic_cell_folder::String, ic_substrate_folder::String, ic_ecm_folder::String, ic_dc_folder::String)
         @assert config_folder != "" "config_folder must be provided"
         @assert custom_code_folder != "" "custom_code_folder must be provided"
         config = InputFolder(retrieveID("configs", config_folder), config_folder)
@@ -52,9 +58,10 @@ struct InputFolders
         ic_cell = InputFolder(retrieveID("ic_cells", ic_cell_folder), ic_cell_folder)
         ic_substrate = InputFolder(retrieveID("ic_substrates", ic_substrate_folder), ic_substrate_folder)
         ic_ecm = InputFolder(retrieveID("ic_ecms", ic_ecm_folder), ic_ecm_folder)
-        return new(config, custom_code, rulesets_collection, ic_cell, ic_substrate, ic_ecm)
+        ic_dc = InputFolder(retrieveID("ic_dcs", ic_dc_folder), ic_dc_folder)
+        return new(config, custom_code, rulesets_collection, ic_cell, ic_substrate, ic_ecm, ic_dc)
     end
-    function InputFolders(config_id::Int, custom_code_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, ic_substrate_id::Int, ic_ecm_id::Int)
+    function InputFolders(config_id::Int, custom_code_id::Int, rulesets_collection_id::Int, ic_cell_id::Int, ic_substrate_id::Int, ic_ecm_id::Int, ic_dc_id::Int)
         @assert config_id > 0 "config_id must be positive"
         @assert custom_code_id > 0 "custom_code_id must be positive"
         config = InputFolder(config_id, configFolder(config_id))
@@ -63,16 +70,17 @@ struct InputFolders
         ic_cell = InputFolder(ic_cell_id, icCellFolder(ic_cell_id))
         ic_substrate = InputFolder(ic_substrate_id, icSubstrateFolder(ic_substrate_id))
         ic_ecm = InputFolder(ic_ecm_id, icECMFolder(ic_ecm_id))
-        return new(config, custom_code, rulesets_collection, ic_cell, ic_substrate, ic_ecm)
+        ic_dc = InputFolder(ic_dc_id, icDCFolder(ic_dc_id))
+        return new(config, custom_code, rulesets_collection, ic_cell, ic_substrate, ic_ecm, ic_dc)
     end
 end
 
-function InputFolders(config::String, custom_code::String; rulesets_collection::String="", ic_cell::String="", ic_substrate::String="", ic_ecm::String="")
-    return InputFolders(config, custom_code, rulesets_collection, ic_cell, ic_substrate, ic_ecm)
+function InputFolders(config::String, custom_code::String; rulesets_collection::String="", ic_cell::String="", ic_substrate::String="", ic_ecm::String="", ic_dc::String="")
+    return InputFolders(config, custom_code, rulesets_collection, ic_cell, ic_substrate, ic_ecm, ic_dc)
 end
 
-function InputFolders(; config::String="", custom_code::String="", rulesets_collection::String="", ic_cell::String="", ic_substrate::String="", ic_ecm::String="")
-    return InputFolders(config, custom_code, rulesets_collection, ic_cell, ic_substrate, ic_ecm)
+function InputFolders(; config::String="", custom_code::String="", rulesets_collection::String="", ic_cell::String="", ic_substrate::String="", ic_ecm::String="", ic_dc::String="")
+    return InputFolders(config, custom_code, rulesets_collection, ic_cell, ic_substrate, ic_ecm, ic_dc)
 end
 
 ##########################################
@@ -83,6 +91,7 @@ struct VariationIDs
     config::Int # integer identifying which variation on the base config file to use (config_variations.db)
     rulesets_collection::Int # integer identifying which variation on the ruleset file to use (rulesets_collection_variations.db)
     ic_cell::Int # integer identifying which variation on the ic cell file to use (ic_cell_variations.db) (only used if cells.xml, not used for cells.csv)
+    ic_ecm::Int # integer identifying which variation on the ic ecm file to use (ic_ecm_variations.db) (only used if ecm.xml, not used for ecm.csv)
 end
 
 function VariationIDs(inputs::InputFolders)
@@ -97,6 +106,30 @@ variationIDNames() = (fieldnames(VariationIDs) .|> string) .* "_variation_id"
 #############   Simulation   #############
 ##########################################
 
+"""
+    Simulation
+
+A simulation that represents a single run of the model.
+
+To create a new simulation, best practice is to use `createTrial` and supply it with the `InputFolders` and any number of single-valued DiscreteVariations:
+```
+inputs = InputFolders(config_folder, custom_code_folder)
+simulation = createTrial(inputs) # uses the default config file as-is
+
+ev = DiscreteVariation(["overall","max_time"], 1440)
+simulation = createTrial(inputs, ev) # uses the config file with the specified variation
+```
+
+If there is a previously created simulation that you wish to access, you can use its ID to create a `Simulation` object:
+```
+simulation = Simulation(simulation_id)
+```
+
+# Fields
+- `id::Int`: integer uniquely identifying this simulation. Matches with the folder in `data/outputs/simulations/`
+- `inputs::InputFolders`: contains the folder info for this simulation.
+- `variation_ids::VariationIDs`: contains the variation IDs for this simulation.
+"""
 struct Simulation <: AbstractMonad
     id::Int # integer uniquely identifying this simulation
     inputs::InputFolders 
@@ -107,6 +140,7 @@ struct Simulation <: AbstractMonad
         @assert variation_ids.config >= 0 "config variation id must be non-negative"
         @assert variation_ids.rulesets_collection >= -1 "rulesets_collection variation id must be non-negative or -1 (indicating no rules)"
         @assert variation_ids.ic_cell >= -1 "ic_cell variation id must be non-negative or -1 (indicating no ic cells)"
+        @assert variation_ids.ic_ecm >= -1 "ic_ecm variation id must be non-negative or -1 (indicating no ic ecm)"
         if variation_ids.rulesets_collection != -1
             @assert inputs.rulesets_collection.folder != "" "rulesets_collection folder must be provided if rulesets_collection variation id is not -1 (indicating that the rules are in use)"
         end
@@ -115,6 +149,12 @@ struct Simulation <: AbstractMonad
         else
             @assert inputs.ic_cell.folder != "" "ic_cell folder must be provided if ic_cell variation_id is not -1 (indicating that the cells are in use)"
             @assert variation_ids.ic_cell == 0 || isfile(joinpath(data_dir, "inputs", "ics", "cells", inputs.ic_cell.folder, "cells.xml")) "cells.xml must be provided if ic_cell variation_id is >1 (indicating that the cell ic parameters are being varied)"
+        end
+        if variation_ids.ic_ecm == -1
+            @assert inputs.ic_ecm.folder == "" "ic_ecm variation_id must be >=0 if ic_ecm folder is provided"
+        else
+            @assert inputs.ic_ecm.folder != "" "ic_ecm folder must be provided if ic_ecm variation_id is not -1 (indicating that the ecm is in use)"
+            @assert variation_ids.ic_ecm == 0 || isfile(joinpath(data_dir, "inputs", "ics", "ecms", inputs.ic_ecm.folder, "ecm.xml")) "ecm.xml must be provided if ic_ecm variation_id is >1 (indicating that the ecm ic parameters are being varied)"
         end
         return new(id, inputs, variation_ids)
     end
@@ -125,14 +165,15 @@ function Simulation(inputs::InputFolders, variation_ids::VariationIDs=VariationI
     """
     INSERT INTO simulations (physicell_version_id,\
     config_id,rulesets_collection_id,\
-    ic_cell_id,ic_substrate_id,ic_ecm_id,custom_code_id,\
+    ic_cell_id,ic_substrate_id,ic_ecm_id,ic_dc_id,\
+    custom_code_id,\
     $(join(variationIDNames(), ",")),\
     status_code_id) \
     VALUES(\
         $(physicellVersionDBEntry()),\
         $(inputs.config.id),$(inputs.rulesets_collection.id),\
         $(inputs.ic_cell.id),$(inputs.ic_substrate.id),\
-        $(inputs.ic_ecm.id),$(inputs.custom_code.id),\
+        $(inputs.ic_ecm.id),$(inputs.ic_dc.id),$(inputs.custom_code.id),\
         $(join([string(getfield(variation_ids, field)) for field in fieldnames(VariationIDs)],",")),\
         $(getStatusCodeID("Not Started"))
     )
@@ -147,8 +188,8 @@ function getSimulation(simulation_id::Int)
     if isempty(df)
         error("Simulation $(simulation_id) not in the database.")
     end
-    inputs = InputFolders(df.config_id[1], df.custom_code_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1])
-    variation_ids = VariationIDs(df.config_variation_id[1], df.rulesets_collection_variation_id[1], df.ic_cell_variation_id[1])
+    inputs = InputFolders(df.config_id[1], df.custom_code_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1], df.ic_dc_id[1])
+    variation_ids = VariationIDs(df.config_variation_id[1], df.rulesets_collection_variation_id[1], df.ic_cell_variation_id[1], df.ic_ecm_variation_id[1])
     return Simulation(simulation_id, inputs, variation_ids)
 end
 
@@ -160,6 +201,38 @@ Base.length(simulation::Simulation) = 1
 ###############   Monad   ################
 ##########################################
 
+"""
+    Monad
+
+A group of simulations that are identical up to randomness.
+
+To create a new monad, best practice is to use `createTrial` and supply it with the `InputFolders` and any number of single-valued DiscreteVariations.
+Set `n_replicates=0` to avoid adding new simulations to the database. This is useful for creating references for later use.
+Otherwise, set `n_replicates` > 1 to create the simulations to go with this monad.
+If `n_replicates` = 1, it will return a `Simulation` object.
+```
+inputs = InputFolders(config_folder, custom_code_folder)
+monad = createTrial(inputs; n_replicates=0) # uses the default config file as-is
+
+ev = DiscreteVariation(["overall","max_time"], 1440)
+monad = createTrial(inputs, ev; n_replicates=10) # uses the config file with the specified variation
+
+monad = createTrial(inputs, ev; n_replicates=10, use_previous=false) # changes the default behavior and creates 10 new simulations for this monad
+```
+
+If there is a previously created monad that you wish to access, you can use its ID to create a `Monad` object:
+```
+monad = Monad(monad_id)
+monad = Monad(monad_id; n_replicates=5) # ensures at least 5 simulations in the monad (using previous sims)
+```
+
+# Fields
+- `id::Int`: integer uniquely identifying this monad. Matches with the folder in `data/outputs/monads/`
+- `n_replicates::Int`: minimum number of simulations to ensure are part of this monad when running this monad.
+- `simulation_ids::Vector{Int}`: array of simulation IDs belonging to this monad. This need not have length equal to `n_replicates`.
+- `inputs::InputFolders`: contains the folder info for this monad.
+- `variation_ids::VariationIDs`: contains the variation IDs for this monad.
+"""
 struct Monad <: AbstractMonad
     # a monad is a group of simulation replicates, i.e. identical up to randomness
     id::Int # integer uniquely identifying this monad
@@ -176,7 +249,7 @@ struct Monad <: AbstractMonad
                        INSERT OR IGNORE INTO monads (physicell_version_id,\
                        config_id,custom_code_id,\
                        rulesets_collection_id,\
-                       ic_cell_id,ic_substrate_id,ic_ecm_id,\
+                       ic_cell_id,ic_substrate_id,ic_ecm_id,ic_dc_id,\
                        $(join(variationIDNames(), ","))\
                        ) \
                        VALUES(\
@@ -184,7 +257,7 @@ struct Monad <: AbstractMonad
                            $(inputs.config.id),$(inputs.custom_code.id),\
                            $(inputs.rulesets_collection.id),\
                            $(inputs.ic_cell.id),$(inputs.ic_substrate.id),\
-                           $(inputs.ic_ecm.id),\
+                           $(inputs.ic_ecm.id),$(inputs.ic_dc.id),\
                            $(join([string(getfield(variation_ids, field)) for field in fieldnames(VariationIDs)],","))
                        ) \
                        RETURNING monad_id;
@@ -197,14 +270,14 @@ struct Monad <: AbstractMonad
                            WHERE (physicell_version_id,config_id,custom_code_id,\
                            rulesets_collection_id,\
                            ic_cell_id,ic_substrate_id,\
-                           ic_ecm_id,\
+                           ic_ecm_id,ic_dc_id,\
                            $(join(variationIDNames(), ",")))=\
                            (\
                                $(physicellVersionDBEntry()),\
                                $(inputs.config.id),$(inputs.custom_code.id),\
                                $(inputs.rulesets_collection.id),\
                                $(inputs.ic_cell.id),$(inputs.ic_substrate.id),\
-                               $(inputs.ic_ecm.id),\
+                               $(inputs.ic_ecm.id),$(inputs.ic_dc.id),\
                                $(join([string(getfield(variation_ids, field)) for field in fieldnames(VariationIDs)],","))
                            );\
                            """,
@@ -247,8 +320,8 @@ function getMonad(monad_id::Int, n_replicates::Int)
     if isempty(df)
         error("Monad $(monad_id) not in the database.")
     end
-    inputs = InputFolders(df.config_id[1], df.custom_code_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1])
-    variation_ids = VariationIDs(df.config_variation_id[1], df.rulesets_collection_variation_id[1], df.ic_cell_variation_id[1])
+    inputs = InputFolders(df.config_id[1], df.custom_code_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1], df.ic_dc_id[1])
+    variation_ids = VariationIDs(df.config_variation_id[1], df.rulesets_collection_variation_id[1], df.ic_cell_variation_id[1], df.ic_ecm_variation_id[1])
     use_previous = true
     return Monad(monad_id, n_replicates, inputs, variation_ids, use_previous)
 end
@@ -280,6 +353,32 @@ end
 ##############   Sampling   ##############
 ##########################################
 
+"""
+    Sampling
+
+A group of monads that have the same input folders, but differ in parameter values.
+
+To create a new sampling, best practice is to use `createTrial` and supply it with the `InputFolders` and any number of DiscreteVariations.
+At least one should have multiple values to create a sampling.
+```
+inputs = InputFolders(config_folder, custom_code_folder)
+ev = DiscreteVariation(["overall","max_time"], [1440, 2880]))
+sampling = createTrial(inputs, ev; n_replicates=3, use_previous=true)
+```
+
+If there is a previously created sampling that you wish to access, you can use its ID to create a `Sampling` object:
+```
+sampling = Sampling(sampling_id)
+sampling = Sampling(sampling_id; n_replicates=5) # ensures at least 5 simulations in each monad (using previous sims)
+```
+
+# Fields
+- `id::Int`: integer uniquely identifying this sampling. Matches with the folder in `data/outputs/samplings/`
+- `n_replicates::Int`: minimum number of simulations to ensure are part of each monad when running this sampling.
+- `monad_ids::Vector{Int}`: array of monad IDs belonging to this sampling.
+- `inputs::InputFolders`: contains the folder info for this sampling.
+- `variation_ids::Vector{VariationIDs}`: contains the variation IDs for each monad.
+"""
 struct Sampling <: AbstractSampling
     # sampling is a group of monads with config parameters varied
     id::Int # integer uniquely identifying this sampling
@@ -315,12 +414,12 @@ function Sampling(n_replicates::Int, monad_ids::AbstractVector{<:Integer}, input
         WHERE (physicell_version_id,\
         config_id,custom_code_id,\
         rulesets_collection_id,\
-        ic_cell_id,ic_substrate_id,ic_ecm_id)=\
+        ic_cell_id,ic_substrate_id,ic_ecm_id,ic_dc_id)=\
         (\
             $(physicellVersionDBEntry()),\
             $(inputs.config.id),$(inputs.custom_code.id),\
             $(inputs.rulesets_collection.id),\
-            $(inputs.ic_cell.id),$(inputs.ic_substrate.id),$(inputs.ic_ecm.id)\
+            $(inputs.ic_cell.id),$(inputs.ic_substrate.id),$(inputs.ic_ecm.id),$(inputs.ic_dc.id)\
         );\
         """;
         selection="sampling_id"
@@ -342,12 +441,12 @@ function Sampling(n_replicates::Int, monad_ids::AbstractVector{<:Integer}, input
         (physicell_version_id,\
         config_id,custom_code_id,\
         rulesets_collection_id,\
-        ic_cell_id,ic_substrate_id,ic_ecm_id) \
+        ic_cell_id,ic_substrate_id,ic_ecm_id,ic_dc_id) \
         VALUES($(physicellVersionDBEntry()),\
         $(inputs.config.id),$(inputs.custom_code.id),\
         $(inputs.rulesets_collection.id),\
         $(inputs.ic_cell.id),$(inputs.ic_substrate.id),\
-        $(inputs.ic_ecm.id)) RETURNING sampling_id;
+        $(inputs.ic_ecm.id),$(inputs.ic_dc.id)) RETURNING sampling_id;
         """
         ) |> DataFrame |> x -> x.sampling_id[1] # get the sampling_id
     end
@@ -364,21 +463,24 @@ function Sampling(inputs::InputFolders;
                 config_variation_ids::Union{Int,AbstractArray{<:Integer}}=Int[], 
                 rulesets_collection_variation_ids::Union{Int,AbstractArray{<:Integer}}=fill(inputs.rulesets_collection.folder=="" ? -1 : 0, size(config_variation_ids)),
                 ic_cell_variation_ids::Union{Int,AbstractArray{<:Integer}}=fill(inputs.ic_cell.folder=="" ? -1 : 0, size(config_variation_ids)),
+                ic_ecm_variation_ids::Union{Int,AbstractArray{<:Integer}}=fill(inputs.ic_ecm.folder=="" ? -1 : 0, size(config_variation_ids)),
                 use_previous::Bool=true) 
     # allow for passing in a single config_variation_id and/or rulesets_collection_variation_id
     # later, can support passing in (for example) a 3x6 config_variation_ids and a 3x1 rulesets_collection_variation_ids and expanding the rulesets_collection_variation_ids to 3x6, but that can get tricky fast
-    if all(x->x isa Integer, [config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids])
+    if all(x->x isa Integer, [config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids, ic_ecm_variation_ids])
         config_variation_ids = [config_variation_ids]
         rulesets_collection_variation_ids = [rulesets_collection_variation_ids]
         ic_cell_variation_ids = [ic_cell_variation_ids]
+        ic_ecm_variation_ids = [ic_ecm_variation_ids]
     else
-        ns = [length(x) for x in [config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids] if !(x isa Integer)]
-        @assert all(x->x==ns[1], ns) "config_variation_ids, rulesets_collection_variation_ids, and ic_cell_variation_ids must have the same length if they are not integers"
+        ns = [length(x) for x in [config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids, ic_ecm_variation_ids] if !(x isa Integer)]
+        @assert all(x->x==ns[1], ns) "config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids, ic_ecm_variation_ids must have the same length if they are not integers"
         config_variation_ids = config_variation_ids isa Integer ? fill(config_variation_ids, ns[1]) : config_variation_ids
         rulesets_collection_variation_ids = rulesets_collection_variation_ids isa Integer ? fill(rulesets_collection_variation_ids, ns[1]) : rulesets_collection_variation_ids
         ic_cell_variation_ids = ic_cell_variation_ids isa Integer ? fill(ic_cell_variation_ids, ns[1]) : ic_cell_variation_ids
+        ic_ecm_variation_ids = ic_ecm_variation_ids isa Integer ? fill(ic_ecm_variation_ids, ns[1]) : ic_ecm_variation_ids
     end
-    variation_ids = [VariationIDs(config_variation_ids[i], rulesets_collection_variation_ids[i], ic_cell_variation_ids[i]) for i in 1:length(config_variation_ids)]
+    variation_ids = [VariationIDs(config_variation_ids[i], rulesets_collection_variation_ids[i], ic_cell_variation_ids[i], ic_ecm_variation_ids[i]) for i in 1:length(config_variation_ids)]
     return Sampling(n_replicates, inputs, variation_ids; use_previous=use_previous) 
 end
 
@@ -412,9 +514,9 @@ function getSampling(sampling_id::Int, n_replicates::Int)
         error("Sampling $(sampling_id) not in the database.")
     end
     monad_ids = readSamplingMonadIDs(sampling_id)
-    inputs = InputFolders(df.config_id[1], df.custom_code_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1])
+    inputs = InputFolders(df.config_id[1], df.custom_code_id[1], df.rulesets_collection_id[1], df.ic_cell_id[1], df.ic_substrate_id[1], df.ic_ecm_id[1], df.ic_dc_id[1])
     monad_df = constructSelectQuery("monads", "WHERE monad_id IN ($(join(monad_ids,",")))") |> queryToDataFrame
-    variation_ids = [VariationIDs(monad_df.config_variation_id[i], monad_df.rulesets_collection_variation_id[i], monad_df.ic_cell_variation_id[i]) for i in 1:length(monad_ids)]
+    variation_ids = [VariationIDs(monad_df.config_variation_id[i], monad_df.rulesets_collection_variation_id[i], monad_df.ic_cell_variation_id[i], monad_df.ic_ecm_variation_id[i]) for i in 1:length(monad_ids)]
     return Sampling(sampling_id, n_replicates, monad_ids, inputs, variation_ids)
 end
 
@@ -433,6 +535,34 @@ end
 ###############   Trial   ################
 ##########################################
 
+"""
+    Trial
+
+A group of samplings that can have different input folders.
+
+To create a new trial, best practice currently is to create a vector of `Sampling` objects and passing them to `Trial`.
+```
+inputs_1 = InputFolders(config_folder_1, custom_code_folder_1)
+inputs_2 = InputFolders(config_folder_2, custom_code_folder_2)
+ev = DiscreteVariation(["overall","max_time"], [1440, 2880]))
+sampling_1 = createTrial(inputs_1, ev; n_replicates=3, use_previous=true)
+sampling_2 = createTrial(inputs_2, ev; n_replicates=3, use_previous=true)
+trial = Trial([sampling_1, sampling_2])
+```
+
+If there is a previous trial that you wish to access, you can use its ID to create a `Trial` object:
+```
+trial = Trial(trial_id)
+trial = Trial(trial_id; n_replicates=5) # ensures at least 5 simulations in each monad (using previous sims)
+```
+
+# Fields
+- `id::Int`: integer uniquely identifying this trial. Matches with the folder in `data/outputs/trials/`
+- `n_replicates::Int`: minimum number of simulations to ensure are part of each monad in each sampling in this trial.
+- `sampling_ids::Vector{Int}`: array of sampling IDs belonging to this trial.
+- `inputs::Vector{InputFolders}`: contains the folder info for each sampling in this trial.
+- `variation_ids::Vector{Vector{VariationIDs}}`: contains the variation IDs for each monad in each sampling in this trial.
+"""
 struct Trial <: AbstractTrial
     # trial is a group of samplings with different ICs, custom codes, and rulesets
     id::Int # integer uniquely identifying this trial

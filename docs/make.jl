@@ -1,5 +1,4 @@
-using pcvct
-using Documenter
+using Documenter, pcvct
 
 DocMeta.setdocmeta!(pcvct, :DocTestSetup, :(using pcvct); recursive=true)
 
@@ -15,16 +14,27 @@ makedocs(;
     pages=[
         "Home" => "index.md",
         "Manual" => Any[
-            "Guide" => "man/guide.md",
+            "Best practices" => "man/best_practices.md",
+            "Getting started" => "man/getting_started.md",
+            "CoVariations" => "man/covariations.md",
+            "Data directory" => "man/data_directory.md",
+            "Known limitations" => "man/known_limitations.md",
+            "PhysiCell Studio" => "man/physicell_studio.md",
+            "Sensitivity analysis" => "man/sensitivity_analysis.md",
         ],
         "Documentation" => map(
             s -> "lib/$(s)",
             sort(readdir(joinpath(@__DIR__, "src/lib")))
         ),
+        "Miscellaneous" => Any[
+            "Database upgrades" => "misc/database_upgrades.md",
+            "Renaming" => "misc/renaming.md",
+        ],
     ],
 )
 
 deploydocs(;
     repo="github.com/drbergman/pcvct",
-    devbranch="main",
+    devbranch="development",
+    push_preview=true,
 )

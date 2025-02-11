@@ -1,8 +1,7 @@
-# each file (includes below) has their own export statements
-export initializeVCT, resetDatabase, runAbstractTrial, readTrialSamplingIDs, getSimulationIDs
+using SQLite, DataFrames, LightXML, Dates, CSV, Tables, Distributions, Statistics, Random, QuasiMonteCarlo, Sobol
+using PhysiCellXMLRules, PhysiCellCellCreator
 
-using SQLite, DataFrames, LightXML, LazyGrids, Dates, CSV, Tables, Distributions, Statistics, Random, QuasiMonteCarlo, Sobol
-using PhysiCellXMLRules
+export initializeVCT, getSimulationIDs, setNumberOfParallelSims
 
 # put these first as they define classes the rest rely on
 include("VCTClasses.jl")
@@ -15,8 +14,10 @@ include("VCTCreation.jl")
 include("VCTDatabase.jl") 
 include("VCTDeletion.jl")
 include("VCTICCell.jl")
+include("VCTICECM.jl")
 include("VCTRunner.jl")
 include("VCTRecorder.jl")
+include("VCTUp.jl")
 include("VCTVersion.jl")
 include("VCTPhysiCellVersion.jl")
 include("VCTHPC.jl")
@@ -35,6 +36,8 @@ include("VCTExport.jl")
 
 VERSION >= v"1.11" && include("public.julia")
 
+initialized = false
+
 physicell_dir::String = abspath("PhysiCell")
 current_physicell_version_id = missing
 data_dir::String = abspath("data")
@@ -46,11 +49,16 @@ else
 end
 
 run_on_hpc = isRunningOnHPC()
-max_number_of_parallel_simulations = haskey(ENV, "PCVCT_NUM_PARALLEL_SIMS") ? parse(Int, ENV["PCVCT_NUM_PARALLEL_SIMS"]) : 1
+max_number_of_parallel_simulations = 1
 march_flag = run_on_hpc ? "x86-64" : "native"
 
 sbatch_options = defaultJobOptions() # this is a dictionary that will be used to pass options to the sbatch command
 
+function __init__()
+    global max_number_of_parallel_simulations = haskey(ENV, "PCVCT_NUM_PARALLEL_SIMS") ? parse(Int, ENV["PCVCT_NUM_PARALLEL_SIMS"]) : 1
+    global path_to_python = haskey(ENV, "PCVCT_PYTHON_PATH") ? ENV["PCVCT_PYTHON_PATH"] : missing 
+    global path_to_studio = haskey(ENV, "PCVCT_STUDIO_PATH") ? ENV["PCVCT_STUDIO_PATH"] : missing
+end
 ################## Initialization Functions ##################
 
 """
@@ -145,6 +153,23 @@ function getTrialSimulationIDs(trial_id::Int)
     return vcat([getSamplingSimulationIDs(sampling_id) for sampling_id in sampling_ids]...)
 end
 
+"""
+    getSimulationIDs()
+
+Return a vector of all simulation IDs in the database.
+
+Alternate forms take a simulation, monad, sampling, or trial object (or an array of any combination of them) and return the corresponding simulation IDs.
+
+# Examples
+```
+getSimulationIDs() # all simulation IDs in the database
+getSimulationIDs(simulation) # just a vector with the simulation ID, i.e. [simulation.id]
+getSimulationIDs(monad) # all simulation IDs in a monad
+getSimulationIDs(sampling) # all simulation IDs in a sampling
+getSimulationIDs(trial) # all simulation IDs in a trial
+getSimulationIDs([trial1, trial2]) # all simulation IDs between trial1 and trial2
+```
+"""
 getSimulationIDs() = constructSelectQuery("simulations"; selection="simulation_id") |> queryToDataFrame |> x -> x.simulation_id
 getSimulationIDs(simulation::Simulation) = [simulation.id]
 getSimulationIDs(monad::Monad) = readMonadSimulationIDs(monad)
@@ -176,4 +201,13 @@ end
 
 function setMarchFlag(flag::String)
     global march_flag = flag
+end
+
+"""
+    setNumberOfParallelSims(n::Int)
+
+Set the maximum number of parallel simulations to `n`.
+"""
+function setNumberOfParallelSims(n::Int)
+    global max_number_of_parallel_simulations = n
 end

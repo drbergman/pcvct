@@ -1,4 +1,4 @@
-using Downloads, JSON3, CSV
+using Downloads, JSON3, CSV, PhysiCellCellCreator
 
 export createProject
 
@@ -93,7 +93,7 @@ function setUpInputs(data_dir::String, physicell_dir::String, template_as_defaul
 
     mkpath(joinpath(inputs_dir, "configs"))
     mkpath(joinpath(inputs_dir, "custom_codes"))
-    for ic in ["cells", "substrates", "ecms"]
+    for ic in ["cells", "substrates", "ecms", "dcs"]
         mkpath(joinpath(inputs_dir, "ics", ic))
     end
     mkpath(joinpath(inputs_dir, "rulesets_collections"))
@@ -135,6 +135,9 @@ function setUpTemplate(physicell_dir::String, inputs_dir::String)
 
     setUpICFolder(path_to_template, inputs_dir, "cells", "0_template")
     setUpICFolder(path_to_template, inputs_dir, "substrates", "0_template")
+
+    # also set up a ic cell folder using the xml-based version
+    pcvct.createICCellXMLTemplate(joinpath(inputs_dir, "ics", "cells", "1_xml"))
 end
 
 function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, template_as_default::Bool, terse::Bool)
@@ -173,6 +176,7 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         ic_cell_folder = $(ic_cell_folder)
         ic_substrate_folder = \"\" # optionally add this folder with substrates.csv to $(joinpath(path_to_ics, "substrates"))
         ic_ecm_folder = \"\" # optionally add this folder with ecms.csv to $(joinpath(path_to_ics, "ecms"))
+        ic_dc_folder = \"\" # optionally add this folder with dcs.csv to $(joinpath(path_to_ics, "dcs"))
 
         $(tersify("""
         # package them all together into a single object
@@ -181,7 +185,8 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
                               rulesets_collection=rulesets_collection_folder,
                               ic_cell=ic_cell_folder,
                               ic_substrate=ic_substrate_folder,
-                              ic_ecm=ic_ecm_folder)
+                              ic_ecm=ic_ecm_folder,
+                              ic_dc=ic_dc_folder)
 
         ############ make the simulations short ############
 
@@ -252,22 +257,31 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         # now create the sampling (varied parameter values) with these parameters
         # we will give it a reference to the monad with the short max time
         """))\
-        sampling = createTrial(reference, discrete_variations; n_replicates=n_replicates)
+        sampling = createTrial(reference, discrete_variations; n_replicates=n_replicates, use_previous=use_previous)
 
         $(tersify("""
         # at this point, we have only added the sampling to the database...
         # ...along with the monads and simulations that make it up
-        # now, we run the sampling
+        # before running, we will set the number of parallel simulations to run.
+        # note: this will only be used when running locally, i.e., not on an HPC
+        # by default, pcvct will run the simulations serially, i.e., 1 in \"parallel\".
+        # change this by calling:
         """))\
-        out = run(sampling; force_recompile=force_recompile)
+        setNumberOfParallelSims(4) # for example, to run 4 simulations in parallel
 
         $(tersify("""
-        # When running locally, pcvct using a shell environment variable to determine...
-        # ...the number of concurrent siulations to run. This is set to 1 by default.
-        # The variable is called PCVCT_NUM_PARALLEL_SIMS.
-        # A simple way to set this when running the script is to run in your shell:
+        # you can change this default behavior on your machine by setting an environment variable...
+        # called PCVCT_NUM_PARALLEL_SIMS
+        # this is read during `initializeVCT`...
+        # meaning subsequent calls to `setNumberOfParallelSims` will overwrite the value
+        # A simple way to use this when running the script is to run in your shell:
         # `PCVCT_NUM_PARALLEL_SIMS=4 julia $(path_to_generate_data)`
         """))\
+
+        $(tersify("""
+        # now run the sampling
+        """))\
+        out = run(sampling; force_recompile=force_recompile)
 
         $(tersify("""
         # If you are running on an SLURM-based HPC, pcvct will detect this and calls to `sbatch`...
