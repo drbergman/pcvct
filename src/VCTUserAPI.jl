@@ -41,7 +41,7 @@ sampling = createTrial(monad, dv_apoptosis; n_replicates=2) # uses the max time 
 """
 function createTrial(method::AddVariationMethod, inputs::InputFolders, avs::Vector{<:AbstractVariation}=AbstractVariation[];
     n_replicates::Integer=1, use_previous::Bool=true)
-    return _createTrial(method, inputs, VariationIDs(inputs), avs, n_replicates, use_previous)
+    return _createTrial(method, inputs, VariationID(inputs), avs, n_replicates, use_previous)
 end
 
 function createTrial(method::AddVariationMethod, inputs::InputFolders, av::AbstractVariation; kwargs...)
@@ -50,10 +50,9 @@ end
 
 createTrial(inputs::InputFolders, args...; kwargs...) = createTrial(GridVariation(), inputs, args...; kwargs...)
 
-
 function createTrial(method::AddVariationMethod, reference::AbstractMonad, avs::Vector{<:AbstractVariation}=AbstractVariation[];
                      n_replicates::Integer=1, use_previous::Bool=true)
-    return _createTrial(method, reference.inputs, reference.variation_ids, avs, n_replicates, use_previous)
+    return _createTrial(method, reference.inputs, reference.variation_id, avs, n_replicates, use_previous)
 end
 
 function createTrial(method::AddVariationMethod, reference::AbstractMonad, av::AbstractVariation; kwargs...)
@@ -62,24 +61,26 @@ end
 
 createTrial(reference::AbstractMonad, args...; kwargs...) = createTrial(GridVariation(), reference, args...; kwargs...)
 
-function _createTrial(method::AddVariationMethod, inputs::InputFolders, reference_variation_ids::VariationIDs,
+function _createTrial(method::AddVariationMethod, inputs::InputFolders, reference_variation_id::VariationID,
                       avs::Vector{<:AbstractVariation}, n_replicates::Integer, use_previous::Bool)
-                      
-    config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids, ic_ecm_variation_ids = addVariations(method, inputs, avs, reference_variation_ids)
-    if length(config_variation_ids) == 1
-        variation_ids = VariationIDs(config_variation_ids[1], rulesets_collection_variation_ids[1], ic_cell_variation_ids[1], ic_ecm_variation_ids[1])
+
+    add_variations_result = addVariations(method, inputs, avs, reference_variation_id)
+    all_variation_ids = add_variations_result.all_variation_ids
+    if length(all_variation_ids) == 1
+        variation_ids = all_variation_ids[1]
         monad = Monad(n_replicates, inputs, variation_ids, use_previous)
         if n_replicates != 1
             return monad
         end
         return Simulation(monad.simulation_ids[end])
     else
+        location_variation_ids = [loc => [variation_id[loc] for variation_id in all_variation_ids] for loc in project_locations.varied] |>
+            Dict{Symbol,Union{Integer,AbstractArray{<:Integer}}}
+            
         return Sampling(inputs; n_replicates=n_replicates,
-                        config_variation_ids=config_variation_ids,
-                        rulesets_collection_variation_ids=rulesets_collection_variation_ids,
-                        ic_cell_variation_ids=ic_cell_variation_ids,
-                        ic_ecm_variation_ids=ic_ecm_variation_ids,
-                        use_previous=use_previous)
+            location_variation_ids=location_variation_ids,
+            use_previous=use_previous
+        )
     end
 end
 

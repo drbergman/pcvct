@@ -19,7 +19,7 @@ pcvct.deleteSampling(1)
 pcvct.deleteTrial(1)
 
 input_buffer = IOBuffer("n")
-old_stdin = stdin  # Save the original stdin
+old_stdin = stdin  #! Save the original stdin
 Base.stdin = input_buffer
 deleteSimulationsByStatus(["Queued", "Failed"])
 Base.stdin = old_stdin
@@ -30,19 +30,19 @@ pcvct.deleteAllSimulations()
 resetDatabase(; force_reset=true)
 
 input_buffer = IOBuffer("y")
-old_stdin = stdin  # Save the original stdin
+old_stdin = stdin  #! Save the original stdin
 Base.stdin = input_buffer
 resetDatabase()
 Base.stdin = old_stdin
 
 input_buffer = IOBuffer("n\nn\n")
-old_stdin = stdin  # Save the original stdin
+old_stdin = stdin  #! Save the original stdin
 Base.stdin = input_buffer
 @test_throws ErrorException resetDatabase()
 Base.stdin = old_stdin
 
 input_buffer = IOBuffer("n\ny\n")
-old_stdin = stdin  # Save the original stdin
+old_stdin = stdin  #! Save the original stdin
 Base.stdin = input_buffer
 resetDatabase()
 Base.stdin = old_stdin

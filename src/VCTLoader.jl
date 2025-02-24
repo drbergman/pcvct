@@ -61,7 +61,7 @@ function getLabels!(labels::Vector{String}, xml_doc::XMLDocument)
             append!(labels, label_name)
         else
             if label_name == "elapsed_time_in_phase" && label_name in labels
-                label_name = "elapsed_time_in_phase_2" # hack to get around a MultiCellDS duplicate?
+                label_name = "elapsed_time_in_phase_2" #! hack to get around a MultiCellDS duplicate?
             end
             push!(labels, label_name)
         end
@@ -165,7 +165,7 @@ indexToFilename(index::Int) = "output$(lpad(index,8,"0"))"
 function PhysiCellSnapshot(folder::String, index::Union{Int, Symbol}; include_cells::Bool=false, cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}(), labels::Vector{String}=String[], include_substrates::Bool=false, substrate_names::Vector{String}=String[], include_mesh::Bool=false)
     filepath_base = joinpath(folder, indexToFilename(index))
     xml_doc = openXML("$(filepath_base).xml")
-    time = getField(xml_doc, ["metadata","current_time"]) |> x->parse(Float64, x)
+    time = getContent(xml_doc, ["metadata","current_time"]) |> x->parse(Float64, x)
     cells = DataFrame()
     if include_cells
         loadCells!(cells, filepath_base, cell_type_to_name_dict, labels)
@@ -210,7 +210,7 @@ end
 function loadSubstrates(filepath_base::String, substrate_names::Vector{String})
     getSubstrateNames!(substrate_names, "$(filepath_base).xml")
     mat_file = "$(filepath_base)_microenvironment0.mat"
-    A = matread(mat_file) |> values |> first # julia seems to read in the multiscale_microenvironment and assign the key multiscale_microenvironmen (note the missing 't'); do this to make sure we get the data
+    A = matread(mat_file) |> values |> first #! julia seems to read in the multiscale_microenvironment and assign the key multiscale_microenvironmen (note the missing 't'); do this to make sure we get the data
     substrates = DataFrame(A', [:x; :y; :z; :volume; substrate_names])
     return substrates, substrate_names
 end
@@ -221,13 +221,13 @@ function loadSubstrates!(substrates::DataFrame, filepath_base::String, substrate
     end
     getSubstrateNames!(substrate_names, "$(filepath_base).xml")
     mat_file = "$(filepath_base)_microenvironment0.mat"
-    A = matread(mat_file) |> values |> first # julia seems to read in the multiscale_microenvironment and assign the key multiscale_microenvironmen (note the missing 't'); do this to make sure we get the data
+    A = matread(mat_file) |> values |> first #! julia seems to read in the multiscale_microenvironment and assign the key multiscale_microenvironmen (note the missing 't'); do this to make sure we get the data
     labels = [:x; :y; :z; :volume; substrate_names]
     for (label, row) in zip(labels, eachrow(A))
         substrates[!, label] = row
     end
 end
-    
+
 function loadSubstrates!(snapshot::PhysiCellSnapshot, substrate_names::Vector{String}=String[])
     loadSubstrates!(snapshot.substrates, joinpath(snapshot.folder, "$(indexToFilename(snapshot.index))"), substrate_names)
 end
@@ -247,7 +247,6 @@ function loadMesh!(snapshot::PhysiCellSnapshot)
     loadMesh!(snapshot.mesh, xml_doc)
     closeXML(xml_doc)
 end
-
 
 function PhysiCellSequence(folder::String; include_cells::Bool=false, include_substrates::Bool=false, include_mesh::Bool=false)
     cell_type_to_name_dict = Dict{Int, String}()
@@ -331,7 +330,7 @@ function getCellDataSequence(sequence::PhysiCellSequence, labels::Vector{String}
     if all(length.(values(temp_dict)) .== 1)
         return data
     end
-    C(v, label) = begin # Concatenation of columns that belong together
+    C(v, label) = begin #! Concatenation of columns that belong together
         if length(temp_dict[label]) == 1
             return v[temp_dict[label][1]]
         end

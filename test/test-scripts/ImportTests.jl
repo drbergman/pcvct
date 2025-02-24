@@ -6,7 +6,7 @@ hashBorderPrint(str)
 config_folder = "immune_sample"
 custom_code_folder = rulesets_collection_folder = ic_cell_folder = "immune_function"
 
-path_to_project = "./test-project/PhysiCell/sample_projects/immune_function"
+path_to_project = joinpath("PhysiCell", "sample_projects", "immune_function")
 
 dest = Dict()
 dest["config"] = config_folder
@@ -31,25 +31,25 @@ out = run(sampling; force_recompile=false)
 
 success = importProject(path_to_project, src, dest)
 @test success
-@test isdir(joinpath(pcvct.data_dir, "inputs", "configs", "immune_sample_1"))
+@test isdir(pcvct.locationPath(:config, "immune_sample_1"))
 
 src["rules"] = "not_rules.csv"
 success = importProject(path_to_project, src, dest)
 @test !success
 
-path_to_fake_project = joinpath("test-project", "PhysiCell", "sample_projects", "not_a_project")
+path_to_fake_project = joinpath("PhysiCell", "sample_projects", "not_a_project")
 success = importProject(path_to_fake_project)
 @test !success
 
-path_to_project = joinpath("test-project", "PhysiCell", "sample_projects", "template")
+path_to_project = joinpath("PhysiCell", "sample_projects", "template")
 success = importProject(path_to_project)
 @test success
 
 # intentionally sabotage the import
-path_to_bad_project = joinpath("test-project", "PhysiCell", "sample_projects", "bad_template")
-cp(path_to_project, "./test-project/PhysiCell/sample_projects/bad_template")
+path_to_bad_project = joinpath("PhysiCell", "sample_projects", "bad_template")
+cp(path_to_project, joinpath("PhysiCell", "sample_projects", "bad_template"))
 
-path_to_main = joinpath("test-project", "PhysiCell", "sample_projects", "bad_template", "main.cpp")
+path_to_main = joinpath("PhysiCell", "sample_projects", "bad_template", "main.cpp")
 lines = readlines(path_to_main)
 idx = findfirst(x->contains(x, "argument_parser"), lines)
 lines[idx] = "    //no longer parsing because this is now a bad project"
@@ -61,7 +61,7 @@ open(path_to_main, "w") do f
     end
 end
 
-path_to_custom_cpp = joinpath("test-project", "PhysiCell", "sample_projects", "bad_template", "custom_modules", "custom.cpp")
+path_to_custom_cpp = joinpath("PhysiCell", "sample_projects", "bad_template", "custom_modules", "custom.cpp")
 lines = readlines(path_to_custom_cpp)
 idx = findfirst(x->contains(x, "load_initial_cells"), lines)
 lines[idx] = "    //no longer loading initial cells because this is now a bad project"
@@ -75,11 +75,16 @@ success = importProject(path_to_bad_project)
 @test !success
 
 # import the ecm project to actually use
-path_to_project = joinpath("test-project", "PhysiCell", "sample_projects", "template-ecm")
+path_to_project = joinpath("PhysiCell", "sample_projects", "template-ecm")
 success = importProject(path_to_project)
 @test success
 
 # import the dirichlet conditions from file project
-path_to_project = joinpath("test-project", "PhysiCell", "sample_projects", "dirichlet_from_file")
+path_to_project = joinpath("PhysiCell", "sample_projects", "dirichlet_from_file")
+success = importProject(path_to_project)
+@test success
+
+# import the combined sbml project
+path_to_project = joinpath("PhysiCell", "sample_projects_intracellular", "combined", "template-combined")
 success = importProject(path_to_project)
 @test success

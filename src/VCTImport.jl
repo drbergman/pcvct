@@ -26,6 +26,7 @@ struct ImportSources
     makefile::ImportSource
     custom_modules::ImportSource
     rulesets_collection::ImportSource
+    intracellular::ImportSource
     ic_cell::ImportSource
     ic_substrate::ImportSource
     ic_ecm::ImportSource
@@ -38,14 +39,15 @@ function ImportSources(src::Dict)
     main = ImportSource(src, "main", "", "main.cpp", "file", required; input_folder_key = :custom_code)
     makefile = ImportSource(src, "makefile", "", "Makefile", "file", required; input_folder_key = :custom_code)
     custom_modules = ImportSource(src, "custom_modules", "", "custom_modules", "folder", required; input_folder_key = :custom_code)
-    
+
     required = false
     rules = ImportSource(src, "rules", "config", "cell_rules.csv", "file", required; pcvct_name="base_rulesets.csv")
+    intracellular = ImportSource(src, "intracellular", "config", "intracellular.xml", "file", required)
     ic_cell = ImportSource(src, "ic_cell", "config", "cells.csv", "file", required)
     ic_substrate = ImportSource(src, "ic_substrate", "config", "substrates.csv", "file", required)
     ic_ecm = ImportSource(src, "ic_ecm", "config", "ecm.csv", "file", required)
     ic_dc = ImportSource(src, "ic_dc", "config", "dcs.csv", "file", required)
-    return ImportSources(config, main, makefile, custom_modules, rules, ic_cell, ic_substrate, ic_ecm, ic_dc)
+    return ImportSources(config, main, makefile, custom_modules, rules, intracellular, ic_cell, ic_substrate, ic_ecm, ic_dc)
 end
 
 mutable struct ImportDestFolder
@@ -58,6 +60,7 @@ struct ImportDestFolders
     config::ImportDestFolder
     custom_code::ImportDestFolder
     rules::ImportDestFolder
+    intracellular::ImportDestFolder
     ic_cell::ImportDestFolder
     ic_substrate::ImportDestFolder
     ic_ecm::ImportDestFolder
@@ -70,17 +73,18 @@ function ImportDestFolders(path_to_project::AbstractString, dest::Dict)
     created = false
     description = "Imported from project at $(path_to_project)."
 
-    # required folders
+    #! required folders
     config = ImportDestFolder(path_fn("config", "configs"), created, description)
     custom_code = ImportDestFolder(path_fn("custom_code", "custom_codes"), created, description)
 
-    # optional folders
+    #! optional folders
     rules = ImportDestFolder(path_fn("rules", "rulesets_collections"), created, description)
+    intracellular = ImportDestFolder(path_fn("intracellular", "intracellular"), created, description)
     ic_cell = ImportDestFolder(path_fn("ic_cell", joinpath("ics", "cells")), created, description)
     ic_substrate = ImportDestFolder(path_fn("ic_substrate", joinpath("ics", "substrates")), created, description)
     ic_ecm = ImportDestFolder(path_fn("ic_ecm", joinpath("ics", "ecms")), created, description)
     ic_dc = ImportDestFolder(path_fn("ic_dc", joinpath("ics", "dcs")), created, description)
-    return ImportDestFolders(config, custom_code, rules, ic_cell, ic_substrate, ic_ecm, ic_dc)
+    return ImportDestFolders(config, custom_code, rules, intracellular, ic_cell, ic_substrate, ic_ecm, ic_dc)
 end
 
 """
@@ -98,31 +102,34 @@ The following keys are recognized: $(join(["`$fn`" for fn in fieldnames(ImportDe
 """
 function importProject(path_to_project::AbstractString, src=Dict(), dest=Dict(); extreme_caution::Bool=false)
     project_sources = ImportSources(src)
-    input_folders = ImportDestFolders(path_to_project, dest)
+    import_dest_folders = ImportDestFolders(path_to_project, dest)
     success = resolveProjectSources!(project_sources, path_to_project)
     if success
-        success = createInputFolders!(input_folders, project_sources)
-        success = success && copyFilesToFolders(path_to_project, project_sources, input_folders) # only copy if successful so far
-        success = success && adaptProject(input_folders)
+        success = createInputFolders!(import_dest_folders, project_sources)
+        success = success && copyFilesToFolders(path_to_project, project_sources, import_dest_folders) #! only copy if successful so far
+        success = success && adaptProject(import_dest_folders)
     end
     if success
         msg = """
         Imported project from $(path_to_project) into $(joinpath(data_dir, "inputs")):
-            - $(input_folders.config.path_from_inputs)
-            - $(input_folders.custom_code.path_from_inputs)
+            - $(import_dest_folders.config.path_from_inputs)
+            - $(import_dest_folders.custom_code.path_from_inputs)
         """
-        if input_folders.rules.created
-            msg *= "    - $(input_folders.rules.path_from_inputs)"
+        if import_dest_folders.rules.created
+            msg *= "    - $(import_dest_folders.rules.path_from_inputs)"
+        end
+        if import_dest_folders.intracellular.created
+            msg *= "    - $(import_dest_folders.intracellular.path_from_inputs)"
         end
         ics_started = false
         for ic in ["cell", "substrate", "ecm", "dc"]
-            input_folder = getfield(input_folders, Symbol("ic_$(ic)"))::ImportDestFolder
-            if input_folder.created
+            import_dest_folder = getfield(import_dest_folders, Symbol("ic_$(ic)"))::ImportDestFolder
+            if import_dest_folder.created
                 if !ics_started
                     msg *= "\n    - ICs:"
                     ics_started = true
                 end
-                msg *= "\n      - $(splitpath(input_folder.path_from_inputs)[2:end] |> joinpath)"
+                msg *= "\n      - $(splitpath(import_dest_folder.path_from_inputs)[2:end] |> joinpath)"
             end
         end
         println(msg)
@@ -147,9 +154,9 @@ function importProject(path_to_project::AbstractString, src=Dict(), dest=Dict();
         end
         path_to_inputs = joinpath(data_dir, "inputs")
         for fieldname in fieldnames(ImportDestFolders)
-            input_folder = getfield(input_folders, fieldname)
-            if input_folder.created
-                path_to_folder = joinpath(path_to_inputs, input_folder.path_from_inputs)
+            import_dest_folder = getfield(import_dest_folders, fieldname)
+            if import_dest_folder.created
+                path_to_folder = joinpath(path_to_inputs, import_dest_folder.path_from_inputs)
                 if extreme_caution
                     println("Deleting the newly created $(fieldname) folder at $(path_to_folder). Proceed with deletion? (y/n)")
                     response = readline()
@@ -191,27 +198,27 @@ function resolveProjectSource!(project_source::ImportSource, path_to_project::Ab
     return false
 end
 
-function createInputFolders!(input_folders::ImportDestFolders, project_sources::ImportSources)
-    # required folders
-    success = createInputFolder!(input_folders.config)
-    success &= createInputFolder!(input_folders.custom_code)
+function createInputFolders!(import_dest_folders::ImportDestFolders, project_sources::ImportSources)
+    #! required folders
+    success = createInputFolder!(import_dest_folders.config)
+    success &= createInputFolder!(import_dest_folders.custom_code)
 
-    # optional folders
+    #! optional folders
     for fieldname in fieldnames(ImportSources)
         if fieldname in [:config, :main, :makefile, :custom_modules]
             continue
         end
         project_source = getfield(project_sources, fieldname)
         if project_source.found
-            success &= createInputFolder!(getfield(input_folders, project_source.src_key)::ImportDestFolder)
+            success &= createInputFolder!(getfield(import_dest_folders, project_source.src_key)::ImportDestFolder)
         end
     end
     return success
 end
 
-function createInputFolder!(input_folder::ImportDestFolder)
+function createInputFolder!(import_dest_folder::ImportDestFolder)
     path_to_inputs = joinpath(data_dir, "inputs")
-    path_from_inputs_vec = splitpath(input_folder.path_from_inputs)
+    path_from_inputs_vec = splitpath(import_dest_folder.path_from_inputs)
     path_from_inputs_to_collection = joinpath(path_from_inputs_vec[1:end-1]...)
     folder_base = path_from_inputs_vec[end]
     collection_contents = joinpath(path_to_inputs, path_from_inputs_to_collection) |> readdir
@@ -222,12 +229,12 @@ function createInputFolder!(input_folder::ImportDestFolder)
         n += 1
         folder_name = "$(folder_base)_$(n)"
     end
-    input_folder.path_from_inputs = joinpath(path_from_inputs_to_collection, folder_name)
-    path_to_folder = joinpath(path_to_inputs, input_folder.path_from_inputs)
+    import_dest_folder.path_from_inputs = joinpath(path_from_inputs_to_collection, folder_name)
+    path_to_folder = joinpath(path_to_inputs, import_dest_folder.path_from_inputs)
     mkpath(path_to_folder)
     path_to_metadata = joinpath(path_to_folder, "metadata.xml")
-    writeDescriptionToMetadata(path_to_metadata, input_folder.description)
-    input_folder.created = true
+    writeDescriptionToMetadata(path_to_metadata, import_dest_folder.description)
+    import_dest_folder.created = true
     return true
 end
 
@@ -241,7 +248,7 @@ function writeDescriptionToMetadata(path_to_metadata::AbstractString, descriptio
     return
 end
 
-function copyFilesToFolders(path_to_project::AbstractString, project_sources::ImportSources, input_folders::ImportDestFolders)
+function copyFilesToFolders(path_to_project::AbstractString, project_sources::ImportSources, import_dest_folders::ImportDestFolders)
     success = true
     for fieldname in fieldnames(ImportSources)
         project_source = getfield(project_sources, fieldname)::ImportSource
@@ -249,8 +256,8 @@ function copyFilesToFolders(path_to_project::AbstractString, project_sources::Im
             continue
         end
         src = joinpath(path_to_project, project_source.path_from_project)
-        input_folder = getfield(input_folders, project_source.input_folder_key)
-        dest = joinpath(data_dir, "inputs", input_folder.path_from_inputs, project_source.pcvct_name)
+        import_dest_folder = getfield(import_dest_folders, project_source.input_folder_key)
+        dest = joinpath(data_dir, "inputs", import_dest_folder.path_from_inputs, project_source.pcvct_name)
         if dest |> (project_source.type == "file" ? isfile : isdir)
             msg = """
             In copying $(src) to $(dest), found a $(project_source.type) with the same name.
@@ -266,14 +273,14 @@ function copyFilesToFolders(path_to_project::AbstractString, project_sources::Im
     return success
 end
 
-function adaptProject(input_folders::ImportDestFolders)
-    success = adaptConfig(input_folders.config)
-    success &= adaptCustomCode(input_folders.custom_code)
+function adaptProject(import_dest_folders::ImportDestFolders)
+    success = adaptConfig(import_dest_folders.config)
+    success &= adaptCustomCode(import_dest_folders.custom_code)
     return success
 end
 
 function adaptConfig(config::ImportDestFolder)
-    return true # nothing to do for now
+    return true #! nothing to do for now
 end
 
 function adaptCustomCode(custom_code::ImportDestFolder)
@@ -288,7 +295,7 @@ function adaptMain(path_from_inputs::AbstractString)
     lines = readlines(path_to_main)
 
     if any(x->contains(x, "argument_parser.parse"), lines)
-        # already adapted the main.cpp
+        #! already adapted the main.cpp
         return true
     end
 
@@ -327,7 +334,7 @@ function adaptMain(path_from_inputs::AbstractString)
 
         // load and parse settings file(s)
         load_PhysiCell_config_file();
-        
+
         char copy_command [1024]; 
 
         sprintf( copy_command , "cp %s %s/PhysiCell_settings.xml" , argument_parser.path_to_config_file.c_str(), PhysiCell_settings.folder.c_str() ); //, PhysiCell_settings.folder.c_str() ); 
@@ -343,7 +350,7 @@ function adaptMain(path_from_inputs::AbstractString)
 end
 
 function adaptMakefile(path_from_inputs::AbstractString)
-    return true # nothing to do for now
+    return true #! nothing to do for now
 end
 
 function adaptCustomModules(path_from_inputs::AbstractString)
@@ -353,7 +360,7 @@ function adaptCustomModules(path_from_inputs::AbstractString)
 end
 
 function adaptCustomHeader(path_from_inputs::AbstractString)
-    return true # nothing to do for now
+    return true #! nothing to do for now
 end
 
 function adaptCustomCPP(path_from_inputs::AbstractString)

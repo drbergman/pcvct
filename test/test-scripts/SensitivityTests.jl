@@ -18,10 +18,8 @@ dv_save_full_data_interval = DiscreteVariation(["save", "full_data", "interval"]
 dv_save_svg_data_interval = DiscreteVariation(["save","SVG","interval"], 6.0)
 discrete_variations = [dv_max_time, dv_save_full_data_interval, dv_save_svg_data_interval]
 
-reference_config_variation_id, reference_rulesets_variation_id, reference_ic_cell_variation_id = pcvct.addVariations(GridVariation(), inputs, discrete_variations)
-reference_config_variation_id = reference_config_variation_id[1]
-reference_rulesets_variation_id = reference_rulesets_variation_id[1]
-reference_ic_cell_variation_id = reference_ic_cell_variation_id[1]
+add_variations_result = pcvct.addVariations(GridVariation(), inputs, discrete_variations)
+reference_variation_id = add_variations_result.all_variation_ids[1]
 
 xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:0"]
 lower_bound = 250.0 - 50.0
@@ -46,11 +44,11 @@ n_replicates = 1
 
 gs_fn(simulation_id::Int) = finalPopulationCount(simulation_id)[cell_type]
 
-moat_sampling = run(MOAT(n_points), n_replicates, inputs, avs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
-moat_sampling = run(MOAT(), n_replicates, inputs, avs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
-moat_sampling = run(MOAT(4; orthogonalize=true), n_replicates, inputs, avs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
-sobol_sampling = run(Sobolʼ(n_points), n_replicates, inputs, avs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
-rbd_sampling = run(RBD(n_points), n_replicates, inputs, avs; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
+moat_sampling = run(MOAT(n_points), n_replicates, inputs, avs; force_recompile=force_recompile, reference_variation_id=reference_variation_id, functions=[gs_fn])
+moat_sampling = run(MOAT(), n_replicates, inputs, avs; force_recompile=force_recompile, reference_variation_id=reference_variation_id, functions=[gs_fn])
+moat_sampling = run(MOAT(4; orthogonalize=true), n_replicates, inputs, avs; force_recompile=force_recompile, reference_variation_id=reference_variation_id, functions=[gs_fn])
+sobol_sampling = run(Sobolʼ(n_points), n_replicates, inputs, avs; force_recompile=force_recompile, reference_variation_id=reference_variation_id, functions=[gs_fn])
+rbd_sampling = run(RBD(n_points), n_replicates, inputs, avs; force_recompile=force_recompile, reference_variation_id=reference_variation_id, functions=[gs_fn])
 
 pcvct.calculateGSA!(moat_sampling, gs_fn)
 pcvct.calculateGSA!(sobol_sampling, gs_fn)
@@ -69,10 +67,8 @@ dv_save_full_data_interval = DiscreteVariation(["save", "full_data", "interval"]
 dv_save_svg_data_interval = DiscreteVariation(["save","SVG","interval"], 6.0)
 discrete_variations = [dv_max_time, dv_save_full_data_interval, dv_save_svg_data_interval]
 
-reference_config_variation_id, reference_rulesets_variation_id, reference_ic_cell_variation_id = pcvct.addVariations(GridVariation(), inputs, discrete_variations)
-reference_config_variation_id = reference_config_variation_id[1]
-reference_rulesets_variation_id = reference_rulesets_variation_id[1]
-reference_ic_cell_variation_id = reference_ic_cell_variation_id[1]
+add_variations_result = pcvct.addVariations(GridVariation(), inputs, discrete_variations)
+reference_variation_id = add_variations_result.all_variation_ids[1]
 
 xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:0"]
 lower_bound = 250.0 - 50.0
@@ -90,14 +86,14 @@ dv4 = UniformDistributedVariation(xml_path, 0.25, 0.75)
 
 av = CoVariation(dv1, dv2, dv3, dv4)
 
-moat_sampling = run(MOAT(n_points), n_replicates, inputs, av; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
+moat_sampling = run(MOAT(n_points), n_replicates, inputs, av; force_recompile=force_recompile, reference_variation_id=reference_variation_id, functions=[gs_fn])
 n_simulations_expected = n_points * (1 + 1) * n_replicates
 @test length(moat_sampling.sampling) == n_simulations_expected
 
 sobol_index_methods = (first_order=:Sobol1993, total_order=:Homma1996)
-sobol_sampling = run(Sobolʼ(n_points; sobol_index_methods=sobol_index_methods), n_replicates, inputs, av; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
+sobol_sampling = run(Sobolʼ(n_points; sobol_index_methods=sobol_index_methods), n_replicates, inputs, av; force_recompile=force_recompile, reference_variation_id=reference_variation_id, functions=[gs_fn])
 sobol_index_methods = (first_order=:Saltelli2010, total_order=:Sobol2007)
-sobol_sampling = run(Sobolʼ(n_points; sobol_index_methods=sobol_index_methods), n_replicates, inputs, av; force_recompile=force_recompile, reference_config_variation_id=reference_config_variation_id, reference_rulesets_variation_id=reference_rulesets_variation_id, reference_ic_cell_variation_id=reference_ic_cell_variation_id, functions=[gs_fn])
+sobol_sampling = run(Sobolʼ(n_points; sobol_index_methods=sobol_index_methods), n_replicates, inputs, av; force_recompile=force_recompile, reference_variation_id=reference_variation_id, functions=[gs_fn])
 
 reference = getSimulationIDs(sobol_sampling)[1] |> Simulation
 sobol_sampling = run(Sobolʼ(2), n_replicates, reference, av)
@@ -115,8 +111,8 @@ dv_pressure_hfm = UniformDistributedVariation(["hypothesis_ruleset:name:default"
 dv_x0 = UniformDistributedVariation(["cell_patches:name:default", "patch_collection:type:disc", "patch:ID:1", "x0"], -100.0, 0.0, flip)
 dv_anisotropy = UniformDistributedVariation(["layer:ID:2", "patch_collection:type:elliptical_disc", "patch:ID:1", "anisotropy"], 0.0, 1.0)
 
-cv1 = CoVariation([dv_apop, dv_cycle]) # I think wanted these to only be config variations?
-cv2 = CoVariation([dv_necr, dv_pressure_hfm, dv_x0, dv_anisotropy]) # I think I wanted these to be all different locations?
+cv1 = CoVariation([dv_apop, dv_cycle]) #! I think wanted these to only be config variations?
+cv2 = CoVariation([dv_necr, dv_pressure_hfm, dv_x0, dv_anisotropy]) #! I think I wanted these to be all different locations?
 avs = [cv1, cv2]
 
 method = MOAT(4)

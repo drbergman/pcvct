@@ -8,3 +8,7 @@ It is assumed that most, if not all use cases, will benefit from more simulation
 
 ## Initial conditions not loaded when launching PhysiCell Studio for a simulation.
 When launching PhysiCell Studio from pcvct, the initial conditions (cells and substrates) are not loaded.
+
+## Limited intracellular models
+Currently only supports ODE intracellular models (using libRoadRunner).
+Does not support MaBoSS or dFBA.

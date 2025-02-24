@@ -73,7 +73,7 @@ function averageExtracellularSubstrate(snapshot::PhysiCellSnapshot; cell_type_to
     substrates = snapshot.substrates
     mesh = snapshot.mesh
 
-    aes = Dict{String, Dict{String, Real}}() # aes[cell_type_name][substrate_name] = average 
+    aes = Dict{String, Dict{String, Real}}()
     cells_to_keep = include_dead ? deepcopy(cells) : cells[.!cells.dead, :]
     for cell_type_name in values(cell_type_to_name_dict)
         cell_type_cells = cells_to_keep[cells_to_keep.cell_type_name .== cell_type_name, :]
@@ -123,7 +123,7 @@ function ExtracellularSubstrateTimeSeries(sequence::PhysiCellSequence; include_d
     for (i, snapshot) in enumerate(sequence.snapshots)
         snapshot_data = averageExtracellularSubstrate(snapshot; cell_type_to_name_dict=cell_type_to_name_dict, substrate_names=substrate_names, include_dead=include_dead)
         for cell_type_name in keys(snapshot_data)
-            if !(cell_type_name in keys(data))
+            if !haskey(data, cell_type_name)
                 data[cell_type_name] = Dict{String, Vector{Real}}()
             end
             for substrate_name in keys(snapshot_data[cell_type_name])
@@ -154,7 +154,7 @@ function ExtracellularSubstrateTimeSeries(simulation_id::Integer; include_dead::
                 continue
             end
             cell_type_name, substrate_name = split(name, " AND ")
-            if !(cell_type_name in keys(data))
+            if !haskey(data, cell_type_name)
                 data[cell_type_name] = Dict{String, Vector{Real}}()
             end
             data[cell_type_name][substrate_name] = df[!, name]
