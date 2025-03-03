@@ -12,7 +12,7 @@ function pcvctVersion()
 end
 
 function pcvctDBVersion(is_new_db::Bool)
-    # check if versions table exists
+    #! check if versions table exists
     table_name = "pcvct_version"
     versions_exists = DBInterface.execute(db, "SELECT name FROM sqlite_master WHERE type='table' AND name='$(table_name)';") |> DataFrame |> x -> (length(x.name)==1)
     if !versions_exists

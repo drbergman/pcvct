@@ -6,7 +6,8 @@ str = "TESTING WITH $(filename)"
 hashBorderPrint(str)
 
 ic_ecm_folder = "1_xml"
-pcvct.createICECMXMLTemplate(ic_ecm_folder)
+ic_ecm_folder = pcvct.createICECMXMLTemplate(ic_ecm_folder)
+@test_nowarn pcvct.createICECMXMLTemplate(ic_ecm_folder)
 
 config_folder = "template-ecm"
 custom_code_folder = "template-ecm"

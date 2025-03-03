@@ -8,10 +8,6 @@ hashBorderPrint(str)
 simulationsTable()
 simulation_ids = 1:5
 printSimulationsTable(simulation_ids)
-pcvct.printConfigVariationsTable(simulation_ids)
-pcvct.printRulesetsVariationsTable(simulation_ids)
-pcvct.printICCellVariationsTable(simulation_ids)
-pcvct.printICECMVariationsTable(simulation_ids)
 
 # test required folders
 config_src_folder =  joinpath(pcvct.data_dir, "inputs", "configs")
@@ -41,25 +37,25 @@ schema_without_primary_id = ""
 @test_throws ArgumentError pcvct.icFilename("ecm")
 
 # misc tests
-config_db = pcvct.configDB(Simulation(1))
+config_db = pcvct.variationsDatabase(:config, Simulation(1))
 @test config_db isa SQLite.DB
 
-ic_cell_db = pcvct.icCellDB(Simulation(1))
+ic_cell_db = pcvct.variationsDatabase(:ic_cell, Simulation(1))
 @test ic_cell_db isa Missing
 
-ic_ecm_db = pcvct.icECMDB(Simulation(1))
+ic_ecm_db = pcvct.variationsDatabase(:ic_ecm, Simulation(1))
 @test ic_ecm_db isa Nothing
 
-pcvct.configVariationIDs(Simulation(1))
-pcvct.configVariationIDs(Sampling(1))
-pcvct.rulesetsVariationIDs(Simulation(1))
-pcvct.rulesetsVariationIDs(Sampling(1))
-pcvct.icCellVariationIDs(Simulation(1))
-pcvct.icCellVariationIDs(Sampling(1))
-pcvct.icECMVariationIDs(Simulation(1))
-pcvct.icECMVariationIDs(Sampling(1))
+pcvct.variationIDs(:config, Simulation(1))
+pcvct.variationIDs(:config, Sampling(1))
+pcvct.variationIDs(:rulesets_collection, Simulation(1))
+pcvct.variationIDs(:rulesets_collection, Sampling(1))
+pcvct.variationIDs(:ic_cell, Simulation(1))
+pcvct.variationIDs(:ic_cell, Sampling(1))
+pcvct.variationIDs(:ic_ecm, Simulation(1))
+pcvct.variationIDs(:ic_ecm, Sampling(1))
 
-pcvct.configVariationsTable(Sampling(1); remove_constants=true)
-pcvct.rulesetsVariationsTable(Sampling(1); remove_constants=true)
-pcvct.icCellVariationsTable(Sampling(1); remove_constants=true)
-pcvct.icECMVariationsTable(Sampling(1); remove_constants=true)
+pcvct.variationsTable(:config, Sampling(1); remove_constants=true)
+pcvct.variationsTable(:rulesets_collection, Sampling(1); remove_constants=true)
+pcvct.variationsTable(:ic_cell, Sampling(1); remove_constants=true)
+pcvct.variationsTable(:ic_ecm, Sampling(1); remove_constants=true)

@@ -24,34 +24,34 @@ function physicellVersionID()
         repo_is_dirty = true
     end
 
-    # then, get the current commit hash
+    #! then, get the current commit hash
     commit_hash = readchomp(`git -C $physicell_dir rev-parse HEAD`)
     commit_hash *= repo_is_dirty ? "-dirty" : ""
 
-    # then, compare that hash with hashes in the database
+    #! then, compare that hash with hashes in the database
     query = constructSelectQuery("physicell_versions", "WHERE commit_hash = '$commit_hash'")
     current_entry_df = queryToDataFrame(query)
     @assert size(current_entry_df, 1) <= 1 "The database should have unique 'commit_hash' entries."
     is_hash_in_db = !isempty(current_entry_df)
     no_entries_missing = is_hash_in_db && all(.!ismissing.([x[1] for x in eachcol(current_entry_df)]))
     if no_entries_missing
-        # if the commit hash is already in the database, and it has a tag, then we are done
+        #! if the commit hash is already in the database, and it has a tag, then we are done
         return current_entry_df.physicell_version_id[1]
     end
     entry_dict = Dict{String,String}()
-    
-    # then, compare that hash with remote hashes to identify the tag, repo owner, and date
+
+    #! then, compare that hash with remote hashes to identify the tag, repo owner, and date
     hash_to_tag_dict = getCommitHashToTagDict(physicell_dir)
     if !repo_is_dirty && haskey(hash_to_tag_dict, commit_hash)
         entry_dict["tag"] = hash_to_tag_dict[commit_hash]
     else
         entry_dict["tag"] = "NULL"
     end
-    
+
     entry_dict["repo_owner"] = repo_is_dirty ? "NULL" : repoOwner(commit_hash, entry_dict["tag"])
     entry_dict["date"] = repo_is_dirty ? "NULL" : readchomp(`git -C $physicell_dir show -s --format=%ci $commit_hash`)
-    
-    db_entry_dict = [k => v=="NULL" ? v : "'$v'" for (k,v) in entry_dict] |> Dict # surround non-NULL values with single quotes, so NULL really go in as NULL
+
+    db_entry_dict = [k => v=="NULL" ? v : "'$v'" for (k,v) in entry_dict] |> Dict #! surround non-NULL values with single quotes, so NULL really go in as NULL
     if is_hash_in_db
         for (name, col) in pairs(eachcol(current_entry_df))
             if !ismissing(col[1])
@@ -70,7 +70,7 @@ end
 
 function physicellIsGit()
     is_git = isdir(joinpath(physicell_dir, ".git"))
-    if !is_git # possible it is a submodule
+    if !is_git #! possible it is a submodule
         path_to_file = joinpath(physicell_dir, ".git")
         if isfile(path_to_file)
             lines = readlines(path_to_file)
@@ -86,7 +86,7 @@ function physicellIsGit()
 end
 
 function gitDirectoryIsClean(dir::String)
-    cmd = `git -C $dir status --porcelain` # -C flag is for changing directory, --porcelain flag is for machine-readable output (much easier to tell if clean this way)
+    cmd = `git -C $dir status --porcelain` #! -C flag is for changing directory, --porcelain flag is for machine-readable output (much easier to tell if clean this way)
     output = read(cmd, String)
     is_clean = length(output) == 0
     if is_clean
@@ -96,10 +96,14 @@ function gitDirectoryIsClean(dir::String)
         "licenses", "matlab", "output", "povray", "protocols", "sample_projects",
         "sample_projects_intracellular", "sample_projects_physipkpd", "tests", "unit_tests",
         "user_projects"]
+    files_to_ignore = ["ALL_CITATIONS.txt"]
     lines = split(output, "\n")
     filter!(x -> x != "", lines)
     for folder in folders_to_ignore
         filter!(x -> !contains(x, " $folder/"), lines)
+    end
+    for file in files_to_ignore
+        filter!(x -> !contains(x, " $file"), lines)
     end
     is_clean = isempty(lines)
     if !is_clean

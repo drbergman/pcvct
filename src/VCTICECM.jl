@@ -6,7 +6,7 @@ using PhysiCellECMCreator
 Create folder with a template XML file for IC ECM.
 
 See the PhysiCellECMCreator.jl documentation for more information on IC ECM and how this function works outside of pcvct.
-This pcvct function runs the `createICECMXMLTemplate` function from PhysiCellECMCreator.jl and then reinitializes the database.
+This pcvct function runs the `createICECMXMLTemplate` function from PhysiCellECMCreator.jl and then updates the database.
 Furthermore, the folder can be passed in just as the name of the folder located in `data/inputs/ics/ecms/` rather than the full path.
 
 This functionality is run outside of a PhysiCell runtime.
@@ -21,9 +21,25 @@ Importantly, no two simulations will use the same CSV file.
 """
 function createICECMXMLTemplate(folder::String)
     if length(splitpath(folder)) == 1
-        # then the folder is just the name of the ics/ecms/folder folder
-        folder = joinpath(data_dir, "inputs", "ics", "ecms", folder)
+        @assert initialized "Must supply a full path to the folder if the database is not initialized."
+        #! then the folder is just the name of the ics/ecms/folder folder
+        path_to_folder = locationPath(:ic_ecm, folder)
+    else
+        path_to_folder = folder
+        folder = splitpath(folder)[end]
     end
-    PhysiCellECMCreator.createICECMXMLTemplate(folder)
-    reinitializeDatabase()
+
+    if isfile(joinpath(path_to_folder, "ecm.xml"))
+        println("ecm.xml already exists in $path_to_folder. Skipping.")
+        return folder
+    end
+
+    PhysiCellECMCreator.createICECMXMLTemplate(path_to_folder)
+
+    #! finish by adding this folder to the database
+    if initialized
+        insertFolder(:ic_ecm, folder)
+    end
+
+    return folder
 end

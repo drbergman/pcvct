@@ -45,18 +45,18 @@ end
 
 function setUpStudioInputs(simulation_id::Int)
     path_to_output = joinpath(outputFolder("simulation", simulation_id), "output")
-    
+
     physicell_version = physicellVersion(Simulation(simulation_id))
     upstream_version = split(physicell_version, "-")[1] |> VersionNumber
-    
+
     rules_header = ["cell_type", "signal", "response", "behavior", "base_response", "max_response", "half_max", "hill_power", "applies_to_dead"]
     if upstream_version < v"1.14.0"
         output_rules_file = "cell_rules.csv"
-    else # starting in 1.14.1, export the v3 rules to cell_rules_parsed.csv
+    else #! starting in PhysiCell v1.14.1, export the v3 rules to cell_rules_parsed.csv
         output_rules_file = "cell_rules_parsed.csv"
         filter!(h -> h != "base_response", rules_header)
     end
-    
+
     path_to_xml = joinpath(path_to_output, "PhysiCell_settings.xml")
     xml_doc = openXML(path_to_xml)
     makeXMLPath(xml_doc, ["save", "folder"])

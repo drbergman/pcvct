@@ -51,70 +51,69 @@ function prepareFolder(simulation::Simulation, export_folder::AbstractString)
     query = constructSelectQuery("simulations", "WHERE simulation_id = $(simulation.id)")
     row = queryToDataFrame(query; is_row=true)
 
-    # config file
-    config_folder = simulation.inputs.config.folder
-    path_to_xml = joinpath(data_dir, "inputs", "configs", config_folder, "config_variations", "config_variation_$(row.config_variation_id[1]).xml")
+    #! config file
+    path_to_xml = joinpath(locationPath(:config, simulation), "config_variations", "config_variation_$(row.config_variation_id[1]).xml")
     cp(path_to_xml, joinpath(export_config_folder, "PhysiCell_settings.xml"))
 
-    # custom code
-    custom_code_folder = simulation.inputs.custom_code.folder
-    path_to_custom_codes_folder = joinpath(data_dir, "inputs", "custom_codes", custom_code_folder)
+    #! custom code
+    path_to_custom_codes_folder = locationPath(:custom_code, simulation)
     for filename in ["main.cpp", "Makefile"]
         cp(joinpath(path_to_custom_codes_folder, filename), joinpath(export_folder, filename))
     end
     cp(joinpath(path_to_custom_codes_folder, "custom_modules"), joinpath(export_folder, "custom_modules"))
 
-    # rulesets
+    #! rulesets
     if row.rulesets_collection_id[1] != -1
-        rulesets_collection_folder = simulation.inputs.rulesets_collection.folder
-        path_to_xml = joinpath(data_dir, "inputs", "rulesets_collections", rulesets_collection_folder, "rulesets_collections_variations", "rulesets_variation_$(row.rulesets_collection_variation_id[1]).xml")
+        path_to_xml = joinpath(locationPath(:rulesets_collection, simulation), "rulesets_collection_variations", "rulesets_collection_variation_$(row.rulesets_collection_variation_id[1]).xml")
         path_to_csv = joinpath(export_folder, "config", "cell_rules.csv")
         exportRulesToCSV(path_to_csv, path_to_xml)
     end
 
-    # ic cells
+    #! intracellulars
+    if row.intracellular_id[1] != -1
+        path_to_intracellular = joinpath(locationPath(:intracellular, simulation), "intracellular.xml")
+        cp(path_to_intracellular, joinpath(export_folder, "config", "intracellular.xml"))
+    end
+
+    #! ic cells
     if row.ic_cell_id[1] != -1
-        ic_cell_folder = simulation.inputs.ic_cell.folder
-        path_to_ic_cells_folder = joinpath(data_dir, "inputs", "ics", "cells", ic_cell_folder)
+        path_to_ic_cells_folder = locationPath(:ic_cell, simulation)
         ic_cell_file_name = readdir(path_to_ic_cells_folder)
         filter!(x -> x in ["cells.csv", "cells.xml"], ic_cell_file_name)
         ic_cell_file_name = ic_cell_file_name[1]
         if endswith(ic_cell_file_name, ".xml")
-            # rel path from ic_cells_folder
+            #! rel path from ic_cells_folder
             ic_cell_file_name = joinpath("ic_cell_variations", "ic_cell_variation_$(row.ic_cell_variation_id[1])_s$(simulation.id).csv")
         end
         cp(joinpath(path_to_ic_cells_folder, ic_cell_file_name), joinpath(export_folder, "config", "cells.csv"))
     end
 
-    # ic substrates
+    #! ic substrates
     if row.ic_substrate_id[1] != -1
-        ic_substrate_folder = simulation.inputs.ic_substrate.folder
-        path_to_file = joinpath(data_dir, "inputs", "ics", "substrates", ic_substrate_folder, "substrates.csv")
+        path_to_file = joinpath(locationPath(:ic_substrate, simulation), "substrates.csv")
         cp(path_to_file, joinpath(export_folder, "config", "substrates.csv"))
     end
 
-    # ic ecm
+    #! ic ecm
     if row.ic_ecm_id[1] != -1
-        ic_ecm_folder = simulation.inputs.ic_ecm.folder
-        path_to_ic_ecm_folder = joinpath(data_dir, "inputs", "ics", "ecms", ic_ecm_folder)
+        path_to_ic_ecm_folder = locationPath(:ic_ecm, simulation)
         ic_ecm_file_name = readdir(path_to_ic_ecm_folder)
         filter!(x -> x in ["ecm.csv", "ecm.xml"], ic_ecm_file_name)
         ic_ecm_file_name = ic_ecm_file_name[1]
         if endswith(ic_ecm_file_name, ".xml")
-            # rel path from ic_ecm_folder
+            #! rel path from ic_ecm_folder
             ic_ecm_file_name = joinpath("ic_ecm_variations", "ic_ecm_variation_$(row.ic_ecm_variation_id[1])_s$(simulation.id).csv")
         end
         cp(joinpath(path_to_ic_ecm_folder, ic_ecm_file_name), joinpath(export_folder, "config", "ecm.csv"))
     end
 
-    # ic dcs
+    #! ic dcs
     if row.ic_dc_id[1] != -1
-        ic_dc_folder = simulation.inputs.ic_dc.folder
-        path_to_file = joinpath(data_dir, "inputs", "ics", "dcs", ic_dc_folder, "dcs.csv")
+        path_to_file = joinpath(locationPath(:ic_dc, simulation), "dcs.csv")
         cp(path_to_file, joinpath(export_folder, "config", "dcs.csv"))
     end
 
-    # get physicell version
+    #! get physicell version
     physicell_version_id = row.physicell_version_id[1]
     query = constructSelectQuery("physicell_versions", "WHERE physicell_version_id = $physicell_version_id")
     row = queryToDataFrame(query; is_row=true)
@@ -168,7 +167,7 @@ function revertMain(export_folder::AbstractString, physicell_version::AbstractSt
 
     parsing_block = """
         // load and parse settings file(s)
-        
+
         bool XML_status = false; 
         char copy_command [1024]; 
         if( argc > 1 )
@@ -185,13 +184,6 @@ function revertMain(export_folder::AbstractString, physicell_version::AbstractSt
         { exit(-1); }
     """
     lines = [lines[1:(idx1-1)]; parsing_block; lines[idx1:end]]
-    # main_idx = findfirst(x -> contains(x, "int main"), lines)
-    # if contains(lines[main_idx], "{")
-    #     lines = [lines[1:main_idx]; parsing_block; lines[main_idx+1:end]]
-    # else
-    #     # this might not be 100% robust, but I have to hope for some standardization of the main function
-    #     lines = [lines[1:main_idx+1]; parsing_block; lines[main_idx+2:end]]
-    # end
 
     open(path_to_main, "w") do io
         for line in lines
@@ -202,7 +194,7 @@ function revertMain(export_folder::AbstractString, physicell_version::AbstractSt
 end
 
 function revertMakefile(export_folder::AbstractString, physicell_version::AbstractString)
-    return true # nothing to do as of yet for the Makefile
+    return true #! nothing to do as of yet for the Makefile
 end
 
 function revertConfig(export_folder::AbstractString, physicell_version::AbstractString)
@@ -210,18 +202,18 @@ function revertConfig(export_folder::AbstractString, physicell_version::Abstract
     path_to_config = joinpath(path_to_config_folder, "PhysiCell_settings.xml")
     xml_doc = openXML(path_to_config)
 
-    # output folder
+    #! output folder
     folder_element = retrieveElement(xml_doc, ["save", "folder"])
     set_content(folder_element, "output")
 
-    # ic substrate
+    #! ic substrate
     substrate_ic_element = retrieveElement(xml_doc, ["microenvironment_setup", "options", "initial_condition"])
     using_substrate_ics = isfile(joinpath(path_to_config_folder, "substrates.csv"))
     set_attributes(substrate_ic_element; type="csv", enabled=string(using_substrate_ics))
     filename_element = find_element(substrate_ic_element, "filename")
     set_content(filename_element, joinpath(".", "config", "substrates.csv"))
-    
-    # ic cells
+
+    #! ic cells
     cell_ic_element = retrieveElement(xml_doc, ["initial_conditions", "cell_positions"])
     using_cell_ics = isfile(joinpath(path_to_config_folder, "cells.csv"))
     set_attributes(cell_ic_element; type="csv", enabled=string(using_substrate_ics))
@@ -230,20 +222,20 @@ function revertConfig(export_folder::AbstractString, physicell_version::Abstract
     filename_element = find_element(cell_ic_element, "filename")
     set_content(filename_element, "cells.csv")
 
-    # ic ecm
+    #! ic ecm
     using_ecm_ics = isfile(joinpath(path_to_config_folder, "ecm.csv"))
     if using_ecm_ics
         setECMSetupElement(xml_doc)
     end
 
-    # ic dcs
+    #! ic dcs
     dc_ic_element = retrieveElement(xml_doc, ["microenvironment_setup", "options", "dirichlet_nodes"])
     using_dc_ics = isfile(joinpath(path_to_config_folder, "dcs.csv"))
     set_attributes(dc_ic_element; type="csv", enabled=string(using_dc_ics))
     filename_element = find_element(dc_ic_element, "filename")
     set_content(filename_element, joinpath("config", "dcs.csv"))
-    
-    # rulesets
+
+    #! rulesets
     rules_element = retrieveElement(xml_doc, ["cell_rules", "rulesets", "ruleset"])
     using_rules = isfile(joinpath(path_to_config_folder, "cell_rules.csv"))
     set_attributes(rules_element; type="csv", enabled=string(using_rules))
@@ -251,6 +243,9 @@ function revertConfig(export_folder::AbstractString, physicell_version::Abstract
     set_content(filename_element, joinpath(".", "config"))
     filename_element = find_element(rules_element, "filename")
     set_content(filename_element, "cell_rules.csv")
+
+    #! intracellulars
+    #! lol, not supported for export yet
 
     closeXML(xml_doc)
     return true
@@ -285,7 +280,7 @@ function revertCustomModules(export_folder::AbstractString, physicell_version::A
 end
 
 function revertCustomHeader(path_to_custom_modules::AbstractString, physicell_version::AbstractString)
-    return true # nothing to do as of yet for the custom header
+    return true #! nothing to do as of yet for the custom header
 end
 
 function revertCustomCPP(path_to_custom_modules::AbstractString, physicell_version::AbstractString)

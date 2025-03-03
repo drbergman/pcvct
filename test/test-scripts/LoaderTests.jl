@@ -15,7 +15,7 @@ push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], 6.0))
 
 out = run(inputs, discrete_variations; use_previous=false)
 @test out.trial isa Simulation
-sequence = pcvct.PhysiCellSequence(joinpath("test-project", "data", "outputs", "simulations", string(out.trial.id), "output"); include_cells=true, include_substrates=true)
+sequence = pcvct.PhysiCellSequence(joinpath("data", "outputs", "simulations", string(out.trial.id), "output"); include_cells=true, include_substrates=true)
 
 seq_dict = getCellDataSequence(sequence, "elapsed_time_in_phase"; include_dead=true)
 

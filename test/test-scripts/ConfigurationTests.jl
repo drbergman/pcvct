@@ -10,7 +10,7 @@ inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rul
 
 n_replicates = 2
 
-path_to_xml = joinpath("test-project", "data", "inputs", "configs", config_folder, "PhysiCell_settings.xml")
+path_to_xml = joinpath("data", "inputs", "configs", config_folder, "PhysiCell_settings.xml")
 
 cell_type = "default"
 
@@ -32,7 +32,7 @@ element_paths = [
 xml_doc = pcvct.openXML(path_to_xml)
 for ep in element_paths
     ce = pcvct.retrieveElement(xml_doc, ep[2]; required=false)
-    @test !isnothing(ce) # make sure the element was found
+    @test !isnothing(ce) #! make sure the element was found
 end
 pcvct.closeXML(xml_doc)
 
@@ -130,3 +130,9 @@ addAttackRateVariationDimension!(discrete_variations, cell_type, cell_type, [0.1
 
 out = run(reference_monad, discrete_variations; n_replicates=n_replicates)
 @test out.n_success == length(out.trial)
+
+@test isnothing(pcvct.prepareVariedInputFolder(:custom_code, Sampling(1))) #! returns nothing because custom codes is not varied
+@test_throws ArgumentError pcvct.shortLocationVariationID(:not_a_location)
+@test_nowarn pcvct.shortVariationName(:intracellular, "not_a_var")
+@test_nowarn pcvct.shortVariationName(:intracellular, "intracellular_variation_id")
+@test_throws ArgumentError pcvct.shortVariationName(:not_a_location, "not_a_var")

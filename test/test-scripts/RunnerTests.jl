@@ -31,7 +31,7 @@ out2 = run(inputs, discrete_variations)
 
 @test out.trial.id == out2.trial.id 
 @test out.trial.inputs == out2.trial.inputs
-@test out.trial.variation_ids == out2.trial.variation_ids
+@test out.trial.variation_id == out2.trial.variation_id
 
 hashBorderPrint("SIMULATION SUCCESSFULLY RUN!")
 
@@ -71,7 +71,7 @@ out2 = run(simulation, discrete_variations; n_replicates=n_replicates, force_rec
 
 hashBorderPrint("SUCCESSFULLY `run` WITHOUT CREATING SAMPLING!")
 
-n_simulations = length(sampling) # number of simulations recorded (in .csvs) for this sampling
+n_simulations = length(sampling) #! number of simulations recorded (in .csvs) for this sampling
 n_expected_sims = n_replicates
 for discrete_variation in discrete_variations
     global n_expected_sims *= length(discrete_variation)
@@ -79,9 +79,9 @@ end
 n_variations = length(sampling.variation_ids)
 
 # make sure the number of simulations in this sampling is what we expected based on...
-@test n_simulations == n_expected_sims # the discrete_variations...
-@test n_simulations == n_variations * n_replicates # ...how many variation ids we recorded (number of rulesets_variations_ids must match variation_ids on construction of sampling)
-@test n_simulations == out.n_success # ...how many simulations succeeded
+@test n_simulations == n_expected_sims #! the discrete_variations...
+@test n_simulations == n_variations * n_replicates #! ...how many variation ids we recorded (number of rulesets_variations_ids must match variation_ids on construction of sampling)
+@test n_simulations == out.n_success #! ...how many simulations succeeded
 
 hashBorderPrint("SAMPLING SUCCESSFULLY IN CSVS!")
 

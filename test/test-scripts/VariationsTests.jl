@@ -30,51 +30,51 @@ vals = [1.0, 2.0]
 push!(discrete_variations, DiscreteVariation(xml_path, vals))
 
 # Test edge cases of addGrid
-config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids = pcvct.addVariations(GridVariation(), inputs, discrete_variations)
+add_variations_result = pcvct.addVariations(GridVariation(), inputs, discrete_variations)
 
 # Test edge cases of addLHS
-config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids = pcvct.addVariations(LHSVariation(4), inputs, discrete_variations)
+add_variations_result = pcvct.addVariations(LHSVariation(4), inputs, discrete_variations)
 
 discrete_variations = DiscreteVariation[]
 xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:0"]
 push!(discrete_variations, DiscreteVariation(xml_path, [1.0, 2.0]))
-config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids = pcvct.addVariations(LHSVariation(4), inputs, discrete_variations)
+add_variations_result = pcvct.addVariations(LHSVariation(4), inputs, discrete_variations)
 
 discrete_variations = DiscreteVariation[]
 xml_path = ["cell_patches:name:default", "patch_collection:type:disc", "patch:ID:1", "x0"]
 vals = [0.0, -100.0]
 push!(discrete_variations, DiscreteVariation(xml_path, vals))
-config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids = pcvct.addVariations(LHSVariation(4), inputs, discrete_variations)
+add_variations_result = pcvct.addVariations(LHSVariation(4), inputs, discrete_variations)
 
 # Test edge cases of addSobol
-config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids = pcvct.addVariations(pcvct.SobolVariation(5), inputs, discrete_variations)
+add_variations_result = pcvct.addVariations(pcvct.SobolVariation(5), inputs, discrete_variations)
 
 discrete_variations = DiscreteVariation[]
 xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:0"]
 push!(discrete_variations, DiscreteVariation(xml_path, [1.0, 2.0]))
-config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids = pcvct.addVariations(pcvct.SobolVariation(5; skip_start=false), inputs, discrete_variations)
+add_variations_result = pcvct.addVariations(pcvct.SobolVariation(5; skip_start=false), inputs, discrete_variations)
 
 discrete_variations = DiscreteVariation[]
 xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","max_response"]
 vals = [1.0, 2.0]
 push!(discrete_variations, DiscreteVariation(xml_path, vals))
-config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids = pcvct.addVariations(pcvct.SobolVariation(5; skip_start=4, include_one=true), inputs, discrete_variations)
+add_variations_result = pcvct.addVariations(pcvct.SobolVariation(5; skip_start=4, include_one=true), inputs, discrete_variations)
 
 # Test edge cases of addRBD
-config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids = pcvct.addVariations(pcvct.RBDVariation(1), inputs, discrete_variations)
+add_variations_result = pcvct.addVariations(pcvct.RBDVariation(1), inputs, discrete_variations)
 
 discrete_variations = DiscreteVariation[]
 xml_path = ["cell_patches:name:default", "patch_collection:type:disc", "patch:ID:1", "x0"]
 vals = [0.0, -100.0]
 push!(discrete_variations, DiscreteVariation(xml_path, vals))
-config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids = pcvct.addVariations(pcvct.RBDVariation(2), inputs, discrete_variations)
+add_variations_result = pcvct.addVariations(pcvct.RBDVariation(2), inputs, discrete_variations)
 
 discrete_variations = DiscreteVariation[]
 xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:0"]
 push!(discrete_variations, DiscreteVariation(xml_path, [1.0, 2.0]))
-config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids = pcvct.addVariations(pcvct.RBDVariation(3), inputs, discrete_variations)
+add_variations_result = pcvct.addVariations(pcvct.RBDVariation(3), inputs, discrete_variations)
 
-config_variation_ids, rulesets_collection_variation_ids, ic_cell_variation_ids = pcvct.addVariations(pcvct.RBDVariation(3; use_sobol=false), inputs, discrete_variations)
+add_variations_result = pcvct.addVariations(pcvct.RBDVariation(3; use_sobol=false), inputs, discrete_variations)
 
 # test deprecation of ElementaryVariation
 @test_warn "`ElementaryVariation` is deprecated in favor of the more descriptive `DiscreteVariation`." ElementaryVariation(xml_path, [0.0, 1.0])
@@ -101,7 +101,7 @@ df = pcvct.simulationsTable(sampling)
 drs = df[!, Symbol("default: apop death rate")]
 pdurs = df[!, Symbol("default: duration:index:0")]
 for (dr, pdur) in zip(drs, pdurs)
-    @test (val_1.==dr) == (val_2.==pdur) # make sure they are using the same index in both
+    @test (val_1.==dr) == (val_2.==pdur) #! make sure they are using the same index in both
 end
 
 max_response_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","max_response"]
@@ -125,6 +125,13 @@ sampling = createTrial(LHSVariation(5), inputs, cv; n_replicates=3)
 @test pcvct.location(cv) == [:config, :config]
 @test pcvct.target(cv) == pcvct.XMLPath.([apoptosis_rate_path, cycle_rate_path])
 
-cv = CoVariation(cv.variations[1], cv.variations[2]) # CoVariation(ev1, ev2, ...)
+cv = CoVariation(cv.variations[1], cv.variations[2]) #! CoVariation(ev1, ev2, ...)
 sampling = createTrial(SobolVariation(7), inputs, cv; n_replicates=2)
 @test length(sampling.monad_ids) == 7
+
+# more tests for coverage
+ev = DiscreteVariation(["hypothesis_ruleset:name:default", "behavior:name:cycle entry", "decreasing_signals", "signal:name:pressure", "applies_to_dead"], [true, false])
+@test pcvct.sqliteDataType(ev) == "TEXT"
+
+ev = DiscreteVariation(["options", "random_seed"], ["system_clock", 0])
+@test pcvct.sqliteDataType(ev) == "TEXT"
