@@ -24,9 +24,9 @@ rulesets_collection_variation_ids = [1, 1]
 ic_cell_variation_ids = [0, 0]
 sampling = Sampling(inputs;
     n_replicates=n_replicates,
-    config_variation_ids=config_variation_ids,
-    rulesets_collection_variation_ids=rulesets_collection_variation_ids,
-    ic_cell_variation_ids=ic_cell_variation_ids
+    location_variation_ids=Dict{Symbol,Union{Integer,AbstractArray{<:Integer}}}(:config => config_variation_ids,
+                                                                                :rulesets_collection => rulesets_collection_variation_ids,
+                                                                                :ic_cell => ic_cell_variation_ids)
 )
 @test sampling isa Sampling
 
@@ -46,4 +46,4 @@ trial = Trial(samplings)
 # misc tests
 inputs = InputFolders(; config="0_template", custom_code="0_template")
 simulation = Simulation(Monad(1))
-sampling = Sampling(inputs; config_variation_ids=0, rulesets_collection_variation_ids=-1, ic_cell_variation_ids=-1)
+sampling = Sampling(inputs; location_variation_ids=Dict{Symbol,Union{Integer,AbstractArray{<:Integer}}}(:config => 0, :rulesets_collection => -1, :ic_cell => -1))

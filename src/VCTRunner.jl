@@ -7,10 +7,9 @@ function prepareSimulationCommand(simulation::Simulation, monad_id::Int, do_full
     mkpath(path_to_simulation_output)
 
     if do_full_setup
-        loadConfiguration(simulation)
-        loadRulesets(simulation)
-        loadICCells(simulation)
-        loadICECM(simulation)
+        for loc in project_locations.varied
+            prepareVariedInputFolder(loc, simulation)
+        end
         success = loadCustomCode(simulation; force_recompile=force_recompile)
         if !success
             simulationFailedToRun(simulation, monad_id)
@@ -18,10 +17,10 @@ function prepareSimulationCommand(simulation::Simulation, monad_id::Int, do_full
         end
     end
 
-    executable_str = joinpath(data_dir, "inputs", "custom_codes", simulation.inputs.custom_code.folder, baseToExecutable("project")) # path to executable
-    config_str = joinpath(data_dir, "inputs", "configs", simulation.inputs.config.folder, "config_variations", "config_variation_$(simulation.variation_ids.config).xml")
+    executable_str = joinpath(locationPath(:custom_code, simulation), baseToExecutable("project")) #! path to executable
+    config_str = joinpath(locationPath(:config, simulation), "config_variations", "config_variation_$(simulation.variation_id[:config]).xml")
     flags = ["-o", path_to_simulation_output]
-    if simulation.inputs.ic_cell.id != -1
+    if simulation.inputs[:ic_cell].id != -1
         try
             append!(flags, ["-i", pathToICCell(simulation)])
         catch e
@@ -30,26 +29,30 @@ function prepareSimulationCommand(simulation::Simulation, monad_id::Int, do_full
             return nothing
         end
     end
-    if simulation.inputs.ic_substrate.id != -1
-        append!(flags, ["-s", joinpath(data_dir, "inputs", "ics", "substrates", simulation.inputs.ic_substrate.folder, "substrates.csv")]) # if ic file included (id != -1), then include this in the command
+    if simulation.inputs[:ic_substrate].id != -1
+        append!(flags, ["-s", joinpath(locationPath(:ic_substrate, simulation), "substrates.csv")]) #! if ic file included (id != -1), then include this in the command
     end
-    if simulation.inputs.ic_ecm.id != -1
+    if simulation.inputs[:ic_ecm].id != -1
         try
-            append!(flags, ["-e", pathToICECM(simulation)]) # if ic file included (id != -1), then include this in the command
+            append!(flags, ["-e", pathToICECM(simulation)]) #! if ic file included (id != -1), then include this in the command
         catch e
             println("\nWARNING: Simulation $(simulation.id) failed to initialize the IC ECM file.\n\tCause: $e\n")
             simulationFailedToRun(simulation, monad_id)
             return nothing
         end
     end
-    if simulation.inputs.ic_dc.id != -1
-        append!(flags, ["-d", joinpath(data_dir, "inputs", "ics", "dcs", simulation.inputs.ic_dc.folder, "dcs.csv")]) # if ic file included (id != -1), then include this in the command
+    if simulation.inputs[:ic_dc].id != -1
+        append!(flags, ["-d", joinpath(locationPath(:ic_dc, simulation), "dcs.csv")]) #! if ic file included (id != -1), then include this in the command
     end
-    if simulation.variation_ids.rulesets_collection != -1
-        path_to_rules_file = joinpath(data_dir, "inputs", "rulesets_collections", simulation.inputs.rulesets_collection.folder, "rulesets_collections_variations", "rulesets_variation_$(simulation.variation_ids.rulesets_collection).xml")
+    if simulation.variation_id[:rulesets_collection] != -1
+        path_to_rules_file = joinpath(locationPath(:rulesets_collection, simulation), "rulesets_collection_variations", "rulesets_collection_variation_$(simulation.variation_id[:rulesets_collection]).xml")
         append!(flags, ["-r", path_to_rules_file])
     end
-    return `$executable_str $config_str $flags`
+    if simulation.variation_id[:intracellular] != -1
+        path_to_intracellular_file = joinpath(locationPath(:intracellular, simulation), "intracellular_variations", "intracellular_variation_$(simulation.variation_id[:intracellular]).xml")
+        append!(flags, ["-n", path_to_intracellular_file])
+    end
+    return Cmd(`$executable_str $config_str $flags`; env=ENV, dir=physicell_dir)
 end
 
 function simulationFailedToRun(simulation::Simulation, monad_id::Int)
@@ -97,16 +100,21 @@ end
 function prepareHPCCommand(cmd::Cmd, simulation_id::Int)
     path_to_simulation_folder = outputFolder("simulation", simulation_id)
     base_cmd_str = "sbatch"
-    flags = ["--wrap=$(prepCmdForWrap(cmd))", "--wait", "--output=$(joinpath(path_to_simulation_folder, "output.log"))", "--error=$(joinpath(path_to_simulation_folder, "output.err"))"]
+    flags = ["--wrap=$(prepCmdForWrap(Cmd(cmd.exec)))",
+             "--wait",
+             "--output=$(joinpath(path_to_simulation_folder, "output.log"))",
+             "--error=$(joinpath(path_to_simulation_folder, "output.err"))",
+             "--chdir=$(physicell_dir)"
+            ]
     for (k, v) in sbatch_options
-        if k in ["wrap", "output", "error", "wait"]
+        if k in ["wrap", "output", "error", "wait", "chdir"]
             println("WARNING: The key $k is reserved for pcvct to set in the sbatch command. Skipping this key.")
             continue
         end
         if typeof(v) <: Function
             v = v(simulation_id)
         end
-        # check if v has any spaces
+        #! check if v has any spaces
         if occursin(" ", v)
             v = "\"$v\""
         end
@@ -128,10 +136,10 @@ function resolveSimulation(simulation_process::SimulationProcess, prune_options:
         DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Completed")) WHERE simulation_id=$(simulation.id);" )
     else
         println("\nWARNING: Simulation $(simulation.id) failed. Please check $(path_to_err) for more information.\n")
-        # write the execution command to output.err
+        #! write the execution command to output.err
         lines = readlines(path_to_err)
         open(path_to_err, "w+") do io
-            # read the lines of the output.err file
+            #! read the lines of the output.err file
             println(io, "Execution command: $(p.cmd)")
             println(io, "\n---stderr from PhysiCell---")
             for line in lines
@@ -152,21 +160,21 @@ function runMonad(monad::Monad; do_full_setup::Bool=true, force_recompile::Bool=
     if do_full_setup
         compilation_success = loadCustomCode(monad; force_recompile=force_recompile)
         if !compilation_success
-            return Task[] # do not delete simulations or the monad as these could have succeeded in the past (or on other nodes, etc.)
+            return Task[] #! do not delete simulations or the monad as these could have succeeded in the past (or on other nodes, etc.)
         end
     end
-    loadConfiguration(monad)
-    loadRulesets(monad)
-    loadICCells(monad)
-    loadICECM(monad)
+
+    for loc in project_locations.varied
+        prepareVariedInputFolder(loc, monad)
+    end
 
     simulation_tasks = Task[]
     for simulation_id in monad.simulation_ids
         if isStarted(simulation_id; new_status_code="Queued")
-            continue # if the simulation has already been started (or even completed), then don't run it again
+            continue #! if the simulation has already been started (or even completed), then don't run it again
         end
         simulation = Simulation(simulation_id)
-       
+
         push!(simulation_tasks, @task SimulationProcess(simulation; monad_id=monad.id, do_full_setup=false, force_recompile=false))
     end
 
@@ -178,13 +186,13 @@ function runSampling(sampling::Sampling; force_recompile::Bool=false)
 
     compilation_success = loadCustomCode(sampling; force_recompile=force_recompile)
     if !compilation_success
-        return Task[] # do not delete simulations, monads, or the sampling as these could have succeeded in the past (or on other nodes, etc.)
+        return Task[] #! do not delete simulations, monads, or the sampling as these could have succeeded in the past (or on other nodes, etc.)
     end
 
     simulation_tasks = []
     for index in eachindex(sampling.variation_ids)
-        monad = Monad(sampling, index) # instantiate a monad with the variation_id and the simulation ids already found
-        append!(simulation_tasks, runMonad(monad, do_full_setup=false, force_recompile=false)) # run the monad and add the number of new simulations to the total
+        monad = Monad(sampling, index) #! instantiate a monad with the variation_id and the simulation ids already found
+        append!(simulation_tasks, runMonad(monad, do_full_setup=false, force_recompile=false)) #! run the monad and add the number of new simulations to the total
     end
 
     return simulation_tasks
@@ -195,8 +203,8 @@ function runTrial(trial::Trial; force_recompile::Bool=false)
 
     simulation_tasks = []
     for i in eachindex(trial.sampling_ids)
-        sampling = Sampling(trial, i) # instantiate a sampling with the variation_ids and the simulation ids already found
-        append!(simulation_tasks, runSampling(sampling; force_recompile=force_recompile)) # run the sampling and add the number of new simulations to the total
+        sampling = Sampling(trial, i) #! instantiate a sampling with the variation_ids and the simulation ids already found
+        append!(simulation_tasks, runSampling(sampling; force_recompile=force_recompile)) #! run the sampling and add the number of new simulations to the total
     end
 
     return simulation_tasks
@@ -218,7 +226,6 @@ Used by `run` to collect the tasks to run.
 See also [`run`](@ref).
 """
 function collectSimulationTasks(T::AbstractTrial; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions=PruneOptions()) end
-
 
 struct PCVCTOutput
     trial::AbstractTrial
@@ -242,8 +249,6 @@ Also print out messages to the console to inform the user about the progress and
 - `prune_options::PruneOptions=PruneOptions()`: Options for pruning simulations.
 """
 function run(T::AbstractTrial; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions())
-    cd(()->run(pipeline(`make clean`; stdout=devnull)), physicell_dir) # remove all *.o files so that a future recompile will re-compile all the files
-
     simulation_tasks = collectSimulationTasks(T; force_recompile=force_recompile)
     n_simulation_tasks = length(simulation_tasks)
     n_success = 0
@@ -254,19 +259,19 @@ function run(T::AbstractTrial; force_recompile::Bool=false, prune_options::Prune
     queue_channel = Channel{Task}(n_simulation_tasks)
     result_channel = Channel{Bool}(n_simulation_tasks)
     @async for simulation_task in simulation_tasks
-        put!(queue_channel, simulation_task) # if the queue_channel is full, this will block until there is space
+        put!(queue_channel, simulation_task) #! if the queue_channel is full, this will block until there is space
     end
 
-    for _ in 1:num_parallel_sims # start one task per allowed num of parallel sims
-        @async for simulation_task in queue_channel # do not let the creation of this task block the creation of the other tasks
-            # once the simulation_task is processed, put it in the result_channel and move on to the next simulation_task in the queue_channel
+    for _ in 1:num_parallel_sims #! start one task per allowed num of parallel sims
+        @async for simulation_task in queue_channel #! do not let the creation of this task block the creation of the other tasks
+            #! once the simulation_task is processed, put it in the result_channel and move on to the next simulation_task in the queue_channel
             put!(result_channel, processSimulationTask(simulation_task, prune_options))
         end
     end
 
-    # this code block effectively blocks the main thread until all the simulation_tasks have been processed
-    for _ in 1:n_simulation_tasks # take exactly the number of expected outputs
-        success = take!(result_channel) # wait until the result_channel has a value to take
+    #! this code block effectively blocks the main thread until all the simulation_tasks have been processed
+    for _ in 1:n_simulation_tasks #! take exactly the number of expected outputs
+        success = take!(result_channel) #! wait until the result_channel has a value to take
         n_success += success
     end
 
@@ -289,7 +294,7 @@ function run(T::AbstractTrial; force_recompile::Bool=false, prune_options::Prune
     if print_low_success_warning
         println(" ($(repeat("*", n_asterisks)))")
         asterisks["low_success_warning"] = n_asterisks
-        n_asterisks += 1 # in case something gets added later
+        n_asterisks += 1 #! in case something gets added later
     else
         println()
     end
@@ -305,7 +310,7 @@ end
 
 """
     runAbstractTrial(T::AbstractTrial; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions())
-    
+
 Alias for [`run`](@ref), but only with this particular signature. Does not work on `Cmd` objects as `Base.run` is built for.
 Also, does not work with `run`ning sensitivity samplings.
 """

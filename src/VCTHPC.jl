@@ -49,7 +49,7 @@ end
     setJobOptions(options::Dict)
 
 Set the default job options for use with SLURM.
-    
+
 For any key-value pair in `options`, the corresponding key in the global `sbatch_options` dictionary is set to the value.
 A flag is then added to the sbatch command for each key-value pair in `options`: `--key=value`.
 When running simulations, any values in this dictionary that are `Function`'s will be assumed to be functions of the simulation id.

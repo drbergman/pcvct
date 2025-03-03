@@ -18,9 +18,11 @@ makedocs(;
             "Getting started" => "man/getting_started.md",
             "CoVariations" => "man/covariations.md",
             "Data directory" => "man/data_directory.md",
+            "Intracellular inputs" => "man/intracellular_inputs.md",
             "Known limitations" => "man/known_limitations.md",
             "PhysiCell Studio" => "man/physicell_studio.md",
             "Sensitivity analysis" => "man/sensitivity_analysis.md",
+            "Developer guide" => "man/developer_guide.md",
         ],
         "Documentation" => map(
             s -> "lib/$(s)",

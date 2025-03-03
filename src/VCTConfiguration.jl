@@ -29,7 +29,7 @@ function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString
             end
             continue
         end
-        # Deal with checking attributes
+        #! Deal with checking attributes
         current_element = getChildByAttribute(current_element, split(path_element, ":"))
         if isnothing(current_element)
             required ? retrieveElementError(xml_path, path_element) : return nothing
@@ -44,7 +44,7 @@ function retrieveElementError(xml_path::Vector{<:AbstractString}, path_element::
     throw(ArgumentError(error_msg))
 end
 
-function getField(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString}; required::Bool=true)
+function getContent(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString}; required::Bool=true)
     return retrieveElement(xml_doc, xml_path; required=required) |> content
 end
 
@@ -83,7 +83,7 @@ function makeXMLPath(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString})
             end
             continue
         end
-        # Deal with checking attributes
+        #! Deal with checking attributes
         path_element_split = split(path_element, ":")
         child_element = getChildByAttribute(current_element, path_element_split)
         if isnothing(child_element)
@@ -98,190 +98,130 @@ end
 
 ################## Configuration Functions ##################
 
-function loadConfiguration(M::AbstractMonad)
-    path_to_xml = joinpath(data_dir, "inputs", "configs", M.inputs.config.folder, "config_variations", "config_variation_$(M.variation_ids.config).xml")
+"""
+    createXMLFile(location::Symbol, M::AbstractMonad)
+
+Create XML file for the given location and variation_id in the given monad.
+
+The file is placed in `\$(location)_variations` and can be accessed from there to run the simulation(s).
+"""
+function createXMLFile(location::Symbol, M::AbstractMonad)
+    path_to_folder = locationPath(location, M)
+    path_to_xml = joinpath(path_to_folder, variationsTableName(location), "$(location)_variation_$(M.variation_id[location]).xml")
     if isfile(path_to_xml)
-        return
+        return path_to_xml
     end
     mkpath(dirname(path_to_xml))
-    path_to_xml_src = joinpath(data_dir, "inputs", "configs", M.inputs.config.folder, "PhysiCell_settings.xml")
-    cp(path_to_xml_src, path_to_xml, force=true)
 
-    xml_doc = openXML(path_to_xml)
-    query = constructSelectQuery("config_variations", "WHERE config_variation_id=$(M.variation_ids.config);")
-    variation_row = queryToDataFrame(query; db=configDB(M.inputs.config.folder), is_row=true)
-    for column_name in names(variation_row)
-        if column_name == "config_variation_id"
-            continue
+    path_to_base_xml = prepareBaseFile(M.inputs[location])
+    @assert endswith(path_to_base_xml, ".xml") "Base XML file for $(location) must end with .xml. Got $(path_to_base_xml)"
+    @assert isfile(path_to_base_xml) "Base XML file not found: $(path_to_base_xml)"
+
+    xml_doc = openXML(path_to_base_xml)
+    if M.variation_id[location] != 0 #! only update if not using the base variation for the location
+        query = constructSelectQuery(variationsTableName(location), "WHERE $(locationVarIDName(location))=$(M.variation_id[location])")
+        variation_row = queryToDataFrame(query; db=variationsDatabase(location, M), is_row=true)
+        for column_name in names(variation_row)
+            if column_name == locationVarIDName(location)
+                continue
+            end
+            xml_path = columnNameToXMLPath(column_name)
+            updateField(xml_doc, xml_path, variation_row[1, column_name])
         end
-        xml_path = columnNameToXMLPath(column_name)
-        updateField(xml_doc, xml_path, variation_row[1, column_name])
     end
     save_file(xml_doc, path_to_xml)
     closeXML(xml_doc)
     return
 end
 
-function loadConfiguration(sampling::Sampling)
-    for index in eachindex(sampling.variation_ids)
-        monad = Monad(sampling, index) # instantiate a monad with the variation_id and the simulation ids already found
-        loadConfiguration(monad)
+function prepareBaseFile(input_folder::InputFolder)
+    if input_folder.location == :rulesets_collection
+        return prepareBaseRulesetsCollectionFile(input_folder)
     end
+    return joinpath(locationPath(input_folder), input_folder.basename)
 end
 
-function loadRulesets(M::AbstractMonad)
-    if M.variation_ids.rulesets_collection == -1 # no rules being used
-        return
-    end
-    path_to_rulesets_collections_folder = joinpath(data_dir, "inputs", "rulesets_collections", M.inputs.rulesets_collection.folder)
-    path_to_rulesets_xml = joinpath(path_to_rulesets_collections_folder, "rulesets_collections_variations", "rulesets_variation_$(M.variation_ids.rulesets_collection).xml")
-    if isfile(path_to_rulesets_xml) # already have the rulesets_collection variation created
-        return
-    end
-    mkpath(dirname(path_to_rulesets_xml)) # ensure the directory exists
-
-    # create xml file using LightXML
-    path_to_base_xml = joinpath(path_to_rulesets_collections_folder, "base_rulesets.xml")
+function prepareBaseRulesetsCollectionFile(input_folder::InputFolder)
+    path_to_rulesets_collection_folder = locationPath(:rulesets_collection, input_folder.folder)
+    path_to_base_xml = joinpath(path_to_rulesets_collection_folder, "base_rulesets.xml")
     if !isfile(path_to_base_xml)
-        # this could happen if the rules are not being varied (so no call to addRulesetsVariationsColumns) and then a sim runs without the base_rulesets.xml being created yet
-        writeRules(path_to_base_xml, joinpath(path_to_rulesets_collections_folder, "base_rulesets.csv"))
+        #! this could happen if the rules are not being varied (so no call to addRulesetsVariationsColumns) and then a sim runs without the base_rulesets.xml being created yet
+        writeRules(path_to_base_xml, joinpath(path_to_rulesets_collection_folder, "base_rulesets.csv"))
     end
-        
-    xml_doc = parse_file(path_to_base_xml)
-    if M.variation_ids.rulesets_collection != 0 # only update if not using the base variation for the ruleset
-        query = constructSelectQuery("rulesets_collection_variations", "WHERE rulesets_collection_variation_id=$(M.variation_ids.rulesets_collection);")
-        variation_row = queryToDataFrame(query; db=rulesetsCollectionDB(M), is_row=true)
-        for column_name in names(variation_row)
-            if column_name == "rulesets_collection_variation_id"
-                continue
-            end
-            xml_path = columnNameToXMLPath(column_name)
-            updateField(xml_doc, xml_path, variation_row[1, column_name])
-        end
-    end
-    save_file(xml_doc, path_to_rulesets_xml)
-    closeXML(xml_doc)
-    return
+    return path_to_base_xml
 end
 
-function loadICCells(M::AbstractMonad)
-    if M.inputs.ic_cell.id == -1 # no ic cells being used
+function prepareVariedInputFolder(location::Symbol, M::AbstractMonad)
+    if !M.inputs[location].varied #! this input is not being varied (either unused or static)
         return
     end
-    path_to_ic_cells_folder = joinpath(data_dir, "inputs", "ics", "cells", M.inputs.ic_cell.folder)
-    if isfile(joinpath(path_to_ic_cells_folder, "cells.csv")) # ic already given by cells.csv
-        return
-    end
-    path_to_ic_cells_xml = joinpath(path_to_ic_cells_folder, "ic_cell_variations", "ic_cell_variation_$(M.variation_ids.ic_cell).xml")
-    if isfile(path_to_ic_cells_xml) # already have the ic cell variation created
-        return
-    end
-    mkpath(dirname(path_to_ic_cells_xml))
+    createXMLFile(location, M)
+end
 
-    path_to_base_xml = joinpath(path_to_ic_cells_folder, "cells.xml")
-    xml_doc = parse_file(path_to_base_xml)
-    if M.variation_ids.ic_cell != 0 # only update if not using the base variation for the ic cells
-        query = constructSelectQuery("ic_cell_variations", "WHERE ic_cell_variation_id=$(M.variation_ids.ic_cell);")
-        variation_row = queryToDataFrame(query; db=icCellDB(M.inputs.ic_cell.folder), is_row=true)
-        for column_name in names(variation_row)
-            if column_name == "ic_cell_variation_id"
-                continue
-            end
-            xml_path = columnNameToXMLPath(column_name)
-            updateField(xml_doc, xml_path, variation_row[1, column_name])
-        end
+function prepareVariedInputFolder(location::Symbol, sampling::Sampling)
+    if !sampling.inputs[location].varied #! this input is not being varied (either unused or static)
+        return
     end
-    save_file(xml_doc, path_to_ic_cells_xml)
-    closeXML(xml_doc)
-    return
+    for index in eachindex(sampling.variation_ids)
+        monad = Monad(sampling, index) #! instantiate a monad with the variation_id and the simulation ids already found
+        prepareVariedInputFolder(location, monad)
+    end
 end
 
 function pathToICCell(simulation::Simulation)
-    @assert simulation.inputs.ic_cell.id != -1 "No IC cell variation being used" # we should have already checked this before calling this function
-    path_to_ic_cell_folder = joinpath(data_dir, "inputs", "ics", "cells", simulation.inputs.ic_cell.folder)
-    if isfile(joinpath(path_to_ic_cell_folder, "cells.csv")) # ic already given by cells.csv
+    @assert simulation.inputs[:ic_cell].id != -1 "No IC cell variation being used" #! we should have already checked this before calling this function
+    path_to_ic_cell_folder = locationPath(:ic_cell, simulation)
+    if isfile(joinpath(path_to_ic_cell_folder, "cells.csv")) #! ic already given by cells.csv
         return joinpath(path_to_ic_cell_folder, "cells.csv")
     end
-    path_to_config_xml = joinpath(data_dir, "inputs", "configs", simulation.inputs.config.folder, "config_variations", "config_variation_$(simulation.variation_ids.config).xml")
+    path_to_config_xml = joinpath(locationPath(:config, simulation), "config_variations", "config_variation_$(simulation.variation_id[:config]).xml")
     xml_doc = openXML(path_to_config_xml)
     domain_dict = Dict{String,Float64}()
     for d in ["x", "y", "z"]
         for side in ["min", "max"]
             key = "$(d)_$(side)"
             xml_path = ["domain"; key]
-            domain_dict[key] = getField(xml_doc, xml_path) |> x -> parse(Float64, x)
+            domain_dict[key] = getContent(xml_doc, xml_path) |> x -> parse(Float64, x)
         end
     end
     closeXML(xml_doc)
     path_to_ic_cell_variations = joinpath(path_to_ic_cell_folder, "ic_cell_variations")
-    path_to_ic_cell_xml = joinpath(path_to_ic_cell_variations, "ic_cell_variation_$(simulation.variation_ids.ic_cell).xml")
-    path_to_ic_cell_file = joinpath(path_to_ic_cell_variations, "ic_cell_variation_$(simulation.variation_ids.ic_cell)_s$(simulation.id).csv")
+    path_to_ic_cell_xml = joinpath(path_to_ic_cell_variations, "ic_cell_variation_$(simulation.variation_id[:ic_cell]).xml")
+    path_to_ic_cell_file = joinpath(path_to_ic_cell_variations, "ic_cell_variation_$(simulation.variation_id[:ic_cell])_s$(simulation.id).csv")
     generateICCell(path_to_ic_cell_xml, path_to_ic_cell_file, domain_dict)
     return path_to_ic_cell_file
 end
 
-function loadICECM(M::AbstractMonad)
-    if M.inputs.ic_ecm.id == -1 # no ic ecm being used
-        return
-    end
-    path_to_ic_ecm_folder = joinpath(data_dir, "inputs", "ics", "ecms", M.inputs.ic_ecm.folder)
-    if isfile(joinpath(path_to_ic_ecm_folder, "ecm.csv")) # ic already given by ecm.csv
-        return
-    end
-    path_to_ic_ecm_xml = joinpath(path_to_ic_ecm_folder, "ic_ecm_variations", "ic_ecm_variation_$(M.variation_ids.ic_ecm).xml")
-    if isfile(path_to_ic_ecm_xml) # already have the ic ecm variation created
-        return
-    end
-    mkpath(dirname(path_to_ic_ecm_xml))
-
-    path_to_base_xml = joinpath(path_to_ic_ecm_folder, "ecm.xml")
-    xml_doc = parse_file(path_to_base_xml)
-    if M.variation_ids.ic_ecm != 0 # only update if not using the base variation for the ic ecm
-        query = constructSelectQuery("ic_ecm_variations", "WHERE ic_ecm_variation_id=$(M.variation_ids.ic_ecm);")
-        variation_row = queryToDataFrame(query; db=icECMDB(M.inputs.ic_ecm.folder), is_row=true)
-        for column_name in names(variation_row)
-            if column_name == "ic_ecm_variation_id"
-                continue
-            end
-            xml_path = columnNameToXMLPath(column_name)
-            updateField(xml_doc, xml_path, variation_row[1, column_name])
-        end
-    end
-    save_file(xml_doc, path_to_ic_ecm_xml)
-    closeXML(xml_doc)
-    return
-end
-
 function pathToICECM(simulation::Simulation)
-    @assert simulation.inputs.ic_ecm.id != -1 "No IC ecm variation being used" # we should have already checked this before calling this function
-    path_to_ic_ecm_folder = joinpath(data_dir, "inputs", "ics", "ecms", simulation.inputs.ic_ecm.folder)
-    if isfile(joinpath(path_to_ic_ecm_folder, "ecm.csv")) # ic already given by ecm.csv
+    @assert simulation.inputs[:ic_ecm].id != -1 "No IC ecm variation being used" #! we should have already checked this before calling this function
+    path_to_ic_ecm_folder = locationPath(:ic_ecm, simulation)
+    if isfile(joinpath(path_to_ic_ecm_folder, "ecm.csv")) #! ic already given by ecm.csv
         return joinpath(path_to_ic_ecm_folder, "ecm.csv")
     end
-    path_to_config_xml = joinpath(data_dir, "inputs", "configs", simulation.inputs.config.folder, "config_variations", "config_variation_$(simulation.variation_ids.config).xml")
+    path_to_config_xml = joinpath(locationPath(:config, simulation), "config_variations", "config_variation_$(simulation.variation_id[:config]).xml")
     xml_doc = openXML(path_to_config_xml)
     config_dict = Dict{String,Float64}()
-    for d in ["x", "y"] # does not (yet?) support 3D
+    for d in ["x", "y"] #! does not (yet?) support 3D
         for side in ["min", "max"]
             key = "$(d)_$(side)"
             xml_path = ["domain"; key]
-            config_dict[key] = getField(xml_doc, xml_path) |> x -> parse(Float64, x)
+            config_dict[key] = getContent(xml_doc, xml_path) |> x -> parse(Float64, x)
         end
-        key = "d$(d)" # d$(d) looks funny but it's just dx and dy
+        key = "d$(d)" #! d$(d) looks funny but it's just dx and dy
         xml_path = ["domain"; key]
-        config_dict[key] = getField(xml_doc, xml_path) |> x -> parse(Float64, x)
+        config_dict[key] = getContent(xml_doc, xml_path) |> x -> parse(Float64, x)
     end
     closeXML(xml_doc)
     path_to_ic_ecm_variations = joinpath(path_to_ic_ecm_folder, "ic_ecm_variations")
-    path_to_ic_ecm_xml = joinpath(path_to_ic_ecm_variations, "ic_ecm_variation_$(simulation.variation_ids.ic_ecm).xml")
-    path_to_ic_ecm_file = joinpath(path_to_ic_ecm_variations, "ic_ecm_variation_$(simulation.variation_ids.ic_ecm)_s$(simulation.id).csv")
+    path_to_ic_ecm_xml = joinpath(path_to_ic_ecm_variations, "ic_ecm_variation_$(simulation.variation_id[:ic_ecm]).xml")
+    path_to_ic_ecm_file = joinpath(path_to_ic_ecm_variations, "ic_ecm_variation_$(simulation.variation_id[:ic_ecm])_s$(simulation.id).csv")
     generateICECM(path_to_ic_ecm_xml, path_to_ic_ecm_file, config_dict)
     return path_to_ic_ecm_file
 end
 
 ################## XML Path Helper Functions ##################
 
-# can I define my own macro that takes all these functions and adds methods for FN(cell_def, node::String) and FN(cell_def, path_suffix::Vector{String})??
+#! can I define my own macro that takes all these functions and adds methods for FN(cell_def, node::String) and FN(cell_def, path_suffix::Vector{String})??
 function cellDefinitionPath(cell_definition::String)::Vector{String}
     return ["cell_definitions", "cell_definition:name:$(cell_definition)"]
 end
@@ -320,9 +260,47 @@ end
 
 ################## Simplify Name Functions ##################
 
-function simpleConfigVariationNames(name::String)
+function shortLocationVariationID(fieldname::Symbol)
+    if fieldname == :config
+        return :ConfigVarID
+    elseif fieldname == :rulesets_collection
+        return :RulesVarID
+    elseif fieldname == :intracellular
+        return :IntraVarID
+    elseif fieldname == :ic_cell
+        return :ICCellVarID
+    elseif fieldname == :ic_ecm
+        return :ICECMVarID
+    else
+        throw(ArgumentError("Got fieldname $(fieldname). However, it must be 'config', 'rulesets_collection', 'intracellular', 'ic_cell', or 'ic_ecm'."))
+    end
+end
+
+shortLocationVariationID(fieldname::String) = shortLocationVariationID(Symbol(fieldname))
+
+function shortLocationVariationID(type::Type, fieldname::Union{String, Symbol})
+    return type(shortLocationVariationID(fieldname))
+end
+
+function shortVariationName(location::Symbol, name::String)
+    if location == :config
+        return shortConfigVariationName(name)
+    elseif location == :rulesets_collection
+        return shortRulesetsVariationName(name)
+    elseif location == :intracellular
+        return shortIntracellularVariationName(name)
+    elseif location == :ic_cell
+        return shortICCellVariationName(name)
+    elseif location == :ic_ecm
+        return shortICECMVariationName(name)
+    else
+        throw(ArgumentError("location must be 'config', 'rulesets_collection', 'intracellular', 'ic_cell', or 'ic_ecm'."))
+    end
+end
+
+function shortConfigVariationName(name::String)
     if name == "config_variation_id"
-        return "ConfigVarID"
+        return shortLocationVariationID(String, "config")
     elseif name == "overall/max_time"
         return "Max Time"
     elseif name == "save/full_data/interval"
@@ -336,9 +314,9 @@ function simpleConfigVariationNames(name::String)
     end
 end
 
-function simpleRulesetsVariationNames(name::String)
+function shortRulesetsVariationName(name::String)
     if name == "rulesets_collection_variation_id"
-        return "RulesVarID"
+        return shortLocationVariationID(String, "rulesets_collection")
     elseif startswith(name, "hypothesis_ruleset")
         return getRuleParameterName(name)
     else
@@ -346,9 +324,17 @@ function simpleRulesetsVariationNames(name::String)
     end
 end
 
-function simpleICCellVariationNames(name::String)
+function shortIntracellularVariationName(name::String)
+    if name == "intracellular_variation_id"
+        return shortLocationVariationID(String, "intracellular")
+    else
+        return name
+    end
+end
+
+function shortICCellVariationName(name::String)
     if name == "ic_cell_variation_id"
-        return "ICCellVarID"
+        return shortLocationVariationID(String, "ic_cell")
     elseif startswith(name, "cell_patches")
         return getICCellParameterName(name)
     else
@@ -356,9 +342,9 @@ function simpleICCellVariationNames(name::String)
     end
 end
 
-function simpleICECMVariationNames(name::String)
+function shortICECMVariationName(name::String)
     if name == "ic_ecm_variation_id"
-        return "ICECMVarID"
+        return shortLocationVariationID(String, "ic_ecm")
     elseif startswith(name, "layer")
         return getICECMParameterName(name)
     else

@@ -1,36 +1,41 @@
 using pcvct, Test
 
-include("./test-project/VCT/PrintHelpers.jl")
+include("./test-scripts/PrintHelpers.jl")
 
 @testset "pcvct.jl" begin
-    # Write your tests here.
-    include("./test-project/VCT/CreateProjectTests.jl")
-    
-    include("./test-project/VCT/GenerateData.jl") # this file is created by CreateProjectTests.jl
+    #! Write your tests here.
+    include("./test-scripts/CreateProjectTests.jl")
 
-    include("./test-project/VCT/RunnerTests.jl")
-    include("./test-project/VCT/UserAPITests.jl")
-    include("./test-project/VCT/ImportTests.jl")
-    include("./test-project/VCT/PrunerTests.jl")
-    include("./test-project/VCT/ConfigurationTests.jl")
-    include("./test-project/VCT/ICCellTests.jl")
-    include("./test-project/VCT/ICECMTests.jl")
-    include("./test-project/VCT/ExportTests.jl")
-    include("./test-project/VCT/SensitivityTests.jl")
-    include("./test-project/VCT/DatabaseTests.jl")
-    include("./test-project/VCT/ClassesTests.jl")
-    include("./test-project/VCT/LoaderTests.jl")
+    include("./VCT/GenerateData.jl") #! this file is created by CreateProjectTests.jl
+
+    include("./test-scripts/ProjectConfigurationTests.jl")
+
+    include("./test-scripts/RunnerTests.jl")
+    include("./test-scripts/UserAPITests.jl")
+    include("./test-scripts/ImportTests.jl")
+    include("./test-scripts/PrunerTests.jl")
+    include("./test-scripts/ConfigurationTests.jl")
+
+    include("./test-scripts/IntracellularTests.jl")
+    include("./test-scripts/ICCellTests.jl")
+    include("./test-scripts/ICECMTests.jl")
+
+    include("./test-scripts/ExportTests.jl")
+    include("./test-scripts/SensitivityTests.jl")
+    include("./test-scripts/DatabaseTests.jl")
+    include("./test-scripts/ClassesTests.jl")
+    include("./test-scripts/LoaderTests.jl")
     if Sys.isapple()
-        include("./test-project/VCT/MovieTests.jl")
+        include("./test-scripts/MovieTests.jl")
     end
-    include("./test-project/VCT/PopulationTests.jl")
-    include("./test-project/VCT/SubstrateTests.jl")
-    include("./test-project/VCT/VariationsTests.jl")
-    include("./test-project/VCT/HPCTests.jl")
-    include("./test-project/VCT/ModuleTests.jl")
-    include("./test-project/VCT/PhysiCellVersionTests.jl")
-    include("./test-project/VCT/PhysiCellStudioTests.jl")
+    include("./test-scripts/PopulationTests.jl")
+    include("./test-scripts/SubstrateTests.jl")
+    include("./test-scripts/VariationsTests.jl")
+    include("./test-scripts/HPCTests.jl")
+    include("./test-scripts/ModuleTests.jl")
+    include("./test-scripts/PhysiCellVersionTests.jl")
+    include("./test-scripts/PhysiCellStudioTests.jl")
 
-    # probably want this one last (it deletes/resets things)
-    include("./test-project/VCT/DeletionTests.jl")
+    #! probably want this one last (it deletes/resets things)
+    include("./test-scripts/DeletionTests.jl")
 end

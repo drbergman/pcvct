@@ -163,7 +163,7 @@ function MonadPopulationTimeSeries(monad::Monad; include_dead::Bool=false)
             @assert time == spts.time "Simulations $(simulation_ids[1]) and $(simulation_id) in monad $(monad.id) have different times in their time series."
         end
         for (name, cell_count) in pairs(spts.cell_count)
-            if !(name in keys(cell_count_arrays))
+            if !haskey(cell_count_arrays, name)
                 cell_count_arrays[name] = zeros(Int, length(time), monad_length)
             end
             cell_count_arrays[name][:,i] = cell_count
@@ -195,18 +195,18 @@ function populationTimeSeries(M::AbstractMonad; include_dead::Bool=false)
     end
 end
 
-# plot recipes
+#! plot recipes
 getMeanCounts(s::SimulationPopulationTimeSeries) = s.cell_count
 getMeanCounts(m::MonadPopulationTimeSeries) = m.cell_count_means
 
 @recipe function f(M::AbstractMonad; include_dead=false, include_cell_types=:all, exclude_cell_types=String[])
     pts = populationTimeSeries(M; include_dead=include_dead)
-    # allow for single string input for either of these
+    #! allow for single string input for either of these
     include_cell_types = include_cell_types == :all ? :all : (include_cell_types isa String ? [include_cell_types] : include_cell_types)
     exclude_cell_types = exclude_cell_types isa String ? [exclude_cell_types] : exclude_cell_types
     for (name, counts) in pairs(getMeanCounts(pts))
-        skip = include_cell_types != :all && !(name in include_cell_types) # skip this cell type as only a subset was requested and this was not in it
-        skip = skip || name in exclude_cell_types # skip this cell type as it was requested to be excluded
+        skip = include_cell_types != :all && !(name in include_cell_types) #! skip this cell type as only a subset was requested and this was not in it
+        skip = skip || name in exclude_cell_types #! skip this cell type as it was requested to be excluded
         if skip
             continue 
         end
@@ -232,15 +232,15 @@ end
         sim_id = monad.simulation_ids[1]
         row_ind = findfirst(df[!, :SimID] .== sim_id)
         row = df[row_ind, :]
-        title_tuple = [row[name] for name in names(row) if !(name in ["SimID", "ConfigVarID", "RulesVarID"])]
+        title_tuple = [row[name] for name in names(row) if !(name in ["SimID"; shortLocationVariationID.(String, project_locations.varied)])]
         push!(title_tuples, title_tuple)
     end
-    
+
     order = sortperm(title_tuples)
     title_tuples = title_tuples[order]
     monads = monads[order]
 
-    layout  --> (length(monads), 1) # easy room for improvement here
+    layout  --> (length(monads), 1) #! easy room for improvement here
 
     for (i, (monad, title_tuple)) in enumerate(zip(monads, title_tuples))
         @series begin
@@ -306,7 +306,7 @@ end
             end
             if cell_types == :all
                 for (name, cell_count) in pairs(spts.cell_count)
-                    if !(name in keys(cell_count_arrays))
+                    if !haskey(cell_count_arrays, name)
                         cell_count_arrays[name] = zeros(Int, length(time), monad_length)
                     end
                     cell_count_arrays[name][:,i] = cell_count
@@ -319,7 +319,7 @@ end
                     if cell_type isa String
                         cell_type = [cell_type]
                     end
-                    if !(cell_type in keys(cell_count_arrays))
+                    if !haskey(cell_count_arrays, cell_type)
                         cell_count_arrays[cell_type] = zeros(Int, length(time), monad_length)
                     end
                     cell_count_arrays[cell_type][:,i] = sum([spts.cell_count[ct] for ct in cell_type])
@@ -336,7 +336,7 @@ end
         monad_summary[monad.id] = (time=time, cell_count_means=cell_count_means, cell_count_stds=cell_count_stds)
     end
 
-    layout  --> (length(all_cell_types), 1) # easy room for improvement here
+    layout  --> (length(all_cell_types), 1) #! easy room for improvement here
 
     for (i, cell_type) in enumerate(all_cell_types)
         @series begin

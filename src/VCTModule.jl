@@ -1,13 +1,14 @@
 using SQLite, DataFrames, LightXML, Dates, CSV, Tables, Distributions, Statistics, Random, QuasiMonteCarlo, Sobol
 using PhysiCellXMLRules, PhysiCellCellCreator
 
-export initializeVCT, getSimulationIDs, setNumberOfParallelSims
+export initializeModelManager, getSimulationIDs, setNumberOfParallelSims
 
-# put these first as they define classes the rest rely on
+#! put these first as they define classes the rest rely on
 include("VCTClasses.jl")
 include("VCTPruner.jl")
 include("VCTVariations.jl")
 
+include("VCTProjectConfiguration.jl")
 include("VCTCompilation.jl")
 include("VCTConfiguration.jl")
 include("VCTCreation.jl")
@@ -21,6 +22,7 @@ include("VCTUp.jl")
 include("VCTVersion.jl")
 include("VCTPhysiCellVersion.jl")
 include("VCTHPC.jl")
+include("VCTComponents.jl")
 
 include("VCTUserAPI.jl")
 
@@ -36,12 +38,14 @@ include("VCTExport.jl")
 
 VERSION >= v"1.11" && include("public.julia")
 
+inputs_dict = Dict{Symbol, Any}()
+
 initialized = false
 
 physicell_dir::String = abspath("PhysiCell")
 current_physicell_version_id = missing
 data_dir::String = abspath("data")
-PHYSICELL_CPP::String = haskey(ENV, "PHYSICELL_CPP") ? ENV["PHYSICELL_CPP"] : "/opt/homebrew/bin/g++-14"
+PHYSICELL_CPP::String = haskey(ENV, "PHYSICELL_CPP") ? ENV["PHYSICELL_CPP"] : "g++"
 if Sys.iswindows()
     baseToExecutable(s::String) = "$(s).exe"
 else
@@ -50,15 +54,16 @@ end
 
 run_on_hpc = isRunningOnHPC()
 max_number_of_parallel_simulations = 1
-march_flag = run_on_hpc ? "x86-64" : "native"
+march_flag::String = run_on_hpc ? "x86-64" : "native"
 
-sbatch_options = defaultJobOptions() # this is a dictionary that will be used to pass options to the sbatch command
+sbatch_options::Dict{String,Any} = defaultJobOptions() #! this is a dictionary that will be used to pass options to the sbatch command
 
 function __init__()
     global max_number_of_parallel_simulations = haskey(ENV, "PCVCT_NUM_PARALLEL_SIMS") ? parse(Int, ENV["PCVCT_NUM_PARALLEL_SIMS"]) : 1
     global path_to_python = haskey(ENV, "PCVCT_PYTHON_PATH") ? ENV["PCVCT_PYTHON_PATH"] : missing 
     global path_to_studio = haskey(ENV, "PCVCT_STUDIO_PATH") ? ENV["PCVCT_STUDIO_PATH"] : missing
 end
+
 ################## Initialization Functions ##################
 
 """
@@ -86,7 +91,7 @@ function pcvctLogo()
 end
 
 """
-    initializeVCT(path_to_physicell::String, path_to_data::String)
+    initializeModelManager(path_to_physicell::String, path_to_data::String)
 
 Initialize the VCT environment by setting the paths to PhysiCell and data directories, and initializing the database.
 
@@ -94,26 +99,37 @@ Initialize the VCT environment by setting the paths to PhysiCell and data direct
 - `path_to_physicell::String`: Path to the PhysiCell directory as either an absolute or relative path.
 - `path_to_data::String`: Path to the data directory as either an absolute or relative path.
 """
-function initializeVCT(path_to_physicell::String, path_to_data::String; auto_upgrade::Bool=false)
-    # print big logo of PCVCT here
+function initializeModelManager(path_to_physicell::String, path_to_data::String; auto_upgrade::Bool=false)
+    #! print big logo of PCVCT here
     println(pcvctLogo())
     println("----------INITIALIZING----------")
     global physicell_dir = abspath(path_to_physicell)
     global data_dir = abspath(path_to_data)
-    println(rpad("Path to PhysiCell:", 20, ' ') * physicell_dir)
-    println(rpad("Path to data:", 20, ' ') * data_dir)
+    println(rpad("Path to PhysiCell:", 25, ' ') * physicell_dir)
+    println(rpad("Path to data:", 25, ' ') * data_dir)
+    success = parseProjectInputsConfigurationFile()
+    if !success
+        println("Project configuration file parsing failed.")
+        return
+    end
     success = initializeDatabase(joinpath(data_dir, "vct.db"); auto_upgrade=auto_upgrade)
     if !success
         global db = SQLite.DB()
         println("Database initialization failed.")
         return
     end
-    println(rpad("PhysiCell version:", 20, ' ') * physicellInfo())
-    println(rpad("pcvct version:", 20, ' ') * string(pcvctVersion()))
-    println(rpad("Compiler:", 20, ' ') * PHYSICELL_CPP)
-    println(rpad("Running on HPC:", 20, ' ') * string(run_on_hpc))
-    println(rpad("Max parallel sims:", 20, ' ') * string(max_number_of_parallel_simulations))
+    println(rpad("PhysiCell version:", 25, ' ') * physicellInfo())
+    println(rpad("pcvct version:", 25, ' ') * string(pcvctVersion()))
+    println(rpad("Compiler:", 25, ' ') * PHYSICELL_CPP)
+    println(rpad("Running on HPC:", 25, ' ') * string(run_on_hpc))
+    println(rpad("Max parallel sims:", 25, ' ') * string(max_number_of_parallel_simulations))
     flush(stdout)
+end
+
+function initializeModelManager()
+    physicell_dir = "PhysiCell"
+    data_dir = "data"
+    return initializeModelManager(physicell_dir, data_dir)
 end
 
 ################## Selection Functions ##################
@@ -195,7 +211,7 @@ end
 
 function outputFolder(T::AbstractTrial)
     name = typeof(T) |> string |> lowercase
-    name = split(name, ".")[end] # remove module name that comes with the type, e.g. main.vctmodule.sampling -> sampling
+    name = split(name, ".")[end] #! remove module name that comes with the type, e.g. main.vctmodule.sampling -> sampling
     return outputFolder(name, T.id)
 end
 

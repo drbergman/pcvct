@@ -32,12 +32,13 @@ function createProject(project_dir::String="."; clone_physicell::Bool=true, temp
     data_dir = joinpath(project_dir, "data")
 
     setUpInputs(data_dir, physicell_dir, template_as_default)
+    setUpComponents(data_dir, physicell_dir)
     setUpVCT(project_dir, physicell_dir, data_dir, template_as_default, terse)
 end
 
 function getLatestReleaseTag(repo_url::String)
     api_url = replace(repo_url, "github.com" => "api.github.com/repos") * "/releases/latest"
-    # include this header for CI testing to not exceed request limit (I think?): macos for some reason raised a `RequestError: HTTP/2 403`; users should not need to set this ENV variable
+    #! include this header for CI testing to not exceed request limit (I think?): macos for some reason raised a `RequestError: HTTP/2 403`; users should not need to set this ENV variable
     headers = haskey(ENV, "PCVCT_PUBLIC_REPO_AUTH") ? Dict("Authorization" => "token $(ENV["PCVCT_PUBLIC_REPO_AUTH"])") : Pair{String,String}[] 
     response = Downloads.download(api_url; headers=headers)
     release_info = JSON3.read(response, Dict{String, Any})
@@ -63,7 +64,7 @@ function setUpPhysiCell(project_dir::String, clone_physicell::Bool)
             run(`git clone --branch $latest_tag --depth 1 https://github.com/drbergman/PhysiCell $(physicell_dir)`)
         end
     else
-        # download drbergman/Pysicell main branch
+        #! download drbergman/Pysicell main branch
         println("Downloading PhysiCell repository")
         url = "https://api.github.com/repos/drbergman/PhysiCell/releases/latest"
         headers = haskey(ENV, "PCVCT_PUBLIC_REPO_AUTH") ? Dict("Authorization" => "token $(ENV["PCVCT_PUBLIC_REPO_AUTH"])") : Pair{String,String}[]
@@ -83,11 +84,25 @@ function setUpPhysiCell(project_dir::String, clone_physicell::Bool)
     return physicell_dir
 end
 
+function setUpComponents(data_dir::String, physicell_dir::String)
+    components_dir = joinpath(data_dir, "components")
+    mkpath(components_dir)
+
+    #! make sbml roadrunner components and populate with an example sbml for a roadrunner model
+    roadrunner_components_dir = joinpath(components_dir, "roadrunner")
+    mkpath(roadrunner_components_dir)
+    cp(joinpath(physicell_dir, "sample_projects_intracellular", "ode", "ode_energy", "config", "Toy_Metabolic_Model.xml"), joinpath(roadrunner_components_dir, "Toy_Metabolic_Model.xml"); force=true)
+end
+
 function setUpInputs(data_dir::String, physicell_dir::String, template_as_default::Bool)
     if isdir(data_dir)
         println("Data directory already exists ($(data_dir)). Skipping setup of data directory.")
         return
     end
+
+    mkpath(data_dir)
+    createInputsTOMLTemplate(joinpath(data_dir, "inputs.toml"))
+
     inputs_dir = joinpath(data_dir, "inputs")
     mkpath(inputs_dir)
 
@@ -97,6 +112,7 @@ function setUpInputs(data_dir::String, physicell_dir::String, template_as_defaul
         mkpath(joinpath(inputs_dir, "ics", ic))
     end
     mkpath(joinpath(inputs_dir, "rulesets_collections"))
+    mkpath(joinpath(inputs_dir, "intracellulars"))
 
     if template_as_default
         setUpTemplate(physicell_dir, inputs_dir)
@@ -115,6 +131,20 @@ function setUpRequiredFolders(path_to_template::String, inputs_dir::String, fold
     cp(joinpath(path_to_template, "Makefile"), joinpath(custom_codes_folder, "Makefile"))
 end
 
+function icFilename(table_name::String)
+    if table_name == "cells"
+        return "cells.csv"
+    elseif table_name == "substrates"
+        return "substrates.csv"
+    elseif table_name == "ecms"
+        return "ecm.csv"
+    elseif table_name == "dcs"
+        return "dcs.csv"
+    else
+        throw(ArgumentError("table_name must be 'cells', 'substrates', 'ecms', or `dcs`."))
+    end
+end
+
 function setUpICFolder(path_to_template::String, inputs_dir::String, ic_name::String, folder::String)
     ic_folder = joinpath(inputs_dir, "ics", ic_name, folder)
     mkpath(ic_folder)
@@ -130,13 +160,13 @@ function setUpTemplate(physicell_dir::String, inputs_dir::String)
     rulesets_collection_folder = joinpath(inputs_dir, "rulesets_collections", "0_template")
     mkpath(rulesets_collection_folder)
     open(joinpath(rulesets_collection_folder, "base_rulesets.csv"), "w") do f
-        write(f, "default,pressure,decreases,cycle entry,0.0,0.5,4,0") # actually add a rule for example's sake
+        write(f, "default,pressure,decreases,cycle entry,0.0,0.5,4,0") #! actually add a rule for example's sake
     end
 
     setUpICFolder(path_to_template, inputs_dir, "cells", "0_template")
     setUpICFolder(path_to_template, inputs_dir, "substrates", "0_template")
 
-    # also set up a ic cell folder using the xml-based version
+    #! also set up a ic cell folder using the xml-based version
     pcvct.createICCellXMLTemplate(joinpath(inputs_dir, "ics", "cells", "1_xml"))
 end
 
@@ -165,14 +195,16 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
     tersify(s::String) = (terse ? "" : s)
     generate_data_lines = """
         using pcvct
-        initializeVCT(\"$(abspath(physicell_dir))\", \"$(abspath(data_dir))\")
-        
+        initializeModelManager() # this works if launching from the project directory, i.e. the directory containing the VCT folder
+        # initializeModelManager(\"$(abspath(physicell_dir))\", \"$(abspath(data_dir))\") # use this if not calling this from the project directory
+
         ############ set up ############
 
         config_folder = $(config_folder)
-        rulesets_collection_folder = $(rulesets_collection_folder)
         custom_code_folder = $(custom_code_folder)
-        
+        rulesets_collection_folder = $(rulesets_collection_folder)
+        intracellular_folder = \"\" # optionally add this folder with intracellular.xml to $(joinpath(path_to_ics, "intracellulars"))
+
         ic_cell_folder = $(ic_cell_folder)
         ic_substrate_folder = \"\" # optionally add this folder with substrates.csv to $(joinpath(path_to_ics, "substrates"))
         ic_ecm_folder = \"\" # optionally add this folder with ecms.csv to $(joinpath(path_to_ics, "ecms"))
@@ -183,6 +215,7 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         """))\
         inputs = InputFolders(config_folder, custom_code_folder;
                               rulesets_collection=rulesets_collection_folder,
+                              intracellular=intracellular_folder,
                               ic_cell=ic_cell_folder,
                               ic_substrate=ic_substrate_folder,
                               ic_ecm=ic_ecm_folder,
@@ -229,7 +262,7 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         $(tersify("""
         # assume you have the template project with \"default\" as a cell type...
         # ...let's vary their cycle durations and apoptosis rates
-        
+
         # get the xml path to duration of phase 0 of the default cell type
         # this is a list of strings in which each string is either...
         # \t1) the name of a tag in the xml file OR
@@ -272,7 +305,7 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         $(tersify("""
         # you can change this default behavior on your machine by setting an environment variable...
         # called PCVCT_NUM_PARALLEL_SIMS
-        # this is read during `initializeVCT`...
+        # this is read during `initializeModelManager`...
         # meaning subsequent calls to `setNumberOfParallelSims` will overwrite the value
         # A simple way to use this when running the script is to run in your shell:
         # `PCVCT_NUM_PARALLEL_SIMS=4 julia $(path_to_generate_data)`
@@ -289,9 +322,9 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
         """))\
     """
 
-    # Remove leading whitespace
+    #! Remove leading whitespace
     generate_data_lines = join(map(x -> lstrip(c->c==' ', x), split(generate_data_lines, '\n')), '\n')
-    
+
     open(path_to_generate_data, "w") do f
         write(f, generate_data_lines)
     end

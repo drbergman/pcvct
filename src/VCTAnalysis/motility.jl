@@ -34,14 +34,14 @@ function meanSpeed(p; direction=:any)::NTuple{3,Dict{String,Float64}}
     distance_dict = Dict{String, Float64}(zip(cell_type_names, zeros(Float64, length(cell_type_names))))
     time_dict = Dict{String, Float64}(zip(cell_type_names, zeros(Float64, length(cell_type_names))))
     while start_ind <= length(type_change) 
-        I = findfirst(type_change[start_ind:end]) # from s to I, cell_type_name is constant. at I+1 it changes
-        I = isnothing(I) ? length(type_change)+2-start_ind : I # if the cell_type_name is constant till the end, set I to be at the end
-        # If start_ind = 1 (at start of sim) and I = 2 (so cell_type_name[3] != cell_type_name[2], meaning that for steps [1,2] cell_type_name is constnat), only use dx in stepping from 1->2 since somewhere in 2->3 the type changes. That is, use dx[1]
-        distance_dict[cell_type_name[start_ind]] += sum(dist_fn.(dx[start_ind:I-1], dy[start_ind:I-1], dz[start_ind:I-1]))  # only count distance travelled while remaining in the initial cell_type_name
-        time_dict[cell_type_name[start_ind]] += p.time[start_ind+I-1] - p.time[start_ind] # record time spent in this cell_type_name (note p.time is not diffs like dx and dy are, hence the difference in indices)
-        start_ind += I # advance the start to the first instance of a new cell_type_name
+        I = findfirst(type_change[start_ind:end]) #! from s to I, cell_type_name is constant. at I+1 it changes
+        I = isnothing(I) ? length(type_change)+2-start_ind : I #! if the cell_type_name is constant till the end, set I to be at the end
+        #! If start_ind = 1 (at start of sim) and I = 2 (so cell_type_name[3] != cell_type_name[2], meaning that for steps [1,2] cell_type_name is constnat), only use dx in stepping from 1->2 since somewhere in 2->3 the type changes. That is, use dx[1]
+        distance_dict[cell_type_name[start_ind]] += sum(dist_fn.(dx[start_ind:I-1], dy[start_ind:I-1], dz[start_ind:I-1]))  #! only count distance travelled while remaining in the initial cell_type_name
+        time_dict[cell_type_name[start_ind]] += p.time[start_ind+I-1] - p.time[start_ind] #! record time spent in this cell_type_name (note p.time is not diffs like dx and dy are, hence the difference in indices)
+        start_ind += I #! advance the start to the first instance of a new cell_type_name
     end
-    speed_dict = [k => distance_dict[k] / time_dict[k] for k in cell_type_names] |> Dict{String,Float64} # convert to speed
+    speed_dict = [k => distance_dict[k] / time_dict[k] for k in cell_type_names] |> Dict{String,Float64} #! convert to speed
     return speed_dict, distance_dict, time_dict
 end
 

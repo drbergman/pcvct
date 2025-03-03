@@ -11,7 +11,7 @@ simulation = Simulation(1)
 monad = Monad(simulation)
 
 cmd_local = pcvct.prepareSimulationCommand(simulation, monad.id, true, false)
-cmd_local_str = string(cmd_local)
+cmd_local_str = string(Cmd(cmd_local.exec))
 cmd_local_str = strip(cmd_local_str, '`')
 cmd_hpc = pcvct.prepareHPCCommand(cmd_local, simulation.id)
 
@@ -36,7 +36,7 @@ end_of_day = DateTime(Dates.year(current_time), Dates.month(current_time), Dates
 threshold_time = end_of_day - Second(threshold_seconds)
 is_about_to_be_next_day = current_time >= threshold_time
 if is_about_to_be_next_day
-    # if it's about to be the next day, wait until it is the next day
+    #! if it's about to be the next day, wait until it is the next day
     sleep(threshold_seconds + 1)
 end
 path_to_dummy_file = joinpath(pcvct.data_dir, "test.txt")
