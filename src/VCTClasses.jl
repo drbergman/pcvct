@@ -284,42 +284,35 @@ struct Monad <: AbstractMonad
     id::Int #! integer uniquely identifying this monad
     n_replicates::Int #! (minimum) number of simulations belonging to this monad
     simulation_ids::Vector{Int} #! simulation ids belonging to this monad
-
     inputs::InputFolders #! contains the folder names for the simulations in this monad
-
     variation_id::VariationID
 
     function Monad(n_replicates::Int, inputs::InputFolders, variation_id::VariationID, use_previous::Bool)
+        feature_str = """
+        (\
+        physicell_version_id,\
+        $(join(locationIDNames(), ",")),\
+        $(join(locationVariationIDNames(), ","))\
+        ) \
+        """
+        value_str = """
+        (\
+        $(physicellVersionDBEntry()),\
+        $(join([inputs[loc].id for loc in project_locations.all], ",")),\
+        $(join([variation_id[loc] for loc in project_locations.varied],","))\
+        ) \
+        """
         monad_id = DBInterface.execute(db,
             """
-            INSERT OR IGNORE INTO monads (\
-            physicell_version_id,\
-            $(join(locationIDNames(), ",")),\
-            $(join(locationVariationIDNames(), ","))\
-            ) \
-            VALUES(\
-            $(physicellVersionDBEntry()),\
-            $(join([inputs[loc].id for loc in project_locations.all], ",")),\
-            $(join([variation_id[loc] for loc in project_locations.varied],","))\
-            ) \
-            RETURNING monad_id;
+            INSERT OR IGNORE INTO monads $feature_str VALUES $value_str RETURNING monad_id;
             """
         ) |> DataFrame |> x -> x.monad_id
         if isempty(monad_id)
             monad_id = constructSelectQuery(
                 "monads",
                 """
-                WHERE (\
-                physicell_version_id,\
-                $(join(locationIDNames(), ",")),\
-                $(join(locationVariationIDNames(), ","))\
-                )=\
-                (\
-                $(physicellVersionDBEntry()),\
-                $(join([inputs[loc].id for loc in project_locations.all], ",")),\
-                $(join([variation_id[loc] for loc in project_locations.varied],","))\
-                );\
-                """,
+                WHERE $feature_str=$value_str
+                """;
                 selection="monad_id"
             ) |> queryToDataFrame |> x -> x.monad_id[1] #! get the monad_id
         else
@@ -327,45 +320,44 @@ struct Monad <: AbstractMonad
         end
         return Monad(monad_id, n_replicates, inputs, variation_id, use_previous)
     end
-    function Monad(id::Int, n_replicates::Int, inputs::InputFolders, variation_id::VariationID, use_previous::Bool)
-        simulation_ids = use_previous ? readMonadSimulationIDs(id) : Int[]
-        num_sims_to_add = n_replicates - length(simulation_ids)
-        if num_sims_to_add > 0
-            for _ = 1:num_sims_to_add
-                simulation = Simulation(inputs, variation_id) #! create a new simulation
-                push!(simulation_ids, simulation.id) #! add the simulation id to the monad
-            end
-        end
 
+    function Monad(id::Int, n_replicates::Int, inputs::InputFolders, variation_id::VariationID, use_previous::Bool)
         @assert id > 0 "id must be positive"
         @assert n_replicates >= 0 "n_replicates must be non-negative"
 
-        #! this could be done when adding new simulation ids to save some fie I/O
-        #! doing it here just to make sure it is always up to date (and for consistency across classes)
-        recordSimulationIDs(id, simulation_ids) #! record the simulation ids in a .csv file
+        previous_simulation_ids = readMonadSimulationIDs(id)
+        new_simulation_ids = Int[]
+        num_sims_to_add = n_replicates - (use_previous ? length(previous_simulation_ids) : 0)
+        if num_sims_to_add > 0
+            for _ = 1:num_sims_to_add
+                simulation = Simulation(inputs, variation_id) #! create a new simulation
+                push!(new_simulation_ids, simulation.id)
+            end
+            recordSimulationIDs(id, [previous_simulation_ids; new_simulation_ids]) #! record the simulation ids in a .csv file
+        end
+
+        simulation_ids = use_previous ? [previous_simulation_ids; new_simulation_ids] : new_simulation_ids
 
         return new(id, n_replicates, simulation_ids, inputs, variation_id)
     end
 
 end
 
-function Monad(inputs::InputFolders, variation_id::VariationID; use_previous::Bool=true)
-    n_replicates = 0 #! not making a monad to run if not supplying the n_replicates info
+function Monad(inputs::InputFolders, variation_id::VariationID; use_previous::Bool=true, n_replicates::Int=0)
     Monad(n_replicates, inputs, variation_id, use_previous)
 end
 
-function getMonad(monad_id::Int, n_replicates::Int)
+function getMonad(monad_id::Int, n_replicates::Int, use_previous::Bool)
     df = constructSelectQuery("monads", "WHERE monad_id=$(monad_id);") |> queryToDataFrame
     if isempty(df)
         error("Monad $(monad_id) not in the database.")
     end
     inputs = [loc => df[1, locationIDName(loc)] for loc in project_locations.all] |> InputFolders
     variation_id = [loc => df[1, locationVarIDName(loc)] for loc in project_locations.varied] |> VariationID
-    use_previous = true
     return Monad(monad_id, n_replicates, inputs, variation_id, use_previous)
 end
 
-Monad(monad_id::Integer; n_replicates::Integer=0) = getMonad(monad_id, n_replicates)
+Monad(monad_id::Integer; n_replicates::Integer=0, use_previous::Bool=true) = getMonad(monad_id, n_replicates, use_previous)
 
 function Simulation(monad::Monad)
     return Simulation(monad.inputs, monad.variation_id)

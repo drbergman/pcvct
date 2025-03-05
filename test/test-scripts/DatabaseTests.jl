@@ -23,11 +23,6 @@ mv(custom_code_src_folder, custom_code_dest_folder)
 mv(config_dest_folder, config_src_folder)
 mv(custom_code_dest_folder, custom_code_src_folder)
 
-# test memory db
-pcvct.initializeDatabase()
-pcvct.reinitializeDatabase()
-pcvct.initializeDatabase(joinpath(pcvct.data_dir, "vct.db"))
-
 # test bad table
 table_name_not_end_in_s = "test"
 @test_throws ErrorException pcvct.createPCVCTTable(table_name_not_end_in_s, "")
@@ -59,3 +54,12 @@ pcvct.variationsTable(:config, Sampling(1); remove_constants=true)
 pcvct.variationsTable(:rulesets_collection, Sampling(1); remove_constants=true)
 pcvct.variationsTable(:ic_cell, Sampling(1); remove_constants=true)
 pcvct.variationsTable(:ic_ecm, Sampling(1); remove_constants=true)
+
+# test bad folder
+path_to_bad_folder = joinpath(pcvct.data_dir, "inputs", "configs", "bad_folder")
+mkdir(path_to_bad_folder)
+
+@test pcvct.reinitializeDatabase() == false
+
+rm(path_to_bad_folder; force=true, recursive=true)
+@test pcvct.initializeDatabase(pcvct.db.file) == true
