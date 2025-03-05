@@ -13,3 +13,5 @@ Here are the options brainstormed thus far:
   - PhysiCellDB.jl
   - PhysiDB.jl (the clear name for make the database portion a separate package)
   - PhysiCell.jl (kinda self-important to assume this will be all the PhysiCell stuff in Julia)
+
+I think I'm now leaning towards `ModelManager.jl` being the underlying framework that works across ABM (or other modeling paradigms) frameworks and then `PhysiCellModelManager.jl` is the PhysiCell-specific version.

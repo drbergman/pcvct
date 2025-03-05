@@ -3,7 +3,11 @@ filename = split(filename, "/") |> last
 str = "TESTING WITH $(filename)"
 hashBorderPrint(str)
 
-hashBorderPrint("DATABASE SUCCESSFULLY INITIALIZED!")
+n_sims = length(Monad(1))
+monad = Monad(1; n_replicates=1, use_previous=false)
+run(monad)
+@test length(monad.simulation_ids) == 1 #! how many simulations were attached to this monad when run
+@test length(getSimulationIDs(monad)) == n_sims+1 #! how many simulations are stored in simulations.csv
 
 config_folder = "0_template"
 rulesets_collection_folder = "0_template"
@@ -33,12 +37,8 @@ out2 = run(inputs, discrete_variations)
 @test out.trial.inputs == out2.trial.inputs
 @test out.trial.variation_id == out2.trial.variation_id
 
-hashBorderPrint("SIMULATION SUCCESSFULLY RUN!")
-
 query = pcvct.constructSelectQuery("simulations", "WHERE simulation_id=1")
 df = pcvct.queryToDataFrame(query; is_row=true)
-
-hashBorderPrint("SIMULATION SUCCESSFULLY IN DB!")
 
 cell_type = "default"
 discrete_variations = DiscreteVariation[]
@@ -53,12 +53,8 @@ push!(discrete_variations, DiscreteVariation(xml_path, 5.0))
 
 sampling = createTrial(simulation, discrete_variations; n_replicates=n_replicates)
 
-hashBorderPrint("SAMPLING SUCCESSFULLY CREATED!")
-
 out = run(sampling; force_recompile=false)
 @test out.n_success == length(sampling)
-
-hashBorderPrint("SAMPLING SUCCESSFULLY RUN!")
 
 out2 = run(simulation, discrete_variations; n_replicates=n_replicates, force_recompile=false)
 @test out2.trial isa Sampling
@@ -68,8 +64,6 @@ out2 = run(simulation, discrete_variations; n_replicates=n_replicates, force_rec
 @test Set(pcvct.getSimulationIDs(out2.trial)) == Set(pcvct.getSimulationIDs(sampling))
 @test out2.n_scheduled == 0
 @test out2.n_success == 0
-
-hashBorderPrint("SUCCESSFULLY `run` WITHOUT CREATING SAMPLING!")
 
 n_simulations = length(sampling) #! number of simulations recorded (in .csvs) for this sampling
 n_expected_sims = n_replicates
@@ -83,14 +77,10 @@ n_variations = length(sampling.variation_ids)
 @test n_simulations == n_variations * n_replicates #! ...how many variation ids we recorded (number of rulesets_variations_ids must match variation_ids on construction of sampling)
 @test n_simulations == out.n_success #! ...how many simulations succeeded
 
-hashBorderPrint("SAMPLING SUCCESSFULLY IN CSVS!")
-
 out = run(sampling; force_recompile=false)
 
 # no new simulations should have been run
 @test out.n_success == 0
-
-hashBorderPrint("SUCCESSFULLY FOUND PREVIOUS SIMS!")
 
 trial = Trial([sampling])
 @test trial isa Trial
@@ -99,8 +89,6 @@ out = run(trial; force_recompile=false)
 
 # no new simulations should have been run
 @test out.n_success == 0
-
-hashBorderPrint("SUCCESSFULLY RAN TRIAL!")
 
 @test_warn "`runAbstractTrial` is deprecated. Use `run` instead." runAbstractTrial(trial; force_recompile=false)
 

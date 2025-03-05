@@ -22,11 +22,14 @@ n_replicates = 1
 config_variation_ids = [1, 2]
 rulesets_collection_variation_ids = [1, 1]
 ic_cell_variation_ids = [0, 0]
+location_variation_ids = Dict{Symbol,Union{Integer,AbstractArray{<:Integer}}}(
+    :config => config_variation_ids,
+    :rulesets_collection => rulesets_collection_variation_ids,
+    :ic_cell => ic_cell_variation_ids
+)
 sampling = Sampling(inputs;
     n_replicates=n_replicates,
-    location_variation_ids=Dict{Symbol,Union{Integer,AbstractArray{<:Integer}}}(:config => config_variation_ids,
-                                                                                :rulesets_collection => rulesets_collection_variation_ids,
-                                                                                :ic_cell => ic_cell_variation_ids)
+    location_variation_ids=location_variation_ids
 )
 @test sampling isa Sampling
 
