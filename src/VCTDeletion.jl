@@ -250,12 +250,8 @@ function resetDatabase(; force_reset::Bool=false, force_continue::Bool=false)
         rm_hpc_safe(joinpath(locationPath(:custom_code, custom_code_folder), baseToExecutable("project")); force=true)
     end
 
-    if db.file == ":memory:"
-        initializeDatabase()
-    else
-        rm_hpc_safe("$(db.file)"; force=true)
-        initializeDatabase("$(db.file)")
-    end
+    rm_hpc_safe("$(db.file)"; force=true)
+    initializeDatabase("$(db.file)")
     return nothing
 end
 

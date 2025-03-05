@@ -11,22 +11,17 @@ function initializeDatabase(path_to_database::String; auto_upgrade::Bool=false)
     is_new_db = !isfile(path_to_database)
     global db = SQLite.DB(path_to_database)
     SQLite.transaction(db, "EXCLUSIVE")
-    success = createSchema(is_new_db; auto_upgrade=auto_upgrade)
-    SQLite.commit(db)
-    if success
+    try
+        createSchema(is_new_db; auto_upgrade=auto_upgrade)
+    catch e
+        SQLite.rollback(db)
+        println("Error initializing database: $e")
+        return false
+    else
+        SQLite.commit(db)
         global initialized = true
+        return true
     end
-    return success
-end
-
-function initializeDatabase()
-    global db = SQLite.DB()
-    is_new_db = true
-    success = createSchema(is_new_db)
-    if success
-        global initialized = true
-    end
-    return success
 end
 
 function reinitializeDatabase()
@@ -34,11 +29,7 @@ function reinitializeDatabase()
         return
     end
     global initialized = false
-    if db.file == ":memory:" #! if the database is in memory, re-initialize it
-        initializeDatabase()
-    else
-        initializeDatabase(db.file; auto_upgrade=true)
-    end
+    return initializeDatabase(db.file; auto_upgrade=true)
 end
 
 function createSchema(is_new_db::Bool; auto_upgrade::Bool=false)
@@ -197,7 +188,7 @@ function createPCVCTTable(table_name::String, schema::String; db::SQLite.DB=db)
         s *= "\n\tThis helps to normalize what the id names are for these entries."
         s *= "\n\tYour table $(table_name) does not end in 's'."
         s *= "\n\tSee retrieveID(location::Symbol, folder_name::String; db::SQLite.DB=db)."
-        error(s)
+        throw(ErrorException(s))
     end
     #! check that schema has PRIMARY KEY named as table_name without the s followed by _id
     id_name = locationIDName(Symbol(table_name[1:end-1]))
@@ -206,7 +197,7 @@ function createPCVCTTable(table_name::String, schema::String; db::SQLite.DB=db)
         s *= "\n\tThis helps to normalize what the id names are for these entries."
         s *= "\n\tYour schema $(schema) does not have \"$(id_name) INTEGER PRIMARY KEY\"."
         s *= "\n\tSee retrieveID(location::Symbol, folder_name::String; db::SQLite.DB=db)."
-        error(s)
+        throw(ErrorException(s))
     end
     SQLite.execute(db, "CREATE TABLE IF NOT EXISTS $(table_name) (
         $(schema)
