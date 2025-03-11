@@ -23,11 +23,11 @@ push!(discrete_variations, DiscreteVariation(["overall","max_time"], 12.0))
 push!(discrete_variations, DiscreteVariation(["save","full_data","interval"], 6.0))
 push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], 6.0))
 
-sampling = createTrial(inputs, discrete_variations; n_replicates=1)
+sampling_from_import = createTrial(inputs, discrete_variations; n_replicates=1) #! save this for PopulationTests.jl
 
-out = run(sampling; force_recompile=false)
+out = run(sampling_from_import; force_recompile=false)
 
-@test out.n_success == length(sampling)
+@test out.n_success == length(sampling_from_import)
 
 success = importProject(path_to_project, src, dest)
 @test success
