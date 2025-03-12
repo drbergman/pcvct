@@ -22,7 +22,7 @@ end
 function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString}; required::Bool=true)
     current_element = root(xml_doc)
     for path_element in xml_path
-        if !occursin(":",path_element)
+        if !occursin(":", path_element)
             current_element = find_element(current_element, path_element)
             if isnothing(current_element)
                 required ? retrieveElementError(xml_path, path_element) : return nothing
