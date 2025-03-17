@@ -3,17 +3,17 @@
 ## Loading output
 
 ### `PhysiCellSnapshot`
-The base unit of PhysiCell output is the [`PhysiCellSnapshot`](@ref).
+The base unit of PhysiCell output is the `PhysiCellSnapshot`.
 These are currently considered pcvct internals and so the API may change.
 Each snapshot records the path to the PhysiCell output folder, its index in the sequence of outputs, the time of the snapshot in the simulation, and optionally the cell, substrate, and mesh data at that snapshot.
 
 ### `PhysiCellSequence`
-A [`PhysiCellSequence`](@ref) is the full sequence of snapshots corresponding to a single PhysiCell simulation.
+A `PhysiCellSequence` is the full sequence of snapshots corresponding to a single PhysiCell simulation.
 As with `PhysiCellSnapshot`'s, these are currently considered internals and their API may change.
 In addition to the path to the PhysiCell output folder and the vector of `PhysiCellSnapshot`'s, it holds metadata for the simulation.
 
 ### `getCellDataSequence`
-The main function to get sequences of cell data is [`getCellDataSequence`](@ref).
+The main function to get sequences of cell data is `getCellDataSequence`.
 It accepts any of a simulation ID (`<:Integer`), a simulation (`::Simulation`), or a sequence (`::PhysiCellSequence`) and either a single label (`::String`) or a vector of labels (`::Vector{String}`).
 For each cell in the simulation (as determined by the cell ID), the output creates a dictionary entry (the key is the integer cell ID) whose value is a named tuple with the input labels as keys as well as `:time`.
 This means that if one sets
@@ -77,8 +77,8 @@ plotbycelltype(Sampling(1); include_cell_types=["epi", "mes", ["epi", "mes"]], c
 ## Substrate analysis
 pcvct supports two ways to summarize substrate information over time.
 
-### AverageSubstrateTimeSeries
-An [`AverageSubstrateTimeSeries`](@ref) gives the time series for the average substrate across the entire domain.
+### `AverageSubstrateTimeSeries`
+An `AverageSubstrateTimeSeries` gives the time series for the average substrate across the entire domain.
 
 ```julia
 simulation_id = 1
@@ -88,7 +88,7 @@ plot(asts.time, asts["oxygen"])
 ```
 
 ### `ExtracellularSubstrateTimeSeries`
-An [`ExtracellularSubstrateTimeSeries`](@ref) gives the time series for the average substrate concentration in the extracellular space neighboring all cells of a given cell type.
+An `ExtracellularSubstrateTimeSeries` gives the time series for the average substrate concentration in the extracellular space neighboring all cells of a given cell type.
 In a simulation with `cd8` cells and `IFNg` diffusible substrate, plot the average concentration of IFNg experienced by CD8+ T cells using the following:
 
 ```julia
