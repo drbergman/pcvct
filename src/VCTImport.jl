@@ -33,7 +33,7 @@ struct ImportSources
     ic_dc::ImportSource
 end
 
-function ImportSources(src::Dict)
+function ImportSources(src::Dict, path_to_project::AbstractString)
     required = true
     config = ImportSource(src, "config", "config", "PhysiCell_settings.xml", "file", required)
     main = ImportSource(src, "main", "", "main.cpp", "file", required; input_folder_key = :custom_code)
@@ -42,12 +42,80 @@ function ImportSources(src::Dict)
 
     required = false
     rules = ImportSource(src, "rules", "config", "cell_rules.csv", "file", required; pcvct_name="base_rulesets.csv")
-    intracellular = ImportSource(src, "intracellular", "config", "intracellular.xml", "file", required)
+    intracellular = prepareIntracellularImport(src, config, path_to_project)
     ic_cell = ImportSource(src, "ic_cell", "config", "cells.csv", "file", required)
     ic_substrate = ImportSource(src, "ic_substrate", "config", "substrates.csv", "file", required)
     ic_ecm = ImportSource(src, "ic_ecm", "config", "ecm.csv", "file", required)
     ic_dc = ImportSource(src, "ic_dc", "config", "dcs.csv", "file", required)
     return ImportSources(config, main, makefile, custom_modules, rules, intracellular, ic_cell, ic_substrate, ic_ecm, ic_dc)
+end
+
+function prepareIntracellularImport(src::Dict, config::ImportSource, path_to_project::AbstractString)
+    if haskey(src, "intracellular") || isfile(joinpath(path_to_project, "config", "intracellular.xml"))
+        return ImportSource(src, "intracellular", "config", "intracellular.xml", "file", true)
+    end
+    #! now attempt to read the config file and assemble the intracellular file
+    path_to_xml = joinpath(path_to_project, config.path_from_project)
+    if !isfile(path_to_xml) #! if the config file is not found, then we cannot proceed with grabbing the intracellular data, just return the default
+        return ImportSource(src, "intracellular", "config", "intracellular.xml", "file", false)
+    end
+    xml_doc = openXML(path_to_xml)
+    cell_definitions_element = retrieveElement(xml_doc, ["cell_definitions"])
+    cell_type_to_components_dict = Dict{String,PhysiCellComponent}()
+    for cell_definition_element in child_elements(cell_definitions_element)
+        if name(cell_definition_element) != "cell_definition"
+            continue
+        end
+        cell_type = attribute(cell_definition_element, "name")
+        phenotype_element = find_element(cell_definition_element, "phenotype")
+        intracellular_element = find_element(phenotype_element, "intracellular")
+        if isnothing(intracellular_element)
+            continue
+        end
+        type = attribute(intracellular_element, "type")
+        if type ∉ ["roadrunner", "dfba"]
+            throw(ErrorException("pcvct does not yet support intracellular type $type."))
+        end
+        path_to_file = find_element(intracellular_element, "sbml_filename") |> content
+        temp_component = PhysiCellComponent(type, basename(path_to_file))
+        #! now we have to rely on the path to the file is correct relative to the parent directory of the config file (that should usually be the case)
+        path_to_src = joinpath(path_to_project, path_to_file)
+        path_to_dest = _create_component_dest_file_name(readlines(path_to_src), temp_component)
+        component = PhysiCellComponent(type, basename(path_to_dest))
+        if !isfile(path_to_dest)
+            cp(path_to_src, path_to_dest)
+        end
+
+        cell_type_to_components_dict[cell_type] = component
+    end
+
+    if isempty(cell_type_to_components_dict)
+        return ImportSource(src, "intracellular", "config", "intracellular.xml", "file", false)
+    end
+
+    intracellular_folder = assembleIntracellular!(cell_type_to_components_dict; name="temp_assembled_from_$(splitpath(path_to_project)[end])", skip_db_insert=true)
+    mv(joinpath(locationPath(:intracellular, intracellular_folder), "intracellular.xml"), joinpath(path_to_project, "config", "assembled_intracellular_for_import.xml"); force=true)
+    rm(locationPath(:intracellular, intracellular_folder); force=true, recursive=true)
+    
+    closeXML(xml_doc)
+    return ImportSource(src, "intracellular", "config", "assembled_intracellular_for_import.xml", "file", true; pcvct_name="intracellular.xml")
+end
+
+function _create_component_dest_file_name(src_lines::Vector{String}, component::PhysiCellComponent)
+    base_path = joinpath(data_dir, "components", component.path_from_components)
+    folder = dirname(base_path)
+    mkpath(folder)
+    base_filename, file_ext = basename(base_path) |> splitext
+    n = 0
+    path_to_dest = joinpath(folder, base_filename * file_ext)
+    while isfile(path_to_dest)
+        if src_lines == readlines(path_to_dest)
+            return path_to_dest
+        end
+        n += 1
+        path_to_dest = joinpath(folder, base_filename * "_$(n)" * file_ext)
+    end
+    return path_to_dest
 end
 
 mutable struct ImportDestFolder
@@ -79,7 +147,7 @@ function ImportDestFolders(path_to_project::AbstractString, dest::Dict)
 
     #! optional folders
     rules = ImportDestFolder(path_fn("rules", "rulesets_collections"), created, description)
-    intracellular = ImportDestFolder(path_fn("intracellular", "intracellular"), created, description)
+    intracellular = ImportDestFolder(path_fn("intracellular", "intracellulars"), created, description)
     ic_cell = ImportDestFolder(path_fn("ic_cell", joinpath("ics", "cells")), created, description)
     ic_substrate = ImportDestFolder(path_fn("ic_substrate", joinpath("ics", "substrates")), created, description)
     ic_ecm = ImportDestFolder(path_fn("ic_ecm", joinpath("ics", "ecms")), created, description)
@@ -101,7 +169,7 @@ The following keys are recognized: $(join(["`$fn`" for fn in fieldnames(ImportDe
 - `extreme_caution::Bool`: If true, will ask for confirmation before deleting any folders created during the import process. Care has been taken to ensure this is unnecessary. Provided for users who want to be extra cautious.
 """
 function importProject(path_to_project::AbstractString, src=Dict(), dest=Dict(); extreme_caution::Bool=false)
-    project_sources = ImportSources(src)
+    project_sources = ImportSources(src, path_to_project)
     import_dest_folders = ImportDestFolders(path_to_project, dest)
     success = resolveProjectSources!(project_sources, path_to_project)
     if success
@@ -299,9 +367,6 @@ function adaptMain(path_from_inputs::AbstractString)
         return true
     end
 
-    idx = findfirst(x->contains(x, "<fstream>"), lines)
-    insert!(lines, idx+1, "#include <getopt.h>")
-
     idx1 = findfirst(x->contains(x, "// load and parse settings file(s)"), lines)
     if isnothing(idx1)
         idx1 = findfirst(x->contains(x, "bool XML_status = false;"), lines)
@@ -314,19 +379,27 @@ function adaptMain(path_from_inputs::AbstractString)
             return false
         end
     end
-    idx2 = findfirst(x -> contains(x, "// copy config file to"), lines)
-    if isnothing(idx2)
-        idx2 = findfirst(x -> contains(x, "system(") && contains(x, "copy_command"), lines)
-        if isnothing(idx2)
-            msg = """
-            Could not identify where the copy command is in the main.cpp file.
-            Aborting the export process.
-            """
-            println(msg)
-            return false
-        end
-    end
-    deleteat!(lines, idx1:(idx2-1))
+    idx_not_xml_status = findfirst(x->contains(x, "!XML_status"), lines)
+    idx2 = idx_not_xml_status + findfirst(x -> contains(x, "}"), lines[idx_not_xml_status:end]) - 1
+    # idx2 = findfirst(x -> contains(x, "// copy config file to"), lines)
+    # if isnothing(idx2)
+    #     idx2 = findfirst(x -> contains(x, "system(") && contains(x, "copy_command"), lines)
+    #     if isnothing(idx2)
+    #         idx2 = findfirst(x -> contains(x, "// OpenMP setup"), lines)
+    #         if isnothing(idx2)
+    #             idx2 = findfirst(x -> contains(x, "omp_set_num_threads("), lines)
+    #             if isnothing(idx2)
+    #                 msg = """
+    #                 Could not identify where the copy command is in the main.cpp file.
+    #                 Aborting the export process.
+    #                 """
+    #                 println(msg)
+    #                 return false
+    #             end
+    #         end
+    #     end
+    # end
+    deleteat!(lines, idx1:idx2)
 
     parsing_block = """
         // read arguments

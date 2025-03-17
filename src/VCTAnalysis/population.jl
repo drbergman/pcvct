@@ -9,7 +9,9 @@ function populationCount(snapshot::PhysiCellSnapshot; include_dead::Bool=false, 
     else
         cell_df = @view snapshot.cells[snapshot.cells.dead .== false, :]
     end
-    getCellTypeToNameDict!(cell_type_to_name_dict, snapshot)
+    if isempty(cell_type_to_name_dict)
+        cell_type_to_name_dict = getCellTypeToNameDict(snapshot)
+    end
     cell_type_names = values(cell_type_to_name_dict)
     for cell_type_name in cell_type_names
         data[cell_type_name] = count(x -> x == cell_type_name, cell_df.cell_type_name)
@@ -35,18 +37,28 @@ spts = SimulationPopulationTimeSeries(1; include_dead=true) # similar, but count
 ```
 
 # Fields
-- `folder::String`: The folder containing the simulation's output.
+- `path_to_folder::String`: The path to the folder containing the simulation's output.
 - `time::Vector{Real}`: The time points of the population time series.
 - `cell_count::Dict{String, Vector{Integer}}`: A dictionary where keys are cell type names and values are vectors of cell counts over time.
 """
 struct SimulationPopulationTimeSeries <: AbstractPopulationTimeSeries
-    folder::String
+    path_to_folder::String
     time::Vector{Real}
     cell_count::Dict{String, Vector{Integer}}
 end
 
+function Base.getindex(spts::SimulationPopulationTimeSeries, cell_type::String)
+    if cell_type in keys(spts.cell_count)
+        return spts.cell_count[cell_type]
+    elseif cell_type == "time"
+        return spts.time
+    else
+        throw(ArgumentError("Cell type $cell_type not found in the population time series."))
+    end
+end
+
 function SimulationPopulationTimeSeries(sequence::PhysiCellSequence; include_dead::Bool=false)
-    folder = sequence.folder
+    path_to_folder = sequence.path_to_folder
     time = [snapshot.time for snapshot in sequence.snapshots]
     cell_count = Dict{String, Vector{Integer}}()
     for (i, snapshot) in enumerate(sequence.snapshots)
@@ -58,15 +70,15 @@ function SimulationPopulationTimeSeries(sequence::PhysiCellSequence; include_dea
             cell_count[ID][i] = count
         end
     end
-    return SimulationPopulationTimeSeries(folder, time, cell_count)
+    return SimulationPopulationTimeSeries(path_to_folder, time, cell_count)
 end
 
-function SimulationPopulationTimeSeries(folder::String; include_dead::Bool=false)
-    return PhysiCellSequence(folder; include_cells=true) |> x -> SimulationPopulationTimeSeries(x; include_dead=include_dead)
+function SimulationPopulationTimeSeries(path_to_folder::String; include_dead::Bool=false)
+    return PhysiCellSequence(path_to_folder; include_cells=true) |> x -> SimulationPopulationTimeSeries(x; include_dead=include_dead)
 end
 
-function SimulationPopulationTimeSeries(simulation_id::Integer; include_dead::Bool=false)
-    print("Computing SimulationPopulationTimeSeries for Simulation $simulation_id...")
+function SimulationPopulationTimeSeries(simulation_id::Integer; include_dead::Bool=false, verbose::Bool=true)
+    verbose ? print("Computing SimulationPopulationTimeSeries for Simulation $simulation_id...") : nothing
     simulation_folder = outputFolder("simulation", simulation_id)
     path_to_summary = joinpath(simulation_folder, "summary")
     path_to_file = joinpath(path_to_summary, "population_time_series$(include_dead ? "_include_dead" : "").csv")
@@ -82,11 +94,11 @@ function SimulationPopulationTimeSeries(simulation_id::Integer; include_dead::Bo
         end
         CSV.write(path_to_file, df)
     end
-    println("done.")
+    verbose ? println("done.") : nothing
     return spts
 end
 
-SimulationPopulationTimeSeries(simulation::Simulation; include_dead::Bool=false) = SimulationPopulationTimeSeries(simulation.id; include_dead=include_dead)
+SimulationPopulationTimeSeries(simulation::Simulation; kwargs...) = SimulationPopulationTimeSeries(simulation.id; kwargs...)
 
 """
     finalPopulationCount(simulation::Simulation[; include_dead::Bool=false])
@@ -106,8 +118,8 @@ final_default_count = fpc["default"]
 """
 function finalPopulationCount end
 
-function finalPopulationCount(folder::String; include_dead::Bool=false)
-    final_snapshot = PhysiCellSnapshot(folder, :final; include_cells=true)
+function finalPopulationCount(path_to_folder::String; include_dead::Bool=false)
+    final_snapshot = PhysiCellSnapshot(path_to_folder, :final; include_cells=true)
     return populationCount(final_snapshot; include_dead=include_dead)
 end
 
@@ -137,24 +149,33 @@ mpts = MonadPopulationTimeSeries(monad(1))
 - `monad_id::Int`: The ID of the monad.
 - `monad_length::Int`: The number of simulations in the monad.
 - `time::Vector{Real}`: The time points of the population time series.
-- `cell_count_arrays::Dict{String, Array{Integer,2}}`: A dictionary where keys are cell type names and values are `(length(time), monad_length)`-sized arrays of cell counts over time for each simulation in the monad.
-- `cell_count_means::Dict{String, Vector{Real}}`: A dictionary where keys are cell type names and values are vectors of mean cell counts over time for each simulation in the monad.
-- `cell_count_stds::Dict{String, Vector{Real}}`: A dictionary where keys are cell type names and values are vectors of standard deviation of cell counts over time for each simulation in the monad.
+- `cell_count::Dict{String, NamedTuple}`: A dictionary where keys are cell type names and values are NamedTuples with fields `:counts`, `:mean`, and `:std`.
 """
 struct MonadPopulationTimeSeries <: AbstractPopulationTimeSeries
     monad_id::Int
     monad_length::Int
     time::Vector{Real}
-    cell_count_arrays::Dict{String, Array{Integer,2}}
-    cell_count_means::Dict{String, Vector{Real}}
-    cell_count_stds::Dict{String, Vector{Real}}
+    cell_count::Dict{String,NamedTuple}
 end
+
+function Base.getindex(mpts::MonadPopulationTimeSeries, cell_type::String)
+    if cell_type in keys(mpts.cell_count)
+        return mpts.cell_count[cell_type]
+    elseif cell_type == "time"
+        return mpts.time
+    else
+        throw(ArgumentError("Cell type $cell_type not found in the population time series."))
+    end
+end
+
+Base.keys(apts::AbstractPopulationTimeSeries; exclude_time::Bool=false) = exclude_time ? keys(apts.cell_count) : ["time"; keys(apts.cell_count)]
 
 function MonadPopulationTimeSeries(monad::Monad; include_dead::Bool=false)
     simulation_ids = getSimulationIDs(monad)
     monad_length = length(simulation_ids)
     time = Real[]
-    cell_count_arrays = Dict{String, Array{Int,2}}()
+    cell_count = Dict{String, NamedTuple}()
+    _counts = Dict{String, Array{Int,2}}()
     for (i, simulation_id) in enumerate(simulation_ids)
         spts = SimulationPopulationTimeSeries(simulation_id; include_dead=include_dead)
         if isempty(time)
@@ -163,19 +184,20 @@ function MonadPopulationTimeSeries(monad::Monad; include_dead::Bool=false)
             @assert time == spts.time "Simulations $(simulation_ids[1]) and $(simulation_id) in monad $(monad.id) have different times in their time series."
         end
         for (name, cell_count) in pairs(spts.cell_count)
-            if !haskey(cell_count_arrays, name)
-                cell_count_arrays[name] = zeros(Int, length(time), monad_length)
+            if !haskey(_counts, name)
+                _counts[name] = zeros(Int, length(time), monad_length)
             end
-            cell_count_arrays[name][:,i] = cell_count
+            _counts[name][:,i] = cell_count
         end
     end
-    cell_count_means = Dict{String, Vector{Real}}()
-    cell_count_stds = Dict{String, Vector{Real}}()
-    for (name, array) in cell_count_arrays
-        cell_count_means[name] = mean(array, dims=2) |> vec
-        cell_count_stds[name] = std(array, dims=2) |> vec
+    _mean = Dict{String, Vector{Real}}()
+    _std = Dict{String, Vector{Real}}()
+    for (name, array) in _counts
+        _mean[name] = mean(array, dims=2) |> vec
+        _std[name] = std(array, dims=2) |> vec
+        cell_count[name] = [:counts => array, :mean => _mean[name], :std => _std[name]] |> NamedTuple
     end
-    return MonadPopulationTimeSeries(monad.id, monad_length, time, cell_count_arrays, cell_count_means, cell_count_stds)
+    return MonadPopulationTimeSeries(monad.id, monad_length, time, cell_count)
 end
 
 MonadPopulationTimeSeries(monad_id::Integer; include_dead::Bool=false) = MonadPopulationTimeSeries(Monad(monad_id); include_dead=include_dead)
@@ -197,27 +219,75 @@ end
 
 #! plot recipes
 getMeanCounts(s::SimulationPopulationTimeSeries) = s.cell_count
-getMeanCounts(m::MonadPopulationTimeSeries) = m.cell_count_means
+getMeanCounts(m::MonadPopulationTimeSeries) = [k => v.mean for (k, v) in pairs(m.cell_count)] |> Dict
+
+function processIncludeCellTypes(include_cell_types)
+    if include_cell_types isa Symbol
+        #! include_cell_types = :all
+        @assert include_cell_types == :all "include_cell_types must be :all if a symbol."
+        return :all
+    elseif include_cell_types isa String
+        #! include_cell_types = "cancer"
+        return [include_cell_types]
+    elseif include_cell_types isa AbstractVector{<:AbstractString}
+        #! include_cell_types = ["cancer", "immune"]
+        return include_cell_types
+    elseif include_cell_types isa AbstractVector
+        @assert isa.(include_cell_types, Union{String,AbstractVector{<:AbstractString}}) |> all "include_cell_types must consist of strings and vectors of strings."
+        return include_cell_types
+    end
+    throw(ArgumentError("include_cell_types must be :all, a string, or a vector consisting of strings and vectors of strings. Got $(typeof(include_cell_types))."))
+end
+
+function processExcludeCellTypes(exclude_cell_types)
+    if exclude_cell_types isa String
+        return [exclude_cell_types]
+    elseif exclude_cell_types isa AbstractVector{<:AbstractString}
+        return exclude_cell_types
+    end
+    throw(ArgumentError("exclude_cell_types must be a string or a vector of strings."))
+end
 
 @recipe function f(M::AbstractMonad; include_dead=false, include_cell_types=:all, exclude_cell_types=String[])
     pts = populationTimeSeries(M; include_dead=include_dead)
     #! allow for single string input for either of these
-    include_cell_types = include_cell_types == :all ? :all : (include_cell_types isa String ? [include_cell_types] : include_cell_types)
-    exclude_cell_types = exclude_cell_types isa String ? [exclude_cell_types] : exclude_cell_types
-    for (name, counts) in pairs(getMeanCounts(pts))
-        skip = include_cell_types != :all && !(name in include_cell_types) #! skip this cell type as only a subset was requested and this was not in it
-        skip = skip || name in exclude_cell_types #! skip this cell type as it was requested to be excluded
-        if skip
-            continue 
+    include_cell_types = processIncludeCellTypes(include_cell_types)
+    exclude_cell_types = processExcludeCellTypes(exclude_cell_types)
+
+    cell_count_keys = include_cell_types == :all ? keys(pts; exclude_time=true) : include_cell_types
+    for k in cell_count_keys
+        if k isa String
+            k = [k] #! standardize so that all are vectors
         end
-        @series begin
-            label --> name
-            x = pts.time
-            y = counts
-            if typeof(M) == Monad && length(M.simulation_ids) > 1
-                ribbon := pts.cell_count_stds[name]
+        setdiff!(k, exclude_cell_types) #! remove any cell types that are to be excluded (also removes duplicates)
+        if isempty(k)
+            continue #! skip if all cell types were excluded
+        end
+        if length(k) == 1
+            name = k[1]
+            @series begin
+                label --> name
+                x = pts.time
+                y = getMeanCounts(pts)[name]
+                if typeof(M) == Monad && length(M.simulation_ids) > 1
+                    ribbon := pts[name].std
+                end
+                x, y
             end
-            x, y
+        else #! need to basically recalculate since we are combining multiple cell types
+            simulation_ids = getSimulationIDs(M)
+            sptss = [SimulationPopulationTimeSeries(simulation_id; include_dead=include_dead, verbose=false) for simulation_id in simulation_ids]
+            sim_sums = [sum([spts[name] for name in k]) for spts in sptss]
+            all_counts = reduce(hcat, sim_sums)
+            @series begin
+                label --> join(k, ", ")
+                x = pts.time
+                y = mean(all_counts, dims=2) |> vec
+                if typeof(M) == Monad && length(M.simulation_ids) > 1
+                    ribbon := std(all_counts, dims=2) |> vec
+                end
+                x, y
+            end
         end
     end
 end
@@ -255,8 +325,15 @@ end
     end
 end
 
+@recipe function f(::Type{PCVCTOutput}, out::PCVCTOutput) 
+    if out.trial isa Trial
+        throw(ArgumentError("Plotting an entire trial not (yet?) defined. Break it down into at least Samplings first."))
+    end
+    out.trial
+end
+
 """
-    plotbycelltype(T::AbstractTrial, cell_types::Union{String, Vector{String}}=:all)
+    plotbycelltype(T::AbstractTrial; include_dead::Bool=false, include_cell_types=:all, exclude_cell_types=String[])
 
 Plot the population time series of a trial by cell type.
 
@@ -273,22 +350,23 @@ struct CellTypeInMonads
     cell_count_stds::Vector{Vector{Real}}
 end
 
-@recipe function f(p::PlotByCellType)
-    @assert typeof(p.args[1]) <: AbstractTrial "Expected first argument to be a subtype of AbstractTrial, got $(typeof(p.args[1]))."
-    if length(p.args) == 1
-        T = p.args[1]
-        cell_types = :all
-    elseif length(p.args) == 2
-        T, cell_types = p.args
+@recipe function f(p::PlotByCellType; include_dead=false, include_cell_types=:all, exclude_cell_types=String[])
+    @assert length(p.args) == 1 "Expected exactly 1 argument, got $(length(p.args))."
+    if (p.args[1] isa PCVCTOutput)
+        T = p.args[1].trial
     else
-        error("Expected 1 or 2 arguments, got $(length(p.args)).")
+        T = p.args[1]
     end
+    @assert typeof(T) <: AbstractTrial "Expected first argument to be a subtype of AbstractTrial, got $(typeof(p.args[1]))."
 
     if T isa Simulation
         monads = [Monad(T)]
     else
         monads = Monad.(getMonadIDs(T))
     end
+
+    include_cell_types = processIncludeCellTypes(include_cell_types)
+    exclude_cell_types = processExcludeCellTypes(exclude_cell_types)
 
     monad_summary = Dict{Int,Any}()
     all_cell_types = Set()
@@ -298,37 +376,31 @@ end
         time = Real[]
         cell_count_arrays = Dict{Any, Array{Int,2}}()
         for (i, simulation_id) in enumerate(simulation_ids)
-            spts = SimulationPopulationTimeSeries(simulation_id)
+            spts = SimulationPopulationTimeSeries(simulation_id; include_dead=include_dead)
             if isempty(time)
                 time = spts.time
             else
                 @assert time == spts.time "Simulations $(simulation_ids[1]) and $(simulation_id) in monad $(monad.id) have different times in their time series."
             end
-            if cell_types == :all
-                for (name, cell_count) in pairs(spts.cell_count)
-                    if !haskey(cell_count_arrays, name)
-                        cell_count_arrays[name] = zeros(Int, length(time), monad_length)
-                    end
-                    cell_count_arrays[name][:,i] = cell_count
+            cell_count_keys = include_cell_types == :all ? keys(spts; exclude_time=true) : include_cell_types
+            for k in cell_count_keys
+                if k isa String
+                    k = [k] #! standardize so that all are vectors
                 end
-            else
-                if cell_types isa String
-                    cell_types = [cell_types]
+                setdiff!(k, exclude_cell_types) #! remove any cell types that are to be excluded (also removes duplicates)
+                if isempty(k)
+                    continue #! skip if all cell types were excluded
                 end
-                for cell_type in cell_types
-                    if cell_type isa String
-                        cell_type = [cell_type]
-                    end
-                    if !haskey(cell_count_arrays, cell_type)
-                        cell_count_arrays[cell_type] = zeros(Int, length(time), monad_length)
-                    end
-                    cell_count_arrays[cell_type][:,i] = sum([spts.cell_count[ct] for ct in cell_type])
+                if !haskey(cell_count_arrays, k)
+                    cell_count_arrays[k] = zeros(Int, length(time), monad_length)
                 end
+                @assert [haskey(spts.cell_count, ct) for ct in k] |> all "A cell type in $k not found in simulation $simulation_id which has cell types $(keys(spts.cell_count))."
+                cell_count_arrays[k][:,i] = sum([spts.cell_count[ct] for ct in k])
             end
         end
         cell_count_means = Dict{Any, Vector{Real}}()
         cell_count_stds = Dict{Any, Vector{Real}}()
-        for (name, array) in cell_count_arrays
+        for (name, array) in pairs(cell_count_arrays)
             cell_count_means[name] = mean(array, dims=2) |> vec
             cell_count_stds[name] = std(array, dims=2) |> vec
             push!(all_cell_types, name)
@@ -351,8 +423,8 @@ end
     end
 end
 
-@recipe function f(tc::CellTypeInMonads)
-    for (x, y, z) in zip(tc.time, tc.cell_count_means, tc.cell_count_stds)
+@recipe function f(ctim::CellTypeInMonads)
+    for (x, y, z) in zip(ctim.time, ctim.cell_count_means, ctim.cell_count_stds)
         @series begin
             ribbon := z
             x, y

@@ -17,14 +17,41 @@ function averageSubstrate(snapshot::PhysiCellSnapshot, substrate_names::Vector{S
     return data
 end
 
+"""
+    AverageSubstrateTimeSeries
+
+A struct to hold the average substrate concentrations over time for a PhysiCell simulation.
+
+# Fields
+- `path_to_folder::String`: The path to the PhysiCell-defined output folder containing the simulation output.
+- `time::Vector{Real}`: The time points at which the snapshots were taken.
+- `substrate_concentrations::Dict{String, Vector{Real}}`: A dictionary mapping substrate names to vectors of their average concentrations over time.
+
+# Example
+```julia
+asts = AverageSubstrateTimeSeries(1) # Load average substrate time series for Simulation 1
+asts.time # Get the time points
+asts["time"] # alternative way to get the time points
+asts["oxygen"] # Get the oxygen concentration over time
+"""
 struct AverageSubstrateTimeSeries
-    folder::String
+    path_to_folder::String
     time::Vector{Real}
     substrate_concentrations::Dict{String, Vector{Real}}
 end
 
+function Base.getindex(asts::AverageSubstrateTimeSeries, name::String)
+    if name in keys(asts.substrate_concentrations)
+        return asts.substrate_concentrations[name]
+    elseif name == "time"
+        return asts.time
+    else
+        throw(ArgumentError("Invalid substrate name: $name"))
+    end
+end
+
 function AverageSubstrateTimeSeries(sequence::PhysiCellSequence)
-    folder = sequence.folder
+    path_to_folder = sequence.path_to_folder
     time = [snapshot.time for snapshot in sequence.snapshots]
     substrate_concentrations = Dict{String, Vector{Real}}()
     substrate_names = getSubstrateNames(sequence)
@@ -37,11 +64,11 @@ function AverageSubstrateTimeSeries(sequence::PhysiCellSequence)
             substrate_concentrations[substrate_name][i] = snapshot_substrate_concentrations[substrate_name]
         end
     end
-    return AverageSubstrateTimeSeries(folder, time, substrate_concentrations)
+    return AverageSubstrateTimeSeries(path_to_folder, time, substrate_concentrations)
 end
 
-function AverageSubstrateTimeSeries(folder::String)
-    return PhysiCellSequence(folder; include_substrates=true) |> x -> AverageSubstrateTimeSeries(x)
+function AverageSubstrateTimeSeries(path_to_folder::String)
+    return PhysiCellSequence(path_to_folder; include_substrates=true) |> x -> AverageSubstrateTimeSeries(x)
 end
 
 function AverageSubstrateTimeSeries(simulation_id::Integer)
@@ -65,8 +92,10 @@ function AverageSubstrateTimeSeries(simulation_id::Integer)
     return asts
 end
 
-function averageExtracellularSubstrate(snapshot::PhysiCellSnapshot; cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}(), substrate_names::Vector{String}=String[], include_dead::Bool=false)
-    loadCells!(snapshot, cell_type_to_name_dict)
+AverageSubstrateTimeSeries(simulation::Simulation) = AverageSubstrateTimeSeries(simulation.id)
+
+function averageExtracellularSubstrate(snapshot::PhysiCellSnapshot; cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}(), substrate_names::Vector{String}=String[], include_dead::Bool=false, labels::Vector{String}=String[])
+    loadCells!(snapshot, cell_type_to_name_dict, labels)
     loadSubstrates!(snapshot, substrate_names)
     loadMesh!(snapshot)
     cells = snapshot.cells
@@ -106,22 +135,51 @@ function computeVoxelIndices(cells::DataFrame, mesh::Dict{String, Vector{Float64
     return voxel_inds
 end
 
+"""
+    ExtracellularSubstrateTimeSeries
+
+A struct to hold the mean extracellular substrate concentrations per cell type over time for a PhysiCell simulation.
+
+# Fields
+- `path_to_folder::String`: The path to the PhysiCell-defined output folder containing the simulation output.
+- `time::Vector{Real}`: The time points at which the snapshots were taken.
+- `data::Dict{String, Dict{String, Vector{Real}}}`: A dictionary mapping cell type names to dictionaries mapping substrate names to vectors of their average concentrations over time.
+
+# Example
+```julia
+ests = ExtracellularSubstrateTimeSeries(1) # Load extracellular substrate time series for Simulation 1
+ests.time # Get the time points
+ests["cancer"]["oxygen"] # Get the oxygen concentration over time for the cancer cell type
+
+ests = ExtracellularSubstrateTimeSeries(simulation; include_dead=true) # Load extracellular substrate time series for a Simulation object, including dead cells
+ests["time"] # Alternate way to get the time points
+ests["cd8"]["IFNg"] # Get the interferon gamma concentration over time for the CD8 cell type
+```
+"""
 struct ExtracellularSubstrateTimeSeries
-    folder::String
+    path_to_folder::String
     time::Vector{Real}
-    data::Dict{String, Dict{String, Vector{Real}}}
+    data::Dict{String,Dict{String,Vector{Real}}}
+end
+
+function Base.getindex(ests::ExtracellularSubstrateTimeSeries, name::String)
+    if name in keys(ests.data)
+        return ests.data[name]
+    elseif name == "time"
+        return ests.time
+    else
+        throw(ArgumentError("Invalid cell type name: $name"))
+    end
 end
 
 function ExtracellularSubstrateTimeSeries(sequence::PhysiCellSequence; include_dead::Bool=false)
-    folder = sequence.folder
+    path_to_folder = sequence.path_to_folder
     time = [snapshot.time for snapshot in sequence.snapshots]
     data = Dict{String, Dict{String, Vector{Real}}}()
     cell_type_to_name_dict = sequence.cell_type_to_name_dict
-    getCellTypeToNameDict!(cell_type_to_name_dict, sequence.folder)
-    substrate_names = sequence.substrate_names
-    getSubstrateNames!(substrate_names, sequence.folder)
+    substrate_names = getSubstrateNames(sequence)
     for (i, snapshot) in enumerate(sequence.snapshots)
-        snapshot_data = averageExtracellularSubstrate(snapshot; cell_type_to_name_dict=cell_type_to_name_dict, substrate_names=substrate_names, include_dead=include_dead)
+        snapshot_data = averageExtracellularSubstrate(snapshot; cell_type_to_name_dict=cell_type_to_name_dict, substrate_names=substrate_names, include_dead=include_dead, labels=sequence.labels)
         for cell_type_name in keys(snapshot_data)
             if !haskey(data, cell_type_name)
                 data[cell_type_name] = Dict{String, Vector{Real}}()
@@ -134,11 +192,11 @@ function ExtracellularSubstrateTimeSeries(sequence::PhysiCellSequence; include_d
             end
         end
     end
-    return ExtracellularSubstrateTimeSeries(folder, time, data)
+    return ExtracellularSubstrateTimeSeries(path_to_folder, time, data)
 end
 
-function ExtracellularSubstrateTimeSeries(folder::String; include_dead::Bool=false)
-    return PhysiCellSequence(folder; include_cells=true, include_substrates=true, include_mesh=true) |> x -> ExtracellularSubstrateTimeSeries(x; include_dead=include_dead)
+function ExtracellularSubstrateTimeSeries(path_to_folder::String; include_dead::Bool=false)
+    return PhysiCellSequence(path_to_folder; include_cells=true, include_substrates=true, include_mesh=true) |> x -> ExtracellularSubstrateTimeSeries(x; include_dead=include_dead)
 end
 
 function ExtracellularSubstrateTimeSeries(simulation_id::Integer; include_dead::Bool=false)
@@ -174,3 +232,5 @@ function ExtracellularSubstrateTimeSeries(simulation_id::Integer; include_dead::
     println("done.")
     return ests
 end
+
+ExtracellularSubstrateTimeSeries(simulation::Simulation; kwargs...) = ExtracellularSubstrateTimeSeries(simulation.id; kwargs...)

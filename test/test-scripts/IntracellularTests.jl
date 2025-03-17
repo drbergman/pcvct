@@ -19,5 +19,7 @@ macros_lines = pcvct.readMacrosFile(out.trial)
 @test "ADDON_ROADRUNNER" in macros_lines
 
 #! more test coverage
-intracellular = assembleIntracellular!(cell_to_components_dict; name="template-combined")
-@test intracellular == "template-combined" #! should not need to make a new folder, the assembly.toml file should show they match
+new_intracellular = assembleIntracellular!(cell_to_components_dict; name="template-combined")
+@test intracellular == new_intracellular #! should not need to make a new folder, the assembly.toml file should show they match
+
+export_folder = out |> getSimulationIDs |> first |> exportSimulation

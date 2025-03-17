@@ -22,6 +22,7 @@ makedocs(;
             "Known limitations" => "man/known_limitations.md",
             "PhysiCell Studio" => "man/physicell_studio.md",
             "Sensitivity analysis" => "man/sensitivity_analysis.md",
+            "Analyzing output" => "man/analyzing_output.md",
             "Developer guide" => "man/developer_guide.md",
         ],
         "Documentation" => map(

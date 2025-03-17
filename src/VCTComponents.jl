@@ -46,7 +46,7 @@ function assembleIntracellular!(cell_to_components_dict::Dict{String,<:Union{Phy
     return assembleIntracellular!(cell_to_vec_components_dict; kwargs...)
 end
 
-function assembleIntracellular!(cell_to_components_dict::Dict{String,Vector{PhysiCellComponent}}; name::String="assembled")
+function assembleIntracellular!(cell_to_components_dict::Dict{String,Vector{PhysiCellComponent}}; name::String="assembled", skip_db_insert::Bool=false)
     #! get all components to assign IDs
     unique_components = PhysiCellComponent[]
     for components in values(cell_to_components_dict)
@@ -145,7 +145,7 @@ function assembleIntracellular!(cell_to_components_dict::Dict{String,Vector{Phys
     end
 
     #! make sure the database is updated, variations.db intialized
-    if initialized
+    if initialized && !skip_db_insert
         insertFolder(:intracellular, splitpath(folder)[end])
     end
 

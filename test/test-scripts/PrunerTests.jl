@@ -19,3 +19,4 @@ simulation = createTrial(inputs, discrete_variations; use_previous=false)
 prune_options = PruneOptions(true, true, true, true, true)
 out = run(simulation; force_recompile=false, prune_options=prune_options)
 @test out.n_success == 1
+deleteSimulation(simulation)
