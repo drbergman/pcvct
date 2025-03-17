@@ -188,19 +188,19 @@ struct Simulation <: AbstractMonad
     variation_id::VariationID
 
     function Simulation(id::Int, inputs::InputFolders, variation_id::VariationID)
-        @assert id > 0 "id must be positive"
+        @assert id > 0 "Simulation id must be positive. Got $id."
         for location in project_locations.varied
             if inputs[location].required
-                @assert variation_id[location] >= 0 "$(location) variation id must be non-negative"
+                @assert variation_id[location] >= 0 "$(location) variation id must be non-negative. Got $(variation_id[location])."
             elseif inputs[location].id == -1
-                @assert variation_id[location] == -1 "$(location) variation id must be -1 because there is associated folder indicating $(location) is not in use."
+                @assert variation_id[location] == -1 "$(location) variation id must be -1 because there is no associated folder indicating $(location) is not in use. Got $(variation_id[location])."
             #! now we know this location is not required and it is in use
             elseif !inputs[location].varied
                 #! this particular folder is not varying it, so make sure its variation id is 0, i.e. the base file in this folder
-                @assert variation_id[location] == 0 "$(inputs[location].folder) in $(location) is not varying but the variation id is not 0."
+                @assert variation_id[location] == 0 "$(inputs[location].folder) in $(location) is not varying but the variation id is not 0. Got $(variation_id[location])."
             #! now we know that the folder is being varied, so just make sure the variation id is >=0
             else
-                @assert variation_id[location] >= 0 "$(location) variation id must be non-negative as the folder $(inputs[location].folder) is varying."
+                @assert variation_id[location] >= 0 "$(location) variation id must be non-negative as the folder $(inputs[location].folder) is varying. Got $(variation_id[location])."
             end
         end
         return new(id, inputs, variation_id)
@@ -228,7 +228,7 @@ function Simulation(inputs::InputFolders, variation_id::VariationID=VariationID(
     return Simulation(simulation_id, inputs, variation_id)
 end
 
-function getSimulation(simulation_id::Int)
+function Simulation(simulation_id::Int)
     df = constructSelectQuery("simulations", "WHERE simulation_id=$(simulation_id);") |> queryToDataFrame
     if isempty(df)
         error("Simulation $(simulation_id) not in the database.")
@@ -238,8 +238,6 @@ function getSimulation(simulation_id::Int)
 
     return Simulation(simulation_id, inputs, variation_id)
 end
-
-Simulation(simulation_id::Int) = getSimulation(simulation_id)
 
 Base.length(simulation::Simulation) = 1
 
@@ -274,20 +272,16 @@ monad = Monad(monad_id; n_replicates=5) # ensures at least 5 simulations in the 
 
 # Fields
 - `id::Int`: integer uniquely identifying this monad. Matches with the folder in `data/outputs/monads/`
-- `n_replicates::Int`: minimum number of simulations to ensure are part of this monad when running this monad.
-- `simulation_ids::Vector{Int}`: array of simulation IDs belonging to this monad. This need not have length equal to `n_replicates`.
 - `inputs::InputFolders`: contains the folder info for this monad.
 - `variation_id::VariationID`: contains the variation IDs for this monad.
 """
 struct Monad <: AbstractMonad
     #! a monad is a group of simulation replicates, i.e. identical up to randomness
     id::Int #! integer uniquely identifying this monad
-    n_replicates::Int #! (minimum) number of simulations belonging to this monad
-    simulation_ids::Vector{Int} #! simulation ids belonging to this monad
     inputs::InputFolders #! contains the folder names for the simulations in this monad
-    variation_id::VariationID
+    variation_id::VariationID #! contains the variation IDs for the simulations in this monad
 
-    function Monad(n_replicates::Int, inputs::InputFolders, variation_id::VariationID, use_previous::Bool)
+    function Monad(inputs::InputFolders, variation_id::VariationID=VariationID(inputs); n_replicates::Integer=0, use_previous::Bool=true)
         feature_str = """
         (\
         physicell_version_id,\
@@ -318,12 +312,12 @@ struct Monad <: AbstractMonad
         else
             monad_id = monad_id[1] #! get the monad_id
         end
-        return Monad(monad_id, n_replicates, inputs, variation_id, use_previous)
+        return Monad(monad_id, inputs, variation_id, n_replicates, use_previous)
     end
 
-    function Monad(id::Int, n_replicates::Int, inputs::InputFolders, variation_id::VariationID, use_previous::Bool)
-        @assert id > 0 "id must be positive"
-        @assert n_replicates >= 0 "n_replicates must be non-negative"
+    function Monad(id::Int, inputs::InputFolders, variation_id::VariationID, n_replicates::Int, use_previous::Bool)
+        @assert id > 0 "Monad id must be positive. Got $id."
+        @assert n_replicates >= 0 "Monad n_replicates must be non-negative. Got $n_replicates."
 
         previous_simulation_ids = readMonadSimulationIDs(id)
         new_simulation_ids = Int[]
@@ -336,51 +330,44 @@ struct Monad <: AbstractMonad
             recordSimulationIDs(id, [previous_simulation_ids; new_simulation_ids]) #! record the simulation ids in a .csv file
         end
 
-        simulation_ids = use_previous ? [previous_simulation_ids; new_simulation_ids] : new_simulation_ids
-
-        return new(id, n_replicates, simulation_ids, inputs, variation_id)
+        return new(id, inputs, variation_id)
     end
 
 end
 
-function Monad(inputs::InputFolders, variation_id::VariationID; use_previous::Bool=true, n_replicates::Int=0)
-    Monad(n_replicates, inputs, variation_id, use_previous)
-end
-
-function getMonad(monad_id::Int, n_replicates::Int, use_previous::Bool)
+function Monad(monad_id::Integer; n_replicates::Integer=0, use_previous::Bool=true)
     df = constructSelectQuery("monads", "WHERE monad_id=$(monad_id);") |> queryToDataFrame
     if isempty(df)
         error("Monad $(monad_id) not in the database.")
     end
     inputs = [loc => df[1, locationIDName(loc)] for loc in project_locations.all] |> InputFolders
     variation_id = [loc => df[1, locationVarIDName(loc)] for loc in project_locations.varied] |> VariationID
-    return Monad(monad_id, n_replicates, inputs, variation_id, use_previous)
+    return Monad(monad_id, inputs, variation_id, n_replicates, use_previous)
 end
 
-Monad(monad_id::Integer; n_replicates::Integer=0, use_previous::Bool=true) = getMonad(monad_id, n_replicates, use_previous)
+function Monad(simulation::Simulation; n_replicates::Integer=0, use_previous::Bool=true)
+    monad = Monad(simulation.inputs, simulation.variation_id; n_replicates=n_replicates, use_previous=use_previous)
+    addSimulationID(monad, simulation.id)
+    return monad
+end
+
+function Monad(monad::Monad; n_replicates::Integer=0, use_previous::Bool=true)
+    return Monad(monad.id, monad.inputs, monad.variation_id, n_replicates, use_previous)
+end
+
+function addSimulationID(monad::Monad, simulation_id::Int)
+    simulation_ids = getSimulationIDs(monad)
+    if simulation_id in simulation_ids
+        return
+    end
+    push!(simulation_ids, simulation_id)
+    recordSimulationIDs(monad, simulation_ids)
+    return
+end
 
 function Simulation(monad::Monad)
     return Simulation(monad.inputs, monad.variation_id)
 end
-
-function Monad(simulation::Simulation)
-    n_replicates = 0 #! do not impose a min length on this monad
-    use_previous = true
-    monad = Monad(n_replicates, simulation.inputs, simulation.variation_id, use_previous)
-    addSimulationID!(monad, simulation.id)
-    return monad
-end
-
-function addSimulationID!(monad::Monad, simulation_id::Int)
-    if simulation_id in monad.simulation_ids
-        return
-    end
-    push!(monad.simulation_ids, simulation_id)
-    recordSimulationIDs(monad.id, monad.simulation_ids)
-    return
-end
-
-getVariationIDs(M::AbstractMonad) = [M.variation_id]
 
 ##########################################
 ##############   Sampling   ##############
@@ -407,91 +394,82 @@ sampling = Sampling(sampling_id; n_replicates=5) # ensures at least 5 simulation
 
 # Fields
 - `id::Int`: integer uniquely identifying this sampling. Matches with the folder in `data/outputs/samplings/`
-- `n_replicates::Int`: minimum number of simulations to ensure are part of each monad when running this sampling.
-- `monad_ids::Vector{Int}`: array of monad IDs belonging to this sampling.
 - `inputs::InputFolders`: contains the folder info for this sampling.
-- `variation_ids::Vector{VariationID}`: contains the variation IDs for each monad.
+- `monads::Vector{Monad}`: array of monads belonging to this sampling.
 """
 struct Sampling <: AbstractSampling
-    #! sampling is a group of monads with config parameters varied
+    #! sampling is a group of monads with parameters varied
     id::Int #! integer uniquely identifying this sampling
-    n_replicates::Int #! minimum length of each monad belonging to this sampling
-    monad_ids::Vector{Int} #! array of monad indices belonging to this sampling
-
     inputs::InputFolders #! contains the folder names for this sampling
+    monads::Vector{Monad} #! contains the monads belonging to this sampling
 
-    variation_ids::Vector{VariationID} #! variation_ids associated with each monad
-
-    function Sampling(id::Int, n_replicates::Int, monad_ids::AbstractVector{<:Integer}, inputs::InputFolders, variation_ids::AbstractVector{VariationID})
-        @assert id > 0 "id must be positive"
-        n_monads = length(monad_ids)
-        n_variations = length(variation_ids)
-        if n_monads != n_variations
-            error_message = """
-                Number of monads and variations must be the same
-                \tn_monads = $n_monads
-                \tn_variations = $n_variations
+    function Sampling(monads::AbstractVector{Monad}, inputs::InputFolders)
+        id = -1
+        sampling_ids = constructSelectQuery(
+            "samplings",
             """
-            throw(ArgumentError(error_message))
-        end
-        recordMonadIDs(id, monad_ids) #! record the monad ids in a .csv file
-        return new(id, n_replicates, monad_ids, inputs, variation_ids)
-    end
-end
-
-function Sampling(n_replicates::Int, monad_ids::AbstractVector{<:Integer}, inputs::InputFolders, variation_ids::Vector{VariationID})
-    id = -1
-    sampling_ids = constructSelectQuery(
-        "samplings",
-        """
-        WHERE (\
-        physicell_version_id,\
-        $(join(locationIDNames(), ","))\
-        )=\
-        (\
-        $(physicellVersionDBEntry()),\
-        $(join([inputs[loc].id for loc in project_locations.all], ","))\
-        );\
-        """;
-        selection="sampling_id"
-    ) |> queryToDataFrame |> x -> x.sampling_id
-    if !isempty(sampling_ids) #! if there are previous samplings with the same parameters
-        for sampling_id in sampling_ids #! check if the monad_ids are the same with any previous monad_ids
-            monad_ids_in_db = readSamplingMonadIDs(sampling_id) #! get the monad_ids belonging to this sampling
-            if symdiff(monad_ids_in_db, monad_ids) |> isempty #! if the monad_ids are the same
-                id = sampling_id #! use the existing sampling_id
-                break
-            end
-        end
-    end
-
-    if id==-1 #! if no previous sampling was found matching these parameters
-        id = DBInterface.execute(db, 
-            """
-            INSERT INTO samplings \
-            (\
+            WHERE (\
             physicell_version_id,\
             $(join(locationIDNames(), ","))\
-            ) \
-            VALUES(\
+            )=\
+            (\
             $(physicellVersionDBEntry()),\
             $(join([inputs[loc].id for loc in project_locations.all], ","))\
-            ) RETURNING sampling_id;
-            """
-        ) |> DataFrame |> x -> x.sampling_id[1] #! get the sampling_id
+            );\
+            """;
+            selection="sampling_id"
+        ) |> queryToDataFrame |> x -> x.sampling_id
+
+        monad_ids = [monad.id for monad in monads]
+        if !isempty(sampling_ids) #! if there are previous samplings with the same parameters
+            for sampling_id in sampling_ids #! check if the monad_ids are the same with any previous monad_ids
+                monad_ids_in_sampling = readSamplingMonadIDs(sampling_id) #! get the monad_ids belonging to this sampling
+                if symdiff(monad_ids_in_sampling, monad_ids) |> isempty #! if the monad_ids are the same
+                    id = sampling_id #! use the existing sampling_id
+                    break
+                end
+            end
+        end
+    
+        if id==-1 #! if no previous sampling was found matching these parameters
+            id = DBInterface.execute(db, 
+                """
+                INSERT INTO samplings \
+                (\
+                physicell_version_id,\
+                $(join(locationIDNames(), ","))\
+                ) \
+                VALUES(\
+                $(physicellVersionDBEntry()),\
+                $(join([inputs[loc].id for loc in project_locations.all], ","))\
+                ) RETURNING sampling_id;
+                """
+            ) |> DataFrame |> x -> x.sampling_id[1] #! get the sampling_id
+            recordMonadIDs(id, monad_ids) #! record the monad ids in a .csv file
+        end
+        return Sampling(id, inputs, monads)
     end
-    return Sampling(id, n_replicates, monad_ids, inputs, variation_ids)
+
+    function Sampling(id::Int, inputs::InputFolders, monads::Vector{Monad})
+        @assert id > 0 "Sampling id must be positive. Got $id."
+        @assert !isempty(monads) "At least one monad must be provided"
+        for monad in monads
+            @assert monad.inputs == inputs "All monads must have the same inputs. You can instead make these into a Trial. Got $(monad.inputs) and $(inputs)."
+        end
+        @assert Set(readSamplingMonadIDs(id)) == Set([monad.id for monad in monads]) "Monad ids do not match those in the database."
+        return new(id, inputs, monads)
+    end
 end
 
-function Sampling(n_replicates::Int, inputs::InputFolders, variation_ids::AbstractArray{VariationID}; use_previous::Bool=true)
-    monad_ids = createMonadIDs(n_replicates, inputs, variation_ids; use_previous=use_previous)
-    return Sampling(n_replicates, monad_ids, inputs, variation_ids)
+function Sampling(inputs::InputFolders, variation_ids::AbstractArray{VariationID}; n_replicates::Integer=0, use_previous::Bool=true)
+    monads = [Monad(inputs, variation_id; n_replicates=n_replicates, use_previous=use_previous) for variation_id in variation_ids]
+    return Sampling(monads, inputs)
 end
 
 function Sampling(inputs::InputFolders;
-                n_replicates::Integer=0,
-                location_variation_ids::Dict{Symbol,<:Union{Integer,AbstractArray{<:Integer}}},
-                use_previous::Bool=true)
+                  location_variation_ids::Dict{Symbol,<:Union{Integer,AbstractArray{<:Integer}}},
+                  n_replicates::Integer=0,
+                  use_previous::Bool=true)
     #! allow for passing in a single config_variation_id and/or rulesets_collection_variation_id
     #! later, can support passing in (for example) a 3x6 config_variation_ids and a 3x1 rulesets_collection_variation_ids and expanding the rulesets_collection_variation_ids to 3x6, but that can get tricky fast
     if all(x->x isa Integer, values(location_variation_ids))
@@ -500,7 +478,7 @@ function Sampling(inputs::InputFolders;
         end
     else
         ns = [length(x) for x in values(location_variation_ids) if !(x isa Integer)]
-        @assert all(x->x==ns[1], ns) "location variation ids must have the same length if they are not integers"
+        @assert all(x->x==ns[1], ns) "location variation ids must have the same length if they are not integers. Got $(ns)."
         for (loc, loc_var_ids) in pairs(location_variation_ids)
             if loc_var_ids isa Integer
                 location_variation_ids[loc] = fill(loc_var_ids, ns[1])
@@ -512,57 +490,33 @@ function Sampling(inputs::InputFolders;
         location_variation_ids[loc] = fill(inputs[loc].id==-1 ? -1 : 0, n)
     end
     variation_ids = [([loc => loc_var_ids[i] for (loc, loc_var_ids) in pairs(location_variation_ids)] |> VariationID) for i in 1:n]
-    return Sampling(n_replicates, inputs, variation_ids; use_previous=use_previous) 
+    return Sampling(inputs, variation_ids; n_replicates=n_replicates, use_previous=use_previous)
 end
 
-function Sampling(n_replicates::Int, monads::AbstractArray{<:AbstractMonad})
-    inputs = monads[1].inputs
-    for monad in monads
-        if monad.inputs != inputs
-            error("All monads must have the same inputs")
-            #! could choose to make a trial from these here...
-        end
+function Sampling(Ms::AbstractArray{<:AbstractMonad}; n_replicates::Integer=0, use_previous::Bool=true)
+    @assert !isempty(Ms) "At least one monad must be provided"
+    inputs = Ms[1].inputs
+    for M in Ms
+        @assert M.inputs == inputs "All Ms must have the same inputs. You can instead make these into a Trial. Got $(M.inputs) and $(inputs)."
     end
-    variation_ids = [monad.variation_id for monad in monads]
-    monad_ids = [monad.id for monad in monads]
-    return Sampling(n_replicates, monad_ids, inputs, variation_ids) 
+    monads = [Monad(M; n_replicates=n_replicates, use_previous=use_previous) for M in Ms] #! this step ensures that the monads all have the min number of replicates ready
+    return Sampling(monads, inputs) 
 end
 
-function createMonadIDs(n_replicates::Int, inputs::InputFolders, variation_ids::AbstractArray{VariationID}; use_previous::Bool=true)
-    _size = length(variation_ids)
-    monad_ids = -ones(Int, _size)
+Sampling(M::AbstractMonad; kwargs...) = Sampling([M]; kwargs...)
 
-    for (i, vid) in enumerate(variation_ids) 
-        monad = Monad(n_replicates, inputs, vid, use_previous) 
-        monad_ids[i] = monad.id
-    end
-    return monad_ids
-end
-
-function getSampling(sampling_id::Int, n_replicates::Int)
+function Sampling(sampling_id::Int; n_replicates::Integer=0, use_previous::Bool=true)
     df = constructSelectQuery("samplings", "WHERE sampling_id=$(sampling_id);") |> queryToDataFrame
     if isempty(df)
         error("Sampling $(sampling_id) not in the database.")
     end
     monad_ids = readSamplingMonadIDs(sampling_id)
-    inputs = [loc => df[1, locationIDName(loc)] for loc in project_locations.all] |> InputFolders
-    monad_df = constructSelectQuery("monads", "WHERE monad_id IN ($(join(monad_ids,",")))") |> queryToDataFrame
-    variation_ids = [([loc => monad_df[i, locationVarIDName(loc)] for loc in project_locations.varied] |> VariationID) for i in 1:length(monad_ids)]
-    return Sampling(sampling_id, n_replicates, monad_ids, inputs, variation_ids)
+    monads = Monad.(monad_ids; n_replicates=n_replicates, use_previous=use_previous)
+    inputs = monads[1].inputs #! readSamplingMonadIDs() should be returning monads already associated with a Sampling and thus having the same inputs
+    return Sampling(sampling_id, inputs, monads)
 end
 
-Sampling(sampling_id::Integer; n_replicates::Integer=0) = getSampling(sampling_id, n_replicates)
-
-function Monad(sampling::Sampling, index::Int; use_previous::Bool=true)
-    return Monad(sampling.n_replicates, sampling.inputs, sampling.variation_ids[index], use_previous)
-end
-
-function Sampling(monads::Vector{Monad})
-    n_replicates = [monad.n_replicates for monad in monads] |> minimum
-    return Sampling(n_replicates, monads)
-end
-
-getVariationIDs(sampling::Sampling) = sampling.variation_ids
+Sampling(sampling::Sampling; kwargs...) = Sampling(sampling.id; kwargs...)
 
 ##########################################
 ###############   Trial   ################
@@ -591,41 +545,38 @@ trial = Trial(trial_id; n_replicates=5) # ensures at least 5 simulations in each
 
 # Fields
 - `id::Int`: integer uniquely identifying this trial. Matches with the folder in `data/outputs/trials/`
-- `n_replicates::Int`: minimum number of simulations to ensure are part of each monad in each sampling in this trial.
-- `sampling_ids::Vector{Int}`: array of sampling IDs belonging to this trial.
 - `inputs::Vector{InputFolders}`: contains the folder info for each sampling in this trial.
 - `variation_ids::Vector{Vector{VariationID}}`: contains the variation IDs for each monad in each sampling in this trial.
 """
 struct Trial <: AbstractTrial
     #! trial is a group of samplings with different ICs, custom codes, rulesets, and/or intracellulars
     id::Int #! integer uniquely identifying this trial
-    n_replicates::Int #! minimum length of each monad belonging to the samplings in this trial
-    sampling_ids::Vector{Int} #! array of sampling indices belonging to this trial
+    samplings::Vector{Sampling} #! contains the samplings belonging to this trial
 
-    inputs::Vector{InputFolders} #! contains the folder names for the samplings in this trial
-    variation_ids::Vector{Vector{VariationID}} #! variation_ids associated with each monad for each sampling
-
-    function Trial(id::Int, n_replicates::Int, sampling_ids::Vector{Int}, inputs::Vector{InputFolders}, variation_ids::Vector{Vector{VariationID}})
-        @assert id > 0 "id must be positive"
-        n_samplings = length(sampling_ids)
-        n_inputs = length(inputs)
-        n_variations = length(variation_ids)
-        if n_samplings != n_inputs || n_samplings != n_variations #! the negation of this is n_samplings == n_inputs && n_samplings == n_folder_names && n_samplings == n_variations, which obviously means they're all the same
-            throw(ArgumentError("Number of samplings, inputs, and variations must be the same"))
-        end
-
-        recordSamplingIDs(id, sampling_ids) #! record the sampling ids in a .csv file
-
-        return new(id, n_replicates, sampling_ids, inputs, variation_ids)
+    function Trial(id::Integer, samplings::Vector{Sampling})
+        @assert id > 0 "Trial id must be positive. Got $id."
+        @assert Set(readTrialSamplingIDs(id)) == Set([sampling.id for sampling in samplings]) "Samplings do not match the samplings in the database."
+        return new(id, samplings)
     end
 end
 
-function Trial(n_replicates::Int, sampling_ids::Vector{Int}, inputs::Vector{InputFolders}, variation_ids::Vector{Vector{VariationID}}; use_previous::Bool=true)
-    id = getTrialID(sampling_ids)
-    return Trial(id, n_replicates, sampling_ids, inputs, variation_ids)
+function Trial(Ss::AbstractArray{<:AbstractSampling}; n_replicates::Integer=0, use_previous::Bool=true)
+    samplings = Sampling.(Ss; n_replicates=n_replicates, use_previous=use_previous)
+    id = getTrialID(samplings)
+    return Trial(id, samplings)
 end
 
-function getTrialID(sampling_ids::Vector{Int})
+function Trial(trial_id::Int; n_replicates::Integer=0, use_previous::Bool=true)
+    df = constructSelectQuery("trials", "WHERE trial_id=$(trial_id);") |> queryToDataFrame
+    @assert !isempty(df) "Trial $(trial_id) not in the database."
+    samplings = Sampling.(readTrialSamplingIDs(trial_id); n_replicates=n_replicates, use_previous=use_previous)
+    @assert !isempty(samplings) "No samplings found for trial_id=$trial_id. This trial has not been created."
+    samplings = Sampling.(readTrialSamplingIDs(trial_id); n_replicates=n_replicates, use_previous=use_previous)
+    return Trial(trial_id, samplings)
+end
+
+function getTrialID(samplings::Vector{Sampling})
+    sampling_ids = [sampling.id for sampling in samplings]
     id = -1
     trial_ids = constructSelectQuery("trials"; selection="trial_id") |> queryToDataFrame |> x -> x.trial_id
     if !isempty(trial_ids) #! if there are previous trials
@@ -640,35 +591,8 @@ function getTrialID(sampling_ids::Vector{Int})
 
     if id==-1 #! if no previous trial was found matching these parameters
         id = DBInterface.execute(db, "INSERT INTO trials (datetime) VALUES($(Dates.format(now(),"yymmddHHMM"))) RETURNING trial_id;") |> DataFrame |> x -> x.trial_id[1] #! get the trial_id
+        recordSamplingIDs(id, sampling_ids) #! record the sampling ids in a .csv file
     end
 
     return id
-end
-
-function Trial(samplings::Vector{Sampling})
-    n_replicates = samplings[1].n_replicates
-    sampling_ids = [sampling.id for sampling in samplings]
-    inputs = [sampling.inputs for sampling in samplings]
-    variation_ids = [sampling.variation_ids for sampling in samplings]
-    return Trial(n_replicates, sampling_ids, inputs, variation_ids)
-end
-
-function getTrial(trial_id::Int, n_replicates::Int)
-    df = constructSelectQuery("trials", "WHERE trial_id=$(trial_id);") |> queryToDataFrame
-    if isempty(df) || isempty(readTrialSamplingIDs(trial_id))
-        error("No samplings found for trial_id=$trial_id. This trial did not run.")
-    end
-    sampling_ids = readTrialSamplingIDs(trial_id)
-    return Trial([Sampling(id; n_replicates=n_replicates) for id in sampling_ids])
-end
-
-Trial(trial_id::Integer; n_replicates::Integer=0) = getTrial(trial_id, n_replicates)
-
-function Sampling(id::Int, n_replicates::Int, inputs::InputFolders, variation_ids::Vector{VariationID}; use_previous::Bool=true)
-    monad_ids = createMonadIDs(n_replicates, inputs, variation_ids; use_previous=use_previous)
-    return Sampling(id, n_replicates, monad_ids, inputs, variation_ids)
-end 
-
-function Sampling(trial::Trial, index::Int)
-    return Sampling(trial.sampling_ids[index], trial.n_replicates, trial.inputs[index], trial.variation_ids[index])
 end

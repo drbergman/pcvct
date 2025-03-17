@@ -7,12 +7,12 @@ hashBorderPrint(str)
 out = run(Monad(1; n_replicates=3))
 @test out.trial isa Monad
 
-simulation_id = out.trial.simulation_ids[1]
+simulation_id = getSimulationIDs(out.trial)[1]
 
-deleteSimulation(simulation_id)
+deleteSimulation(simulation_id:simulation_id)
 @test !isdir(joinpath(pcvct.data_dir, "outputs", "simulations", string(simulation_id)))
 
-pcvct.eraseSimulationID(out.trial.simulation_ids[2])
+pcvct.eraseSimulationID(getSimulationIDs(out.trial)[2])
 
 pcvct.deleteMonad(1:4)
 pcvct.deleteSampling(1)

@@ -16,7 +16,8 @@ push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], 6.0))
 simulation = createTrial(inputs, discrete_variations; use_previous=false)
 @test simulation isa Simulation
 
-prune_options = PruneOptions(true, true, true, true, true)
+prune_options = PruneOptions(true, true, true, true, true, true)
 out = run(simulation; force_recompile=false, prune_options=prune_options)
 @test out.n_success == 1
-deleteSimulation(simulation)
+
+pruned_simulation_id = simulation.id #! save this for use in other tests

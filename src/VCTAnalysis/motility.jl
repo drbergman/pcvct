@@ -1,3 +1,5 @@
+export motilityStatistics
+
 function _motilityStatistics(p; direction=:any)::Dict{String, NamedTuple}
     x, y, z = [col for col in eachcol(p.position)]
     cell_type_name = p.cell_type_name
@@ -36,12 +38,6 @@ function _motilityStatistics(p; direction=:any)::Dict{String, NamedTuple}
     return per_type_stats
 end
 
-function motilityStatistics(path_to_folder::String; direction=:any)::Vector{Dict{String, NamedTuple}}
-    sequence = PhysiCellSequence(path_to_folder; include_cells=true)
-    pos = getCellDataSequence(sequence, "position"; include_dead=false, include_cell_type=true)
-    return [_motilityStatistics(p; direction=direction) for p in values(pos) if length(p.time) > 1]
-end
-
 """
     motilityStatistics(simulation_id::Integer[; direction=:any])
 
@@ -67,8 +63,13 @@ ms[1]["mesenchymal"].distance # distance traveled as a `mesenchymal` cell for th
 ms[1]["mesenchymal"].speed # mean speed as a `mesenchymal` cell for the first cell in the simulation
 ```
 """
-function motilityStatistics(simulation_id::Integer; direction=:any)::Vector{Dict{String, NamedTuple}}
-    return joinpath(outputFolder("simulation", simulation_id), "output") |> x -> motilityStatistics(x; direction=direction)
+function motilityStatistics(simulation_id::Integer; direction=:any)
+    sequence = PhysiCellSequence(simulation_id; include_cells=true)
+    if ismissing(sequence)
+        return missing
+    end
+    pos = getCellDataSequence(sequence, "position"; include_dead=false, include_cell_type=true)
+    return [_motilityStatistics(p; direction=direction) for p in values(pos) if length(p.time) > 1]
 end
 
-motilityStatistics(simulation::Simulation, direction=:any) = motilityStatistics(simulation.id, direction=direction)
+motilityStatistics(simulation::Simulation; direction=:any) = motilityStatistics(simulation.id; direction=direction)

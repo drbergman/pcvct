@@ -44,7 +44,7 @@ function resolveStudioGlobals(python_path::Union{Missing,String}, studio_path::U
 end
 
 function setUpStudioInputs(simulation_id::Int)
-    path_to_output = joinpath(outputFolder("simulation", simulation_id), "output")
+    path_to_output = joinpath(trialFolder("simulation", simulation_id), "output")
 
     physicell_version = physicellVersion(Simulation(simulation_id))
     upstream_version = split(physicell_version, "-")[1] |> VersionNumber

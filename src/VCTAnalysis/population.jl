@@ -2,7 +2,8 @@ using RecipesBase
 
 export finalPopulationCount
 
-function populationCount(snapshot::PhysiCellSnapshot; include_dead::Bool=false, cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}())
+function populationCount(snapshot::PhysiCellSnapshot; include_dead::Bool=false, cell_type_to_name_dict::Dict{Int,String}=Dict{Int,String}(), labels::Vector{String}=String[])
+    loadCells!(snapshot, cell_type_to_name_dict, labels)
     data = Dict{String, Int}()
     if include_dead
         cell_df = snapshot.cells
@@ -37,12 +38,12 @@ spts = SimulationPopulationTimeSeries(1; include_dead=true) # similar, but count
 ```
 
 # Fields
-- `path_to_folder::String`: The path to the folder containing the simulation's output.
+- `simulation_id::Int`: The ID of the simulation.
 - `time::Vector{Real}`: The time points of the population time series.
 - `cell_count::Dict{String, Vector{Integer}}`: A dictionary where keys are cell type names and values are vectors of cell counts over time.
 """
 struct SimulationPopulationTimeSeries <: AbstractPopulationTimeSeries
-    path_to_folder::String
+    simulation_id::Int
     time::Vector{Real}
     cell_count::Dict{String, Vector{Integer}}
 end
@@ -58,11 +59,10 @@ function Base.getindex(spts::SimulationPopulationTimeSeries, cell_type::String)
 end
 
 function SimulationPopulationTimeSeries(sequence::PhysiCellSequence; include_dead::Bool=false)
-    path_to_folder = sequence.path_to_folder
     time = [snapshot.time for snapshot in sequence.snapshots]
     cell_count = Dict{String, Vector{Integer}}()
     for (i, snapshot) in enumerate(sequence.snapshots)
-        population_count = populationCount(snapshot; include_dead=include_dead, cell_type_to_name_dict=sequence.cell_type_to_name_dict)
+        population_count = populationCount(snapshot; include_dead=include_dead, cell_type_to_name_dict=sequence.cell_type_to_name_dict, labels=sequence.labels)
         for (ID, count) in pairs(population_count)
             if !(string(ID) in keys(cell_count))
                 cell_count[ID] = zeros(Int, length(time))
@@ -70,24 +70,24 @@ function SimulationPopulationTimeSeries(sequence::PhysiCellSequence; include_dea
             cell_count[ID][i] = count
         end
     end
-    return SimulationPopulationTimeSeries(path_to_folder, time, cell_count)
-end
-
-function SimulationPopulationTimeSeries(path_to_folder::String; include_dead::Bool=false)
-    return PhysiCellSequence(path_to_folder; include_cells=true) |> x -> SimulationPopulationTimeSeries(x; include_dead=include_dead)
+    return SimulationPopulationTimeSeries(sequence.simulation_id, time, cell_count)
 end
 
 function SimulationPopulationTimeSeries(simulation_id::Integer; include_dead::Bool=false, verbose::Bool=true)
     verbose ? print("Computing SimulationPopulationTimeSeries for Simulation $simulation_id...") : nothing
-    simulation_folder = outputFolder("simulation", simulation_id)
+    simulation_folder = trialFolder("simulation", simulation_id)
     path_to_summary = joinpath(simulation_folder, "summary")
     path_to_file = joinpath(path_to_summary, "population_time_series$(include_dead ? "_include_dead" : "").csv")
     if isfile(path_to_file)
         df = CSV.read(path_to_file, DataFrame)
-        spts = SimulationPopulationTimeSeries(simulation_folder, df.time, Dict{String, Vector{Integer}}(name => df[!, Symbol(name)] for name in names(df) if name != "time"))
+        spts = SimulationPopulationTimeSeries(simulation_id, df.time, Dict{String, Vector{Integer}}(name => df[!, Symbol(name)] for name in names(df) if name != "time"))
     else
+        sequence = PhysiCellSequence(simulation_id; include_cells=true)
+        if ismissing(sequence)
+            return missing
+        end
         mkpath(path_to_summary)
-        spts = joinpath(simulation_folder, "output") |> x -> SimulationPopulationTimeSeries(x; include_dead=include_dead)
+        spts = SimulationPopulationTimeSeries(sequence; include_dead=include_dead)
         df = DataFrame(time=spts.time)
         for (name, counts) in pairs(spts.cell_count)
             df[!, Symbol(name)] = counts
@@ -118,13 +118,9 @@ final_default_count = fpc["default"]
 """
 function finalPopulationCount end
 
-function finalPopulationCount(path_to_folder::String; include_dead::Bool=false)
-    final_snapshot = PhysiCellSnapshot(path_to_folder, :final; include_cells=true)
-    return populationCount(final_snapshot; include_dead=include_dead)
-end
-
 function finalPopulationCount(simulation_id::Int; include_dead::Bool=false)
-    return joinpath(outputFolder("simulation", simulation_id), "output") |> x -> finalPopulationCount(x; include_dead=include_dead)
+    final_snapshot = PhysiCellSnapshot(simulation_id, :final; include_cells=true)
+    return populationCount(final_snapshot; include_dead=include_dead)
 end
 
 function finalPopulationCount(simulation::Simulation; include_dead::Bool=false)
@@ -168,16 +164,19 @@ function Base.getindex(mpts::MonadPopulationTimeSeries, cell_type::String)
     end
 end
 
-Base.keys(apts::AbstractPopulationTimeSeries; exclude_time::Bool=false) = exclude_time ? keys(apts.cell_count) : ["time"; keys(apts.cell_count)]
+Base.keys(apts::AbstractPopulationTimeSeries; exclude_time::Bool=false) = exclude_time ? keys(apts.cell_count) : ["time"; keys(apts.cell_count) |> collect]
 
 function MonadPopulationTimeSeries(monad::Monad; include_dead::Bool=false)
     simulation_ids = getSimulationIDs(monad)
     monad_length = length(simulation_ids)
     time = Real[]
     cell_count = Dict{String, NamedTuple}()
-    _counts = Dict{String, Array{Int,2}}()
+    _counts = Dict{String,Any}()
     for (i, simulation_id) in enumerate(simulation_ids)
         spts = SimulationPopulationTimeSeries(simulation_id; include_dead=include_dead)
+        if ismissing(spts)
+            continue
+        end
         if isempty(time)
             time = spts.time
         else
@@ -185,17 +184,19 @@ function MonadPopulationTimeSeries(monad::Monad; include_dead::Bool=false)
         end
         for (name, cell_count) in pairs(spts.cell_count)
             if !haskey(_counts, name)
-                _counts[name] = zeros(Int, length(time), monad_length)
+                _counts[name] = [cell_count]
+            else
+                push!(_counts[name], cell_count)
             end
-            _counts[name][:,i] = cell_count
         end
     end
     _mean = Dict{String, Vector{Real}}()
     _std = Dict{String, Vector{Real}}()
-    for (name, array) in _counts
-        _mean[name] = mean(array, dims=2) |> vec
-        _std[name] = std(array, dims=2) |> vec
-        cell_count[name] = [:counts => array, :mean => _mean[name], :std => _std[name]] |> NamedTuple
+    for (name, vectors) in _counts
+        _array = reduce(hcat, vectors)
+        _mean[name] = mean(_array, dims=2) |> vec
+        _std[name] = std(_array, dims=2) |> vec
+        cell_count[name] = [:counts => _array, :mean => _mean[name], :std => _std[name]] |> NamedTuple
     end
     return MonadPopulationTimeSeries(monad.id, monad_length, time, cell_count)
 end
@@ -269,7 +270,7 @@ end
                 label --> name
                 x = pts.time
                 y = getMeanCounts(pts)[name]
-                if typeof(M) == Monad && length(M.simulation_ids) > 1
+                if length(getSimulationIDs(M)) > 1
                     ribbon := pts[name].std
                 end
                 x, y
@@ -277,13 +278,14 @@ end
         else #! need to basically recalculate since we are combining multiple cell types
             simulation_ids = getSimulationIDs(M)
             sptss = [SimulationPopulationTimeSeries(simulation_id; include_dead=include_dead, verbose=false) for simulation_id in simulation_ids]
+            filter!(!ismissing, sptss) #! remove any that failed to load
             sim_sums = [sum([spts[name] for name in k]) for spts in sptss]
             all_counts = reduce(hcat, sim_sums)
             @series begin
                 label --> join(k, ", ")
                 x = pts.time
                 y = mean(all_counts, dims=2) |> vec
-                if typeof(M) == Monad && length(M.simulation_ids) > 1
+                if length(getSimulationIDs(M)) > 1
                     ribbon := std(all_counts, dims=2) |> vec
                 end
                 x, y
@@ -296,10 +298,9 @@ end
     df = pcvct.simulationsTable(sampling)
     monads = []
     title_tuples = []
-    for monad_id in sampling.monad_ids
-        monad = Monad(monad_id)
+    for monad in sampling.monads
         push!(monads, monad)
-        sim_id = monad.simulation_ids[1]
+        sim_id = getSimulationIDs(monad)[1]
         row_ind = findfirst(df[!, :SimID] .== sim_id)
         row = df[row_ind, :]
         title_tuple = [row[name] for name in names(row) if !(name in ["SimID"; shortLocationVariationID.(String, project_locations.varied)])]
@@ -375,8 +376,9 @@ end
         monad_length = length(simulation_ids)
         time = Real[]
         cell_count_arrays = Dict{Any, Array{Int,2}}()
-        for (i, simulation_id) in enumerate(simulation_ids)
-            spts = SimulationPopulationTimeSeries(simulation_id; include_dead=include_dead)
+        sptss = SimulationPopulationTimeSeries.(simulation_ids; include_dead=include_dead, verbose=false)
+        filter!(!ismissing, sptss) #! remove any that failed to load
+        for (i, spts) in enumerate(sptss)
             if isempty(time)
                 time = spts.time
             else

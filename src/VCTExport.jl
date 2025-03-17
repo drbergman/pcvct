@@ -15,12 +15,12 @@ Warning: not all features in drbergman/PhysiCell/latest/release are not supporte
 - `simulation::Simulation`: the simulation to export
 - `export_folder::AbstractString`: the folder to export the simulation to. Default is the simulation output folder.
 """
-function exportSimulation(simulation_id::Integer, export_folder::AbstractString="$(joinpath(outputFolder("simulation", simulation_id), "UserProjectExport"))")
+function exportSimulation(simulation_id::Integer, export_folder::AbstractString="$(joinpath(trialFolder("simulation", simulation_id), "UserProjectExport"))")
     simulation = Simulation(simulation_id)
     return exportSimulation(simulation, export_folder)
 end
 
-function exportSimulation(simulation::Simulation, export_folder::AbstractString="$(joinpath(outputFolder(simulation), "UserProjectExport"))")
+function exportSimulation(simulation::Simulation, export_folder::AbstractString="$(joinpath(trialFolder(simulation), "UserProjectExport"))")
     success, physicell_version = prepareFolder(simulation, export_folder)
     if success
         msg = """

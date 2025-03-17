@@ -23,7 +23,7 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
     end
 
     rand_suffix = randstring(10) #! just to ensure that no two nodes try to compile at the same place at the same time
-    temp_physicell_dir = joinpath(outputFolder(S), "temp_physicell_$(rand_suffix)")
+    temp_physicell_dir = joinpath(trialFolder(S), "temp_physicell_$(rand_suffix)")
     #! copy the entire PhysiCell directory to a temporary directory to avoid conflicts with concurrent compilation
     cp(physicell_dir, temp_physicell_dir; force=true)
 
@@ -218,8 +218,7 @@ end
 function isPhysiECMInConfig(sampling::Sampling)
     #! otherwise, no previous sampling saying to use the macro, no ic file for ecm, and the base config file does not have ecm enabled,
     #! now just check that the variation is not enabling the ecm
-    for index in eachindex(sampling.variation_ids)
-        monad = Monad(sampling, index) #! instantiate a monad with the variation_id and the simulation ids already found
+    for monad in Monad.(readSamplingMonadIDs(sampling))
         if isPhysiECMInConfig(monad)
             return true
         end
