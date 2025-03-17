@@ -71,8 +71,7 @@ function prepareFolder(simulation::Simulation, export_folder::AbstractString)
 
     #! intracellulars
     if row.intracellular_id[1] != -1
-        path_to_intracellular = joinpath(locationPath(:intracellular, simulation), "intracellular.xml")
-        cp(path_to_intracellular, joinpath(export_folder, "config", "intracellular.xml"))
+        exportIntracellular(simulation, export_folder)
     end
 
     #! ic cells
@@ -125,6 +124,52 @@ function prepareFolder(simulation::Simulation, export_folder::AbstractString)
     return revertSimulationFolderToCurrentPhysiCell(export_folder, physicell_version), physicell_version
 end
 
+function exportIntracellular(simulation::Simulation, export_folder::AbstractString)
+    path_to_intracellular = joinpath(locationPath(:intracellular, simulation), "intracellular.xml")
+    xml_doc = openXML(path_to_intracellular)
+    intracellulars_element = retrieveElement(xml_doc, ["intracellulars"])
+    intracellular_mapping = Dict{String,Tuple{String,String}}()
+    for intracellular_element in child_elements(intracellulars_element)
+        intracellular_id = attribute(intracellular_element, "ID")
+        intracellular_type = attribute(intracellular_element, "type")
+        new_root = child_elements(intracellular_element) |> first
+        new_xml_doc = XMLDocument()
+        set_root(new_xml_doc, new_root)
+        path_end = joinpath("config", "intracellular_$(intracellular_type)_$(intracellular_id).xml")
+        new_path = joinpath(export_folder, path_end)
+        save_file(new_xml_doc, new_path)
+        closeXML(new_xml_doc)
+        intracellular_mapping[intracellular_id] = (intracellular_type, path_end)
+    end
+    
+    config_xml = openXML(joinpath(export_folder, "config", "PhysiCell_settings.xml"))
+
+    cell_definitions_element = retrieveElement(xml_doc, ["cell_definitions"])
+    for cell_definition_element in child_elements(cell_definitions_element)
+        if name(cell_definition_element) != "cell_definition"
+            continue
+        end
+        cell_type = attribute(cell_definition_element, "name")
+        intracellular_ids_element = find_element(cell_definition_element, "intracellular_ids")
+        ID_elements = get_elements_by_tagname(intracellular_ids_element, "ID")
+        @assert length(ID_elements) <= 1 "Do not (yet?) support multiple intracellular models for a single cell type."
+        intracellular_id = ID_elements |> first |> content
+        config_cell_def_intracellular_element = retrieveElement(config_xml, ["cell_definitions", "cell_definition:name:$(cell_type)", "phenotype", "intracellular"])
+        set_attribute(config_cell_def_intracellular_element, "type", intracellular_mapping[intracellular_id][1])
+
+        #! get (or create) the sbml_filename element
+        sbml_filename_element = find_element(config_cell_def_intracellular_element, "sbml_filename")
+        if isnothing(sbml_filename_element)
+            sbml_filename_element = new_child(config_cell_def_intracellular_element, "sbml_filename")
+        end
+        set_content(sbml_filename_element, intracellular_mapping[intracellular_id][2])
+    end
+    
+    closeXML(config_xml)
+    closeXML(xml_doc)
+    return
+end
+
 function revertSimulationFolderToCurrentPhysiCell(export_folder::AbstractString, physicell_version::AbstractString)
     success = revertMain(export_folder, physicell_version)
     success &= revertMakefile(export_folder, physicell_version)
@@ -137,7 +182,9 @@ function revertMain(export_folder::AbstractString, physicell_version::AbstractSt
     path_to_main = joinpath(export_folder, "main.cpp")
     lines = readlines(path_to_main)
     idx = findfirst(x -> contains(x, "<getopt.h>"), lines)
-    popat!(lines, idx)
+    if !isnothing(idx)
+        popat!(lines, idx)
+    end
 
     idx1 = findfirst(x -> contains(x, "// read arguments"), lines)
     if isnothing(idx1)
@@ -245,8 +292,9 @@ function revertConfig(export_folder::AbstractString, physicell_version::Abstract
     set_content(filename_element, "cell_rules.csv")
 
     #! intracellulars
-    #! lol, not supported for export yet
+    #! handled in exportIntracellular
 
+    save_file(xml_doc, path_to_config)
     closeXML(xml_doc)
     return true
 end
