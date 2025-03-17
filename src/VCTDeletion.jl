@@ -72,7 +72,9 @@ function deleteSimulations(simulation_ids::AbstractVector{<:Union{Integer,Missin
     return nothing
 end
 
-deleteSimulations(simulation_id::Int; delete_supers::Bool=true, and_constraints::String="") = deleteSimulations([simulation_id]; delete_supers=delete_supers, and_constraints=and_constraints)
+deleteSimulations(simulation_id::Int; kwargs...) = deleteSimulations([simulation_id]; kwargs...)
+deleteSimulations(simulations::Vector{Simulation}; kwargs...) = deleteSimulations([sim.id for sim in simulations]; kwargs...)
+deleteSimulations(simulation::Simulation; kwargs...) = deleteSimulations([simulation]; kwargs...)
 deleteSimulation = deleteSimulations #! alias
 deleteAllSimulations(; delete_supers::Bool=true, and_constraints::String="") = getSimulationIDs() |> x -> deleteSimulations(x; delete_supers=delete_supers, and_constraints=and_constraints)
 

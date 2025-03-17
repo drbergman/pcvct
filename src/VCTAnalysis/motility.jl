@@ -1,17 +1,4 @@
-export getCellPositionSequence, computeMeanSpeed
-
-"""
-    getCellPositionSequence(sequence::PhysiCellSequence; include_dead::Bool=false, include_cell_type::Bool=false)
-
-Return a dictionary where the keys are cell IDs from the PhysiCell simulation and the values are NamedTuples containing the time and the position of the cell.
-
-This is a convenience function for `getCellDataSequence(sequence, "position"; include_dead=include_dead, include_cell_type=include_cell_type)`.
-"""
-function getCellPositionSequence(sequence::PhysiCellSequence; include_dead::Bool=false, include_cell_type::Bool=false)
-    return getCellDataSequence(sequence, "position"; include_dead=include_dead, include_cell_type=include_cell_type)
-end
-
-function meanSpeed(p; direction=:any)::NTuple{3,Dict{String,Float64}}
+function _motilityStatistics(p; direction=:any)::Dict{String, NamedTuple}
     x, y, z = [col for col in eachcol(p.position)]
     cell_type_name = p.cell_type_name
     dx = x[2:end] .- x[1:end-1]
@@ -42,35 +29,46 @@ function meanSpeed(p; direction=:any)::NTuple{3,Dict{String,Float64}}
         start_ind += I #! advance the start to the first instance of a new cell_type_name
     end
     speed_dict = [k => distance_dict[k] / time_dict[k] for k in cell_type_names] |> Dict{String,Float64} #! convert to speed
-    return speed_dict, distance_dict, time_dict
+    per_type_stats = Dict{String, NamedTuple}()
+    for cell_type_name in cell_type_names
+        per_type_stats[cell_type_name] = [:time=>time_dict[cell_type_name], :distance=>distance_dict[cell_type_name], :speed=>speed_dict[cell_type_name]] |> NamedTuple
+    end
+    return per_type_stats
 end
 
-function computeMeanSpeed(folder::String; direction=:any)::NTuple{3,Vector{Dict{String,Float64}}}
-    sequence = PhysiCellSequence(folder; include_cells=true)
-    pos = getCellPositionSequence(sequence; include_dead=false, include_cell_type=true)
-    dicts = [meanSpeed(p; direction=direction) for p in values(pos) if length(p.time) > 1]
-    return [dict[1] for dict in dicts], [dict[2] for dict in dicts], [dict[3] for dict in dicts]
+function motilityStatistics(path_to_folder::String; direction=:any)::Vector{Dict{String, NamedTuple}}
+    sequence = PhysiCellSequence(path_to_folder; include_cells=true)
+    pos = getCellDataSequence(sequence, "position"; include_dead=false, include_cell_type=true)
+    return [_motilityStatistics(p; direction=direction) for p in values(pos) if length(p.time) > 1]
 end
 
 """
-    computeMeanSpeed(simulation_id::Integer[; direction=:any])
+    motilityStatistics(simulation_id::Integer[; direction=:any])
 
-Return dictionaries containing the mean speed, total distance traveled, and total time spent for each cell type in the PhysiCell simulation.
+Return the mean speed, distance traveled, and time alive for each cell in the simulation, broken down by cell type in the case of cell type transitions.
 
 The time is counted from when the cell first appears in simulation output until it dies or the simulation ends, whichever comes first.
-
-To account for cells that may change cell type during the simulation, the dictionaries returned are keyed by cell type.
-So, a dictionary with key "A" and value 2.0 indicates that the mean speed of this cell while it was of type "A" is 2.0.
+If the cell transitions to a new cell type during the simulation, the time is counted for each cell type separately.
+Each cell type taken on by a given cell will be a key in the dictionary returned at that entry.
 
 # Arguments
 - `simulation_id::Integer`: The ID of the PhysiCell simulation.
 - `direction::Symbol`: The direction to compute the mean speed. Can be `:x`, `:y`, `:z`, or `:any` (default). If `:x`, for example, the mean speed is calculated using only the x component of the cell's movement.
 
 # Returns
-- `mean_speed_dicts::Vector{Dict{String,Float64}}`: A vector of dictionaries where each dictionary is specific to a single cell. The key is the cell type and the value is the mean speed of that cell.
-- `distance_dicts::Vector{Dict{String,Float64}}`: A vector of dictionaries where each dictionary is specific to a single cell. The key is the cell type and the value is the total distance traveled by that cell.
-- `time_dicts::Vector{Dict{String,Float64}}`: A vector of dictionaries where each dictionary is specific to a single cell. The key is the cell type and the value is the total time in the simulation for that cell.
+- `Vector{Dict{String, NamedTuple}}`: A vector of dictionaries, one per cell in the simulation. Each dictionary has keys for each cell type taken on by the cell. The values are NamedTuples with fields `:time`, `:distance`, and `:speed`.
+
+# Example
+```julia
+ms = motilityStatistics(1) # a vector of dictionaries, one per cell in the simulation
+ms[1]["epithelial"] # NamedTuple with fields :time, :distance, :speed for the first cell in the simulation corresponding to its time as an `epithelial` cell
+ms[1]["mesenchymal"].time # time spent as a `mesenchymal` cell for the first cell in the simulation
+ms[1]["mesenchymal"].distance # distance traveled as a `mesenchymal` cell for the first cell in the simulation
+ms[1]["mesenchymal"].speed # mean speed as a `mesenchymal` cell for the first cell in the simulation
+```
 """
-function computeMeanSpeed(simulation_id::Integer; direction=:any)::NTuple{3,Vector{Dict{String,Float64}}}
-    return joinpath(outputFolder("simulation", simulation_id), "output") |> x -> computeMeanSpeed(x; direction=direction)
+function motilityStatistics(simulation_id::Integer; direction=:any)::Vector{Dict{String, NamedTuple}}
+    return joinpath(outputFolder("simulation", simulation_id), "output") |> x -> motilityStatistics(x; direction=direction)
 end
+
+motilityStatistics(simulation::Simulation, direction=:any) = motilityStatistics(simulation.id, direction=direction)
