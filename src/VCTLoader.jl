@@ -1,6 +1,6 @@
 using DataFrames, MAT
 
-export getCellDataSequence
+export getCellDataSequence, PhysiCellSnapshot, PhysiCellSequence
 
 abstract type AbstractPhysiCellSequence end
 
@@ -111,12 +111,22 @@ indexToFilename(index::Int) = "output$(lpad(index,8,"0"))"
 
 A sequence of PhysiCell snapshots.
 
+By default, only the simulation ID, index, and time are recorded for each PhysiCellSnapshot in the sequence.
+To include any of `cells`, `substrates`, `mesh`, `attachments`, `spring_attachments`, or `neighbors`, pass in the corresponding keyword argument as `true` (see below).
+
 # Fields
 - `simulation_id::Int`: The ID of the simulation.
 - `snapshots::Vector{PhysiCellSnapshot}`: A vector of PhysiCell snapshots.
 - `cell_type_to_name_dict::Dict{Int, String}`: A dictionary mapping cell type IDs to cell type names.
 - `labels::Vector{String}`: A vector of cell data labels.
 - `substrate_names::Vector{String}`: A vector of substrate names.
+
+# Examples
+```julia
+sequence = PhysiCellSequence(1; include_cells=true, include_substrates=true) # loads cell and substrate data for simulation ID 1
+sequence = PhysiCellSequence(simulation; include_attachments=true, include_spring_attachments=true) # loads attachment data for a Simulation object
+sequence = PhysiCellSequence(1; include_mesh=true, include_neighbors=true) # loads mesh and neighbor data for simulation ID 1
+```
 """
 struct PhysiCellSequence <: AbstractPhysiCellSequence
     simulation_id::Int
