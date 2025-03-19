@@ -21,6 +21,7 @@ deleteSimulations(1:100; and_constraints="AND config_id = 1") # delete simulatio
 ```
 """
 function deleteSimulations(simulation_ids::AbstractVector{<:Union{Integer,Missing}}; delete_supers::Bool=true, and_constraints::String="")
+    simulation_ids = Vector(simulation_ids) #! filter! does not work on AbstractRange, such as `simulation_ids = 1:3`
     filter!(x -> !ismissing(x), simulation_ids)
     where_stmt = "WHERE simulation_id IN ($(join(simulation_ids,","))) $(and_constraints)"
     sim_df = constructSelectQuery("simulations", where_stmt) |> queryToDataFrame
@@ -28,7 +29,7 @@ function deleteSimulations(simulation_ids::AbstractVector{<:Union{Integer,Missin
     DBInterface.execute(db,"DELETE FROM simulations WHERE simulation_id IN ($(join(simulation_ids,",")));")
 
     for row in eachrow(sim_df)
-        rm_hpc_safe(outputFolder("simulation", row.simulation_id); force=true, recursive=true)
+        rm_hpc_safe(trialFolder("simulation", row.simulation_id); force=true, recursive=true)
 
         for (location, location_dict) in pairs(inputs_dict)
             if !any(location_dict["varied"])
@@ -85,7 +86,7 @@ function deleteMonad(monad_ids::AbstractVector{<:Integer}; delete_subs::Bool=tru
         if delete_subs
             append!(simulation_ids_to_delete, readMonadSimulationIDs(monad_id))
         end
-        rm_hpc_safe(outputFolder("monad", monad_id); force=true, recursive=true)
+        rm_hpc_safe(trialFolder("monad", monad_id); force=true, recursive=true)
     end
     if !isempty(simulation_ids_to_delete)
         deleteSimulations(simulation_ids_to_delete; delete_supers=false)
@@ -124,7 +125,7 @@ function deleteSampling(sampling_ids::AbstractVector{<:Integer}; delete_subs::Bo
         if delete_subs
             append!(monad_ids_to_delete, readSamplingMonadIDs(sampling_id))
         end
-        rm_hpc_safe(outputFolder("sampling", sampling_id); force=true, recursive=true)
+        rm_hpc_safe(trialFolder("sampling", sampling_id); force=true, recursive=true)
     end
     if !isempty(monad_ids_to_delete)
         all_sampling_ids = constructSelectQuery("samplings"; selection="sampling_id") |> queryToDataFrame |> x -> x.sampling_id
@@ -172,7 +173,7 @@ function deleteTrial(trial_ids::AbstractVector{<:Integer}; delete_subs::Bool=tru
         if delete_subs
             append!(sampling_ids_to_delete, readTrialSamplingIDs(trial_id))
         end
-        rm_hpc_safe(outputFolder("trial", trial_id); force=true, recursive=true)
+        rm_hpc_safe(trialFolder("trial", trial_id); force=true, recursive=true)
     end
     if !isempty(sampling_ids_to_delete)
         all_trial_ids = constructSelectQuery("trials"; selection="trial_id") |> queryToDataFrame |> x -> x.trial_id

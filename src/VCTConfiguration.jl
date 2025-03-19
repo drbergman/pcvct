@@ -162,8 +162,7 @@ function prepareVariedInputFolder(location::Symbol, sampling::Sampling)
     if !sampling.inputs[location].varied #! this input is not being varied (either unused or static)
         return
     end
-    for index in eachindex(sampling.variation_ids)
-        monad = Monad(sampling, index) #! instantiate a monad with the variation_id and the simulation ids already found
+    for monad in Monad.(readSamplingMonadIDs(sampling))
         prepareVariedInputFolder(location, monad)
     end
 end

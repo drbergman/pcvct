@@ -6,25 +6,19 @@ function recordIDs(path_to_folder::String, filename::String, ids::Array{Int})
 end
 
 function recordSimulationIDs(monad_id::Int, simulation_ids::Array{Int})
-    path_to_folder = outputFolder("monad", monad_id)
+    path_to_folder = trialFolder("monad", monad_id)
     recordIDs(path_to_folder, "simulations", simulation_ids)
 end
 
-recordSimulationIDs(monad::Monad) = recordSimulationIDs(monad.id, monad.simulation_ids)
+recordSimulationIDs(monad::Monad, simulation_ids::AbstractArray{Int}) = recordSimulationIDs(monad.id, simulation_ids)
 
 function recordMonadIDs(sampling_id::Int, monad_ids::Array{Int})
-    path_to_folder = outputFolder("sampling", sampling_id)
+    path_to_folder = trialFolder("sampling", sampling_id)
     recordIDs(path_to_folder, "monads", monad_ids)
 end
 
-recordMonadIDs(sampling::Sampling) = recordMonadIDs(sampling.id, sampling.monad_ids)
-
 function recordSamplingIDs(trial_id::Int, sampling_ids::Array{Int})
-    recordSamplingIDs(outputFolder("trial", trial_id), sampling_ids)
-end
-
-function recordSamplingIDs(trial::Trial)
-    recordSamplingIDs(outputFolder(trial), trial.sampling_ids)
+    recordSamplingIDs(trialFolder("trial", trial_id), sampling_ids)
 end
 
 function recordSamplingIDs(path_to_folder::String, sampling_ids::Array{Int})

@@ -167,10 +167,10 @@ function _runSensitivitySampling(method::MOAT, n_replicates::Int, inputs::InputF
         all_variation_ids[location] = hcat(base_variation_ids[location], perturbed_variation_ids[location])
     end
     location_variation_dict = (loc => all_variation_ids[loc] for loc in project_locations.varied) |> Dict
-    monad_dict, monad_ids = variationsToMonads(inputs, location_variation_dict, use_previous)
+    monad_dict, monad_ids = variationsToMonads(inputs, location_variation_dict)
     header_line = ["base"; columnName.(pv.variations)]
     monad_ids_df = DataFrame(monad_ids, header_line)
-    sampling = Sampling(n_replicates, monad_dict |> values |> collect)
+    sampling = Sampling(monad_dict |> values |> collect; n_replicates=n_replicates, use_previous=use_previous)
     out = run(sampling; force_recompile=force_recompile, prune_options=prune_options)
     return MOATSampling(sampling, monad_ids_df)
 end
@@ -294,11 +294,11 @@ function _runSensitivitySampling(method::Sobolʼ, n_replicates::Int, inputs::Inp
         end
     end
     location_variation_ids_dict = [loc => hcat(location_variation_ids_A[loc], location_variation_ids_B[loc], [location_variation_ids_Aᵦ[loc][i] for i in focus_indices]...) for loc in project_locations.varied] |> Dict{Symbol,Matrix{Int}}
-    monad_dict, monad_ids = variationsToMonads(inputs, location_variation_ids_dict, use_previous)
+    monad_dict, monad_ids = variationsToMonads(inputs, location_variation_ids_dict)
     monads = monad_dict |> values |> collect
     header_line = ["A"; "B"; columnName.(pv.variations[focus_indices])]
     monad_ids_df = DataFrame(monad_ids, header_line)
-    sampling = Sampling(n_replicates, monads)
+    sampling = Sampling(monads; n_replicates=n_replicates, use_previous=use_previous)
     out = run(sampling; force_recompile=force_recompile, prune_options=prune_options)
     return SobolSampling(sampling, monad_ids_df; sobol_index_methods=method.sobol_index_methods)
 end
@@ -406,11 +406,11 @@ function _runSensitivitySampling(method::RBD, n_replicates::Int, inputs::InputFo
     end
     add_variations_result = addVariations(method.rbd_variation, inputs, pv, reference_variation_id)
     location_variation_ids_dict = add_variations_result.location_variation_ids_dict
-    monad_dict, monad_ids = variationsToMonads(inputs, location_variation_ids_dict, use_previous)
+    monad_dict, monad_ids = variationsToMonads(inputs, location_variation_ids_dict)
     monads = monad_dict |> values |> collect
     header_line = columnName.(pv.variations)
     monad_ids_df = DataFrame(monad_ids, header_line)
-    sampling = Sampling(n_replicates, monads)
+    sampling = Sampling(monads; n_replicates=n_replicates, use_previous=use_previous)
     out = run(sampling; force_recompile=force_recompile, prune_options=prune_options)
     return RBDSampling(sampling, monad_ids_df, method.rbd_variation.num_cycles; num_harmonics=method.num_harmonics)
 end
@@ -435,7 +435,7 @@ end
 
 function recordSensitivityScheme(gsa_sampling::GSASampling)
     method = methodString(gsa_sampling)
-    path_to_csv = joinpath(outputFolder(gsa_sampling.sampling), "$(method)_scheme.csv")
+    path_to_csv = joinpath(trialFolder(gsa_sampling.sampling), "$(method)_scheme.csv")
     return CSV.write(path_to_csv, getMonadIDDataFrame(gsa_sampling); header=true)
 end
 
@@ -468,7 +468,7 @@ The `use_previous` flag determines whether to use previous simulations, if they 
 - `monad_dict::Dict{VariationID, Monad}`: a dictionary of the monads to be used without duplicates.
 - `monad_ids::Matrix{Int}`: a matrix of the monad IDs to be used. Matches the shape of the input IDs matrices.
 """
-function variationsToMonads(inputs::InputFolders, location_variation_ids_dict::Dict{Symbol,Matrix{Int}}, use_previous::Bool)
+function variationsToMonads(inputs::InputFolders, location_variation_ids_dict::Dict{Symbol,Matrix{Int}})
     monad_dict = Dict{VariationID, Monad}()
     monad_ids = zeros(Int, size(location_variation_ids_dict |> values |> first))
     for i in eachindex(monad_ids)
@@ -477,7 +477,7 @@ function variationsToMonads(inputs::InputFolders, location_variation_ids_dict::D
             monad_ids[i] = monad_dict[monad_variation_id].id
             continue
         end
-        monad = Monad(inputs, monad_variation_id; use_previous=use_previous)
+        monad = Monad(inputs, monad_variation_id)
         monad_dict[monad_variation_id] = monad
         monad_ids[i] = monad.id
     end

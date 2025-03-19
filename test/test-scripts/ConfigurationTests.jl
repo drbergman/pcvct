@@ -68,7 +68,7 @@ out = run(inputs, discrete_variations; n_replicates=n_replicates)
 @test out.n_success == length(out.trial)
 
 ## test the in place functions
-reference_monad = Monad(out.trial.monad_ids[1])
+reference_monad = out.trial.monads[1]
 
 monads = Monad[]
 discrete_variations = DiscreteVariation[]

@@ -15,16 +15,17 @@ Automatically prune some of the generated output files from a simulation.
 - `prune_final::Bool=false`: If any of the above are true, also prune the final files for that type
 """
 @with_kw struct PruneOptions
+    prune_mat::Bool = false
     prune_svg::Bool = false
     prune_txt::Bool = false
-    prune_mat::Bool = false
+    prune_xml::Bool = false
 
     prune_initial::Bool = false
     prune_final::Bool = false
 end
 
 function pruneSimulationOutput(simulation_id::Integer; prune_options::PruneOptions=PruneOptions())
-    path_to_output_folder = joinpath(outputFolder("simulation", simulation_id), "output")
+    path_to_output_folder = joinpath(trialFolder("simulation", simulation_id), "output")
     if prune_options.prune_svg
         glob("snapshot*.svg", path_to_output_folder) .|> x->rm(x, force=true)
         if prune_options.prune_initial
@@ -50,6 +51,15 @@ function pruneSimulationOutput(simulation_id::Integer; prune_options::PruneOptio
         end
         if prune_options.prune_final
             glob("final*.mat", path_to_output_folder) .|> x->rm(x, force=true)
+        end
+    end
+    if prune_options.prune_xml
+        glob("output*.xml", path_to_output_folder) .|> x->rm(x, force=true)
+        if prune_options.prune_initial
+            glob("initial*.xml", path_to_output_folder) .|> x->rm(x, force=true)
+        end
+        if prune_options.prune_final
+            glob("final*.xml", path_to_output_folder) .|> x->rm(x, force=true)
         end
     end
 end

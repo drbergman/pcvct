@@ -3,7 +3,7 @@ import Base.run
 export runAbstractTrial
 
 function prepareSimulationCommand(simulation::Simulation, monad_id::Int, do_full_setup::Bool, force_recompile::Bool)
-    path_to_simulation_output = joinpath(outputFolder(simulation), "output")
+    path_to_simulation_output = joinpath(trialFolder(simulation), "output")
     mkpath(path_to_simulation_output)
 
     if do_full_setup
@@ -78,7 +78,7 @@ function SimulationProcess(simulation::Simulation; monad_id::Union{Missing,Int}=
         return SimulationProcess(simulation, monad_id, nothing)
     end
 
-    path_to_simulation_folder = outputFolder("simulation", simulation.id)
+    path_to_simulation_folder = trialFolder("simulation", simulation.id)
     DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Running")) WHERE simulation_id=$(simulation.id);" )
     println("\tRunning simulation: $(simulation.id)...")
     flush(stdout)
@@ -98,7 +98,7 @@ function prepCmdForWrap(cmd::Cmd)
 end
 
 function prepareHPCCommand(cmd::Cmd, simulation_id::Int)
-    path_to_simulation_folder = outputFolder("simulation", simulation_id)
+    path_to_simulation_folder = trialFolder("simulation", simulation_id)
     base_cmd_str = "sbatch"
     flags = ["--wrap=$(prepCmdForWrap(Cmd(cmd.exec)))",
              "--wait",
@@ -128,7 +128,7 @@ function resolveSimulation(simulation_process::SimulationProcess, prune_options:
     monad_id = simulation_process.monad_id
     p = simulation_process.process
     success = p.exitcode == 0
-    path_to_simulation_folder = outputFolder(simulation)
+    path_to_simulation_folder = trialFolder(simulation)
     path_to_err = joinpath(path_to_simulation_folder, "output.err")
     if success
         rm(path_to_err; force=true)
@@ -155,7 +155,7 @@ function resolveSimulation(simulation_process::SimulationProcess, prune_options:
 end
 
 function runMonad(monad::Monad; do_full_setup::Bool=true, force_recompile::Bool=false)
-    mkpath(outputFolder(monad))
+    mkpath(trialFolder(monad))
 
     if do_full_setup
         compilation_success = loadCustomCode(monad; force_recompile=force_recompile)
@@ -169,7 +169,7 @@ function runMonad(monad::Monad; do_full_setup::Bool=true, force_recompile::Bool=
     end
 
     simulation_tasks = Task[]
-    for simulation_id in monad.simulation_ids
+    for simulation_id in getSimulationIDs(monad)
         if isStarted(simulation_id; new_status_code="Queued")
             continue #! if the simulation has already been started (or even completed), then don't run it again
         end
@@ -182,7 +182,7 @@ function runMonad(monad::Monad; do_full_setup::Bool=true, force_recompile::Bool=
 end
 
 function runSampling(sampling::Sampling; force_recompile::Bool=false)
-    mkpath(outputFolder(sampling))
+    mkpath(trialFolder(sampling))
 
     compilation_success = loadCustomCode(sampling; force_recompile=force_recompile)
     if !compilation_success
@@ -190,8 +190,7 @@ function runSampling(sampling::Sampling; force_recompile::Bool=false)
     end
 
     simulation_tasks = []
-    for index in eachindex(sampling.variation_ids)
-        monad = Monad(sampling, index) #! instantiate a monad with the variation_id and the simulation ids already found
+    for monad in Monad.(readSamplingMonadIDs(sampling))
         append!(simulation_tasks, runMonad(monad, do_full_setup=false, force_recompile=false)) #! run the monad and add the number of new simulations to the total
     end
 
@@ -199,11 +198,11 @@ function runSampling(sampling::Sampling; force_recompile::Bool=false)
 end
 
 function runTrial(trial::Trial; force_recompile::Bool=false)
-    mkpath(outputFolder(trial))
+    mkpath(trialFolder(trial))
 
     simulation_tasks = []
-    for i in eachindex(trial.sampling_ids)
-        sampling = Sampling(trial, i) #! instantiate a sampling with the variation_ids and the simulation ids already found
+    for sampling_id in readTrialSamplingIDs(trial)
+        sampling = Sampling(sampling_id) #! instantiate a sampling with the variation_ids and the simulation ids already found
         append!(simulation_tasks, runSampling(sampling; force_recompile=force_recompile)) #! run the sampling and add the number of new simulations to the total
     end
 
