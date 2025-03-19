@@ -15,7 +15,7 @@ plotbycelltype(Sampling(1); include_cell_types="default")
 
 # misc tests
 out = Monad(1; n_replicates=3) |> run
-pcvct.MonadPopulationTimeSeries(1)
+mpts = pcvct.MonadPopulationTimeSeries(1)
 plot(out)
 plot(out.trial)
 plotbycelltype(out)
@@ -36,4 +36,8 @@ plot(sampling_from_import; include_cell_types=[["fast T cell", "slow T cell", "e
 
 plotbycelltype(sampling_from_import; include_cell_types="fast T cell", exclude_cell_types="fast T cell")
 
-@test ismissing(pcvct.PhysiCellSnapshot(pruned_simulation_id, :initial))
+@test ismissing(PhysiCellSnapshot(pruned_simulation_id, :initial))
+
+spts = pcvct.SimulationPopulationTimeSeries(1)
+Base.show(stdout, MIME"text/plain"(), spts)
+Base.show(stdout, MIME"text/plain"(), mpts)

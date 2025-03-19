@@ -141,6 +141,16 @@ end
 
 MOATSampling(sampling::Sampling, monad_ids_df::DataFrame) = MOATSampling(sampling, monad_ids_df, Dict{Function, GlobalSensitivity.MorrisResult}())
 
+function Base.show(io::IO, ::MIME"text/plain", moat_sampling::MOATSampling)
+    println(io, "MOAT sampling")
+    println(io, "-------------")
+    show(io, moat_sampling.sampling)
+    println(io, "Sensitivity functions calculated:")
+    for f in keys(moat_sampling.results)
+        println(io, "  $f")
+    end
+end
+
 function _runSensitivitySampling(method::MOAT, n_replicates::Int, inputs::InputFolders, pv::ParsedVariations; reference_variation_id::VariationID=VariationID(inputs),
     ignore_indices::Vector{Int}=Int[], force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions(), use_previous::Bool=true)
 
@@ -271,6 +281,19 @@ end
 
 SobolSampling(sampling::Sampling, monad_ids_df::DataFrame; sobol_index_methods::NamedTuple{(:first_order, :total_order), Tuple{Symbol, Symbol}}=(first_order=:Jansen1999, total_order=:Jansen1999)) = SobolSampling(sampling, monad_ids_df, Dict{Function, GlobalSensitivity.SobolResult}(), sobol_index_methods)
 
+function Base.show(io::IO, ::MIME"text/plain", sobol_sampling::SobolSampling)
+    println(io, "Sobol sampling")
+    println(io, "--------------")
+    show(io, sobol_sampling.sampling)
+    println(io, "Sobol index methods:")
+    println(io, "  First order: $(sobol_sampling.sobol_index_methods.first_order)")
+    println(io, "  Total order: $(sobol_sampling.sobol_index_methods.total_order)")
+    println(io, "Sensitivity functions calculated:")
+    for f in keys(sobol_sampling.results)
+        println(io, "  $f")
+    end
+end
+
 function _runSensitivitySampling(method::Sobolʼ, n_replicates::Int, inputs::InputFolders, pv::ParsedVariations; reference_variation_id::VariationID=VariationID(inputs),
     ignore_indices::Vector{Int}=Int[], force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions(), use_previous::Bool=true)
 
@@ -398,6 +421,17 @@ struct RBDSampling <: GSASampling
 end
 
 RBDSampling(sampling::Sampling, monad_ids_df::DataFrame, num_cycles; num_harmonics::Int=6) = RBDSampling(sampling, monad_ids_df, Dict{Function, GlobalSensitivity.SobolResult}(), num_harmonics, num_cycles)
+
+function Base.show(io::IO, ::MIME"text/plain", rbd_sampling::RBDSampling)
+    println(io, "RBD sampling")
+    println(io, "------------")
+    show(io, rbd_sampling.sampling)
+    println(io, "Number of harmonics: $(rbd_sampling.num_harmonics)")
+    println(io, "Number of cycles (1/2 or 1): $(rbd_sampling.num_cycles)")
+    for f in keys(rbd_sampling.results)
+        println(io, "  $f")
+    end
+end
 
 function _runSensitivitySampling(method::RBD, n_replicates::Int, inputs::InputFolders, pv::ParsedVariations; reference_variation_id::VariationID=VariationID(inputs),
     ignore_indices::Vector{Int}=Int[], force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions(), use_previous::Bool=true)

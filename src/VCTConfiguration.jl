@@ -58,7 +58,7 @@ function updateField(xml_doc::XMLDocument, xml_path_and_value::Vector{Any})
     return updateField(xml_doc, xml_path_and_value[1:end-1],xml_path_and_value[end])
 end
 
-function xmlPathToColumnName(xml_path::Vector{<:AbstractString})
+function columnName(xml_path::Vector{<:AbstractString})
     return join(xml_path, "/")
 end
 

@@ -48,16 +48,6 @@ struct SimulationPopulationTimeSeries <: AbstractPopulationTimeSeries
     cell_count::Dict{String, Vector{Integer}}
 end
 
-function Base.getindex(spts::SimulationPopulationTimeSeries, cell_type::String)
-    if cell_type in keys(spts.cell_count)
-        return spts.cell_count[cell_type]
-    elseif cell_type == "time"
-        return spts.time
-    else
-        throw(ArgumentError("Cell type $cell_type not found in the population time series."))
-    end
-end
-
 function SimulationPopulationTimeSeries(sequence::PhysiCellSequence; include_dead::Bool=false)
     time = [snapshot.time for snapshot in sequence.snapshots]
     cell_count = Dict{String, Vector{Integer}}()
@@ -99,6 +89,38 @@ function SimulationPopulationTimeSeries(simulation_id::Integer; include_dead::Bo
 end
 
 SimulationPopulationTimeSeries(simulation::Simulation; kwargs...) = SimulationPopulationTimeSeries(simulation.id; kwargs...)
+
+function Base.getindex(spts::SimulationPopulationTimeSeries, cell_type::String)
+    if cell_type in keys(spts.cell_count)
+        return spts.cell_count[cell_type]
+    elseif cell_type == "time"
+        return spts.time
+    else
+        throw(ArgumentError("Cell type $cell_type not found in the population time series."))
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/plain", spts::SimulationPopulationTimeSeries)
+    println(io, "SimulationPopulationTimeSeries for Simulation $(spts.simulation_id):")
+    println(io, "  Time: $(check_and_format_range(spts.time))")
+    println(io, "  Cell types: $(join(keys(spts.cell_count), ", "))")
+end
+
+function check_and_format_range(v)
+    @assert !isempty(v) "Vector is empty."
+    if length(v) == 1
+        return "$(v[1])"
+    end
+    #! Calculate the step size
+    step = v[2] - v[1]
+
+    #! Check if all consecutive differences are equal to the step size
+    if all(diff(v) .≈ step)
+        return "$(v[1]):$step:$(v[end])"
+    else
+        return "$(v[1])-$(v[end]) (not equally spaced)"
+    end
+end
 
 """
     finalPopulationCount(simulation::Simulation[; include_dead::Bool=false])
@@ -154,18 +176,6 @@ struct MonadPopulationTimeSeries <: AbstractPopulationTimeSeries
     cell_count::Dict{String,NamedTuple}
 end
 
-function Base.getindex(mpts::MonadPopulationTimeSeries, cell_type::String)
-    if cell_type in keys(mpts.cell_count)
-        return mpts.cell_count[cell_type]
-    elseif cell_type == "time"
-        return mpts.time
-    else
-        throw(ArgumentError("Cell type $cell_type not found in the population time series."))
-    end
-end
-
-Base.keys(apts::AbstractPopulationTimeSeries; exclude_time::Bool=false) = exclude_time ? keys(apts.cell_count) : ["time"; keys(apts.cell_count) |> collect]
-
 function MonadPopulationTimeSeries(monad::Monad; include_dead::Bool=false)
     simulation_ids = getSimulationIDs(monad)
     monad_length = length(simulation_ids)
@@ -202,6 +212,26 @@ function MonadPopulationTimeSeries(monad::Monad; include_dead::Bool=false)
 end
 
 MonadPopulationTimeSeries(monad_id::Integer; include_dead::Bool=false) = MonadPopulationTimeSeries(Monad(monad_id); include_dead=include_dead)
+
+function Base.getindex(mpts::MonadPopulationTimeSeries, cell_type::String)
+    if cell_type in keys(mpts.cell_count)
+        return mpts.cell_count[cell_type]
+    elseif cell_type == "time"
+        return mpts.time
+    else
+        throw(ArgumentError("Cell type $cell_type not found in the population time series."))
+    end
+end
+
+Base.keys(apts::AbstractPopulationTimeSeries; exclude_time::Bool=false) = exclude_time ? keys(apts.cell_count) : ["time"; keys(apts.cell_count) |> collect]
+
+function Base.show(io::IO, ::MIME"text/plain", mpts::MonadPopulationTimeSeries)
+    println(io, "MonadPopulationTimeSeries for Monad $(mpts.monad_id):")
+    printSimulationIDs(io, Monad(mpts.monad_id))
+    println(io, "  Time: $(check_and_format_range(mpts.time))")
+    println(io, "  Cell types: $(join(keys(mpts.cell_count), ", "))")
+end
+
 
 """
     populationTimeSeries(M::AbstractMonad[; include_dead::Bool=false])

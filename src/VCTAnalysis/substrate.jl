@@ -40,16 +40,6 @@ struct AverageSubstrateTimeSeries
     substrate_concentrations::Dict{String, Vector{Real}}
 end
 
-function Base.getindex(asts::AverageSubstrateTimeSeries, name::String)
-    if name in keys(asts.substrate_concentrations)
-        return asts.substrate_concentrations[name]
-    elseif name == "time"
-        return asts.time
-    else
-        throw(ArgumentError("Invalid substrate name: $name"))
-    end
-end
-
 function AverageSubstrateTimeSeries(sequence::PhysiCellSequence)
     time = [snapshot.time for snapshot in sequence.snapshots]
     substrate_concentrations = Dict{String, Vector{Real}}()
@@ -92,6 +82,22 @@ function AverageSubstrateTimeSeries(simulation_id::Integer)
 end
 
 AverageSubstrateTimeSeries(simulation::Simulation) = AverageSubstrateTimeSeries(simulation.id)
+
+function Base.getindex(asts::AverageSubstrateTimeSeries, name::String)
+    if name in keys(asts.substrate_concentrations)
+        return asts.substrate_concentrations[name]
+    elseif name == "time"
+        return asts.time
+    else
+        throw(ArgumentError("Invalid substrate name: $name"))
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/plain", asts::AverageSubstrateTimeSeries)
+    println(io, "AverageSubstrateTimeSeries for Simulation $(asts.simulation_id)")
+    println(io, "  Time: $(check_and_format_range(asts.time))")
+    println(io, "  Substrates: $(join(keys(asts.substrate_concentrations), ", "))")
+end
 
 function averageExtracellularSubstrate(snapshot::PhysiCellSnapshot; cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}(), substrate_names::Vector{String}=String[], include_dead::Bool=false, labels::Vector{String}=String[])
     if ismissing(loadCells!(snapshot, cell_type_to_name_dict, labels))
@@ -163,16 +169,6 @@ struct ExtracellularSubstrateTimeSeries
     data::Dict{String,Dict{String,Vector{Real}}}
 end
 
-function Base.getindex(ests::ExtracellularSubstrateTimeSeries, name::String)
-    if name in keys(ests.data)
-        return ests.data[name]
-    elseif name == "time"
-        return ests.time
-    else
-        throw(ArgumentError("Invalid cell type name: $name"))
-    end
-end
-
 function ExtracellularSubstrateTimeSeries(sequence::PhysiCellSequence; include_dead::Bool=false)
     time = [snapshot.time for snapshot in sequence.snapshots]
     data = Dict{String, Dict{String, Vector{Real}}}()
@@ -234,3 +230,20 @@ function ExtracellularSubstrateTimeSeries(simulation_id::Integer; include_dead::
 end
 
 ExtracellularSubstrateTimeSeries(simulation::Simulation; kwargs...) = ExtracellularSubstrateTimeSeries(simulation.id; kwargs...)
+
+function Base.getindex(ests::ExtracellularSubstrateTimeSeries, name::String)
+    if name in keys(ests.data)
+        return ests.data[name]
+    elseif name == "time"
+        return ests.time
+    else
+        throw(ArgumentError("Invalid cell type name: $name"))
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/plain", ests::ExtracellularSubstrateTimeSeries)
+    println(io, "ExtracellularSubstrateTimeSeries for Simulation $(ests.simulation_id)")
+    println(io, "  Time: $(check_and_format_range(ests.time))")
+    substrates = reduce(hcat, [keys(v) for v in values(ests.data)]) |> unique
+    println(io, "  Substrates: $(join(substrates, ", "))")
+end

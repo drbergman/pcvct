@@ -44,7 +44,7 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
     executable_name = baseToExecutable("project_ccid_$(S.inputs[:custom_code].id)")
     cmd = Cmd(`make -j 8 CC=$(PHYSICELL_CPP) PROGRAM_NAME=$(executable_name) CFLAGS=$(cflags)`; env=ENV, dir=temp_physicell_dir) #! compile the custom code in the PhysiCell directory and return to the original directory
 
-    println("Compiling custom code for $(S.inputs[:custom_code].folder) using:\n\n$(Cmd(cmd; env=nothing, dir=""))\n") #! print the command to be run, but not all the environment variables and directory info
+    println("Compiling custom code for $(S.inputs[:custom_code].folder). See $(joinpath(path_to_input_custom_codes, "compilation.log")) for more information.")
 
     try
         run(pipeline(cmd; stdout=joinpath(path_to_input_custom_codes, "compilation.log"), stderr=joinpath(path_to_input_custom_codes, "compilation.err")))
