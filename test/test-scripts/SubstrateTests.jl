@@ -9,7 +9,7 @@ ests = pcvct.ExtracellularSubstrateTimeSeries(1)
 ests = pcvct.ExtracellularSubstrateTimeSeries(Simulation(1))
 
 @test ismissing(pcvct.AverageSubstrateTimeSeries(pruned_simulation_id))
-snapshot = pcvct.PhysiCellSnapshot(pruned_simulation_id, :initial)
+snapshot = PhysiCellSnapshot(pruned_simulation_id, :initial)
 @test ismissing(snapshot)
 @test ismissing(pcvct.ExtracellularSubstrateTimeSeries(pruned_simulation_id))
 
