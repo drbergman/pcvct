@@ -6,7 +6,7 @@ hashBorderPrint(str)
 n_sims = length(Monad(1))
 monad = Monad(1; n_replicates=1, use_previous=false)
 run(monad)
-@test length(monad.simulation_ids) == 1 #! how many simulations were attached to this monad when run
+@test length(monad) == n_sims + 1 #! how many simulations were attached to this monad when run
 @test length(getSimulationIDs(monad)) == n_sims+1 #! how many simulations are stored in simulations.csv
 
 config_folder = "0_template"
@@ -60,7 +60,7 @@ out2 = run(simulation, discrete_variations; n_replicates=n_replicates, force_rec
 @test out2.trial isa Sampling
 @test out2.trial.id == sampling.id
 @test out2.trial.inputs == sampling.inputs
-@test Set(out2.trial.monad_ids) == Set(sampling.monad_ids)
+@test Set(pcvct.readSamplingMonadIDs(out2.trial)) == Set(pcvct.readSamplingMonadIDs(sampling))
 @test Set(pcvct.getSimulationIDs(out2.trial)) == Set(pcvct.getSimulationIDs(sampling))
 @test out2.n_scheduled == 0
 @test out2.n_success == 0
@@ -70,7 +70,7 @@ n_expected_sims = n_replicates
 for discrete_variation in discrete_variations
     global n_expected_sims *= length(discrete_variation)
 end
-n_variations = length(sampling.variation_ids)
+n_variations = length(sampling.monads)
 
 # make sure the number of simulations in this sampling is what we expected based on...
 @test n_simulations == n_expected_sims #! the discrete_variations...

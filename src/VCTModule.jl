@@ -152,11 +152,11 @@ function readConstituentIDs(path_to_csv::String)
     return ids
 end
 
-readMonadSimulationIDs(monad_id::Int) = readConstituentIDs(joinpath(outputFolder("monad", monad_id), "simulations.csv"))
+readMonadSimulationIDs(monad_id::Int) = readConstituentIDs(joinpath(trialFolder("monad", monad_id), "simulations.csv"))
 readMonadSimulationIDs(monad::Monad) = readMonadSimulationIDs(monad.id)
-readSamplingMonadIDs(sampling_id::Int) = readConstituentIDs(joinpath(outputFolder("sampling", sampling_id), "monads.csv"))
+readSamplingMonadIDs(sampling_id::Int) = readConstituentIDs(joinpath(trialFolder("sampling", sampling_id), "monads.csv"))
 readSamplingMonadIDs(sampling::Sampling) = readSamplingMonadIDs(sampling.id)
-readTrialSamplingIDs(trial_id::Int) = readConstituentIDs(joinpath(outputFolder("trial", trial_id), "samplings.csv"))
+readTrialSamplingIDs(trial_id::Int) = readConstituentIDs(joinpath(trialFolder("trial", trial_id), "samplings.csv"))
 readTrialSamplingIDs(trial::Trial) = readTrialSamplingIDs(trial.id)
 
 function getSamplingSimulationIDs(sampling_id::Int)
@@ -191,7 +191,7 @@ getSimulationIDs(simulation::Simulation) = [simulation.id]
 getSimulationIDs(monad::Monad) = readMonadSimulationIDs(monad)
 getSimulationIDs(sampling::Sampling) = getSamplingSimulationIDs(sampling.id)
 getSimulationIDs(trial::Trial) = getTrialSimulationIDs(trial.id)
-getSimulationIDs(Ts::AbstractArray{<:AbstractTrial}) = vcat([getSimulationIDs(T) for T in Ts]...)
+getSimulationIDs(Ts::AbstractArray{<:AbstractTrial}) = reduce(vcat, getSimulationIDs.(Ts))
 
 function getTrialMonads(trial_id::Int)
     sampling_ids = readTrialSamplingIDs(trial_id)
@@ -205,14 +205,14 @@ getMonadIDs(trial::Trial) = getTrialMonads(trial.id)
 
 ################## Miscellaneous Functions ##################
 
-function outputFolder(lower_class_str::AbstractString, id::Int)
+function trialFolder(lower_class_str::AbstractString, id::Int)
     return joinpath(data_dir, "outputs", lower_class_str * "s", string(id))
 end
 
-function outputFolder(T::AbstractTrial)
+function trialFolder(T::AbstractTrial)
     name = typeof(T) |> string |> lowercase
     name = split(name, ".")[end] #! remove module name that comes with the type, e.g. main.vctmodule.sampling -> sampling
-    return outputFolder(name, T.id)
+    return trialFolder(name, T.id)
 end
 
 function setMarchFlag(flag::String)

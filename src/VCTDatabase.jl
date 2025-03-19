@@ -323,7 +323,7 @@ end
 ########### Summarizing Database Functions ###########
 
 variationIDs(location::Symbol, M::AbstractMonad) = [M.variation_id[location]]
-variationIDs(location::Symbol, sampling::Sampling) = [variation_id[location] for variation_id in sampling.variation_ids]
+variationIDs(location::Symbol, sampling::Sampling) = [monad.variation_id[location] for monad in sampling.monads]
 
 function variationsTable(query::String, db::SQLite.DB; remove_constants::Bool=false)
     df = queryToDataFrame(query, db=db)

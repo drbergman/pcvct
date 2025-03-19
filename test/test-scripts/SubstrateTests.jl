@@ -8,6 +8,11 @@ asts = pcvct.AverageSubstrateTimeSeries(Simulation(1))
 ests = pcvct.ExtracellularSubstrateTimeSeries(1)
 ests = pcvct.ExtracellularSubstrateTimeSeries(Simulation(1))
 
+@test ismissing(pcvct.AverageSubstrateTimeSeries(pruned_simulation_id))
+snapshot = pcvct.PhysiCellSnapshot(pruned_simulation_id, :initial)
+@test ismissing(snapshot)
+@test ismissing(pcvct.ExtracellularSubstrateTimeSeries(pruned_simulation_id))
+
 # misc tests
 asts["time"]
 substrate_names = keys(asts.substrate_concentrations)

@@ -30,5 +30,5 @@ dv1 = DiscreteVariation(xml_path1, 50.0)
 dv2 = DiscreteVariation(xml_path2, 80.0)
 cv = CoVariation(dv1, dv2)
 
-out_fail = run(Monad(out.trial.monad_ids[1]), cv; n_replicates=n_replicates)
+out_fail = run(out.trial.monads[1], cv; n_replicates=n_replicates)
 @test out_fail.n_success == 0
