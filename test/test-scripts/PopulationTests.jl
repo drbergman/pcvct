@@ -36,4 +36,4 @@ plot(sampling_from_import; include_cell_types=[["fast T cell", "slow T cell", "e
 
 plotbycelltype(sampling_from_import; include_cell_types="fast T cell", exclude_cell_types="fast T cell")
 
-@test ismissing(pcvct.PhysiCellSnapshot(pruned_simulation_id, :initial))
+@test ismissing(PhysiCellSnapshot(pruned_simulation_id, :initial))
