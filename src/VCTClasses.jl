@@ -65,6 +65,16 @@ struct InputFolder
     end
 end
 
+function Base.show(io::IO, ::MIME"text/plain", input_folder::InputFolder)
+    println(io, "InputFolder:")
+    println(io, "  Location: $(input_folder.location)")
+    println(io, "  ID: $(input_folder.id)")
+    println(io, "  Folder: $(input_folder.folder)")
+    println(io, "  Basename: $(input_folder.basename)")
+    println(io, "  Required: $(input_folder.required)")
+    println(io, "  Varied: $(input_folder.varied)")
+end
+
 """
     InputFolders
 
@@ -123,6 +133,20 @@ end
 
 Base.getindex(input_folders::InputFolders, loc::Symbol) = input_folders.input_folders[loc]
 
+function Base.show(io::IO, ::MIME"text/plain", input_folders::InputFolders)
+    println(io, "InputFolders:")
+    printInputFolders(io, input_folders)
+end
+
+function printInputFolders(io::IO, input_folders::InputFolders, n_indent::Int=1)
+    for (loc, input_folder) in pairs(input_folders.input_folders)
+        if isempty(input_folder.folder)
+            continue
+        end
+        println(io, "  "^n_indent, "$loc: $(input_folder.folder)")
+    end
+end
+
 ##########################################
 ############   Variation IDs  ############
 ##########################################
@@ -153,6 +177,20 @@ struct VariationID
 end
 
 Base.getindex(variation_id::VariationID, loc::Symbol) = variation_id.ids[loc]
+
+function Base.show(io::IO, ::MIME"text/plain", variation_id::VariationID)
+    println(io, "VariationID:")
+    printVariationID(io, variation_id)
+end
+
+function printVariationID(io::IO, variation_id::VariationID, n_indent::Int=1)
+    for (loc, id) in pairs(variation_id.ids)
+        if id == -1
+            continue
+        end
+        println(io, "  "^n_indent, "$loc: $id")
+    end
+end
 
 ##########################################
 #############   Simulation   #############
@@ -240,6 +278,14 @@ function Simulation(simulation_id::Int)
 end
 
 Base.length(simulation::Simulation) = 1
+
+function Base.show(io::IO, ::MIME"text/plain", simulation::Simulation)
+    println(io, "Simulation (ID=$(simulation.id)):")
+    println(io, "  Inputs:")
+    printInputFolders(io, simulation.inputs, 2)
+    println(io, "  Variation ID:")
+    printVariationID(io, simulation.variation_id, 2)
+end
 
 ##########################################
 ###############   Monad   ################
@@ -367,6 +413,22 @@ end
 
 function Simulation(monad::Monad)
     return Simulation(monad.inputs, monad.variation_id)
+end
+
+function Base.show(io::IO, ::MIME"text/plain", monad::Monad)
+    println(io, "Monad (ID=$(monad.id)):")
+    println(io, "  Inputs:")
+    printInputFolders(io, monad.inputs, 2)
+    println(io, "  Variation ID:")
+    printVariationID(io, monad.variation_id, 2)
+    printSimulationIDs(io, monad)
+end
+
+function printSimulationIDs(io::IO, T::AbstractTrial, n_indent::Int=1)
+    simulation_ids = getSimulationIDs(T) |> compressIDs
+    simulation_ids = join(simulation_ids[1], ", ")
+    simulation_ids = replace(simulation_ids, ":" => "-")
+    println(io, "  "^n_indent, "Simulations: $simulation_ids")
 end
 
 ##########################################
@@ -518,6 +580,20 @@ end
 
 Sampling(sampling::Sampling; kwargs...) = Sampling(sampling.id; kwargs...)
 
+function Base.show(io::IO, ::MIME"text/plain", sampling::Sampling)
+    println(io, "Sampling (ID=$(sampling.id)):")
+    printMonadIDs(io, sampling)
+    println(io, "  Inputs:")
+    printInputFolders(io, sampling.inputs, 2)
+end
+
+function printMonadIDs(io::IO, sampling::Sampling, n_indent::Int=1)
+    monad_ids = readSamplingMonadIDs(sampling) |> compressIDs
+    monad_ids = join(monad_ids[1], ", ")
+    monad_ids = replace(monad_ids, ":" => "-")
+    print(io, "  "^n_indent, "Monads: $(monad_ids)")
+end
+
 ##########################################
 ###############   Trial   ################
 ##########################################
@@ -595,4 +671,12 @@ function getTrialID(samplings::Vector{Sampling})
     end
 
     return id
+end
+
+function Base.show(io::IO, ::MIME"text/plain", trial::Trial)
+    println(io, "Trial (ID=$(trial.id)):")
+    for sampling in trial.samplings
+        println(io, "  Sampling (ID=$(sampling.id)):")
+        printMonadIDs(io, sampling, 2)
+    end
 end

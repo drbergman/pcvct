@@ -55,3 +55,12 @@ sampling = Sampling(Monad(1))
 all_monads = getSimulationIDs() .|> Simulation .|> Monad
 all_monad_ids = [monad.id for monad in all_monads] |> unique
 trial = Trial(Monad.(all_monad_ids))
+
+#! show the stuff
+Base.show(stdout, MIME"text/plain"(), simulation.inputs[:config])
+Base.show(stdout, MIME"text/plain"(), simulation.inputs)
+Base.show(stdout, MIME"text/plain"(), simulation.variation_id)
+Base.show(stdout, MIME"text/plain"(), simulation)
+Base.show(stdout, MIME"text/plain"(), monad)
+Base.show(stdout, MIME"text/plain"(), sampling)
+Base.show(stdout, MIME"text/plain"(), trial)

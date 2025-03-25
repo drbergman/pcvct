@@ -1,6 +1,6 @@
 using DataFrames, MAT
 
-export getCellDataSequence
+export getCellDataSequence, PhysiCellSnapshot, PhysiCellSequence
 
 abstract type AbstractPhysiCellSequence end
 
@@ -99,6 +99,16 @@ function PhysiCellSnapshot(simulation_id::Int, index::Union{Int, Symbol};
     return PhysiCellSnapshot(simulation_id, index, time, DataFrame(cells), substrates, mesh, attachments, spring_attachments, neighbors)
 end
 
+function Base.show(io::IO, ::MIME"text/plain", snapshot::PhysiCellSnapshot)
+    println(io, "PhysiCellSnapshot (SimID=$(snapshot.simulation_id), Index=$(snapshot.index))")
+    println(io, "  Time: $(snapshot.time)")
+    println(io, "  Cells: $(isempty(snapshot.cells) ? "NOT LOADED" : nrow(snapshot.cells)) cells")
+    println(io, "  Substrates: $(isempty(snapshot.substrates) ? "NOT LOADED" : "LOADED")")
+    println(io, "  Mesh: $(isempty(snapshot.mesh) ? "NOT LOADED" : "LOADED")")
+    println(io, "  Attachments: $(isempty(snapshot.attachments) ? "NOT LOADED" : "LOADED")")
+    println(io, "  Spring Attachments: $(isempty(snapshot.spring_attachments) ? "NOT LOADED" : "LOADED")")
+end
+
 function indexToFilename(index::Symbol)
     @assert index in [:initial, :final] "The non-integer index must be either :initial or :final"
     return string(index)
@@ -111,12 +121,22 @@ indexToFilename(index::Int) = "output$(lpad(index,8,"0"))"
 
 A sequence of PhysiCell snapshots.
 
+By default, only the simulation ID, index, and time are recorded for each PhysiCellSnapshot in the sequence.
+To include any of `cells`, `substrates`, `mesh`, `attachments`, `spring_attachments`, or `neighbors`, pass in the corresponding keyword argument as `true` (see below).
+
 # Fields
 - `simulation_id::Int`: The ID of the simulation.
 - `snapshots::Vector{PhysiCellSnapshot}`: A vector of PhysiCell snapshots.
 - `cell_type_to_name_dict::Dict{Int, String}`: A dictionary mapping cell type IDs to cell type names.
 - `labels::Vector{String}`: A vector of cell data labels.
 - `substrate_names::Vector{String}`: A vector of substrate names.
+
+# Examples
+```julia
+sequence = PhysiCellSequence(1; include_cells=true, include_substrates=true) # loads cell and substrate data for simulation ID 1
+sequence = PhysiCellSequence(simulation; include_attachments=true, include_spring_attachments=true) # loads attachment data for a Simulation object
+sequence = PhysiCellSequence(1; include_mesh=true, include_neighbors=true) # loads mesh and neighbor data for simulation ID 1
+```
 """
 struct PhysiCellSequence <: AbstractPhysiCellSequence
     simulation_id::Int
@@ -162,6 +182,13 @@ function PhysiCellSequence(simulation_id::Integer;
 end
 
 PhysiCellSequence(simulation::Simulation; kwargs...) = PhysiCellSequence(simulation.id; kwargs...)
+
+function Base.show(io::IO, ::MIME"text/plain", sequence::PhysiCellSequence)
+    println(io, "PhysiCellSequence (SimID=$(sequence.simulation_id))")
+    println(io, "  #Snapshots: $(length(sequence.snapshots))")
+    println(io, "  Cell Types: $(join(values(sequence.cell_type_to_name_dict), ", "))")
+    println(io, "  Substrates: $(join(sequence.substrate_names, ", "))")
+end
 
 pathToOutputFolder(simulation_id::Integer) = return joinpath(trialFolder("simulation", simulation_id), "output")
 pathToOutputFileBase(simulation_id::Integer, index::Union{Int, Symbol}) = joinpath(pathToOutputFolder(simulation_id), indexToFilename(index))

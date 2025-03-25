@@ -96,3 +96,5 @@ out = run(trial; force_recompile=false)
 dv = DiscreteVariation(["hypothesis_ruleset:name:default", "behavior:name:cycle entry", "decreasing_signals", "max_response"], 100.0)
 out = run(inputs, dv)
 @test out.n_success == 0
+
+Base.show(stdout, MIME"text/plain"(), out)

@@ -135,3 +135,8 @@ ev = DiscreteVariation(["hypothesis_ruleset:name:default", "behavior:name:cycle 
 
 ev = DiscreteVariation(["options", "random_seed"], ["system_clock", 0])
 @test pcvct.sqliteDataType(ev) == "TEXT"
+
+Base.show(stdout, MIME"text/plain"(), pcvct.XMLPath(xml_path))
+Base.show(stdout, MIME"text/plain"(), ev)
+Base.show(stdout, MIME"text/plain"(), UniformDistributedVariation(xml_path, 0.0, 1.0))
+Base.show(stdout, MIME"text/plain"(), cv)
