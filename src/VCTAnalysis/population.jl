@@ -252,41 +252,13 @@ end
 getMeanCounts(s::SimulationPopulationTimeSeries) = s.cell_count
 getMeanCounts(m::MonadPopulationTimeSeries) = [k => v.mean for (k, v) in pairs(m.cell_count)] |> Dict
 
-function processIncludeCellTypes(include_cell_types)
-    if include_cell_types isa Symbol
-        #! include_cell_types = :all
-        @assert include_cell_types == :all "include_cell_types must be :all if a symbol."
-        return :all
-    elseif include_cell_types isa String
-        #! include_cell_types = "cancer"
-        return [include_cell_types]
-    elseif include_cell_types isa AbstractVector{<:AbstractString}
-        #! include_cell_types = ["cancer", "immune"]
-        return include_cell_types
-    elseif include_cell_types isa AbstractVector
-        @assert isa.(include_cell_types, Union{String,AbstractVector{<:AbstractString}}) |> all "include_cell_types must consist of strings and vectors of strings."
-        return include_cell_types
-    end
-    throw(ArgumentError("include_cell_types must be :all, a string, or a vector consisting of strings and vectors of strings. Got $(typeof(include_cell_types))."))
-end
-
-function processExcludeCellTypes(exclude_cell_types)
-    if exclude_cell_types isa String
-        return [exclude_cell_types]
-    elseif exclude_cell_types isa AbstractVector{<:AbstractString}
-        return exclude_cell_types
-    end
-    throw(ArgumentError("exclude_cell_types must be a string or a vector of strings."))
-end
-
 @recipe function f(M::AbstractMonad; include_dead=false, include_cell_types=:all, exclude_cell_types=String[])
     pts = populationTimeSeries(M; include_dead=include_dead)
     #! allow for single string input for either of these
-    include_cell_types = processIncludeCellTypes(include_cell_types)
+    include_cell_types = processIncludeCellTypes(include_cell_types, keys(pts; exclude_time=true) |> collect)
     exclude_cell_types = processExcludeCellTypes(exclude_cell_types)
 
-    cell_count_keys = include_cell_types == :all ? keys(pts; exclude_time=true) : include_cell_types
-    for k in cell_count_keys
+    for k in include_cell_types
         if k isa String
             k = [k] #! standardize so that all are vectors
         end
@@ -396,7 +368,9 @@ end
         monads = Monad.(getMonadIDs(T))
     end
 
-    include_cell_types = processIncludeCellTypes(include_cell_types)
+    simulation_id = getSimulationIDs(T) |> first
+    all_cell_types = pathToOutputXML(simulation_id, :initial) |> getCellTypeToNameDict |> values |> collect
+    include_cell_types = processIncludeCellTypes(include_cell_types, all_cell_types)
     exclude_cell_types = processExcludeCellTypes(exclude_cell_types)
 
     monad_summary = Dict{Int,Any}()
@@ -414,8 +388,7 @@ end
             else
                 @assert time == spts.time "Simulations $(simulation_ids[1]) and $(simulation_id) in monad $(monad.id) have different times in their time series."
             end
-            cell_count_keys = include_cell_types == :all ? keys(spts; exclude_time=true) : include_cell_types
-            for k in cell_count_keys
+            for k in include_cell_types
                 if k isa String
                     k = [k] #! standardize so that all are vectors
                 end

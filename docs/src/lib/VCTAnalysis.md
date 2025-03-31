@@ -10,5 +10,5 @@ Possibly with VCTLoader.jl.
 
 ```@autodocs
 Modules = [pcvct]
-Pages = ["population.jl", "substrate.jl", "motility.jl"]
+Pages = ["graphs.jl", "motility.jl", "population.jl", "preprocessing.jl", "substrate.jl"]
 ```

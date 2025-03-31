@@ -22,9 +22,11 @@ plotbycelltype(out)
 plotbycelltype(out.trial)
 
 
-pcvct.processIncludeCellTypes(["cancer", "immune"])
-pcvct.processIncludeCellTypes(["epi", "mes", ["epi", "mes"]])
-@test_throws AssertionError pcvct.processIncludeCellTypes(:mes)
+all_cell_types = ["cancer", "immune", "epi", "mes"]
+pcvct.processIncludeCellTypes(["cancer", "immune"], all_cell_types)
+pcvct.processIncludeCellTypes(["epi", "mes", ["epi", "mes"]], all_cell_types)
+@test_throws ArgumentError pcvct.processIncludeCellTypes(:mes, all_cell_types)
+@test_throws ArgumentError pcvct.processIncludeCellTypes(1, all_cell_types)
 
 pcvct.processExcludeCellTypes("cancer")
 @test_throws ArgumentError pcvct.processExcludeCellTypes(:mes)

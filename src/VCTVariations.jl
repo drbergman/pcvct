@@ -31,7 +31,7 @@ end
 
 columnName(xp::XMLPath) = columnName(xp.xml_path)
 
-Base.show(io::IO, ::MIME"text/plain", xp::XMLPath) = print(io, "XMLPath: $(columnName(xp))")
+Base.show(io::IO, ::MIME"text/plain", xp::XMLPath) = println(io, "XMLPath: $(columnName(xp))")
 
 ################## Abstract Variations ##################
 
@@ -216,9 +216,11 @@ _values(dv::DistributedVariation, cdf::Real) = _values(dv, [cdf])
 _values(::DistributedVariation) = error("A cdf must be provided for a DistributedVariation.")
 _values(ev::ElementaryVariation, cdf) = error("values not defined for $(typeof(ev)) with type of cdf = $(typeof(cdf))")
 
-function dataType(discrete_variation::DiscreteVariation)
-    return typeof(discrete_variation).parameters[1] #! typeof(discrete_variation).parameters[1] is the type parameter T in the definition of DiscreteVariation{T}
-end
+dataType(::DiscreteVariation{T}) where T = T
+
+# function dataType(discrete_variation::DiscreteVariation)
+#     return typeof(discrete_variation).parameters[1] #! typeof(discrete_variation).parameters[1] is the type parameter T in the definition of DiscreteVariation{T}
+# end
 
 function dataType(dv::DistributedVariation)
     return eltype(dv.distribution)
