@@ -67,9 +67,9 @@ snapshot = PhysiCellSnapshot(mat_pruned_simulation_id, 0)
 @test ismissing(pcvct.averageExtracellularSubstrate(snapshot))
 
 sequence = PhysiCellSequence(mat_pruned_simulation_id; include_attachments=true, include_spring_attachments=true, include_neighbors=true)
-pcvct.loadAttachments!(sequence)
-pcvct.loadSpringAttachments!(sequence)
-pcvct.loadNeighbors!(sequence)
+pcvct.loadGraph!(sequence, :attachments)
+pcvct.loadGraph!(sequence, :spring_attachments)
+pcvct.loadGraph!(sequence, :neighbors)
 
 simulation = Simulation(monad)
 out = run(simulation; prune_options=PruneOptions(prune_txt=true))

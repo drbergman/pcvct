@@ -591,7 +591,7 @@ function printMonadIDs(io::IO, sampling::Sampling, n_indent::Int=1)
     monad_ids = readSamplingMonadIDs(sampling) |> compressIDs
     monad_ids = join(monad_ids[1], ", ")
     monad_ids = replace(monad_ids, ":" => "-")
-    print(io, "  "^n_indent, "Monads: $(monad_ids)")
+    println(io, "  "^n_indent, "Monads: $(monad_ids)")
 end
 
 ##########################################

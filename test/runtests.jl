@@ -30,6 +30,8 @@ include("./test-scripts/PrintHelpers.jl")
     end
     include("./test-scripts/PopulationTests.jl")
     include("./test-scripts/SubstrateTests.jl")
+    include("./test-scripts/GraphsTests.jl")
+    
     include("./test-scripts/VariationsTests.jl")
     include("./test-scripts/HPCTests.jl")
     include("./test-scripts/ModuleTests.jl")

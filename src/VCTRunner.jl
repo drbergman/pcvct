@@ -233,9 +233,11 @@ struct PCVCTOutput
 end
 
 function Base.show(io::IO, ::MIME"text/plain", output::PCVCTOutput)
-    show(io, output.trial)
-    println()
-    println("In completing this trial:")
+    println(io, "PCVCT Output")
+    println(io, "------------")
+    show(io, MIME"text/plain"(), output.trial)
+    println(io, "")
+    println(io, "In completing this trial:")
     println(io, "  - Scheduled $(output.n_scheduled) simulations.")
     println(io, "  - Successfully completed $(output.n_success) simulations.")
 end
