@@ -369,7 +369,7 @@ evs = ElementaryVariation[]
 addDomainVariationDimension!(evs, (x_min=-78, xmax=78, min_y=-30, maxy=[30, 60], z_max=10))
 """
 function addDomainVariationDimension!(evs::Vector{<:ElementaryVariation}, domain::NamedTuple)
-    dim_chars = ["z", "y", "x"]
+    dim_chars = ["z", "y", "x"] #! put x at the end to avoid prematurely matching with "max"
     for (tag, value) in pairs(domain)
         tag = String(tag)
         if contains(tag, "min")

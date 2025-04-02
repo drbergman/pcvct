@@ -24,6 +24,8 @@ include("./test-scripts/PrintHelpers.jl")
     include("./test-scripts/SensitivityTests.jl")
     include("./test-scripts/DatabaseTests.jl")
     include("./test-scripts/ClassesTests.jl")
+
+    #! post-processing tests
     include("./test-scripts/LoaderTests.jl")
     if Sys.isapple()
         include("./test-scripts/MovieTests.jl")
@@ -31,6 +33,7 @@ include("./test-scripts/PrintHelpers.jl")
     include("./test-scripts/PopulationTests.jl")
     include("./test-scripts/SubstrateTests.jl")
     include("./test-scripts/GraphsTests.jl")
+    include("./test-scripts/PCFTests.jl")
     
     include("./test-scripts/VariationsTests.jl")
     include("./test-scripts/HPCTests.jl")
