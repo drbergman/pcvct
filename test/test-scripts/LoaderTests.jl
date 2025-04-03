@@ -71,12 +71,13 @@ pcvct.loadGraph!(sequence, :attachments)
 pcvct.loadGraph!(sequence, :spring_attachments)
 pcvct.loadGraph!(sequence, :neighbors)
 
+Base.show(stdout, MIME"text/plain"(), snapshot)
+Base.show(stdout, MIME"text/plain"(), sequence)
+Base.show(stdout, MIME"text/plain"(), sequence.snapshots[1])
+
 simulation = Simulation(monad)
 out = run(simulation; prune_options=PruneOptions(prune_txt=true))
 txt_pruned_simulation_id = out.trial.id
 @test ismissing(PhysiCellSnapshot(txt_pruned_simulation_id, 0; include_attachments=true))
 @test ismissing(PhysiCellSnapshot(txt_pruned_simulation_id, 0; include_spring_attachments=true))
 @test ismissing(PhysiCellSnapshot(txt_pruned_simulation_id, 0; include_neighbors=true))
-
-Base.show(stdout, MIME"text/plain"(), snapshot)
-Base.show(stdout, MIME"text/plain"(), sequence)
