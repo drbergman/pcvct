@@ -13,7 +13,7 @@ The `cells`, `substrates`, and `mesh` fields may remain empty until they are nee
 
 # Fields
 - `simulation_id::Int`: The ID of the simulation.
-- `index::Union{Int, Symbol}`: The index of the snapshot. Can be an integer or a symbol (`:initial` or `:final`).
+- `index::Union{Int,Symbol}`: The index of the snapshot. Can be an integer or a symbol (`:initial` or `:final`).
 - `time::Float64`: The time of the snapshot (in minutes).
 - `cells::DataFrame`: A DataFrame containing cell data.
 - `substrates::DataFrame`: A DataFrame containing substrate data.
@@ -34,7 +34,7 @@ struct PhysiCellSnapshot <: AbstractPhysiCellSequence
     neighbors::MetaGraph
 end
 
-function PhysiCellSnapshot(simulation_id::Int, index::Union{Int, Symbol};
+function PhysiCellSnapshot(simulation_id::Int, index::Union{Integer, Symbol};
     include_cells::Bool=false,
     cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}(),
     labels::Vector{String}=String[],
@@ -99,6 +99,8 @@ function PhysiCellSnapshot(simulation_id::Int, index::Union{Int, Symbol};
     return PhysiCellSnapshot(simulation_id, index, time, DataFrame(cells), substrates, mesh, attachments, spring_attachments, neighbors)
 end
 
+PhysiCellSnapshot(simulation::Simulation, index::Union{Integer,Symbol}; kwargs...) = PhysiCellSnapshot(simulation.id, index; kwargs...)
+
 function Base.show(io::IO, ::MIME"text/plain", snapshot::PhysiCellSnapshot)
     println(io, "PhysiCellSnapshot (SimID=$(snapshot.simulation_id), Index=$(snapshot.index))")
     println(io, "  Time: $(snapshot.time)")
@@ -117,6 +119,14 @@ end
 
 indexToFilename(index::Int) = "output$(lpad(index,8,"0"))"
 
+"""
+    AgentID
+
+A wrapper for the agent ID used in PhysiCell.
+
+The purpose of this struct is to make it easier to interpret the data in the MetaGraphs loaded from PhysiCell.
+The MetaGraphs use `Int`s to index the vertices, which could cause confusion when looking at the mappings to the agent ID metadata if also using `Int`s.
+"""
 struct AgentID
     id::Int
 end
@@ -222,9 +232,9 @@ function Base.show(io::IO, ::MIME"text/plain", sequence::PhysiCellSequence)
 end
 
 pathToOutputFolder(simulation_id::Integer) = return joinpath(trialFolder("simulation", simulation_id), "output")
-pathToOutputFileBase(simulation_id::Integer, index::Union{Int, Symbol}) = joinpath(pathToOutputFolder(simulation_id), indexToFilename(index))
+pathToOutputFileBase(simulation_id::Integer, index::Union{Integer,Symbol}) = joinpath(pathToOutputFolder(simulation_id), indexToFilename(index))
 pathToOutputFileBase(snapshot::PhysiCellSnapshot) = pathToOutputFileBase(snapshot.simulation_id, snapshot.index)
-pathToOutputXML(simulation_id::Integer, index::Union{Int, Symbol}) = "$(pathToOutputFileBase(simulation_id, index)).xml"
+pathToOutputXML(simulation_id::Integer, index::Union{Integer,Symbol}) = "$(pathToOutputFileBase(simulation_id, index)).xml"
 pathToOutputXML(snapshot::PhysiCellSnapshot) = pathToOutputXML(snapshot.simulation_id, snapshot.index)
 
 function getLabels(path_to_file::String)

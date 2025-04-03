@@ -1,5 +1,6 @@
 include("VCTAnalysis/preprocessing.jl")
 include("VCTAnalysis/graphs.jl")
 include("VCTAnalysis/motility.jl")
+include("VCTAnalysis/pcf.jl")
 include("VCTAnalysis/population.jl")
 include("VCTAnalysis/substrate.jl")
