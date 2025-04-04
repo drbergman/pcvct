@@ -106,10 +106,10 @@ function Base.show(io::IO, ::MIME"text/plain", snapshot::PhysiCellSnapshot)
     println(io, "  Time: $(snapshot.time)")
     println(io, "  Cells: $(isempty(snapshot.cells) ? "NOT LOADED" : "($(nrow(snapshot.cells)) cells x $(ncol(snapshot.cells)) features) DataFrame")")
     println(io, "  Substrates: $(isempty(snapshot.substrates) ? "NOT LOADED" : "($(size(snapshot.substrates, 1)) voxels x [x, y, z, volume, $(size(snapshot.substrates, 2)-4) substrates]) DataFrame")")
-    println(io, "  Mesh: $(isempty(snapshot.mesh) ? "NOT LOADED" : "LOADED")")
-    println(io, "  Attachments: $(nv(snapshot.attachments)==0 ? "NOT LOADED" : "LOADED")")
-    println(io, "  Spring Attachments: $(nv(snapshot.spring_attachments)==0 ? "NOT LOADED" : "LOADED")")
-    println(io, "  Neighbors: $(nv(snapshot.neighbors)==0 ? "NOT LOADED" : "LOADED")")
+    println(io, "  Mesh: $(isempty(snapshot.mesh) ? "NOT LOADED" : meshInfo(snapshot))")
+    println(io, "  Attachments: $(nv(snapshot.attachments)==0 ? "NOT LOADED" : graphInfo(snapshot.attachments))")
+    println(io, "  Spring Attachments: $(nv(snapshot.spring_attachments)==0 ? "NOT LOADED" : graphInfo(snapshot.spring_attachments))")
+    println(io, "  Neighbors: $(nv(snapshot.neighbors)==0 ? "NOT LOADED" : graphInfo(snapshot.neighbors))")
 end
 
 function indexToFilename(index::Symbol)
@@ -229,6 +229,8 @@ function Base.show(io::IO, ::MIME"text/plain", sequence::PhysiCellSequence)
     println(io, "  #Snapshots: $(length(sequence.snapshots))")
     println(io, "  Cell Types: $(join(values(sequence.cell_type_to_name_dict), ", "))")
     println(io, "  Substrates: $(join(sequence.substrate_names, ", "))")
+    loadMesh!(sequence.snapshots[1])
+    println(io, "  Mesh: $(meshInfo(sequence))")
 end
 
 pathToOutputFolder(simulation_id::Integer) = return joinpath(trialFolder("simulation", simulation_id), "output")
@@ -437,6 +439,15 @@ function loadMesh!(sequence::PhysiCellSequence)
     end
 end
 
+function meshInfo(snapshot::PhysiCellSnapshot)
+    mesh = snapshot.mesh
+    grid_size = [length(mesh[k]) for k in ["x", "y", "z"] if length(mesh[k]) > 1]
+    domain_size = [[mesh[k][1], mesh[k][end]] + 0.5*(mesh[k][2] - mesh[k][1]) * [-1, 1] for k in ["x", "y", "z"] if length(mesh[k]) > 1]
+    return "$(join(grid_size, " x ")) grid on $(join(domain_size, " x "))"
+end
+
+meshInfo(sequence::PhysiCellSequence) = meshInfo(sequence.snapshots[1])
+
 function loadGraph!(G::MetaGraph, path_to_txt_file::String, graph::Symbol)
     if nv(G) > 0
         return
@@ -468,6 +479,10 @@ function loadGraph!(sequence::PhysiCellSequence, graph::Symbol)
     for snapshot in sequence.snapshots
         loadGraph!(snapshot, graph)
     end
+end
+
+function graphInfo(g::MetaGraph)
+    return "directed graph with $(nv(g)) vertices and $(ne(g)) edges"
 end
 
 """
