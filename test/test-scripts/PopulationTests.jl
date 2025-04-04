@@ -15,16 +15,18 @@ plotbycelltype(Sampling(1); include_cell_types="default")
 
 # misc tests
 out = Monad(1; n_replicates=3) |> run
-pcvct.MonadPopulationTimeSeries(1)
+mpts = pcvct.MonadPopulationTimeSeries(1)
 plot(out)
 plot(out.trial)
 plotbycelltype(out)
 plotbycelltype(out.trial)
 
 
-pcvct.processIncludeCellTypes(["cancer", "immune"])
-pcvct.processIncludeCellTypes(["epi", "mes", ["epi", "mes"]])
-@test_throws AssertionError pcvct.processIncludeCellTypes(:mes)
+all_cell_types = ["cancer", "immune", "epi", "mes"]
+pcvct.processIncludeCellTypes(["cancer", "immune"], all_cell_types)
+pcvct.processIncludeCellTypes(["epi", "mes", ["epi", "mes"]], all_cell_types)
+@test_throws ArgumentError pcvct.processIncludeCellTypes(:mes, all_cell_types)
+@test_throws ArgumentError pcvct.processIncludeCellTypes(1, all_cell_types)
 
 pcvct.processExcludeCellTypes("cancer")
 @test_throws ArgumentError pcvct.processExcludeCellTypes(:mes)
@@ -36,4 +38,8 @@ plot(sampling_from_import; include_cell_types=[["fast T cell", "slow T cell", "e
 
 plotbycelltype(sampling_from_import; include_cell_types="fast T cell", exclude_cell_types="fast T cell")
 
-@test ismissing(pcvct.PhysiCellSnapshot(pruned_simulation_id, :initial))
+@test ismissing(PhysiCellSnapshot(pruned_simulation_id, :initial))
+
+spts = pcvct.SimulationPopulationTimeSeries(1)
+Base.show(stdout, MIME"text/plain"(), spts)
+Base.show(stdout, MIME"text/plain"(), mpts)

@@ -29,6 +29,10 @@ struct XMLPath
     end
 end
 
+columnName(xp::XMLPath) = columnName(xp.xml_path)
+
+Base.show(io::IO, ::MIME"text/plain", xp::XMLPath) = println(io, "XMLPath: $(columnName(xp))")
+
 ################## Abstract Variations ##################
 
 abstract type AbstractVariation end
@@ -49,25 +53,37 @@ A singleton value can be passed in place of `values` for convenience.
 # Examples
 ```jldoctest
 julia> dv = DiscreteVariation(["overall", "max_time"], [1440.0, 2880.0])
-DiscreteVariation{Float64}(:config, pcvct.XMLPath(["overall", "max_time"]), [1440.0, 2880.0])
+DiscreteVariation (Float64):
+  location: config
+  target: overall/max_time
+  values: [1440.0, 2880.0]
 ```
 ```jldoctest
 xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","max_response"]
 DiscreteVariation(xml_path, 0)
 # output
-DiscreteVariation{Int64}(:rulesets_collection, pcvct.XMLPath(["hypothesis_ruleset:name:default", "behavior:name:cycle entry", "decreasing_signals", "max_response"]), [0])
+DiscreteVariation (Int64):
+  location: rulesets_collection
+  target: hypothesis_ruleset:name:default/behavior:name:cycle entry/decreasing_signals/max_response
+  values: [0]
 ```
 ```jldoctest
 xml_path = ["cell_patches:name:default","patch_collection:type:disc","patch:ID:1","x0"]
 DiscreteVariation(xml_path, [0.0, 100.0])
 # output
-DiscreteVariation{Float64}(:ic_cell, pcvct.XMLPath(["cell_patches:name:default", "patch_collection:type:disc", "patch:ID:1", "x0"]), [0.0, 100.0])
+DiscreteVariation (Float64):
+  location: ic_cell
+  target: cell_patches:name:default/patch_collection:type:disc/patch:ID:1/x0
+  values: [0.0, 100.0]
 ```
 ```jldoctest
 xml_path = ["layer:ID:2", "patch:ID:1", "density"]
 DiscreteVariation(xml_path, [0.1, 0.2])
 # output
-DiscreteVariation{Float64}(:ic_ecm, pcvct.XMLPath(["layer:ID:2", "patch:ID:1", "density"]), [0.1, 0.2])
+DistributedVariation:
+  location: ic_ecm
+  target: layer:ID:2/patch:ID:1/density
+  values: [0.1, 0.2]
 """
 struct DiscreteVariation{T} <: ElementaryVariation
     location::Symbol
@@ -86,6 +102,13 @@ end
 DiscreteVariation(xml_path::Vector{<:AbstractString}, value::T) where T = DiscreteVariation(xml_path, [value])
 
 Base.length(discrete_variation::DiscreteVariation) = length(discrete_variation.values)
+
+function Base.show(io::IO, ::MIME"text/plain", dv::DiscreteVariation)
+    println(io, "DiscreteVariation ($(dataType(dv))):")
+    println(io, "  location: $(dv.location)")
+    println(io, "  target: $(columnName(dv))")
+    println(io, "  values: $(dv.values)")
+end
 
 function ElementaryVariation(args...; kwargs...)
     Base.depwarn("`ElementaryVariation` is deprecated in favor of the more descriptive `DiscreteVariation`.", :ElementaryVariation; force=true)
@@ -112,7 +135,10 @@ using Distributions
 d = Uniform(1, 2)
 DistributedVariation([pcvct.apoptosisPath("default"); "death_rate"], d)
 # output
-DistributedVariation(:config, pcvct.XMLPath(["cell_definitions", "cell_definition:name:default", "phenotype", "death", "model:code:100", "death_rate"]), Distributions.Uniform{Float64}(a=1.0, b=2.0), false)
+DistributedVariation:
+  location: config
+  target: cell_definitions/cell_definition:name:default/phenotype/death/model:code:100/death_rate
+  distribution: Distributions.Uniform{Float64}(a=1.0, b=2.0)
 ```
 ```jldoctest
 using Distributions
@@ -120,7 +146,10 @@ d = Uniform(1, 2)
 flip = true # the cdf on this variation will decrease from 1 to 0 as the value increases from 1 to 2
 DistributedVariation([pcvct.necrosisPath("default"); "death_rate"], d, flip)
 # output
-DistributedVariation(:config, pcvct.XMLPath(["cell_definitions", "cell_definition:name:default", "phenotype", "death", "model:code:101", "death_rate"]), Distributions.Uniform{Float64}(a=1.0, b=2.0), true)
+DistributedVariation (flipped):
+  location: config
+  target: cell_definitions/cell_definition:name:default/phenotype/death/model:code:101/death_rate
+  distribution: Distributions.Uniform{Float64}(a=1.0, b=2.0)
 """
 struct DistributedVariation <: ElementaryVariation
     location::Symbol
@@ -139,9 +168,16 @@ end
 
 target(ev::ElementaryVariation) = ev.target
 location(ev::ElementaryVariation) = ev.location
-columnName(ev::ElementaryVariation) = target(ev).xml_path |> xmlPathToColumnName
+columnName(ev::ElementaryVariation) = target(ev) |> columnName
 
 Base.length(::DistributedVariation) = -1 #! set to -1 to be a convention
+
+function Base.show(io::IO, ::MIME"text/plain", dv::DistributedVariation)
+    println(io, "DistributedVariation" * (dv.flip ? " (flipped)" : "") * ":")
+    println(io, "  location: $(dv.location)")
+    println(io, "  target: $(columnName(dv))")
+    println(io, "  distribution: $(dv.distribution)")
+end
 
 """
     UniformDistributedVariation(xml_path::Vector{<:AbstractString}, lb::T, ub::T) where {T<:Real}
@@ -180,9 +216,11 @@ _values(dv::DistributedVariation, cdf::Real) = _values(dv, [cdf])
 _values(::DistributedVariation) = error("A cdf must be provided for a DistributedVariation.")
 _values(ev::ElementaryVariation, cdf) = error("values not defined for $(typeof(ev)) with type of cdf = $(typeof(cdf))")
 
-function dataType(discrete_variation::DiscreteVariation)
-    return typeof(discrete_variation).parameters[1] #! typeof(discrete_variation).parameters[1] is the type parameter T in the definition of DiscreteVariation{T}
-end
+dataType(::DiscreteVariation{T}) where T = T
+
+# function dataType(discrete_variation::DiscreteVariation)
+#     return typeof(discrete_variation).parameters[1] #! typeof(discrete_variation).parameters[1] is the type parameter T in the definition of DiscreteVariation{T}
+# end
 
 function dataType(dv::DistributedVariation)
     return eltype(dv.distribution)
@@ -290,6 +328,30 @@ function Base.length(cv::CoVariation)
     return length(cv.variations[1])
 end
 
+function Base.show(io::IO, ::MIME"text/plain", cv::CoVariation)
+    data_type = typeof(cv).parameters[1]
+    data_type_str = string(data_type)
+    n = length(data_type_str)
+    println(io, "CoVariation ($(data_type_str)):")
+    println(io, "------------" * "-"^(n+3))
+    locations = location(cv)
+    unique_locations = unique(locations)
+    for loc in unique_locations
+        println(io, "  Location: $loc")
+        loc_inds = findall(isequal(loc), locations)
+        for ind in loc_inds
+            println(io, "  Variation $ind:")
+            println(io, "    target: $(columnName(cv.variations[ind]))")
+            if data_type == DiscreteVariation
+                println(io, "    values: $(_values(cv.variations[ind]))")
+            elseif data_type == DistributedVariation
+                println(io, "    distribution: $(cv.variations[ind].distribution)")
+                println(io, "    flip: $(cv.variations[ind].flip)")
+            end
+        end
+    end
+end
+
 ################## Variation Dimension Functions ##################
 
 """
@@ -307,7 +369,7 @@ evs = ElementaryVariation[]
 addDomainVariationDimension!(evs, (x_min=-78, xmax=78, min_y=-30, maxy=[30, 60], z_max=10))
 """
 function addDomainVariationDimension!(evs::Vector{<:ElementaryVariation}, domain::NamedTuple)
-    dim_chars = ["z", "y", "x"]
+    dim_chars = ["z", "y", "x"] #! put x at the end to avoid prematurely matching with "max"
     for (tag, value) in pairs(domain)
         tag = String(tag)
         if contains(tag, "min")
@@ -385,7 +447,7 @@ function addColumns(evs::Vector{<:ElementaryVariation}, location::Symbol, db_col
     id_column_name = locationVarIDName(location)
     column_names = queryToDataFrame("PRAGMA table_info($(table_name));"; db=db_columns) |> x->x[!,:name]
     filter!(x -> x != id_column_name, column_names)
-    varied_column_names = [xmlPathToColumnName(xp.xml_path) for xp in xps]
+    varied_column_names = [columnName(xp.xml_path) for xp in xps]
 
     is_new_column = [!(varied_column_name in column_names) for varied_column_name in varied_column_names]
     if any(is_new_column)

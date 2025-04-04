@@ -126,3 +126,9 @@ gsa_sampling = run(method, n_replicates, reference, avs)
 method = RBD(5)
 gsa_sampling = run(method, n_replicates, reference, avs)
 @test size(gsa_sampling.monad_ids_df) == (5, 2)
+
+# print tests
+Base.show(stdout, MIME"text/plain"(), moat_sampling)
+Base.show(stdout, MIME"text/plain"(), sobol_sampling)
+Base.show(stdout, MIME"text/plain"(), rbd_sampling)
+

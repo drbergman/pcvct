@@ -142,6 +142,7 @@ jobs:
         run: |
           using Pkg
           Pkg.develop(PackageSpec(path=pwd()))
+          Pkg.add("PairCorrelationFunction")
           Pkg.instantiate()
           
       - uses: julia-actions/julia-buildpkg@v1
@@ -153,8 +154,10 @@ jobs:
           
       - name: Run doctests
         shell: julia --project=docs --color=yes {0}
+        env:
+          JULIA_DEBUG: Documenter
         run: |
           using Documenter: DocMeta, doctest
-          using pcvct
-          DocMeta.setdocmeta!(pcvct, :DocTestSetup, :(using pcvct); recursive=true)
+          using pcvct, PairCorrelationFunction
+          DocMeta.setdocmeta!(pcvct, :DocTestSetup, :(using pcvct, PairCorrelationFunction); recursive=true)
           doctest(pcvct)

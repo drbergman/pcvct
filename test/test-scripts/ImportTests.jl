@@ -23,7 +23,7 @@ push!(discrete_variations, DiscreteVariation(["overall","max_time"], 12.0))
 push!(discrete_variations, DiscreteVariation(["save","full_data","interval"], 6.0))
 push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], 6.0))
 
-sampling_from_import = createTrial(inputs, discrete_variations; n_replicates=1) #! save this for PopulationTests.jl
+sampling_from_import = createTrial(inputs, discrete_variations; n_replicates=1) #! save this for PopulationTests.jl and GraphsTests.jl, etc.
 
 out = run(sampling_from_import; force_recompile=false)
 

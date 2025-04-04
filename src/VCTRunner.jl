@@ -232,6 +232,16 @@ struct PCVCTOutput
     n_success::Int
 end
 
+function Base.show(io::IO, ::MIME"text/plain", output::PCVCTOutput)
+    println(io, "PCVCT Output")
+    println(io, "------------")
+    show(io, MIME"text/plain"(), output.trial)
+    println(io, "")
+    println(io, "In completing this trial:")
+    println(io, "  - Scheduled $(output.n_scheduled) simulations.")
+    println(io, "  - Successfully completed $(output.n_success) simulations.")
+end
+
 getSimulationIDs(output::PCVCTOutput) = getSimulationIDs(output.trial)
 
 """

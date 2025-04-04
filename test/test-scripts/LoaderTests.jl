@@ -15,7 +15,7 @@ push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], 6.0))
 
 out = run(inputs, discrete_variations; use_previous=false)
 @test out.trial isa Simulation
-sequence = pcvct.PhysiCellSequence(out.trial.id; include_cells=true, include_substrates=true)
+sequence = PhysiCellSequence(out.trial.id; include_cells=true, include_substrates=true)
 
 seq_dict = getCellDataSequence(sequence, "elapsed_time_in_phase"; include_dead=true)
 
@@ -33,7 +33,7 @@ for direction in [:x, :y, :z, :any]
 end
 @test ismissing(motilityStatistics(pruned_simulation_id))
 
-@test ismissing(pcvct.PhysiCellSequence(pruned_simulation_id))
+@test ismissing(PhysiCellSequence(pruned_simulation_id))
 @test pcvct.pathToOutputXML(pruned_simulation_id, :initial) |> pcvct.getLabels |> isempty
 @test pcvct.pathToOutputXML(pruned_simulation_id, :initial) |> pcvct.getSubstrateNames |> isempty
 
@@ -53,27 +53,31 @@ pcvct.getLabels(snapshot)
 pcvct.getSubstrateNames(snapshot)
 pcvct.loadSubstrates!(sequence)
 pcvct.loadMesh!(sequence)
-snapshot = pcvct.PhysiCellSnapshot(1, 0)
-sequence = pcvct.PhysiCellSequence(Simulation(1))
+snapshot = PhysiCellSnapshot(1, 0)
+sequence = PhysiCellSequence(Simulation(1))
 getCellDataSequence(1, "position")
 getCellDataSequence(Simulation(1), "position")
 
 simulation = Simulation(monad)
 out = run(simulation; prune_options=PruneOptions(prune_mat=true))
 mat_pruned_simulation_id = out.trial.id
-pcvct.PhysiCellSnapshot(mat_pruned_simulation_id, 0; include_cells=true)
-pcvct.PhysiCellSnapshot(mat_pruned_simulation_id, 0; include_substrates=true)
-snapshot = pcvct.PhysiCellSnapshot(mat_pruned_simulation_id, 0)
+PhysiCellSnapshot(mat_pruned_simulation_id, 0; include_cells=true)
+PhysiCellSnapshot(mat_pruned_simulation_id, 0; include_substrates=true)
+snapshot = PhysiCellSnapshot(mat_pruned_simulation_id, 0)
 @test ismissing(pcvct.averageExtracellularSubstrate(snapshot))
 
-sequence = pcvct.PhysiCellSequence(mat_pruned_simulation_id; include_attachments=true, include_spring_attachments=true, include_neighbors=true)
-pcvct.loadAttachments!(sequence)
-pcvct.loadSpringAttachments!(sequence)
-pcvct.loadNeighbors!(sequence)
+sequence = PhysiCellSequence(mat_pruned_simulation_id; include_attachments=true, include_spring_attachments=true, include_neighbors=true)
+pcvct.loadGraph!(sequence, :attachments)
+pcvct.loadGraph!(sequence, :spring_attachments)
+pcvct.loadGraph!(sequence, :neighbors)
+
+Base.show(stdout, MIME"text/plain"(), snapshot)
+Base.show(stdout, MIME"text/plain"(), sequence)
+Base.show(stdout, MIME"text/plain"(), sequence.snapshots[1])
 
 simulation = Simulation(monad)
 out = run(simulation; prune_options=PruneOptions(prune_txt=true))
 txt_pruned_simulation_id = out.trial.id
-@test ismissing(pcvct.PhysiCellSnapshot(txt_pruned_simulation_id, 0; include_attachments=true))
-@test ismissing(pcvct.PhysiCellSnapshot(txt_pruned_simulation_id, 0; include_spring_attachments=true))
-@test ismissing(pcvct.PhysiCellSnapshot(txt_pruned_simulation_id, 0; include_neighbors=true))
+@test ismissing(PhysiCellSnapshot(txt_pruned_simulation_id, 0; include_attachments=true))
+@test ismissing(PhysiCellSnapshot(txt_pruned_simulation_id, 0; include_spring_attachments=true))
+@test ismissing(PhysiCellSnapshot(txt_pruned_simulation_id, 0; include_neighbors=true))

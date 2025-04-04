@@ -9,7 +9,7 @@ ests = pcvct.ExtracellularSubstrateTimeSeries(1)
 ests = pcvct.ExtracellularSubstrateTimeSeries(Simulation(1))
 
 @test ismissing(pcvct.AverageSubstrateTimeSeries(pruned_simulation_id))
-snapshot = pcvct.PhysiCellSnapshot(pruned_simulation_id, :initial)
+snapshot = PhysiCellSnapshot(pruned_simulation_id, :initial)
 @test ismissing(snapshot)
 @test ismissing(pcvct.ExtracellularSubstrateTimeSeries(pruned_simulation_id))
 
@@ -23,3 +23,6 @@ ests["time"]
 cell_types = keys(ests.data)
 ests[first(cell_types)]
 @test_throws ArgumentError ests["not_a_cell_type"]
+
+Base.show(stdout, MIME"text/plain"(), asts)
+Base.show(stdout, MIME"text/plain"(), ests)
