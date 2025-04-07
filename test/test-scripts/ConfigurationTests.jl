@@ -101,9 +101,9 @@ hashBorderPrint("SUCCESSFULLY VARIED CONFIG PARAMETERS!")
 
 discrete_variations = DiscreteVariation[]
 
-xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","max_response"]
+xml_path = rulePath("default", "cycle entry", "decreasing_signals", "max_response")
 push!(discrete_variations, DiscreteVariation(xml_path, [0.0, 1e-8]))
-xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","signal:name:pressure","half_max"]
+xml_path = rulePath("default", "cycle entry", "decreasing_signals", "signal:name:pressure", "half_max")
 push!(discrete_variations, DiscreteVariation(xml_path, [0.25, 0.75]))
 
 out = run(reference_monad, discrete_variations; n_replicates=n_replicates)
@@ -115,7 +115,7 @@ hashBorderPrint("SUCCESSFULLY VARIED RULESETS PARAMETERS!")
 discrete_variations = DiscreteVariation[]
 xml_path = pcvct.motilityPath(cell_type, "speed")
 push!(discrete_variations, DiscreteVariation(xml_path, [0.1, 1.0]))
-xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","signal:name:pressure","half_max"]
+xml_path = rulePath("default", "cycle entry", "decreasing_signals", "signal:name:pressure", "half_max")
 push!(discrete_variations, DiscreteVariation(xml_path, [0.3, 0.6]))
 
 out = run(reference_monad, discrete_variations; n_replicates=n_replicates)
@@ -136,3 +136,10 @@ out = run(reference_monad, discrete_variations; n_replicates=n_replicates)
 @test_nowarn pcvct.shortVariationName(:intracellular, "not_a_var")
 @test_nowarn pcvct.shortVariationName(:intracellular, "intracellular_variation_id")
 @test_throws ArgumentError pcvct.shortVariationName(:not_a_location, "not_a_var")
+
+
+xml_doc = pcvct.openXML(path_to_xml)
+xml_path = ["not", "a", "path"]
+@test_throws ArgumentError pcvct.retrieveElement(xml_doc, xml_path)
+
+pcvct.attackRatesPath(cell_type, "attack_rate:name:$(cell_type)")

@@ -4,7 +4,6 @@ export exportSimulation
 
 """
     exportSimulation(simulation_id::Integer[, export_folder::AbstractString])
-    exportSimulation(simulation::Simulation[, export_folder::AbstractString])
 
 Create a `user_project` folder from a simulation that can be loaded into PhysiCell.
 
@@ -12,14 +11,19 @@ Warning: not all features in drbergman/PhysiCell/latest/release are not supporte
 
 # Arguments
 - `simulation_id::Integer`: the id of the simulation to export
-- `simulation::Simulation`: the simulation to export
 - `export_folder::AbstractString`: the folder to export the simulation to. Default is the simulation output folder.
+
+# Returns
+- `export_folder::AbstractString`: the folder where the simulation was exported to
 """
 function exportSimulation(simulation_id::Integer, export_folder::AbstractString="$(joinpath(trialFolder("simulation", simulation_id), "UserProjectExport"))")
     simulation = Simulation(simulation_id)
     return exportSimulation(simulation, export_folder)
 end
 
+"""
+    exportSimulation(simulation::Simulation[, export_folder::AbstractString])
+"""
 function exportSimulation(simulation::Simulation, export_folder::AbstractString="$(joinpath(trialFolder(simulation), "UserProjectExport"))")
     success, physicell_version = prepareFolder(simulation, export_folder)
     if success
@@ -66,7 +70,7 @@ function prepareFolder(simulation::Simulation, export_folder::AbstractString)
     if row.rulesets_collection_id[1] != -1
         path_to_xml = joinpath(locationPath(:rulesets_collection, simulation), "rulesets_collection_variations", "rulesets_collection_variation_$(row.rulesets_collection_variation_id[1]).xml")
         path_to_csv = joinpath(export_folder, "config", "cell_rules.csv")
-        exportRulesToCSV(path_to_csv, path_to_xml)
+        exportCSVRules(path_to_csv, path_to_xml)
     end
 
     #! intracellulars
@@ -142,7 +146,8 @@ function exportIntracellular(simulation::Simulation, export_folder::AbstractStri
         intracellular_mapping[intracellular_id] = (intracellular_type, path_end)
     end
     
-    config_xml = openXML(joinpath(export_folder, "config", "PhysiCell_settings.xml"))
+    path_to_exported_config = joinpath(export_folder, "config", "PhysiCell_settings.xml")
+    config_xml = openXML(path_to_exported_config)
 
     cell_definitions_element = retrieveElement(xml_doc, ["cell_definitions"])
     for cell_definition_element in child_elements(cell_definitions_element)
@@ -158,13 +163,11 @@ function exportIntracellular(simulation::Simulation, export_folder::AbstractStri
         set_attribute(config_cell_def_intracellular_element, "type", intracellular_mapping[intracellular_id][1])
 
         #! get (or create) the sbml_filename element
-        sbml_filename_element = find_element(config_cell_def_intracellular_element, "sbml_filename")
-        if isnothing(sbml_filename_element)
-            sbml_filename_element = new_child(config_cell_def_intracellular_element, "sbml_filename")
-        end
+        sbml_filename_element = makeXMLPath(config_cell_def_intracellular_element, "sbml_filename")
         set_content(sbml_filename_element, intracellular_mapping[intracellular_id][2])
     end
     
+    save_file(config_xml, path_to_exported_config)
     closeXML(config_xml)
     closeXML(xml_doc)
     return
@@ -250,23 +253,23 @@ function revertConfig(export_folder::AbstractString, physicell_version::Abstract
     xml_doc = openXML(path_to_config)
 
     #! output folder
-    folder_element = retrieveElement(xml_doc, ["save", "folder"])
+    folder_element = makeXMLPath(xml_doc, ["save", "folder"])
     set_content(folder_element, "output")
 
     #! ic substrate
-    substrate_ic_element = retrieveElement(xml_doc, ["microenvironment_setup", "options", "initial_condition"])
+    substrate_ic_element = makeXMLPath(xml_doc, ["microenvironment_setup", "options", "initial_condition"])
     using_substrate_ics = isfile(joinpath(path_to_config_folder, "substrates.csv"))
     set_attributes(substrate_ic_element; type="csv", enabled=string(using_substrate_ics))
-    filename_element = find_element(substrate_ic_element, "filename")
+    filename_element = makeXMLPath(substrate_ic_element, "filename")
     set_content(filename_element, joinpath(".", "config", "substrates.csv"))
 
     #! ic cells
-    cell_ic_element = retrieveElement(xml_doc, ["initial_conditions", "cell_positions"])
+    cell_ic_element = makeXMLPath(xml_doc, ["initial_conditions", "cell_positions"])
     using_cell_ics = isfile(joinpath(path_to_config_folder, "cells.csv"))
-    set_attributes(cell_ic_element; type="csv", enabled=string(using_substrate_ics))
-    folder_element = find_element(cell_ic_element, "folder")
-    set_content(filename_element, joinpath(".", "config"))
-    filename_element = find_element(cell_ic_element, "filename")
+    set_attributes(cell_ic_element; type="csv", enabled=string(using_cell_ics))
+    folder_element = makeXMLPath(cell_ic_element, "folder")
+    set_content(folder_element, joinpath(".", "config"))
+    filename_element = makeXMLPath(cell_ic_element, "filename")
     set_content(filename_element, "cells.csv")
 
     #! ic ecm
@@ -276,19 +279,19 @@ function revertConfig(export_folder::AbstractString, physicell_version::Abstract
     end
 
     #! ic dcs
-    dc_ic_element = retrieveElement(xml_doc, ["microenvironment_setup", "options", "dirichlet_nodes"])
+    dc_ic_element = makeXMLPath(xml_doc, ["microenvironment_setup", "options", "dirichlet_nodes"])
     using_dc_ics = isfile(joinpath(path_to_config_folder, "dcs.csv"))
     set_attributes(dc_ic_element; type="csv", enabled=string(using_dc_ics))
-    filename_element = find_element(dc_ic_element, "filename")
+    filename_element = makeXMLPath(dc_ic_element, "filename")
     set_content(filename_element, joinpath("config", "dcs.csv"))
 
     #! rulesets
-    rules_element = retrieveElement(xml_doc, ["cell_rules", "rulesets", "ruleset"])
+    rules_element = makeXMLPath(xml_doc, ["cell_rules", "rulesets", "ruleset"])
     using_rules = isfile(joinpath(path_to_config_folder, "cell_rules.csv"))
-    set_attributes(rules_element; type="csv", enabled=string(using_rules))
-    folder_element = find_element(rules_element, "folder")
-    set_content(filename_element, joinpath(".", "config"))
-    filename_element = find_element(rules_element, "filename")
+    set_attributes(rules_element; protocol="CBHG", version="3.0", format="csv", enabled=string(using_rules))
+    folder_element = makeXMLPath(rules_element, "folder")
+    set_content(folder_element, joinpath(".", "config"))
+    filename_element = makeXMLPath(rules_element, "filename")
     set_content(filename_element, "cell_rules.csv")
 
     #! intracellulars
@@ -300,22 +303,11 @@ function revertConfig(export_folder::AbstractString, physicell_version::Abstract
 end
 
 function setECMSetupElement(xml_doc::XMLDocument)
-    ecm_setup_element = retrieveElement(xml_doc, ["microenvironment_setup", "ecm_setup"])
-    if isnothing(ecm_setup_element)
-        xml_root = root(xml_doc)
-        microenvironment_setup_element = find_element(xml_root, "microenvironment_setup")
-        ecm_setup_element = new_child(microenvironment_setup_element, "ecm_setup")
-    end
+    ecm_setup_element = makeXMLPath(xml_doc, ["microenvironment_setup", "ecm_setup"])
     set_attributes(ecm_setup_element; enabled="true", format="csv")
-    folder_element = find_element(ecm_setup_element, "folder")
-    if isnothing(folder_element)
-        folder_element = new_child(ecm_setup_element, "folder")
-    end
+    folder_element = makeXMLPath(ecm_setup_element, "folder")
     set_content(folder_element, joinpath(".", "config"))
-    filename_element = find_element(ecm_setup_element, "filename")
-    if isnothing(filename_element)
-        filename_element = new_child(ecm_setup_element, "filename")
-    end
+    filename_element = makeXMLPath(ecm_setup_element, "filename")
     set_content(filename_element, "ecm.csv")
     return
 end
@@ -327,11 +319,11 @@ function revertCustomModules(export_folder::AbstractString, physicell_version::A
     return success
 end
 
-function revertCustomHeader(path_to_custom_modules::AbstractString, physicell_version::AbstractString)
+function revertCustomHeader(::AbstractString, ::AbstractString)
     return true #! nothing to do as of yet for the custom header
 end
 
-function revertCustomCPP(path_to_custom_modules::AbstractString, physicell_version::AbstractString)
+function revertCustomCPP(path_to_custom_modules::AbstractString, ::AbstractString)
     path_to_custom_cpp = joinpath(path_to_custom_modules, "custom.cpp")
     lines = readlines(path_to_custom_cpp)
     idx = findfirst(x -> contains(x, "load_initial_cells();"), lines)

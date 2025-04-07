@@ -233,7 +233,7 @@ function Base.show(io::IO, ::MIME"text/plain", sequence::PhysiCellSequence)
     println(io, "  Mesh: $(meshInfo(sequence))")
 end
 
-pathToOutputFolder(simulation_id::Integer) = return joinpath(trialFolder("simulation", simulation_id), "output")
+pathToOutputFolder(simulation_id::Integer) = joinpath(trialFolder("simulation", simulation_id), "output")
 pathToOutputFileBase(simulation_id::Integer, index::Union{Integer,Symbol}) = joinpath(pathToOutputFolder(simulation_id), indexToFilename(index))
 pathToOutputFileBase(snapshot::PhysiCellSnapshot) = pathToOutputFileBase(snapshot.simulation_id, snapshot.index)
 pathToOutputXML(simulation_id::Integer, index::Union{Integer,Symbol}) = "$(pathToOutputFileBase(simulation_id, index)).xml"

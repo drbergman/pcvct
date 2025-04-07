@@ -26,6 +26,7 @@ end
 
 function reinitializeDatabase()
     if !initialized
+        println("Database not initialized. Initialize the database first before re-initializing. `initializeModelManager()` will do this.")
         return
     end
     global initialized = false

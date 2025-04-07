@@ -59,16 +59,16 @@ DiscreteVariation (Float64):
   values: [1440.0, 2880.0]
 ```
 ```jldoctest
-xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","max_response"]
+xml_path = rulePath("default", "cycle entry", "decreasing_signals", "max_response")
 DiscreteVariation(xml_path, 0)
 # output
 DiscreteVariation (Int64):
   location: rulesets_collection
-  target: hypothesis_ruleset:name:default/behavior:name:cycle entry/decreasing_signals/max_response
+  target: behavior_ruleset:name:default/behavior:name:cycle entry/decreasing_signals/max_response
   values: [0]
 ```
 ```jldoctest
-xml_path = ["cell_patches:name:default","patch_collection:type:disc","patch:ID:1","x0"]
+xml_path = icCellsPath("default", "disc", 1, "x0")
 DiscreteVariation(xml_path, [0.0, 100.0])
 # output
 DiscreteVariation (Float64):
@@ -77,12 +77,12 @@ DiscreteVariation (Float64):
   values: [0.0, 100.0]
 ```
 ```jldoctest
-xml_path = ["layer:ID:2", "patch:ID:1", "density"]
+xml_path = icECMPath(2, "ellipse", 1, "density")
 DiscreteVariation(xml_path, [0.1, 0.2])
 # output
 DistributedVariation:
   location: ic_ecm
-  target: layer:ID:2/patch:ID:1/density
+  target: layer:ID:2/patch_collection:type:ellipse/patch:ID:1/density
   values: [0.1, 0.2]
 """
 struct DiscreteVariation{T} <: ElementaryVariation
@@ -133,7 +133,7 @@ Alternatively, users can use the [`UniformDistributedVariation`](@ref) and [`Nor
 ```jldoctest
 using Distributions
 d = Uniform(1, 2)
-DistributedVariation([pcvct.apoptosisPath("default"); "death_rate"], d)
+DistributedVariation(pcvct.apoptosisPath("default", "death_rate"), d)
 # output
 DistributedVariation:
   location: config
@@ -144,7 +144,7 @@ DistributedVariation:
 using Distributions
 d = Uniform(1, 2)
 flip = true # the cdf on this variation will decrease from 1 to 0 as the value increases from 1 to 2
-DistributedVariation([pcvct.necrosisPath("default"); "death_rate"], d, flip)
+DistributedVariation(pcvct.necrosisPath("default", "death_rate"), d, flip)
 # output
 DistributedVariation (flipped):
   location: config
@@ -259,7 +259,7 @@ end
 cdf(ev::ElementaryVariation, ::Real) = error("cdf not defined for $(typeof(ev))")
 
 function variationLocation(xp::XMLPath)
-    if startswith(xp.xml_path[1], "hypothesis_ruleset:name:")
+    if startswith(xp.xml_path[1], "behavior_ruleset:name:")
         return :rulesets_collection
     elseif xp.xml_path[1] == "intracellulars"
         return :intracellular

@@ -1,3 +1,5 @@
+using PhysiCellXMLRules
+
 function upgradePCVCT(from_version::VersionNumber, to_version::VersionNumber, auto_upgrade::Bool)
     println("Upgrading pcvct from version $(from_version) to $(to_version)...")
     milestone_versions = [v"0.0.1", v"0.0.3", v"0.0.10", v"0.0.11", v"0.0.13", v"0.0.15"]
@@ -53,7 +55,7 @@ function upgradeToV0_0_1(::Bool)
             filter!(x -> x != "rulesets_collection_variation_id", column_names)
             path_to_xml = joinpath(path_to_rulesets_collection_folder, "base_rulesets.xml")
             if !isfile(path_to_xml)
-                writeRules(path_to_xml, joinpath(path_to_rulesets_collection_folder, "base_rulesets.csv"))
+                writeXMLRules(path_to_xml, joinpath(path_to_rulesets_collection_folder, "base_rulesets.csv"))
             end
             xml_doc = openXML(path_to_xml)
             for column_name in column_names

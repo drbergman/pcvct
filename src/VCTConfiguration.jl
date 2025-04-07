@@ -1,4 +1,6 @@
-using PhysiCellCellCreator
+using PhysiCellXMLRules, PhysiCellCellCreator, PhysiCellECMCreator
+
+export rulePath, icCellsPath, icECMPath
 
 ################## XML Functions ##################
 
@@ -54,25 +56,13 @@ function updateField(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString}, n
     return nothing
 end
 
-function updateField(xml_doc::XMLDocument, xml_path_and_value::Vector{Any})
-    return updateField(xml_doc, xml_path_and_value[1:end-1],xml_path_and_value[end])
-end
-
 function columnName(xml_path::Vector{<:AbstractString})
     return join(xml_path, "/")
 end
 
 columnNameToXMLPath(column_name::String) = split(column_name, "/")
 
-function updateFieldsFromCSV(xml_doc::XMLDocument, path_to_csv::String)
-    df = CSV.read(path_to_csv, DataFrame; header=false, silencewarnings=true, types=String)
-    for i = axes(df,1)
-        df[i, :] |> Vector |> x -> filter!(!ismissing, x) |> x -> updateField(xml_doc, x)
-    end
-end
-
-function makeXMLPath(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString})
-    current_element = root(xml_doc)
+function makeXMLPath(current_element::XMLElement, xml_path::AbstractVector{<:AbstractString})
     for path_element in xml_path
         if !occursin(":",path_element)
             child_element = find_element(current_element, path_element)
@@ -93,8 +83,15 @@ function makeXMLPath(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString})
         end
         current_element = child_element
     end
-    return nothing
+    return current_element
 end
+
+function makeXMLPath(xml_doc::XMLDocument, xml_path::AbstractVector{<:AbstractString})
+    current_element = root(xml_doc)
+    return makeXMLPath(current_element, xml_path)
+end
+
+makeXMLPath(x, xml_path::AbstractString) = makeXMLPath(x, [xml_path])
 
 ################## Configuration Functions ##################
 
@@ -146,7 +143,7 @@ function prepareBaseRulesetsCollectionFile(input_folder::InputFolder)
     path_to_base_xml = joinpath(path_to_rulesets_collection_folder, "base_rulesets.xml")
     if !isfile(path_to_base_xml)
         #! this could happen if the rules are not being varied (so no call to addRulesetsVariationsColumns) and then a sim runs without the base_rulesets.xml being created yet
-        writeRules(path_to_base_xml, joinpath(path_to_rulesets_collection_folder, "base_rulesets.csv"))
+        writeXMLRules(path_to_base_xml, joinpath(path_to_rulesets_collection_folder, "base_rulesets.csv"))
     end
     return path_to_base_xml
 end
@@ -221,40 +218,122 @@ end
 ################## XML Path Helper Functions ##################
 
 #! can I define my own macro that takes all these functions and adds methods for FN(cell_def, node::String) and FN(cell_def, path_suffix::Vector{String})??
-function cellDefinitionPath(cell_definition::String)::Vector{String}
-    return ["cell_definitions", "cell_definition:name:$(cell_definition)"]
+function cellDefinitionPath(cell_definition::String, path_elements::Vararg{<:AbstractString})::Vector{String}
+    return ["cell_definitions"; "cell_definition:name:$(cell_definition)"; path_elements...]
 end
 
-function phenotypePath(cell_definition::String)::Vector{String}
-    return [cellDefinitionPath(cell_definition); "phenotype"]
+function phenotypePath(cell_definition::String, path_elements::Vararg{<:AbstractString})::Vector{String}
+    return cellDefinitionPath(cell_definition, "phenotype", path_elements...)
 end
 
-cyclePath(cell_definition::String)::Vector{String} = [phenotypePath(cell_definition); "cycle"]
-deathPath(cell_definition::String)::Vector{String} = [phenotypePath(cell_definition); "death"]
-apoptosisPath(cell_definition::String)::Vector{String} = [deathPath(cell_definition); "model:code:100"]
-necrosisPath(cell_definition::String)::Vector{String} = [deathPath(cell_definition); "model:code:101"]
+cyclePath(cell_definition::String, path_elements::Vararg{<:AbstractString})::Vector{String} = phenotypePath(cell_definition, "cycle", path_elements...)
+deathPath(cell_definition::String, path_elements::Vararg{<:AbstractString})::Vector{String} = phenotypePath(cell_definition, "death", path_elements...)
+apoptosisPath(cell_definition::String, path_elements::Vararg{<:AbstractString})::Vector{String} = deathPath(cell_definition, "model:code:100", path_elements...)
+necrosisPath(cell_definition::String, path_elements::Vararg{<:AbstractString})::Vector{String} = deathPath(cell_definition, "model:code:101", path_elements...)
 
-motilityPath(cell_definition::String)::Vector{String} = [phenotypePath(cell_definition); "motility"]
-motilityPath(cell_definition::String, field_name::String)::Vector{String} = [motilityPath(cell_definition); field_name]
+motilityPath(cell_definition::String, path_elements::Vararg{<:AbstractString})::Vector{String} = phenotypePath(cell_definition, "motility", path_elements...)
+cellInteractionsPath(cell_definition::String, path_elements::Vararg{<:AbstractString})::Vector{String} = phenotypePath(cell_definition, "cell_interactions", path_elements...)
 
-cellInteractionsPath(cell_definition::String)::Vector{String} = [phenotypePath(cell_definition); "cell_interactions"]
-cellInteractionsPath(cell_definition::String, field_name::String)::Vector{String} = [cellInteractionsPath(cell_definition); field_name]
-
-attackRatesPath(cell_definition::String)::Vector{String} = cellInteractionsPath(cell_definition, "attack_rates")
-attackRatesPath(cell_definition::String, target_name::String)::Vector{String} = [attackRatesPath(cell_definition); "attack_rate:name:$(target_name)"]
-
-customDataPath(cell_definition::String)::Vector{String} = [cellDefinitionPath(cell_definition); "custom_data"]
-
-function customDataPath(cell_definition::String, field_name::String)::Vector{String}
-    return [customDataPath(cell_definition); field_name]
+function attackRatesPath(cell_definition::String, path_elements::Vararg{<:AbstractString})::Vector{String}
+    if isempty(path_elements)
+        return cellInteractionsPath(cell_definition, "attack_rates")
+    end
+    if contains(path_elements[1], ":")
+        return cellInteractionsPath(cell_definition, "attack_rates", path_elements...)
+    end
+    return cellInteractionsPath(cell_definition, "attack_rates", "attack_rate:name:$(path_elements[1])", path_elements[2:end]...)
 end
 
-function userParameterPath(field_name::String)::Vector{String}
-    return ["user_parameters"; field_name]
+customDataPath(cell_definition::String, path_elements::Vararg{<:AbstractString})::Vector{String} = cellDefinitionPath(cell_definition, "custom_data", path_elements...)
+
+userParameterPath(field_name::String)::Vector{String} = ["user_parameters"; field_name]
+
+############# XML Path Helper Functions (non-config) #############
+
+"""
+    rulePath(cell_definition::AbstractString, behavior::AbstractString, path_elements::Vararg{<:AbstractString})
+
+Return the XML path to the rule for the given cell definition and behavior.
+
+Optionally, add more path_elements to the path as extra arguments.
+
+# Example
+```jldoctest
+julia> rulePath("T cell", "attack rate")
+2-element Vector{String}:
+ "behavior_ruleset:name:T cell"
+ "behavior:name:attack rate"
+```
+```jldoctest
+julia> rulePath("cancer", "cycle entry", "increasing_signals", "signal:name:oxygen", "half_max")
+5-element Vector{String}:
+ "behavior_ruleset:name:cancer"
+ "behavior:name:cycle entry"
+ "increasing_signals"
+ "signal:name:oxygen"
+ "half_max"
+```
+"""
+function rulePath(cell_definition::AbstractString, behavior::AbstractString, path_elements::Vararg{<:AbstractString})::Vector{String}
+    return ["behavior_ruleset:name:$(cell_definition)"; "behavior:name:$(behavior)"; path_elements...]
 end
 
-function initialConditionPath()
-    return ["initial_conditions"; "cell_positions"; "filename"]
+"""
+    icCellsPath(cell_definition::AbstractString, patch_type::AbstractString, patch_id path_elements::Vararg{<:AbstractString})
+
+Return the XML path to the IC cell patch for the given cell definition, patch type, and patch ID.
+Optionally, add more path_elements to the path as extra arguments.
+
+# Example
+```jldoctest
+julia> icCellsPath("default", "disc", 1)
+3-element Vector{String}:
+ "cell_patches:name:default"
+ "patch_collection:type:disc"
+ "patch:ID:1"
+```
+```jldoctest
+julia> icCellsPath("default", "disc", 1, "x0")
+4-element Vector{String}:
+ "cell_patches:name:default"
+ "patch_collection:type:disc"
+ "patch:ID:1"
+ "x0"
+```
+"""
+function icCellsPath(cell_definition::String, patch_type::String, patch_id, path_elements::Vararg{<:AbstractString})::Vector{String}
+    supported_patch_types = PhysiCellCellCreator.supportedPatchTypes()
+    @assert patch_type in supported_patch_types "IC Cell patch_type must be one of the available patch types, i.e., in $(supported_patch_types). Got $(patch_type)"
+    return ["cell_patches:name:$(cell_definition)"; "patch_collection:type:$(patch_type)"; "patch:ID:$(patch_id)"; path_elements...]
+end
+
+"""
+    icECMPath(layer_id::Int, patch_type::AbstractString, patch_id, path_elements::Vararg{<:AbstractString})
+
+Return the XML path to the IC ECM patch for the given layer_id, patch_type, and patch_id.
+Optionally, add more path_elements to the path as extra arguments.
+
+# Example
+```jldoctest
+julia> icECMPath(2, "ellipse", 1)
+3-element Vector{String}:
+ "layer:ID:2"
+ "patch_collection:type:ellipse"
+ "patch:ID:1"
+```
+```jldoctest
+julia> icECMPath(2, "elliptical_disc", 1, "density")
+4-element Vector{String}:
+ "layer:ID:2"
+ "patch_collection:type:elliptical_disc"
+ "patch:ID:1"
+ "density"
+```
+"""
+function icECMPath(layer_id, patch_type::AbstractString, patch_id, path_elements::Vararg{<:AbstractString})::Vector{String}
+    supported_patch_types = PhysiCellECMCreator.supportedPatchTypes()
+    @assert patch_type in supported_patch_types "IC ECM patch_type must be one of the available patch types, i.e., in $(supported_patch_types). Got $(patch_type)"
+    return ["layer:ID:$(layer_id)"; "patch_collection:type:$(patch_type)"; "patch:ID:$(patch_id)"; path_elements...]
 end
 
 ################## Simplify Name Functions ##################
@@ -316,10 +395,8 @@ end
 function shortRulesetsVariationName(name::String)
     if name == "rulesets_collection_variation_id"
         return shortLocationVariationID(String, "rulesets_collection")
-    elseif startswith(name, "hypothesis_ruleset")
-        return getRuleParameterName(name)
     else
-        return name
+        return getRuleParameterName(name)
     end
 end
 
@@ -334,20 +411,16 @@ end
 function shortICCellVariationName(name::String)
     if name == "ic_cell_variation_id"
         return shortLocationVariationID(String, "ic_cell")
-    elseif startswith(name, "cell_patches")
-        return getICCellParameterName(name)
     else
-        return name
+        return getICCellParameterName(name)
     end
 end
 
 function shortICECMVariationName(name::String)
     if name == "ic_ecm_variation_id"
         return shortLocationVariationID(String, "ic_ecm")
-    elseif startswith(name, "layer")
-        return getICECMParameterName(name)
     else
-        return name
+        return getICECMParameterName(name)
     end
 end
 
@@ -361,12 +434,11 @@ function getCellParameterName(column_name::String)
             break
         elseif contains(component, ":code:")
             target_code = split(component, ":")[3]
+            @assert target_code in ["100", "101"] "Unknown code in xml path: $(target_code)"
             if target_code == "100"
                 target_name = "apop"
-            elseif target_code == "101"
-                target_name = "necr"
             else
-                throw(ArgumentError("Unknown code in xml path: $(target_code)"))
+                target_name = "necr"
             end
             break
         end
@@ -379,6 +451,7 @@ function getCellParameterName(column_name::String)
 end
 
 function getRuleParameterName(name::String)
+    @assert startswith(name, "behavior_ruleset") "'name' for a rulesets variation name must start with 'behavior_ruleset'. Got $(name)"
     xml_path = columnNameToXMLPath(name)
     cell_type = split(xml_path[1], ":")[3]
     behavior = split(xml_path[2], ":")[3]
@@ -394,6 +467,7 @@ function getRuleParameterName(name::String)
 end
 
 function getICCellParameterName(name::String)
+    @assert startswith(name, "cell_patches") "'name' for a cell variation name must start with 'cell_patches'. Got $(name)"
     xml_path = columnNameToXMLPath(name)
     cell_type = split(xml_path[1], ":")[3]
     patch_type = split(xml_path[2], ":")[3]
@@ -403,6 +477,7 @@ function getICCellParameterName(name::String)
 end
 
 function getICECMParameterName(name::String)
+    @assert startswith(name, "layer") "'name' for a ecm variation name must start with 'layer'. Got $(name)"
     xml_path = columnNameToXMLPath(name)
     layer_id = split(xml_path[1], ":")[3]
     patch_type = split(xml_path[2], ":")[3]
