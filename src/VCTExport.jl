@@ -263,7 +263,7 @@ function revertConfig(export_folder::AbstractString, physicell_version::Abstract
     #! ic cells
     cell_ic_element = retrieveElement(xml_doc, ["initial_conditions", "cell_positions"])
     using_cell_ics = isfile(joinpath(path_to_config_folder, "cells.csv"))
-    set_attributes(cell_ic_element; type="csv", enabled=string(using_substrate_ics))
+    set_attributes(cell_ic_element; type="csv", enabled=string(using_cell_ics))
     folder_element = find_element(cell_ic_element, "folder")
     set_content(filename_element, joinpath(".", "config"))
     filename_element = find_element(cell_ic_element, "filename")
