@@ -59,3 +59,17 @@ out = run(inputs, dv)
 @test out.trial isa Simulation
 export_folder = exportSimulation(out.trial.id)
 export_test(export_folder)
+
+# export with intracellulars
+simulation_id = pcvct_output_intracellular |> getSimulationIDs |> first
+path_to_exported_folder = exportSimulation(simulation_id, "IntracellularTestExport")
+path_to_xml = joinpath(path_to_exported_folder, "config", "PhysiCell_settings.xml")
+@test isfile(path_to_xml)
+xml_doc = parse_file(path_to_xml)
+path_to_intracellular = ["cell_definitions", "cell_definition:name:default", "phenotype", "intracellular"]
+intracellular_element = pcvct.retrieveElement(xml_doc, path_to_intracellular)
+@test attribute(intracellular_element, "type") == "roadrunner"
+sbml_filename_element = find_element(intracellular_element, "sbml_filename")
+@test !isnothing(sbml_filename_element)
+filename = content(sbml_filename_element)
+@test isfile(joinpath(path_to_exported_folder, filename))

@@ -4,7 +4,6 @@ export exportSimulation
 
 """
     exportSimulation(simulation_id::Integer[, export_folder::AbstractString])
-    exportSimulation(simulation::Simulation[, export_folder::AbstractString])
 
 Create a `user_project` folder from a simulation that can be loaded into PhysiCell.
 
@@ -12,14 +11,19 @@ Warning: not all features in drbergman/PhysiCell/latest/release are not supporte
 
 # Arguments
 - `simulation_id::Integer`: the id of the simulation to export
-- `simulation::Simulation`: the simulation to export
 - `export_folder::AbstractString`: the folder to export the simulation to. Default is the simulation output folder.
+
+# Returns
+- `export_folder::AbstractString`: the folder where the simulation was exported to
 """
 function exportSimulation(simulation_id::Integer, export_folder::AbstractString="$(joinpath(trialFolder("simulation", simulation_id), "UserProjectExport"))")
     simulation = Simulation(simulation_id)
     return exportSimulation(simulation, export_folder)
 end
 
+"""
+    exportSimulation(simulation::Simulation[, export_folder::AbstractString])
+"""
 function exportSimulation(simulation::Simulation, export_folder::AbstractString="$(joinpath(trialFolder(simulation), "UserProjectExport"))")
     success, physicell_version = prepareFolder(simulation, export_folder)
     if success
@@ -142,7 +146,8 @@ function exportIntracellular(simulation::Simulation, export_folder::AbstractStri
         intracellular_mapping[intracellular_id] = (intracellular_type, path_end)
     end
     
-    config_xml = openXML(joinpath(export_folder, "config", "PhysiCell_settings.xml"))
+    path_to_exported_config = joinpath(export_folder, "config", "PhysiCell_settings.xml")
+    config_xml = openXML(path_to_exported_config)
 
     cell_definitions_element = retrieveElement(xml_doc, ["cell_definitions"])
     for cell_definition_element in child_elements(cell_definitions_element)
@@ -165,6 +170,7 @@ function exportIntracellular(simulation::Simulation, export_folder::AbstractStri
         set_content(sbml_filename_element, intracellular_mapping[intracellular_id][2])
     end
     
+    save_file(config_xml, path_to_exported_config)
     closeXML(config_xml)
     closeXML(xml_doc)
     return
