@@ -19,7 +19,7 @@ pcvct will look for these in the environment variables `PCVCT_PYTHON_PATH` and `
 function runStudio(simulation_id::Int; python_path::Union{Missing,String}=path_to_python, studio_path::Union{Missing,String}=path_to_studio)
     resolveStudioGlobals(python_path, studio_path)
     path_to_temp_xml, path_to_input_rules = setUpStudioInputs(simulation_id)
-    out = executeStudio(path_to_python, path_to_studio, path_to_temp_xml, path_to_input_rules)
+    out = executeStudio(path_to_python, path_to_studio, path_to_temp_xml)
     cleanUpStudioInputs(path_to_temp_xml, path_to_input_rules)
     if out isa Exception
         throw(out)
@@ -76,6 +76,8 @@ function setUpStudioInputs(simulation_id::Int)
 
         updateField(xml_doc, ["cell_rules", "rulesets", "ruleset", "folder"], path_to_output)
         updateField(xml_doc, ["cell_rules", "rulesets", "ruleset", "filename"], input_rules_file)
+    else
+        path_to_input_rules = nothing
     end
 
     path_to_temp_xml = joinpath(path_to_output, "PhysiCell_settings_temp.xml")
@@ -85,7 +87,7 @@ function setUpStudioInputs(simulation_id::Int)
     return path_to_temp_xml, path_to_input_rules
 end
 
-function executeStudio(python_path::String, studio_path::String, path_to_temp_xml::String, path_to_input_rules::String)
+function executeStudio(python_path::String, studio_path::String, path_to_temp_xml::String)
     cmd = `$python_path $(joinpath(studio_path, "bin", "studio.py")) -c $(path_to_temp_xml)`
     try
         run(pipeline(cmd; stdout=devnull, stderr=devnull))
@@ -103,7 +105,9 @@ function executeStudio(python_path::String, studio_path::String, path_to_temp_xm
     end
 end
 
-function cleanUpStudioInputs(path_to_temp_xml::String, path_to_input_rules::String)
+function cleanUpStudioInputs(path_to_temp_xml::String, path_to_input_rules)
     rm(path_to_temp_xml, force=true)
-    rm(path_to_input_rules, force=true)
+    if !isnothing(path_to_input_rules)
+        rm(path_to_input_rules, force=true)
+    end
 end
