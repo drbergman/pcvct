@@ -169,7 +169,14 @@ end
 function physicellVersion(physicell_version_id::Int)
     query = constructSelectQuery("physicell_versions", "WHERE physicell_version_id = $(physicell_version_id)")
     df = queryToDataFrame(query; is_row=true)
-    return ismissing(df.tag[1]) ? df.commit_hash[1] : df.tag[1]
+    if !ismissing(df.tag[1])
+        return df.tag[1]
+    end
+    #! untagged commit, so use the VERSION.txt file
+    path_to_version_file = joinpath(physicell_dir, "VERSION.txt")
+    @assert isfile(path_to_version_file) "PhysiCell version undefined. Not at a tagged commit AND file not found at $path_to_version_file"
+    lines = readlines(path_to_version_file)
+    return lines[1]
 end
 
 physicellVersion() = physicellVersion(current_physicell_version_id)

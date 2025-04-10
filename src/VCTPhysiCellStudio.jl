@@ -19,7 +19,7 @@ pcvct will look for these in the environment variables `PCVCT_PYTHON_PATH` and `
 function runStudio(simulation_id::Int; python_path::Union{Missing,String}=path_to_python, studio_path::Union{Missing,String}=path_to_studio)
     resolveStudioGlobals(python_path, studio_path)
     path_to_temp_xml, path_to_input_rules = setUpStudioInputs(simulation_id)
-    out = executeStudio(path_to_python, path_to_studio, path_to_temp_xml, path_to_input_rules)
+    out = executeStudio(path_to_python, path_to_studio, path_to_temp_xml)
     cleanUpStudioInputs(path_to_temp_xml, path_to_input_rules)
     if out isa Exception
         throw(out)
@@ -59,8 +59,8 @@ function setUpStudioInputs(simulation_id::Int)
 
     path_to_xml = joinpath(path_to_output, "PhysiCell_settings.xml")
     xml_doc = openXML(path_to_xml)
-    makeXMLPath(xml_doc, ["save", "folder"])
-    updateField(xml_doc, ["save", "folder"], path_to_output)
+    save_folder_element = makeXMLPath(xml_doc, ["save", "folder"])
+    set_content(save_folder_element, path_to_output)
     if isfile(joinpath(path_to_output, output_rules_file))
         rules_df = CSV.read(joinpath(path_to_output, output_rules_file), DataFrame; header=rules_header)
         if "base_response" in rules_header
@@ -71,11 +71,14 @@ function setUpStudioInputs(simulation_id::Int)
         path_to_input_rules = joinpath(path_to_output, input_rules_file)
         CSV.write(path_to_input_rules, rules_df, writeheader=false)
 
-        makeXMLPath(xml_doc, ["cell_rules", "rulesets", "ruleset:enabled:true", "folder"])
-        makeXMLPath(xml_doc, ["cell_rules", "rulesets", "ruleset", "filename"])
+        enabled_ruleset_element = makeXMLPath(xml_doc, ["cell_rules", "rulesets", "ruleset:enabled:true"])
+        folder_element = makeXMLPath(enabled_ruleset_element, "folder")
+        filename_element = makeXMLPath(enabled_ruleset_element, "filename")
 
-        updateField(xml_doc, ["cell_rules", "rulesets", "ruleset", "folder"], path_to_output)
-        updateField(xml_doc, ["cell_rules", "rulesets", "ruleset", "filename"], input_rules_file)
+        set_content(folder_element, path_to_output)
+        set_content(filename_element, input_rules_file)
+    else
+        path_to_input_rules = nothing
     end
 
     path_to_temp_xml = joinpath(path_to_output, "PhysiCell_settings_temp.xml")
@@ -85,7 +88,7 @@ function setUpStudioInputs(simulation_id::Int)
     return path_to_temp_xml, path_to_input_rules
 end
 
-function executeStudio(python_path::String, studio_path::String, path_to_temp_xml::String, path_to_input_rules::String)
+function executeStudio(python_path::String, studio_path::String, path_to_temp_xml::String)
     cmd = `$python_path $(joinpath(studio_path, "bin", "studio.py")) -c $(path_to_temp_xml)`
     try
         run(pipeline(cmd; stdout=devnull, stderr=devnull))
@@ -103,7 +106,9 @@ function executeStudio(python_path::String, studio_path::String, path_to_temp_xm
     end
 end
 
-function cleanUpStudioInputs(path_to_temp_xml::String, path_to_input_rules::String)
+function cleanUpStudioInputs(path_to_temp_xml::String, path_to_input_rules)
     rm(path_to_temp_xml, force=true)
-    rm(path_to_input_rules, force=true)
+    if !isnothing(path_to_input_rules)
+        rm(path_to_input_rules, force=true)
+    end
 end

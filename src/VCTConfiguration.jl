@@ -71,8 +71,7 @@ function updateFieldsFromCSV(xml_doc::XMLDocument, path_to_csv::String)
     end
 end
 
-function makeXMLPath(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString})
-    current_element = root(xml_doc)
+function makeXMLPath(current_element::XMLElement, xml_path::AbstractVector{<:AbstractString})
     for path_element in xml_path
         if !occursin(":",path_element)
             child_element = find_element(current_element, path_element)
@@ -93,8 +92,15 @@ function makeXMLPath(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString})
         end
         current_element = child_element
     end
-    return nothing
+    return current_element
 end
+
+function makeXMLPath(xml_doc::XMLDocument, xml_path::AbstractVector{<:AbstractString})
+    current_element = root(xml_doc)
+    return makeXMLPath(current_element, xml_path)
+end
+
+makeXMLPath(x, xml_path::AbstractString) = makeXMLPath(x, [xml_path])
 
 ################## Configuration Functions ##################
 
