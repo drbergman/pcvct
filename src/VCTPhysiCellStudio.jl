@@ -59,8 +59,8 @@ function setUpStudioInputs(simulation_id::Int)
 
     path_to_xml = joinpath(path_to_output, "PhysiCell_settings.xml")
     xml_doc = openXML(path_to_xml)
-    makeXMLPath(xml_doc, ["save", "folder"])
-    updateField(xml_doc, ["save", "folder"], path_to_output)
+    save_folder_element = makeXMLPath(xml_doc, ["save", "folder"])
+    set_content(save_folder_element, path_to_output)
     if isfile(joinpath(path_to_output, output_rules_file))
         rules_df = CSV.read(joinpath(path_to_output, output_rules_file), DataFrame; header=rules_header)
         if "base_response" in rules_header
@@ -71,11 +71,12 @@ function setUpStudioInputs(simulation_id::Int)
         path_to_input_rules = joinpath(path_to_output, input_rules_file)
         CSV.write(path_to_input_rules, rules_df, writeheader=false)
 
-        makeXMLPath(xml_doc, ["cell_rules", "rulesets", "ruleset:enabled:true", "folder"])
-        makeXMLPath(xml_doc, ["cell_rules", "rulesets", "ruleset", "filename"])
+        enabled_ruleset_element = makeXMLPath(xml_doc, ["cell_rules", "rulesets", "ruleset:enabled:true"])
+        folder_element = makeXMLPath(enabled_ruleset_element, "folder")
+        filename_element = makeXMLPath(enabled_ruleset_element, "filename")
 
-        updateField(xml_doc, ["cell_rules", "rulesets", "ruleset", "folder"], path_to_output)
-        updateField(xml_doc, ["cell_rules", "rulesets", "ruleset", "filename"], input_rules_file)
+        set_content(folder_element, path_to_output)
+        set_content(filename_element, input_rules_file)
     else
         path_to_input_rules = nothing
     end

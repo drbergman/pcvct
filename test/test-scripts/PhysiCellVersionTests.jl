@@ -18,6 +18,7 @@ end
 
 @test !pcvct.gitDirectoryIsClean(pcvct.physicell_dir)
 initializeModelManager(pcvct.physicell_dir, pcvct.data_dir)
+pcvct.physicellVersion()
 
 lines[1] = lines[1][1:end-1]
 open(path_to_file, "w") do f

@@ -2,7 +2,7 @@ using Graphs, MetaGraphsNext
 
 export connectedComponents
 
-function connectedComponents(snapshot::PhysiCellSnapshot, graph::Symbol=:neighbors; include_cell_types=:all_in_one, exclude_cell_types=String[])
+function connectedComponents(snapshot::PhysiCellSnapshot, graph::Symbol=:neighbors; include_cell_types=:all_in_one, exclude_cell_types=String[], include_dead::Bool=false)
     is_all_in_one = include_cell_types == :all_in_one
     cell_type_to_name_dict = getCellTypeToNameDict(snapshot)
     cell_type_names = values(cell_type_to_name_dict) |> collect
@@ -10,7 +10,20 @@ function connectedComponents(snapshot::PhysiCellSnapshot, graph::Symbol=:neighbo
     exclude_cell_types = processExcludeCellTypes(exclude_cell_types)
     loadGraph!(snapshot, graph)
     if is_all_in_one
-        return Dict(include_cell_types => (getfield(snapshot, graph) |> copy |> connectedComponents))
+        G = getfield(snapshot, graph) |> deepcopy
+        if include_dead
+            key = "$include_cell_types (include dead)"
+        else
+            key = include_cell_types
+            loadCells!(snapshot)
+            dead_cell_ids = snapshot.cells.ID[snapshot.cells.dead] |> Set
+            vertices_to_remove = [v for v in vertices(G) if G.vertex_labels[v].id in dead_cell_ids]
+            sort!(vertices_to_remove; rev=true)
+            for v in vertices_to_remove
+                rem_vertex!(G, v)
+            end
+        end
+        return Dict(key => connectedComponents(G))
     end
 
     loadCells!(snapshot)
