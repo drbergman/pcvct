@@ -21,16 +21,16 @@ discrete_variations = [dv_max_time, dv_save_full_data_interval, dv_save_svg_data
 add_variations_result = pcvct.addVariations(GridVariation(), inputs, discrete_variations)
 reference_variation_id = add_variations_result.all_variation_ids[1]
 
-xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:0"]
+xml_path = pcvct.cyclePath(cell_type, "phase_durations", "duration:index:0")
 lower_bound = 250.0 - 50.0
 upper_bound = 350.0 + 50.0
 dv1 = UniformDistributedVariation(xml_path, lower_bound, upper_bound)
 
-xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:1"]
+xml_path = pcvct.cyclePath(cell_type, "phase_durations", "duration:index:1")
 vals = [100.0, 200.0, 300.0]
 dv2 = DiscreteVariation(xml_path, vals)
 
-xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:2"]
+xml_path = pcvct.cyclePath(cell_type, "phase_durations", "duration:index:2")
 mu = 300.0
 sigma = 50.0
 lb = 10.0
@@ -70,18 +70,18 @@ discrete_variations = [dv_max_time, dv_save_full_data_interval, dv_save_svg_data
 add_variations_result = pcvct.addVariations(GridVariation(), inputs, discrete_variations)
 reference_variation_id = add_variations_result.all_variation_ids[1]
 
-xml_path = [pcvct.cyclePath(cell_type); "phase_durations"; "duration:index:0"]
+xml_path = pcvct.cyclePath(cell_type, "phase_durations", "duration:index:0")
 lower_bound = 250.0 - 50.0
 upper_bound = 350.0 + 50.0
 dv1 = UniformDistributedVariation(xml_path, lower_bound, upper_bound)
 
-xml_path = ["hypothesis_ruleset:name:default","behavior:name:cycle entry","decreasing_signals","max_response"]
+xml_path = rulePath("default", "cycle entry", "decreasing_signals", "max_response")
 dv2 = UniformDistributedVariation(xml_path, 0.0, 1.0e-8)
 
-xml_path = ["cell_patches:name:default", "patch_collection:type:annulus", "patch:ID:1", "inner_radius"]
+xml_path = icCellsPath("default", "annulus", 1, "inner_radius")
 dv3 = UniformDistributedVariation(xml_path, 0.0, 1.0)
 
-xml_path = ["layer:ID:2", "patch_collection:type:ellipse", "patch:ID:1", "density"]
+xml_path = icECMPath(2, "ellipse", 1, "density")
 dv4 = UniformDistributedVariation(xml_path, 0.25, 0.75)
 
 av = CoVariation(dv1, dv2, dv3, dv4)
@@ -104,12 +104,12 @@ dv_max_time = DiscreteVariation(["overall", "max_time"], 12.0)
 reference = createTrial(inputs, dv_max_time; n_replicates=0)
 
 flip = true
-dv_apop = UniformDistributedVariation([pcvct.apoptosisPath("default"); "death_rate"], 0.0, 1.0)
-dv_cycle = UniformDistributedVariation([pcvct.cyclePath("default"); "phase_durations"; "duration:index:0"], 1000.0, 2000.0, flip)
-dv_necr = NormalDistributedVariation([pcvct.necrosisPath("default"); "death_rate"], 1e-4, 1e-5; lb=0.0, ub=1.0)
-dv_pressure_hfm = UniformDistributedVariation(["hypothesis_ruleset:name:default", "behavior:name:cycle entry", "decreasing_signals", "signal:name:pressure", "half_max"], 0.1, 0.25)
-dv_x0 = UniformDistributedVariation(["cell_patches:name:default", "patch_collection:type:disc", "patch:ID:1", "x0"], -100.0, 0.0, flip)
-dv_anisotropy = UniformDistributedVariation(["layer:ID:2", "patch_collection:type:elliptical_disc", "patch:ID:1", "anisotropy"], 0.0, 1.0)
+dv_apop = UniformDistributedVariation(pcvct.apoptosisPath("default", "death_rate"), 0.0, 1.0)
+dv_cycle = UniformDistributedVariation(pcvct.cyclePath("default", "phase_durations", "duration:index:0"), 1000.0, 2000.0, flip)
+dv_necr = NormalDistributedVariation(pcvct.necrosisPath("default", "death_rate"), 1e-4, 1e-5; lb=0.0, ub=1.0)
+dv_pressure_hfm = UniformDistributedVariation(rulePath("default", "cycle entry", "decreasing_signals", "signal:name:pressure", "half_max"), 0.1, 0.25)
+dv_x0 = UniformDistributedVariation(icCellsPath("default", "disc", 1, "x0"), -100.0, 0.0, flip)
+dv_anisotropy = UniformDistributedVariation(icECMPath(2, "elliptical_disc", 1, "anisotropy"), 0.0, 1.0)
 
 cv1 = CoVariation([dv_apop, dv_cycle]) #! I think wanted these to only be config variations?
 cv2 = CoVariation([dv_necr, dv_pressure_hfm, dv_x0, dv_anisotropy]) #! I think I wanted these to be all different locations?

@@ -17,15 +17,15 @@ inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rul
 n_replicates = 1
 
 dv1 = DiscreteVariation(["overall", "max_time"], 12.0)
-dv2 = DiscreteVariation(["layer:ID:2", "patch_collection:type:ellipse", "patch:ID:1", "density"], [0.25, 0.75])
+dv2 = DiscreteVariation(icECMPath(2, "ellipse", 1, "density"), [0.25, 0.75])
 out = run(inputs, [dv1, dv2]; n_replicates=n_replicates)
 
 macros_lines = pcvct.readMacrosFile(out.trial)
 @test "ADDON_PHYSIECM" in macros_lines
 
 # test failing ecm sim
-xml_path1 = ["layer:ID:2", "patch_collection:type:ellipse", "patch:ID:1", "a"]
-xml_path2 = ["layer:ID:2", "patch_collection:type:elliptical_disc", "patch:ID:1", "a"]
+xml_path1 = icECMPath(2, "ellipse", 1, "a")
+xml_path2 = icECMPath(2, "elliptical_disc", 1, "a")
 dv1 = DiscreteVariation(xml_path1, 50.0)
 dv2 = DiscreteVariation(xml_path2, 80.0)
 cv = CoVariation(dv1, dv2)

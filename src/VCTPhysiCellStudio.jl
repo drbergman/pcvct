@@ -2,9 +2,6 @@ using CSV, DataFrames
 
 export runStudio
 
-path_to_python = haskey(ENV, "PCVCT_PYTHON_PATH") ? ENV["PCVCT_PYTHON_PATH"] : missing 
-path_to_studio = haskey(ENV, "PCVCT_STUDIO_PATH") ? ENV["PCVCT_STUDIO_PATH"] : missing
-
 """
     runStudio(simulation_id::Int; python_path::Union{Missing,String}=path_to_python, studio_path::Union{Missing,String}=path_to_studio)
 
@@ -19,7 +16,7 @@ pcvct will look for these in the environment variables `PCVCT_PYTHON_PATH` and `
 function runStudio(simulation_id::Int; python_path::Union{Missing,String}=path_to_python, studio_path::Union{Missing,String}=path_to_studio)
     resolveStudioGlobals(python_path, studio_path)
     path_to_temp_xml, path_to_input_rules = setUpStudioInputs(simulation_id)
-    out = executeStudio(path_to_python, path_to_studio, path_to_temp_xml, path_to_input_rules)
+    out = executeStudio(path_to_python, path_to_studio, path_to_temp_xml)
     cleanUpStudioInputs(path_to_temp_xml, path_to_input_rules)
     if out isa Exception
         throw(out)
@@ -29,22 +26,20 @@ end
 function resolveStudioGlobals(python_path::Union{Missing,String}, studio_path::Union{Missing,String})
     if ismissing(python_path)
         throw(ArgumentError("Path to python not set. Please set the PCVCT_PYTHON_PATH environment variable or pass the path as an argument."))
-    end
-    if ismissing(studio_path)
-        throw(ArgumentError("Path to studio not set. Please set the PCVCT_STUDIO_PATH environment variable or pass the path as an argument."))
-    end
-    if ismissing(path_to_python)
+    else
         global path_to_python = python_path
         println("Setting path to python to $path_to_python")
     end
-    if ismissing(path_to_studio)
+    if ismissing(studio_path)
+        throw(ArgumentError("Path to studio not set. Please set the PCVCT_STUDIO_PATH environment variable or pass the path as an argument."))
+    else
         global path_to_studio = studio_path
         println("Setting path to studio to $path_to_studio")
     end
 end
 
 function setUpStudioInputs(simulation_id::Int)
-    path_to_output = joinpath(trialFolder("simulation", simulation_id), "output")
+    path_to_output = pathToOutputFolder(simulation_id)
 
     physicell_version = physicellVersion(Simulation(simulation_id))
     upstream_version = split(physicell_version, "-")[1] |> VersionNumber
@@ -58,9 +53,10 @@ function setUpStudioInputs(simulation_id::Int)
     end
 
     path_to_xml = joinpath(path_to_output, "PhysiCell_settings.xml")
+    @assert isfile(path_to_xml) "The file $path_to_xml does not exist. Please check the simulation ID and try again."
     xml_doc = openXML(path_to_xml)
-    makeXMLPath(xml_doc, ["save", "folder"])
-    updateField(xml_doc, ["save", "folder"], path_to_output)
+    save_folder_element = makeXMLPath(xml_doc, ["save", "folder"])
+    set_content(save_folder_element, path_to_output)
     if isfile(joinpath(path_to_output, output_rules_file))
         rules_df = CSV.read(joinpath(path_to_output, output_rules_file), DataFrame; header=rules_header)
         if "base_response" in rules_header
@@ -71,11 +67,14 @@ function setUpStudioInputs(simulation_id::Int)
         path_to_input_rules = joinpath(path_to_output, input_rules_file)
         CSV.write(path_to_input_rules, rules_df, writeheader=false)
 
-        makeXMLPath(xml_doc, ["cell_rules", "rulesets", "ruleset:enabled:true", "folder"])
-        makeXMLPath(xml_doc, ["cell_rules", "rulesets", "ruleset", "filename"])
+        enabled_ruleset_element = makeXMLPath(xml_doc, ["cell_rules", "rulesets", "ruleset:enabled:true"])
+        folder_element = makeXMLPath(enabled_ruleset_element, "folder")
+        filename_element = makeXMLPath(enabled_ruleset_element, "filename")
 
-        updateField(xml_doc, ["cell_rules", "rulesets", "ruleset", "folder"], path_to_output)
-        updateField(xml_doc, ["cell_rules", "rulesets", "ruleset", "filename"], input_rules_file)
+        set_content(folder_element, path_to_output)
+        set_content(filename_element, input_rules_file)
+    else
+        path_to_input_rules = nothing
     end
 
     path_to_temp_xml = joinpath(path_to_output, "PhysiCell_settings_temp.xml")
@@ -85,7 +84,7 @@ function setUpStudioInputs(simulation_id::Int)
     return path_to_temp_xml, path_to_input_rules
 end
 
-function executeStudio(python_path::String, studio_path::String, path_to_temp_xml::String, path_to_input_rules::String)
+function executeStudio(python_path::String, studio_path::String, path_to_temp_xml::String)
     cmd = `$python_path $(joinpath(studio_path, "bin", "studio.py")) -c $(path_to_temp_xml)`
     try
         run(pipeline(cmd; stdout=devnull, stderr=devnull))
@@ -103,7 +102,9 @@ function executeStudio(python_path::String, studio_path::String, path_to_temp_xm
     end
 end
 
-function cleanUpStudioInputs(path_to_temp_xml::String, path_to_input_rules::String)
+function cleanUpStudioInputs(path_to_temp_xml::String, path_to_input_rules)
     rm(path_to_temp_xml, force=true)
-    rm(path_to_input_rules, force=true)
+    if !isnothing(path_to_input_rules)
+        rm(path_to_input_rules, force=true)
+    end
 end

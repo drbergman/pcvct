@@ -13,3 +13,18 @@ fake_studio_path = "fake_studio_path"
 
 @test pcvct.path_to_python == fake_python_path
 @test pcvct.path_to_studio == fake_studio_path
+
+#! test that the studio launches even when the rules file cannot be found
+simulation_id = 1
+simulation_output_folder = pcvct.pathToOutputFolder(simulation_id)
+path_to_parsed_rules = joinpath(simulation_output_folder, "cell_rules_parsed.csv")
+@test isfile(path_to_parsed_rules)
+path_to_dummy_parsed_rules = joinpath(simulation_output_folder, "cell_rules_parsed__.csv")
+@test !isfile(path_to_dummy_parsed_rules)
+mv(path_to_parsed_rules, path_to_dummy_parsed_rules)
+@test !isfile(path_to_parsed_rules)
+@test isfile(path_to_dummy_parsed_rules)
+@test_throws Base.IOError runStudio(simulation_id; python_path=fake_python_path, studio_path=fake_studio_path)
+
+#! put the file back
+mv(path_to_dummy_parsed_rules, path_to_parsed_rules)
