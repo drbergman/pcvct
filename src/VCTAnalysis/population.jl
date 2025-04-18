@@ -20,6 +20,8 @@ function populationCount(snapshot::PhysiCellSnapshot; include_dead::Bool=false, 
     return data
 end
 
+populationCount(::Missing, args...; kwargs...) = missing
+
 abstract type AbstractPopulationTimeSeries end
 
 """
@@ -53,6 +55,7 @@ function SimulationPopulationTimeSeries(sequence::PhysiCellSequence; include_dea
     cell_count = Dict{String, Vector{Integer}}()
     for (i, snapshot) in enumerate(sequence.snapshots)
         population_count = populationCount(snapshot; include_dead=include_dead, cell_type_to_name_dict=sequence.cell_type_to_name_dict, labels=sequence.labels)
+        ismissing(population_count) && continue #! skip if the population count is missing (could happen if the snapshot is empty, which would happen if, e.g., the xml is missing)
         for (ID, count) in pairs(population_count)
             if !(string(ID) in keys(cell_count))
                 cell_count[ID] = zeros(Int, length(time))

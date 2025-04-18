@@ -119,6 +119,8 @@ struct InputFolders
     end
 end
 
+function InputFolders(args...; kwargs...) end
+
 function createSimpleInputFolders()
     fn_args = join(["$(location)::String" for location in project_locations.required], ", ")
     fn_kwargs = join(["$(location)::String=\"\"" for location in setdiff(project_locations.all, project_locations.required)], ", ")

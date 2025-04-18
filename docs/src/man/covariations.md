@@ -17,7 +17,7 @@ pcvct will use values that share an index their respective vectors together.
 ```julia
 base_xml_path = pcvct.customDataPath("default", "sample")
 ev1 = DiscreteVariation(base_xml_path, [1, 2, 3]) # vary the `sample` custom data for cell type default
-max_xml_path = ["hypothesis_ruleset:name:default", "behavior:name:custom sample", "increasing_signals", "max_response"] # the max response of the rule increasing sample (must be bigger than the base response above)
+max_xml_path = ["behavior_ruleset:name:default", "behavior:name:custom sample", "increasing_signals", "max_response"] # the max response of the rule increasing sample (must be bigger than the base response above)
 ev2 = DiscreteVariation(rule_xml_path, [2, 3, 4])
 covariation = CoVariation(ev1, ev2) # CoVariation([ev1, ev2]) also works
 ```
@@ -25,7 +25,8 @@ covariation = CoVariation(ev1, ev2) # CoVariation([ev1, ev2]) also works
 It is also not necessary to create the `ElementaryVariation`'s separately and then pass them to the `CoVariation` constructor.
 ```julia
 # have the phase durations vary by and compensate for each other
-phase_0_xml_path = [pcvct.cyclePath("default"); "phase_durations"; "duration:index:0"]
+phase_0_xml_path = pcvct.cyclePath("default", "phase_durations", "duration:index:0")
+phase_1_xml_path = pcvct.cyclePath("default", "phase_durations", "duration:index:1")
 phase_0_durations = [300.0, 400.0] 
 phase_1_durations = [200.0, 100.0] # the (mean) duration through these two phases is 500 min
 # input any number of tuples (xml_path, values)
@@ -57,9 +58,9 @@ pcvct._values.(covariation.variations, cdf) # pcvct internal for getting values 
 As with `CoVariation{DiscreteVariation}`, it is not necessary to create the `ElementaryVariation`'s separately and then pass them to the `CoVariation` constructor. It is not possible to `flip` a `DistributedVariation` with this syntax, however.
 
 ```julia
-apop_xml_path = [pcvct.apoptosisPath("default"); "death_rate"]
+apop_xml_path = pcvct.apoptosisPath("default", "death_rate")
 apop_dist = Uniform(0, 0.001)
-cycle_entry_path = [pcvct.cyclePath("default"); "phase_transition_rates"; "rate:start_index:0"]
+cycle_entry_path = pcvct.cyclePath("default", "phase_transition_rates", "rate:start_index:0")
 cycle_dist = Uniform(0.00001, 0.0001)
 covariation = CoVariation((apop_xml_path, apop_dist), (cycle_entry_path, cycle_dist))
 ```
