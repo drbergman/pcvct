@@ -218,23 +218,23 @@ end
 ################## XML Path Helper Functions ##################
 
 #! can I define my own macro that takes all these functions and adds methods for FN(cell_def, node::String) and FN(cell_def, path_suffix::Vector{String})??
-function cellDefinitionPath(cell_definition::String, path_elements::Vararg{<:AbstractString})::Vector{String}
+function cellDefinitionPath(cell_definition::String, path_elements::Vararg{AbstractString})::Vector{String}
     return ["cell_definitions"; "cell_definition:name:$(cell_definition)"; path_elements...]
 end
 
-function phenotypePath(cell_definition::String, path_elements::Vararg{<:AbstractString})::Vector{String}
+function phenotypePath(cell_definition::String, path_elements::Vararg{AbstractString})::Vector{String}
     return cellDefinitionPath(cell_definition, "phenotype", path_elements...)
 end
 
-cyclePath(cell_definition::String, path_elements::Vararg{<:AbstractString})::Vector{String} = phenotypePath(cell_definition, "cycle", path_elements...)
-deathPath(cell_definition::String, path_elements::Vararg{<:AbstractString})::Vector{String} = phenotypePath(cell_definition, "death", path_elements...)
-apoptosisPath(cell_definition::String, path_elements::Vararg{<:AbstractString})::Vector{String} = deathPath(cell_definition, "model:code:100", path_elements...)
-necrosisPath(cell_definition::String, path_elements::Vararg{<:AbstractString})::Vector{String} = deathPath(cell_definition, "model:code:101", path_elements...)
+cyclePath(cell_definition::String, path_elements::Vararg{AbstractString})::Vector{String} = phenotypePath(cell_definition, "cycle", path_elements...)
+deathPath(cell_definition::String, path_elements::Vararg{AbstractString})::Vector{String} = phenotypePath(cell_definition, "death", path_elements...)
+apoptosisPath(cell_definition::String, path_elements::Vararg{AbstractString})::Vector{String} = deathPath(cell_definition, "model:code:100", path_elements...)
+necrosisPath(cell_definition::String, path_elements::Vararg{AbstractString})::Vector{String} = deathPath(cell_definition, "model:code:101", path_elements...)
 
-motilityPath(cell_definition::String, path_elements::Vararg{<:AbstractString})::Vector{String} = phenotypePath(cell_definition, "motility", path_elements...)
-cellInteractionsPath(cell_definition::String, path_elements::Vararg{<:AbstractString})::Vector{String} = phenotypePath(cell_definition, "cell_interactions", path_elements...)
+motilityPath(cell_definition::String, path_elements::Vararg{AbstractString})::Vector{String} = phenotypePath(cell_definition, "motility", path_elements...)
+cellInteractionsPath(cell_definition::String, path_elements::Vararg{AbstractString})::Vector{String} = phenotypePath(cell_definition, "cell_interactions", path_elements...)
 
-function attackRatesPath(cell_definition::String, path_elements::Vararg{<:AbstractString})::Vector{String}
+function attackRatesPath(cell_definition::String, path_elements::Vararg{AbstractString})::Vector{String}
     if isempty(path_elements)
         return cellInteractionsPath(cell_definition, "attack_rates")
     end
@@ -244,14 +244,14 @@ function attackRatesPath(cell_definition::String, path_elements::Vararg{<:Abstra
     return cellInteractionsPath(cell_definition, "attack_rates", "attack_rate:name:$(path_elements[1])", path_elements[2:end]...)
 end
 
-customDataPath(cell_definition::String, path_elements::Vararg{<:AbstractString})::Vector{String} = cellDefinitionPath(cell_definition, "custom_data", path_elements...)
+customDataPath(cell_definition::String, path_elements::Vararg{AbstractString})::Vector{String} = cellDefinitionPath(cell_definition, "custom_data", path_elements...)
 
 userParameterPath(field_name::String)::Vector{String} = ["user_parameters"; field_name]
 
 ############# XML Path Helper Functions (non-config) #############
 
 """
-    rulePath(cell_definition::AbstractString, behavior::AbstractString, path_elements::Vararg{<:AbstractString})
+    rulePath(cell_definition::AbstractString, behavior::AbstractString, path_elements::Vararg{AbstractString})
 
 Return the XML path to the rule for the given cell definition and behavior.
 
@@ -274,12 +274,12 @@ julia> rulePath("cancer", "cycle entry", "increasing_signals", "signal:name:oxyg
  "half_max"
 ```
 """
-function rulePath(cell_definition::AbstractString, behavior::AbstractString, path_elements::Vararg{<:AbstractString})::Vector{String}
+function rulePath(cell_definition::AbstractString, behavior::AbstractString, path_elements::Vararg{AbstractString})::Vector{String}
     return ["behavior_ruleset:name:$(cell_definition)"; "behavior:name:$(behavior)"; path_elements...]
 end
 
 """
-    icCellsPath(cell_definition::AbstractString, patch_type::AbstractString, patch_id path_elements::Vararg{<:AbstractString})
+    icCellsPath(cell_definition::AbstractString, patch_type::AbstractString, patch_id path_elements::Vararg{AbstractString})
 
 Return the XML path to the IC cell patch for the given cell definition, patch type, and patch ID.
 Optionally, add more path_elements to the path as extra arguments.
@@ -301,14 +301,14 @@ julia> icCellsPath("default", "disc", 1, "x0")
  "x0"
 ```
 """
-function icCellsPath(cell_definition::String, patch_type::String, patch_id, path_elements::Vararg{<:AbstractString})::Vector{String}
+function icCellsPath(cell_definition::String, patch_type::String, patch_id, path_elements::Vararg{AbstractString})::Vector{String}
     supported_patch_types = PhysiCellCellCreator.supportedPatchTypes()
     @assert patch_type in supported_patch_types "IC Cell patch_type must be one of the available patch types, i.e., in $(supported_patch_types). Got $(patch_type)"
     return ["cell_patches:name:$(cell_definition)"; "patch_collection:type:$(patch_type)"; "patch:ID:$(patch_id)"; path_elements...]
 end
 
 """
-    icECMPath(layer_id::Int, patch_type::AbstractString, patch_id, path_elements::Vararg{<:AbstractString})
+    icECMPath(layer_id::Int, patch_type::AbstractString, patch_id, path_elements::Vararg{AbstractString})
 
 Return the XML path to the IC ECM patch for the given layer_id, patch_type, and patch_id.
 Optionally, add more path_elements to the path as extra arguments.
@@ -330,7 +330,7 @@ julia> icECMPath(2, "elliptical_disc", 1, "density")
  "density"
 ```
 """
-function icECMPath(layer_id, patch_type::AbstractString, patch_id, path_elements::Vararg{<:AbstractString})::Vector{String}
+function icECMPath(layer_id, patch_type::AbstractString, patch_id, path_elements::Vararg{AbstractString})::Vector{String}
     supported_patch_types = PhysiCellECMCreator.supportedPatchTypes()
     @assert patch_type in supported_patch_types "IC ECM patch_type must be one of the available patch types, i.e., in $(supported_patch_types). Got $(patch_type)"
     return ["layer:ID:$(layer_id)"; "patch_collection:type:$(patch_type)"; "patch:ID:$(patch_id)"; path_elements...]

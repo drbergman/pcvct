@@ -41,13 +41,28 @@ function ImportSources(src::Dict, path_to_project::AbstractString)
     custom_modules = ImportSource(src, "custom_modules", "", "custom_modules", "folder", required; input_folder_key = :custom_code)
 
     required = false
-    rules = ImportSource(src, "rules", "config", "cell_rules.csv", "file", required; pcvct_name="base_rulesets.csv")
-    intracellular = prepareIntracellularImport(src, config, path_to_project)
+    rules = prepareRulesetsCollectionImport(src, path_to_project)
+    intracellular = prepareIntracellularImport(src, config, path_to_project) #! config here could contain the <intracellular> element which would inform this import
     ic_cell = ImportSource(src, "ic_cell", "config", "cells.csv", "file", required)
     ic_substrate = ImportSource(src, "ic_substrate", "config", "substrates.csv", "file", required)
     ic_ecm = ImportSource(src, "ic_ecm", "config", "ecm.csv", "file", required)
     ic_dc = ImportSource(src, "ic_dc", "config", "dcs.csv", "file", required)
     return ImportSources(config, main, makefile, custom_modules, rules, intracellular, ic_cell, ic_substrate, ic_ecm, ic_dc)
+end
+
+function prepareRulesetsCollectionImport(src::Dict, path_to_project::AbstractString)
+    rules_ext = ".csv" #! default to csv
+    required = true #! default to requiring rules (just for fewer lines below)
+    if haskey(src, "rulesets_collection")
+        rules_ext = splitext(src["rulesets_collection"])[2]
+    elseif isfile(joinpath(path_to_project, "config", "cell_rules.csv"))
+        rules_ext = ".csv"
+    elseif isfile(joinpath(path_to_project, "config", "cell_rules.xml"))
+        rules_ext = ".xml"
+    else
+        required = false
+    end
+    return ImportSource(src, "rules", "config", "cell_rules$(rules_ext)", "file", required; pcvct_name="base_rulesets$(rules_ext)")
 end
 
 function prepareIntracellularImport(src::Dict, config::ImportSource, path_to_project::AbstractString)
@@ -181,13 +196,13 @@ function importProject(path_to_project::AbstractString, src=Dict(), dest=Dict();
         msg = """
         Imported project from $(path_to_project) into $(joinpath(data_dir, "inputs")):
             - $(import_dest_folders.config.path_from_inputs)
-            - $(import_dest_folders.custom_code.path_from_inputs)
+            - $(import_dest_folders.custom_code.path_from_inputs)\
         """
         if import_dest_folders.rules.created
-            msg *= "    - $(import_dest_folders.rules.path_from_inputs)"
+            msg *= "\n    - $(import_dest_folders.rules.path_from_inputs)"
         end
         if import_dest_folders.intracellular.created
-            msg *= "    - $(import_dest_folders.intracellular.path_from_inputs)"
+            msg *= "\n    - $(import_dest_folders.intracellular.path_from_inputs)"
         end
         ics_started = false
         for ic in ["cell", "substrate", "ecm", "dc"]
@@ -362,6 +377,8 @@ function adaptMain(path_from_inputs::AbstractString)
     path_to_main = joinpath(data_dir, "inputs", path_from_inputs, "main.cpp")
     lines = readlines(path_to_main)
 
+    filter!(x->!contains(x, "copy_command"), lines) #! remove any lines carrying out the copy command, which could be a little risky if the user uses for something other than copying over the config file
+
     if any(x->contains(x, "argument_parser.parse"), lines)
         #! already adapted the main.cpp
         return true
@@ -373,6 +390,7 @@ function adaptMain(path_from_inputs::AbstractString)
         if isnothing(idx1)
             msg = """
             Could not find the line to insert the settings file parsing code.
+            Also, could not find an argument_parser line.
             Aborting the import process.
             """
             println(msg)
@@ -381,24 +399,7 @@ function adaptMain(path_from_inputs::AbstractString)
     end
     idx_not_xml_status = findfirst(x->contains(x, "!XML_status"), lines)
     idx2 = idx_not_xml_status + findfirst(x -> contains(x, "}"), lines[idx_not_xml_status:end]) - 1
-    # idx2 = findfirst(x -> contains(x, "// copy config file to"), lines)
-    # if isnothing(idx2)
-    #     idx2 = findfirst(x -> contains(x, "system(") && contains(x, "copy_command"), lines)
-    #     if isnothing(idx2)
-    #         idx2 = findfirst(x -> contains(x, "// OpenMP setup"), lines)
-    #         if isnothing(idx2)
-    #             idx2 = findfirst(x -> contains(x, "omp_set_num_threads("), lines)
-    #             if isnothing(idx2)
-    #                 msg = """
-    #                 Could not identify where the copy command is in the main.cpp file.
-    #                 Aborting the export process.
-    #                 """
-    #                 println(msg)
-    #                 return false
-    #             end
-    #         end
-    #     end
-    # end
+
     deleteat!(lines, idx1:idx2)
 
     parsing_block = """
@@ -407,10 +408,6 @@ function adaptMain(path_from_inputs::AbstractString)
 
         // load and parse settings file(s)
         load_PhysiCell_config_file();
-
-        char copy_command [1024]; 
-
-        sprintf( copy_command , "cp %s %s/PhysiCell_settings.xml" , argument_parser.path_to_config_file.c_str(), PhysiCell_settings.folder.c_str() ); //, PhysiCell_settings.folder.c_str() ); 
     """
     insert!(lines, idx1, parsing_block)
 

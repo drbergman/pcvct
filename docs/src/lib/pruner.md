@@ -2,7 +2,7 @@
 CollapsedDocStrings = true
 ```
 
-# VCTPruner
+# Pruner
 
 Prune files from a simulation immediately after finishing the simulation.
 
@@ -10,5 +10,5 @@ To motivate this functionality, consider the following scenario. A user has been
 
 ```@autodocs
 Modules = [pcvct]
-Pages = ["VCTPruner.jl"]
+Pages = ["pruner.jl"]
 ```

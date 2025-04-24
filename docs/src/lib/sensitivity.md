@@ -2,11 +2,11 @@
 CollapsedDocStrings = true
 ```
 
-# VCTSensitivity
+# Sensitivity
 
 Run sensitivity analyses on a model.
 
 ```@autodocs
 Modules = [pcvct]
-Pages = ["VCTSensitivity.jl"]
+Pages = ["sensitivity.jl"]
 ```

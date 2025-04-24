@@ -25,7 +25,7 @@ pcvct.PCVCTPCFResult(time, PairCorrelationFunction.PCFResult(radii, g))
 # output
 PCVCTPCFResult:
   Time: 12.0
-  Radii: 0.0 - 2.0 with 2 annuli
+  Radii: 0.0 - 2.0 with 2 annuli, Δr = 1.0
   g: 0.5 - 1.2 (min - max)
 ```
 ```jldoctest
@@ -37,7 +37,7 @@ pcvct.PCVCTPCFResult(time, PairCorrelationFunction.PCFResult(radii, g))
 # output
 PCVCTPCFResult:
   Time: 12.0 - 36.0 (n = 3)
-  Radii: 0.0 - 2.0 with 2 annuli
+  Radii: 0.0 - 2.0 with 2 annuli, Δr = 1.0
   g: 0.4 - 1.4 (min - max)
 ```
 """
@@ -69,7 +69,15 @@ function Base.show(io::IO, ::MIME"text/plain", p::PCVCTPCFResult)
     else
         println(io, "  Time: $(p.time[1]) - $(p.time[end]) (n = $(length(p.time)))")
     end
-    println(io, "  Radii: $(p.pcf_result.radii[1]) - $(p.pcf_result.radii[end]) with $(length(p.pcf_result.radii)-1) annuli")
+    print(io, "  Radii: $(p.pcf_result.radii[1]) - $(p.pcf_result.radii[end]) with $(length(p.pcf_result.radii)-1) annuli")
+    rs = p.pcf_result.radii
+    drs = diff(rs)
+    display_tol = 0.01 #! if the radii deltas are within 1%, just display it as being the same for simplicity
+    if all(drs .> drs[1] * (1-display_tol)) && all(drs .< drs[1] * (1 + display_tol))
+        println(io, ", Δr = $(drs[1])")
+    else
+        println(io, ", Δr varying on [min = $(minimum(drs)), max = $(maximum(drs))]")
+    end
     temp_g = filter(!isnan, p.pcf_result.g)
     println(io, "  g: $(minimum(temp_g)) - $(maximum(temp_g)) (min - max)")
 end

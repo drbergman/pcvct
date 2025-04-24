@@ -2,24 +2,37 @@
 Read [Best practices](@ref) before using pcvct.
 ## Install pcvct
 ### Download julia
-See [here](https://julialang.org/downloads/) for more options:
+The easiest way to install julia is to use the command line. On Linux and MacOS, you can run:
 ```sh
 $ curl -fsSL https://install.julialang.org | sh
 ```
+
+On Windows, you can run:
+```powershell
+> winget install --name Julia --id 9NJNWW8PVKMN -e -s msstore
+```
+
 Note: this command also installs the [JuliaUp](https://github.com/JuliaLang/juliaup) installation manager, which will automatically install julia and help keep it up to date.
+
+See [here](https://julialang.org/install) for the Julia installation home page. See [here](https://julialang.org/downloads/) for more download options.
 
 ### Add the PCVCTRegistry
 Launch julia by running `julia` in a shell.
 Then, enter the Pkg REPL by pressing `]`.
 Finally, add the PCVCTRegistry by running:
-```
+```julia-repl
 pkg> registry add https://github.com/drbergman/PCVCTRegistry
 ```
 
 ### Install pcvct
 Still in the Pkg REPL, run:
-```
+```julia-repl
 pkg> add pcvct
+```
+
+Troubleshoot: If this fails, it may be because the General registry is not set up correctly. The output of `] registry status` should show the PCVCTRegistry and General registry. If it does not, you can add the General registry by running:
+```julia-repl
+pkg> registry add General
 ```
 
 ## Set up a pcvct project
