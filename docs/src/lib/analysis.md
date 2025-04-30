@@ -2,11 +2,11 @@
 CollapsedDocStrings = true
 ```
 
-# VCTAnalysis
+# Analysis
 
 Analyze output from a pcvct project.
 It is anticipated that this will eventually be split off into its own module or even package.
-Possibly with VCTLoader.jl.
+Possibly with loader.jl.
 
 ```@autodocs
 Modules = [pcvct]

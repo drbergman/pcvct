@@ -2,11 +2,11 @@
 CollapsedDocStrings = true
 ```
 
-# VCTModule
+# HPC
 
-Core functionality for pcvct.
+Run pcvct on an HPC.
 
 ```@autodocs
 Modules = [pcvct]
-Pages = ["VCTModule.jl"]
+Pages = ["hpc.jl"]
 ```

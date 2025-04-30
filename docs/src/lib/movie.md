@@ -2,11 +2,11 @@
 CollapsedDocStrings = true
 ```
 
-# VCTHPC
+# Movie
 
-Run pcvct on an HPC.
+Make movies for simulations in the database.
 
 ```@autodocs
 Modules = [pcvct]
-Pages = ["VCTHPC.jl"]
+Pages = ["movie.jl"]
 ```
