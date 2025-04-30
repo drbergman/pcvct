@@ -2,11 +2,11 @@
 CollapsedDocStrings = true
 ```
 
-# VCTVariations
+# Core
 
-Vary parameters of the project.
+Core functionality for pcvct.
 
 ```@autodocs
 Modules = [pcvct]
-Pages = ["VCTVariations.jl"]
+Pages = ["pcvct.jl"]
 ```

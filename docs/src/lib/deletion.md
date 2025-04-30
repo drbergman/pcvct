@@ -2,11 +2,11 @@
 CollapsedDocStrings = true
 ```
 
-# VCTDeletion
+# Deletion
 
 Safely delete output from a pcvct project.
 
 ```@autodocs
 Modules = [pcvct]
-Pages = ["VCTDeletion.jl"]
+Pages = ["deletion.jl"]
 ```

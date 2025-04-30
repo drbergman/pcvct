@@ -2,11 +2,11 @@
 CollapsedDocStrings = true
 ```
 
-# VCTPhysiCellStudio
+# PhysiCell Studio
 
 Launch PhysiCell Studio for a simulation run in pcvct.
 
 ```@autodocs
 Modules = [pcvct]
-Pages = ["VCTPhysiCellStudio.jl"]
+Pages = ["physicell_studio.jl"]
 ```

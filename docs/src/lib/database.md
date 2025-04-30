@@ -2,11 +2,11 @@
 CollapsedDocStrings = true
 ```
 
-# VCTDatabase
+# Database
 
 Create and manage the pcvct database.
 
 ```@autodocs
 Modules = [pcvct]
-Pages = ["VCTDatabase.jl"]
+Pages = ["database.jl"]
 ```

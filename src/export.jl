@@ -201,19 +201,19 @@ function revertMain(export_folder::AbstractString, physicell_version::AbstractSt
             return false
         end
     end
-    idx2 = findfirst(x -> contains(x, "// copy config file to"), lines)
+    idx2 = findfirst(x -> contains(x, "// OpenMP setup"), lines)
     if isnothing(idx2)
-        idx2 = findfirst(x -> contains(x, "system(") && contains(x, "copy_command"), lines)
+        idx2 = findfirst(x -> contains(x, "omp_set_num_threads(") && contains(x, "PhysiCell_settings.omp_num_threads"), lines)
         if isnothing(idx2)
             msg = """
-            Could not identify where the copy command is in the main.cpp file.
+            Could not identify where the omp_set_num_threads is in the main.cpp file.
             Aborting the export process.
             """
             println(msg)
             return false
         end
     end
-    deleteat!(lines, idx1:(idx2-1))
+    deleteat!(lines, idx1:(idx2-1)) #! delete up to but not including the omp_set_num_threads line
 
     parsing_block = """
         // load and parse settings file(s)
@@ -232,6 +232,9 @@ function revertMain(export_folder::AbstractString, physicell_version::AbstractSt
         }
         if( !XML_status )
         { exit(-1); }
+
+        // copy config file to output directory
+        system( copy_command );
     """
     lines = [lines[1:(idx1-1)]; parsing_block; lines[idx1:end]]
 

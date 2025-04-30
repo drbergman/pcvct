@@ -312,10 +312,10 @@ struct CoVariation{T<:ElementaryVariation} <: AbstractVariation
         @assert (length.(evs) |> unique |> length) == 1 "All DiscreteVariations in a CoVariation must have the same length."
         return new{DiscreteVariation}(evs)
     end
-    function CoVariation(inputs::Vararg{DistributedVariation,N}) where {N}
+    function CoVariation(inputs::Vararg{DistributedVariation})
         return CoVariation(Vector{DistributedVariation}([inputs...]))
     end
-    function CoVariation(inputs::Vararg{<:DiscreteVariation,N}) where {N}
+    function CoVariation(inputs::Vararg{DiscreteVariation})
         return CoVariation(Vector{DiscreteVariation}([inputs...]))
     end
 end

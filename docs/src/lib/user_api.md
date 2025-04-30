@@ -2,11 +2,11 @@
 CollapsedDocStrings = true
 ```
 
-# VCTUserAPI
+# User API
 
 Main functions users will use to create and run simulations, monads, samplings, and trials.
 
 ```@autodocs
 Modules = [pcvct]
-Pages = ["VCTUserAPI.jl"]
+Pages = ["user_api.jl"]
 ```

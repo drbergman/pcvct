@@ -2,7 +2,7 @@
 CollapsedDocStrings = true
 ```
 
-# VCTConfiguration
+# Configuration
 
 Interface with the configuration file necessary for PhysiCell simulations.
 
@@ -10,5 +10,5 @@ Provide functionality for accessing and modifying elements in any XML, including
 
 ```@autodocs
 Modules = [pcvct]
-Pages = ["VCTConfiguration.jl"]
+Pages = ["configuration.jl"]
 ```

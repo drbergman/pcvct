@@ -2,11 +2,11 @@
 CollapsedDocStrings = true
 ```
 
-# VCTCreation
+# Creation
 
 Create a new pcvct project.
 
 ```@autodocs
 Modules = [pcvct]
-Pages = ["VCTCreation.jl"]
+Pages = ["creation.jl"]
 ```
