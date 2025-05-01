@@ -1,5 +1,7 @@
 using PhysiCellCellCreator
 
+@compat public createICCellXMLTemplate
+
 """
     createICCellXMLTemplate(folder::String)
 

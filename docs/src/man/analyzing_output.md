@@ -1,5 +1,12 @@
 # Analyzing output
 
+## Install dependencies
+Julia has several packages for plotting.
+Here, we will use `Plots.jl` which you can install with
+```julia-repl
+pkg> add Plots
+```
+
 ## Loading output
 
 ### `PhysiCellSnapshot`
@@ -82,7 +89,7 @@ An `AverageSubstrateTimeSeries` gives the time series for the average substrate 
 
 ```julia
 simulation_id = 1
-asts = AverageSubstrateTimeSeries(simulation_id)
+asts = pcvct.AverageSubstrateTimeSeries(simulation_id)
 using Plots
 plot(asts.time, asts["oxygen"])
 ```
@@ -93,7 +100,7 @@ In a simulation with `cd8` cells and `IFNg` diffusible substrate, plot the avera
 
 ```julia
 simulation_id = 1
-ests = ExtracellularSubstrateTimeSeries(simulation_id)
+ests = pcvct.ExtracellularSubstrateTimeSeries(simulation_id)
 using Plots
 plot(ests.time, ests["cd8"]["IFNg"])
 ```
@@ -119,7 +126,7 @@ mss = motilityStatistics(simulation_id; direction=:x) # only consider the moveme
 
 ## Pair correlation function (PCF)
 Sometimes referred to as radial distribution functions, the pair correlation function (PCF) computes the density of target cells around center cells.
-If the two sets of cells (centers = targets), this is called PCF.
+If the two sets of cells are the same (centers = targets), this is called PCF.
 If the two are not equal, this is sometimes called cross-PCF.
 Both can be computed with a call to `pcvct.pcf` (or just `pcf` if `using PairCorrelationFunction` has been called).
 
@@ -132,7 +139,6 @@ The next argument is the cell type to use as the center cells as either a `Strin
 If the target cells are different from the center cells, the next argument is the target cell type as either a `String` or `Vector{String}`.
 If omitted, the target cell type is the same as the center cell type and a (non-cross) PCF is computed.
 The resulting sets of center and target cell types must either be identical or have no overlap.
-Under the hood, the PCF computation relies on the signature used (with or without a target matrix) to determine whether to correct for cross or non-cross PCF, not the coordinates matching or not.
 
 ### Keyword arguments
 The following keyword arguments are available:

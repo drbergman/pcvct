@@ -1,6 +1,9 @@
 using PhysiCellXMLRules, PhysiCellCellCreator, PhysiCellECMCreator
 
 export rulePath, icCellsPath, icECMPath
+@compat public cellDefinitionPath, phenotypePath, cyclePath,
+               apoptosisPath, necrosisPath, motilityPath, cellInteractionsPath,
+               attackRatesPath, customDataPath, userParameterPath
 
 ################## XML Functions ##################
 

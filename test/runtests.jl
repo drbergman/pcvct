@@ -27,9 +27,7 @@ include("./test-scripts/PrintHelpers.jl")
 
     #! post-processing tests
     include("./test-scripts/LoaderTests.jl")
-    if Sys.isapple()
-        include("./test-scripts/MovieTests.jl")
-    end
+    include("./test-scripts/MovieTests.jl")
     include("./test-scripts/PopulationTests.jl")
     include("./test-scripts/SubstrateTests.jl")
     include("./test-scripts/GraphsTests.jl")

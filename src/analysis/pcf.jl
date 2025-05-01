@@ -2,6 +2,8 @@ using PairCorrelationFunction, RecipesBase
 
 import PairCorrelationFunction: pcf
 
+@compat public pcf
+
 """
     PCVCTPCFResult
 

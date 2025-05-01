@@ -1,3 +1,0 @@
-public cellDefinitionPath, phenotypePath, cyclePath, apoptosisPath, necrosisPath, motilityPath, cellInteractionsPath,
-    attackRatesPath, customDataPath, userParameterPath
-public createICCellXMLTemplate, createICECMXMLTemplate, pcf

@@ -1,5 +1,6 @@
 function shellCommandExists(cmd::Union{String,Cmd})
-    p = run(ignorestatus(`which $cmd`))
+    cmd_ = Sys.iswindows() ? `where $cmd` : `which $cmd`
+    p = run(pipeline(ignorestatus(cmd_); stdout=devnull, stderr=devnull))
     return p.exitcode == 0
 end
 
