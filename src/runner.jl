@@ -2,6 +2,11 @@ import Base.run
 
 export runAbstractTrial
 
+"""
+    prepareSimulationCommand(simulation::Simulation, monad_id::Int, do_full_setup::Bool, force_recompile::Bool)
+
+Internal function to prepare the command to run a simulation, including preparing input files and compiling the custom code if necessary.
+"""
 function prepareSimulationCommand(simulation::Simulation, monad_id::Int, do_full_setup::Bool, force_recompile::Bool)
     path_to_simulation_output = joinpath(trialFolder(simulation), "output")
     mkpath(path_to_simulation_output)
@@ -55,50 +60,75 @@ function prepareSimulationCommand(simulation::Simulation, monad_id::Int, do_full
     return Cmd(`$executable_str $config_str $flags`; env=ENV, dir=physicell_dir)
 end
 
+"""
+    simulationFailedToRun(simulation::Simulation, monad_id::Int)
+
+Set the status code of the simulation to "Failed" and erase the simulation ID from the `simulations.csv` file for the monad it belongs to.
+"""
 function simulationFailedToRun(simulation::Simulation, monad_id::Int)
     DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Failed")) WHERE simulation_id=$(simulation.id);" )
-    eraseSimulationID(simulation.id; monad_id=monad_id)
+    eraseSimulationIDFromConstituents(simulation.id; monad_id=monad_id)
     return
 end
 
+"""
+    SimulationProcess
+
+A struct to hold the simulation process and its associated monad ID. Users should not need to interact with this struct directly.
+
+# Fields
+- `simulation::Simulation`: The simulation object.
+- `monad_id::Int`: The ID of the associated monad.
+- `process::Union{Nothing,Base.Process}`: The process associated with the simulation. If the simulation process fails, e.g. if the command cannot be constructed, this will be `nothing`.
+"""
 struct SimulationProcess
     simulation::Simulation
     monad_id::Int
     process::Union{Nothing,Base.Process}
+    
+    function SimulationProcess(simulation::Simulation; monad_id::Union{Missing,Int}=missing, do_full_setup::Bool=true, force_recompile::Bool=false)
+        if ismissing(monad_id)
+            monad = Monad(simulation)
+            monad_id = monad.id
+        end
+    
+        cmd = prepareSimulationCommand(simulation, monad_id, do_full_setup, force_recompile)
+        if isnothing(cmd)
+            return new(simulation, monad_id, nothing)
+        end
+    
+        path_to_simulation_folder = trialFolder(simulation)
+        DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Running")) WHERE simulation_id=$(simulation.id);" )
+        println("\tRunning simulation: $(simulation.id)...")
+        flush(stdout)
+        if run_on_hpc
+            cmd = prepareHPCCommand(cmd, simulation.id)
+            p = run(pipeline(ignorestatus(cmd); stdout=joinpath(path_to_simulation_folder, "hpc.out"), stderr=joinpath(path_to_simulation_folder, "hpc.err")); wait=true)
+        else
+            p = run(pipeline(ignorestatus(cmd); stdout=joinpath(path_to_simulation_folder, "output.log"), stderr=joinpath(path_to_simulation_folder, "output.err")); wait=true)
+        end
+        return new(simulation, monad_id, p)
+    end
 end
 
-function SimulationProcess(simulation::Simulation; monad_id::Union{Missing,Int}=missing, do_full_setup::Bool=true, force_recompile::Bool=false)
-    if ismissing(monad_id)
-        monad = Monad(simulation)
-        monad_id = monad.id
-    end
+"""
+    prepCmdForWrap(cmd::Cmd)
 
-    cmd = prepareSimulationCommand(simulation, monad_id, do_full_setup, force_recompile)
-    if isnothing(cmd)
-        return SimulationProcess(simulation, monad_id, nothing)
-    end
-
-    path_to_simulation_folder = trialFolder("simulation", simulation.id)
-    DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Running")) WHERE simulation_id=$(simulation.id);" )
-    println("\tRunning simulation: $(simulation.id)...")
-    flush(stdout)
-    if run_on_hpc
-        cmd = prepareHPCCommand(cmd, simulation.id)
-        p = run(pipeline(ignorestatus(cmd); stdout=joinpath(path_to_simulation_folder, "hpc.out"), stderr=joinpath(path_to_simulation_folder, "hpc.err")); wait=true)
-    else
-        p = run(pipeline(ignorestatus(cmd); stdout=joinpath(path_to_simulation_folder, "output.log"), stderr=joinpath(path_to_simulation_folder, "output.err")); wait=true)
-    end
-    return SimulationProcess(simulation, monad_id, p)
-end
-
+Prepare the command for wrapping in the sbatch command. This is a helper function to remove the backticks from the command string.
+"""
 function prepCmdForWrap(cmd::Cmd)
     cmd = string(cmd)
     cmd = strip(cmd, '`')
     return cmd
 end
 
+"""
+    prepareHPCCommand(cmd::Cmd, simulation_id::Int)
+
+Prepare the command to run a simulation on an HPC system using sbatch. This function adds the necessary flags to the command and returns it as a Cmd object.
+"""
 function prepareHPCCommand(cmd::Cmd, simulation_id::Int)
-    path_to_simulation_folder = trialFolder("simulation", simulation_id)
+    path_to_simulation_folder = trialFolder(Simulation, simulation_id)
     base_cmd_str = "sbatch"
     flags = ["--wrap=$(prepCmdForWrap(Cmd(cmd.exec)))",
              "--wait",
@@ -123,6 +153,11 @@ function prepareHPCCommand(cmd::Cmd, simulation_id::Int)
     return `$base_cmd_str $flags`
 end
 
+"""
+    resolveSimulation(simulation_process::SimulationProcess, prune_options::PruneOptions)
+
+Resolve the simulation process by checking its exit code and updating the database accordingly.
+"""
 function resolveSimulation(simulation_process::SimulationProcess, prune_options::PruneOptions)
     simulation = simulation_process.simulation
     monad_id = simulation_process.monad_id
@@ -147,14 +182,29 @@ function resolveSimulation(simulation_process::SimulationProcess, prune_options:
             end
         end
         DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Failed")) WHERE simulation_id=$(simulation.id);" )
-        eraseSimulationID(simulation.id; monad_id=monad_id)
+        eraseSimulationIDFromConstituents(simulation.id; monad_id=monad_id)
     end
 
-    pruneSimulationOutput(simulation; prune_options=prune_options)
+    pruneSimulationOutput(simulation, prune_options)
     return success
 end
 
-function runMonad(monad::Monad; do_full_setup::Bool=true, force_recompile::Bool=false)
+"""
+    collectSimulationTasks(T::AbstractTrial[; force_recompile::Bool=false])
+
+Collect the simulation tasks for the given trial, sampling, monad, or simulation.
+
+# Arguments
+- `T::AbstractTrial`: The trial, sampling, monad, or simulation to collect tasks for.
+
+# Keyword Arguments
+- `force_recompile::Bool=false`: If `true`, forces a recompilation of all files by removing all `.o` files in the PhysiCell directory.
+- `do_full_setup::Bool=true`: If `true`, performs a full setup of the simulation, including compiling code and preparing input files. Only used for [`AbstractMonad`](@ref) objects.
+"""
+collectSimulationTasks(simulation::Simulation; force_recompile::Bool=false) =
+    isStarted(simulation; new_status_code="Queued") ? Task[] : [@task SimulationProcess(simulation; do_full_setup=true, force_recompile=force_recompile)]
+
+function collectSimulationTasks(monad::Monad; do_full_setup::Bool=true, force_recompile::Bool=false)
     mkpath(trialFolder(monad))
 
     if do_full_setup
@@ -181,7 +231,7 @@ function runMonad(monad::Monad; do_full_setup::Bool=true, force_recompile::Bool=
     return simulation_tasks
 end
 
-function runSampling(sampling::Sampling; force_recompile::Bool=false)
+function collectSimulationTasks(sampling::Sampling; force_recompile::Bool=false)
     mkpath(trialFolder(sampling))
 
     compilation_success = loadCustomCode(sampling; force_recompile=force_recompile)
@@ -190,42 +240,34 @@ function runSampling(sampling::Sampling; force_recompile::Bool=false)
     end
 
     simulation_tasks = []
-    for monad in Monad.(readSamplingMonadIDs(sampling))
-        append!(simulation_tasks, runMonad(monad, do_full_setup=false, force_recompile=false)) #! run the monad and add the number of new simulations to the total
+    for monad in Monad.(readConstituentIDs(sampling))
+        append!(simulation_tasks, collectSimulationTasks(monad, do_full_setup=false, force_recompile=false)) #! run the monad and add the number of new simulations to the total
     end
 
     return simulation_tasks
 end
 
-function runTrial(trial::Trial; force_recompile::Bool=false)
+function collectSimulationTasks(trial::Trial; force_recompile::Bool=false)
     mkpath(trialFolder(trial))
 
     simulation_tasks = []
-    for sampling_id in readTrialSamplingIDs(trial)
-        sampling = Sampling(sampling_id) #! instantiate a sampling with the variation_ids and the simulation ids already found
-        append!(simulation_tasks, runSampling(sampling; force_recompile=force_recompile)) #! run the sampling and add the number of new simulations to the total
+    for sampling in Sampling.(readConstituentIDs(trial))
+        append!(simulation_tasks, collectSimulationTasks(sampling; force_recompile=force_recompile)) #! run the sampling and add the number of new simulations to the total
     end
 
     return simulation_tasks
 end
 
-collectSimulationTasks(simulation::Simulation; force_recompile::Bool=false) = 
-    isStarted(simulation; new_status_code="Queued") ? Task[] : [@task SimulationProcess(simulation; do_full_setup=true, force_recompile=force_recompile)]
-collectSimulationTasks(monad::Monad; force_recompile::Bool=false) = runMonad(monad; do_full_setup=true, force_recompile=force_recompile)
-collectSimulationTasks(sampling::Sampling; force_recompile::Bool=false) = runSampling(sampling; force_recompile=force_recompile)
-collectSimulationTasks(trial::Trial; force_recompile::Bool=false) = runTrial(trial; force_recompile=force_recompile)
-
 """
-    collectSimulationTasks(T::AbstractTrial[; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions()])
+    PCVCTOutput
 
-Collect the simulation tasks for the given trial, sampling, monad, or simulation.
+A struct to hold the output of the PCVCT run, including the [`AbstractTrial`](@ref) object, the number of scheduled simulations, and the number of successful simulations.
 
-Used by `run` to collect the tasks to run.
-
-See also [`run`](@ref).
+# Fields
+- `trial::AbstractTrial`: The trial, sampling, monad, or simulation that was run.
+- `n_scheduled::Int`: The number of simulations that were scheduled to run.
+- `n_success::Int`: The number of simulations that were successfully completed.
 """
-function collectSimulationTasks(T::AbstractTrial; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions=PruneOptions()) end
-
 struct PCVCTOutput
     trial::AbstractTrial
     n_scheduled::Int
@@ -242,6 +284,11 @@ function Base.show(io::IO, ::MIME"text/plain", output::PCVCTOutput)
     println(io, "  - Successfully completed $(output.n_success) simulations.")
 end
 
+"""
+    getSimulationIDs(output::PCVCTOutput)
+
+Get the simulation IDs from the output of the PCVCT run.
+"""
 getSimulationIDs(output::PCVCTOutput) = getSimulationIDs(output.trial)
 
 """
@@ -323,11 +370,16 @@ end
 Alias for [`run`](@ref), but only with this particular signature. Does not work on `Cmd` objects as `Base.run` is built for.
 Also, does not work with `run`ning sensitivity samplings.
 """
-function runAbstractTrial(T::AbstractTrial; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions()) 
+function runAbstractTrial(T::AbstractTrial; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions())
     Base.depwarn("`runAbstractTrial` is deprecated. Use `run` instead.", :runAbstractTrial; force=true)
     return run(T; force_recompile=force_recompile, prune_options=prune_options)
 end
 
+"""
+    processSimulationTask(simulation_task, prune_options)
+
+Process the given simulation task and return whether it was successful.
+"""
 function processSimulationTask(simulation_task, prune_options)
     schedule(simulation_task)
     simulation_process = fetch(simulation_task)

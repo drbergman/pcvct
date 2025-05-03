@@ -3,6 +3,19 @@ import GlobalSensitivity #! do not bring in their definition of Sobol as it conf
 
 export MOAT, Sobolʼ, RBD
 
+"""
+    GSAMethod
+
+Abstract type for global sensitivity analysis methods.
+
+# Subtypes
+- [`MOAT`](@ref)
+- [`Sobolʼ`](@ref)
+- [`RBD`](@ref)
+
+# Methods
+[`run`](@ref)
+"""
 abstract type GSAMethod end
 
 """
@@ -16,18 +29,31 @@ Store the information that comes out of a global sensitivity analysis method.
 - [`RBDSampling`](@ref)
 
 # Methods
-- `getMonadIDDataFrame(gsa_sampling::GSASampling)`: get the DataFrame of monad IDs that define the scheme of the sensitivity analysis.
-- `getSimulationIDs(gsa_sampling::GSASampling)`: get the simulation IDs that were run in the sensitivity analysis.
-- `methodString(gsa_sampling::GSASampling)`: get the string representation of the method used in the sensitivity analysis.
-- `sensitivityResults!(gsa_sampling::GSASampling, functions::Vector{<:Function})`: calculate the sensitivity indices for the given functions.
-- `calculateGSA!(gsa_sampling::GSASampling, f::Vector{<:Function})`: calculate the sensitivity indices for the given function(s).
-- `evaluateFunctionOnSampling(gsa_sampling::GSASampling, f::Function)`: evaluate the function on the sampling and return the results.
+[`calculateGSA!`](@ref), [`evaluateFunctionOnSampling`](@ref),
+[`getMonadIDDataFrame`](@ref), [`getSimulationIDs`](@ref), [`methodString`](@ref),
+[`sensitivityResults!`](@ref), [`recordSensitivityScheme`](@ref)
 """
 abstract type GSASampling end
 
+"""
+    getMonadIDDataFrame(gsa_sampling::GSASampling)
+
+Get the DataFrame of monad IDs that define the scheme of the sensitivity analysis.
+"""
 getMonadIDDataFrame(gsa_sampling::GSASampling) = gsa_sampling.monad_ids_df
+
+"""
+    getSimulationIDs(gsa_sampling::GSASampling)
+
+Get the simulation IDs that were run in the sensitivity analysis.
+"""
 getSimulationIDs(gsa_sampling::GSASampling) = getSimulationIDs(gsa_sampling.sampling)
 
+"""
+    methodString(gsa_sampling::GSASampling)
+
+Get the string representation of the method used in the sensitivity analysis.
+"""
 function methodString(gsa_sampling::GSASampling)
     method = typeof(gsa_sampling) |> string |> lowercase
     method = split(method, ".")[end] #! remove module name that comes with the type, e.g. main.vctmodule.moatsampling -> moatsampling
@@ -35,15 +61,15 @@ function methodString(gsa_sampling::GSASampling)
 end
 
 """
-    run(method::GSAMethod, args...; functions::Vector{<:Function}=Function[], kwargs...)
+    run(method::GSAMethod, args...; functions::AbstractVector{<:Function}=Function[], kwargs...)
 
 Run a global sensitivity analysis method on the given arguments.
 
 # Arguments
 - `method::GSAMethod`: the method to run. Options are [`MOAT`](@ref), [`Sobolʼ`](@ref), and [`RBD`](@ref).
-- `n_replicates::Int`: the number of replicates to run for each monad, i.e., at each sampled parameter vector.
+- `n_replicates::Integer`: the number of replicates to run for each monad, i.e., at each sampled parameter vector.
 - `inputs::InputFolders`: the input folders shared across all simuations to run.
-- `avs::Vector{<:AbstractVariation}`: the elementary variations to sample. These can be either [`DiscreteVariation`](@ref)'s or [`DistributedVariation`](@ref)'s.
+- `avs::AbstractVector{<:AbstractVariation}`: the elementary variations to sample. These can be either [`DiscreteVariation`](@ref)'s or [`DistributedVariation`](@ref)'s.
 
 Alternatively, the third argument, `inputs`, can be replaced with a `reference::AbstractMonad`, i.e., a simulation or monad to be the reference.
 This should be preferred to setting reference variation IDs manually, i.e., if not using the base files in the input folders.
@@ -52,33 +78,38 @@ This should be preferred to setting reference variation IDs manually, i.e., if n
 The `reference_variation_id` keyword argument is only compatible when the third argument is of type `InputFolders`.
 Otherwise, the `reference` simulation/monad will set the reference variation values.
 - `reference_variation_id::VariationID`: the reference variation IDs as a `VariationID`
-- `ignore_indices::Vector{Int}=[]`: indices into `avs` to ignore when perturbing the parameters. Only used for Sobolʼ. See [`Sobolʼ`](@ref) for a use case.
+- `ignore_indices::AbstractVector{<:Integer}=[]`: indices into `avs` to ignore when perturbing the parameters. Only used for Sobolʼ. See [`Sobolʼ`](@ref) for a use case.
 - `force_recompile::Bool=false`: whether to force recompilation of the simulation code
 - `prune_options::PruneOptions=PruneOptions()`: the options for pruning the simulation results
 - `use_previous::Bool=true`: whether to use previous simulation results if they exist
-- `functions::Vector{<:Function}=Function[]`: the functions to calculate the sensitivity indices for. Each function must take a simulation ID as the singular input and return a real number.
+- `functions::AbstractVector{<:Function}=Function[]`: the functions to calculate the sensitivity indices for. Each function must take a simulation ID as the singular input and return a real number.
 """
-function run(method::GSAMethod, n_replicates::Integer, inputs::InputFolders, avs::Union{AbstractVariation,Vector{<:AbstractVariation}}; functions::Vector{<:Function}=Function[], kwargs...)
+function run(method::GSAMethod, n_replicates::Integer, inputs::InputFolders, avs::Union{AbstractVariation,AbstractVector{<:AbstractVariation}}; functions::AbstractVector{<:Function}=Function[], kwargs...)
     if avs isa AbstractVariation
         avs = [avs]
     end
     pv = ParsedVariations(avs)
-    gsa_sampling = _runSensitivitySampling(method, n_replicates, inputs, pv; kwargs...)
+    gsa_sampling = runSensitivitySampling(method, n_replicates, inputs, pv; kwargs...)
     sensitivityResults!(gsa_sampling, functions)
     return gsa_sampling
 end
 
-function run(method::GSAMethod, n_replicates::Integer, reference::AbstractMonad, avs::Union{AbstractVariation,Vector{<:AbstractVariation}}; functions::Vector{<:Function}=Function[], kwargs...)
+function run(method::GSAMethod, n_replicates::Integer, reference::AbstractMonad, avs::Union{AbstractVariation,Vector{<:AbstractVariation}}; functions::AbstractVector{<:Function}=Function[], kwargs...)
     return run(method, n_replicates, reference.inputs, avs; reference_variation_id=reference.variation_id, functions, kwargs...)
 end
 
-function sensitivityResults!(gsa_sampling::GSASampling, functions::Vector{<:Function})
+"""
+    sensitivityResults!(gsa_sampling::GSASampling, functions::AbstractVector{<:Function})
+
+Calculate the global sensitivity analysis for the given functions and record the sampling scheme.
+"""
+function sensitivityResults!(gsa_sampling::GSASampling, functions::AbstractVector{<:Function})
     calculateGSA!(gsa_sampling, functions)
     recordSensitivityScheme(gsa_sampling)
 end
 
 """
-    calculateGSA!(gsa_sampling::GSASampling, functions::Vector{<:Function})
+    calculateGSA!(gsa_sampling::GSASampling, functions::AbstractVector{<:Function})
 
 Calculate the sensitivity indices for the given functions.
 
@@ -89,9 +120,9 @@ calculateGSA!(gsa_sampling, f)
 
 # Arguments
 - `gsa_sampling::GSASampling`: the sensitivity analysis to calculate the indices for.
-- `functions::Vector{<:Function}`: the functions to calculate the sensitivity indices for. Each function must take a simulation ID as the singular input and return a real number.
+- `functions::AbstractVector{<:Function}`: the functions to calculate the sensitivity indices for. Each function must take a simulation ID as the singular input and return a real number.
 """
-function calculateGSA!(gsa_sampling::GSASampling, functions::Vector{<:Function})
+function calculateGSA!(gsa_sampling::GSASampling, functions::AbstractVector{<:Function})
     for f in functions
         calculateGSA!(gsa_sampling, f)
     end
@@ -151,8 +182,28 @@ function Base.show(io::IO, ::MIME"text/plain", moat_sampling::MOATSampling)
     end
 end
 
-function _runSensitivitySampling(method::MOAT, n_replicates::Int, inputs::InputFolders, pv::ParsedVariations; reference_variation_id::VariationID=VariationID(inputs),
-    ignore_indices::Vector{Int}=Int[], force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions(), use_previous::Bool=true)
+"""
+    runSensitivitySampling(method::GSAMethod, args...; kwargs...)
+
+Run a global sensitivity analysis method on the given arguments.
+
+# Arguments
+- `method::GSAMethod`: the method to run. Options are [`MOAT`](@ref), [`Sobolʼ`](@ref), and [`RBD`](@ref).
+- `n_replicates::Integer`: the number of replicates to run for each monad, i.e., at each sampled parameter vector.
+- `inputs::InputFolders`: the input folders shared across all simuations to run.
+- `pv::ParsedVariations`: the [`ParsedVariations`](@ref) object that contains the variations to sample.
+
+# Keyword Arguments
+- `reference_variation_id::VariationID`: the reference variation IDs as a `VariationID`
+- `ignore_indices::AbstractVector{<:Integer}=[]`: indices into `pv.variations` to ignore when perturbing the parameters. Only used for [Sobolʼ](@ref).
+- `force_recompile::Bool=false`: whether to force recompilation of the simulation code
+- `prune_options::PruneOptions=PruneOptions()`: the options for pruning the simulation results
+- `use_previous::Bool=true`: whether to use previous simulation results if they exist
+"""
+function runSensitivitySampling end
+
+function runSensitivitySampling(method::MOAT, n_replicates::Int, inputs::InputFolders, pv::ParsedVariations; reference_variation_id::VariationID=VariationID(inputs),
+    ignore_indices::AbstractVector{<:Integer}=Int[], force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions(), use_previous::Bool=true)
 
     if !isempty(ignore_indices)
         error("MOAT does not support ignoring indices...yet? Only Sobolʼ does for now.")
@@ -185,6 +236,11 @@ function _runSensitivitySampling(method::MOAT, n_replicates::Int, inputs::InputF
     return MOATSampling(sampling, monad_ids_df)
 end
 
+"""
+    perturbVariation(location::Symbol, pv::ParsedVariations, folder::String, reference_variation_id::Int, d::Int)
+
+Perturb the variation at the given location and dimension for [`MOAT`](@ref) global sensitivity analysis.
+"""
 function perturbVariation(location::Symbol, pv::ParsedVariations, folder::String, reference_variation_id::Int, d::Int)
     matching_dims = pv[location].indices .== d
     evs = pv[location].variations[matching_dims] #! all the variations associated with the dth feature
@@ -196,19 +252,24 @@ function perturbVariation(location::Symbol, pv::ParsedVariations, folder::String
     cdfs_at_base = [cdf(ev, bv) for (ev, bv) in zip(evs, base_values)]
     @assert maximum(cdfs_at_base) - minimum(cdfs_at_base) < 1e-10 "All base values must have the same CDF (within tolerance).\nInstead, got $cdfs_at_base."
     dcdf = cdfs_at_base[1] < 0.5 ? 0.5 : -0.5
-    new_values = _values.(evs, cdfs_at_base[1] + dcdf) #! note, this is a vector of values
+    new_values = variationValues.(evs, cdfs_at_base[1] + dcdf) #! note, this is a vector of values
 
-    discrete_variations = [DiscreteVariation(target(ev), new_value) for (ev, new_value) in zip(evs, new_values)]
+    discrete_variations = [DiscreteVariation(variationTarget(ev), new_value) for (ev, new_value) in zip(evs, new_values)]
 
-    new_variation_id = gridToDB(discrete_variations, retrieveID(location, folder), reference_variation_id)
+    new_variation_id = gridToDB(discrete_variations, inputFolderID(location, folder), reference_variation_id)
     @assert length(new_variation_id) == 1 "Only doing one perturbation at a time."
     return new_variation_id[1]
 end
 
+"""
+    variationValue(ev::ElementaryVariation, variation_id::Int, folder::String)
+
+Get the value of the variation at the given variation ID for [`MOAT`](@ref) global sensitivity analysis.
+"""
 function variationValue(ev::ElementaryVariation, variation_id::Int, folder::String)
-    loc = location(ev)
-    query = constructSelectQuery("$(loc)_variations", "WHERE $(locationVarIDName(loc))=$variation_id"; selection="\"$(columnName(ev))\"")
-    variation_value_df = queryToDataFrame(query; db=variationsDatabase(loc, folder), is_row=true)
+    location = variationLocation(ev)
+    query = constructSelectQuery("$(location)_variations", "WHERE $(locationVariationIDName(location))=$variation_id"; selection="\"$(columnName(ev))\"")
+    variation_value_df = queryToDataFrame(query; db=variationsDatabase(location, folder), is_row=true)
     return variation_value_df[1,1]
 
 end
@@ -258,7 +319,7 @@ struct Sobolʼ <: GSAMethod #! the prime symbol is used to avoid conflict with t
     sobol_index_methods::NamedTuple{(:first_order, :total_order), Tuple{Symbol, Symbol}}
 end
 
-Sobolʼ(n::Int; sobol_index_methods::NamedTuple{(:first_order, :total_order), Tuple{Symbol, Symbol}}=(first_order=:Jansen1999, total_order=:Jansen1999), kwargs...) = 
+Sobolʼ(n::Int; sobol_index_methods::NamedTuple{(:first_order, :total_order), Tuple{Symbol, Symbol}}=(first_order=:Jansen1999, total_order=:Jansen1999), kwargs...) =
     Sobolʼ(SobolVariation(n; n_matrices=2, kwargs...), sobol_index_methods)
 
 """
@@ -294,8 +355,8 @@ function Base.show(io::IO, ::MIME"text/plain", sobol_sampling::SobolSampling)
     end
 end
 
-function _runSensitivitySampling(method::Sobolʼ, n_replicates::Int, inputs::InputFolders, pv::ParsedVariations; reference_variation_id::VariationID=VariationID(inputs),
-    ignore_indices::Vector{Int}=Int[], force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions(), use_previous::Bool=true)
+function runSensitivitySampling(method::Sobolʼ, n_replicates::Int, inputs::InputFolders, pv::ParsedVariations; reference_variation_id::VariationID=VariationID(inputs),
+    ignore_indices::AbstractVector{<:Integer}=Int[], force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions(), use_previous::Bool=true)
 
     add_variations_result = addVariations(method.sobol_variation, inputs, pv, reference_variation_id)
     all_variation_ids = add_variations_result.all_variation_ids
@@ -303,7 +364,7 @@ function _runSensitivitySampling(method::Sobolʼ, n_replicates::Int, inputs::Inp
     d = length(pv.sz)
     focus_indices = [i for i in 1:d if !(i in ignore_indices)]
     location_variation_ids_A = [loc => [variation_id[loc] for variation_id in all_variation_ids[:,1]] for loc in project_locations.varied] |> Dict
-    A = cdfs[:,1,:] #! cdfs is of size (d, 2, n)
+    A = cdfs[:,1,:] #! cdfs is of size (d, 2, n), i.e., d = # parameters, 2 design matrices, and n = # samples
     location_variation_ids_B = [loc => [variation_id[loc] for variation_id in all_variation_ids[:,2]] for loc in project_locations.varied] |> Dict
     B = cdfs[:,2,:]
     Aᵦ = [i => copy(A) for i in focus_indices] |> Dict
@@ -433,8 +494,8 @@ function Base.show(io::IO, ::MIME"text/plain", rbd_sampling::RBDSampling)
     end
 end
 
-function _runSensitivitySampling(method::RBD, n_replicates::Int, inputs::InputFolders, pv::ParsedVariations; reference_variation_id::VariationID=VariationID(inputs),
-    ignore_indices::Vector{Int}=Int[], force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions(), use_previous::Bool=true)
+function runSensitivitySampling(method::RBD, n_replicates::Int, inputs::InputFolders, pv::ParsedVariations; reference_variation_id::VariationID=VariationID(inputs),
+    ignore_indices::AbstractVector{<:Integer}=Int[], force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions(), use_previous::Bool=true)
     if !isempty(ignore_indices)
         error("RBD does not support ignoring indices...yet? Only Sobolʼ does for now.")
     end
@@ -467,19 +528,29 @@ end
 
 ############# Generic Helper Functions #############
 
+"""
+    recordSensitivityScheme(gsa_sampling::GSASampling)
+
+Record the sampling scheme of the global sensitivity analysis to a CSV file.
+"""
 function recordSensitivityScheme(gsa_sampling::GSASampling)
     method = methodString(gsa_sampling)
     path_to_csv = joinpath(trialFolder(gsa_sampling.sampling), "$(method)_scheme.csv")
     return CSV.write(path_to_csv, getMonadIDDataFrame(gsa_sampling); header=true)
 end
 
+"""
+    evaluateFunctionOnSampling(gsa_sampling::GSASampling, f::Function)
+
+Evaluate the given function on the sampling scheme of the global sensitivity analysis, avoiding duplicate evaluations.
+"""
 function evaluateFunctionOnSampling(gsa_sampling::GSASampling, f::Function)
     monad_id_df = getMonadIDDataFrame(gsa_sampling)
     value_dict = Dict{Int, Float64}()
     values = zeros(Float64, size(monad_id_df))
     for (ind, monad_id) in enumerate(monad_id_df |> Matrix)
         if !haskey(value_dict, monad_id)
-            simulation_ids = readMonadSimulationIDs(monad_id)
+            simulation_ids = readConstituentIDs(Monad, monad_id)
             sim_values = [f(simulation_id) for simulation_id in simulation_ids]
             value = sim_values |> mean
             value_dict[monad_id] = value

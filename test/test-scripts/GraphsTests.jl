@@ -14,3 +14,4 @@ simulation_id = sampling_from_import |> getSimulationIDs |> first
 snapshot = pcvct.PhysiCellSnapshot(simulation_id, :final)
 c = connectedComponents(snapshot; include_cell_types=["fast T cell", "slow T cell", "effector T cell", "exhausted T cell"])
 c = connectedComponents(snapshot; include_dead=true)
+c = connectedComponents(snapshot; include_cell_types=["fast T cell", "slow T cell", "effector T cell", "exhausted T cell"], include_dead=true)

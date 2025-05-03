@@ -6,34 +6,51 @@ export assembleIntracellular!, PhysiCellComponent
     PhysiCellComponent
 
 A struct to hold the information about a component that is used to assemble an input of PhysiCell.
-    
+
 The `type` and `name` are the only fields that are compared for equality.
 The `type` represents the type of component that it is.
 Currently, only "roadrunner" is supported.
 The `name` is the name of the file inside the `components/type/` directory.
-The `path_from_components` is the path from the components directory to the file.
 The `id` is the id of the component, which will be -1 to indicate it is not yet set.
-The `id` is used to link which cell definition(s) use which component(s). 
+The `id` is used to link which cell definition(s) use which component(s).
+
+# Fields
+- `type::String`: The type of the component (e.g., "roadrunner", "dfba", "maboss").
+- `name::String`: The name of the component (e.g., "component.xml").
+- `id::Int`: The id of the component (e.g., 1, 2, 3). This is used to link which cell definition(s) use which component(s). A value of -1 indicates that the id is not yet set.
+
+# Examples
+```jldoctest
+julia> PhysiCellComponent("roadrunner", "test.xml")
+PhysiCellComponent("roadrunner", "test.xml", -1)
+```
+```jldoctest
+component = PhysiCellComponent("roadrunner", "test.xml")
+PhysiCellComponent(component, 78) # set the id to 78; users should not need to do this
+# output
+PhysiCellComponent("roadrunner", "test.xml", 78)
 """
 @auto_hash_equals fields = (type, name) struct PhysiCellComponent #! only compare the name and type for equality
     type::String #! type of the file (currently going to be "roadrunner", "dfba", or "maboss")
     name::String #! name of the file
-    path_from_components::String #! path from the components directory to the file
     id::Int #! id of the component (will be -1 to indicate it is not yet known)
 
     function PhysiCellComponent(type::String, name::String)
-        return new(type, name, joinpath(type, name), -1)
-    end
-
-    function PhysiCellComponent(name::String, type::String, path_from_components::String)
-        new(type, name, path_from_components, -1)
+        return new(type, name, -1)
     end
 
     function PhysiCellComponent(component::PhysiCellComponent, id::Int)
-        new(component.type, component.name, component.path_from_components, id)
+        return new(component.type, component.name, id)
     end
 end
 
+pathFromComponents(component::PhysiCellComponent) = joinpath(component.type, component.name)
+
+"""
+    assembleIntracellular!(cell_to_components_dict::Dict{String,<:Union{PhysiCellComponent,Vector{PhysiCellComponent}}}; kwargs...)
+
+Helper function to ensure the values of each entry is a vector of `PhysiCellComponent`s.
+"""
 function assembleIntracellular!(cell_to_components_dict::Dict{String,<:Union{PhysiCellComponent,Vector{PhysiCellComponent}}}; kwargs...)
     cell_to_vec_components_dict = Dict{String,Vector{PhysiCellComponent}}()
     for (cell_type, components) in cell_to_components_dict
@@ -46,6 +63,23 @@ function assembleIntracellular!(cell_to_components_dict::Dict{String,<:Union{Phy
     return assembleIntracellular!(cell_to_vec_components_dict; kwargs...)
 end
 
+"""
+    assembleIntracellular!(cell_to_components_dict::Dict{String,Vector{PhysiCellComponent}}; name::String="assembled", skip_db_insert::Bool=false)
+
+Assembles the intracellular components for the given cell types into a single file.
+
+First, check if the components have been previously assembled.
+If so, return that folder name.
+If not, create a new folder and save the components there as a single file along with the assembly manifest; finally, update the database with the new folder.
+
+# Arguments
+- `cell_to_components_dict::Dict{String,Vector{PhysiCellComponent}}`: A dictionary mapping cell types to their components.
+- `name::String`: The name of the folder to create (default is "assembled").
+- `skip_db_insert::Bool`: If true, skip the database insert (default is false). Skipped when importing a project. Users should not need to set this.
+
+# Returns
+- `folder::String`: The name of the folder where the components were assembled.
+"""
 function assembleIntracellular!(cell_to_components_dict::Dict{String,Vector{PhysiCellComponent}}; name::String="assembled", skip_db_insert::Bool=false)
     #! get all components to assign IDs
     unique_components = PhysiCellComponent[]
@@ -129,15 +163,15 @@ function assembleIntracellular!(cell_to_components_dict::Dict{String,Vector{Phys
         set_attribute(e_intracellular, "ID", string(i))
         set_attribute(e_intracellular, "type", component.type)
 
-        path_to_component_xml = joinpath(data_dir, "components", component.path_from_components)
-        component_xml_doc = openXML(path_to_component_xml)
+        path_to_component_xml = joinpath(data_dir, "components", pathFromComponents(component))
+        component_xml_doc = parse_file(path_to_component_xml)
         component_xml_root = root(component_xml_doc)
         add_child(e_intracellular, component_xml_root)
-        closeXML(component_xml_doc)
+        free(component_xml_doc)
     end
 
     save_file(xml_doc, joinpath(path_to_folder, "intracellular.xml"))
-    closeXML(xml_doc)
+    free(xml_doc)
 
     #! record the assembly of the document
     open(joinpath(path_to_folder, "assembly.toml"), "w") do io
@@ -153,6 +187,13 @@ function assembleIntracellular!(cell_to_components_dict::Dict{String,Vector{Phys
     return folder
 end
 
+"""
+    getIntracellularFolder(assembly_manifest::Dict)
+
+Get the folder that contains the intracellular assembly manifest that is equivalent to the given assembly manifest, if one exists.
+
+If no such folder exists, return nothing.
+"""
 function getIntracellularFolder(assembly_manifest::Dict)
     path_to_location_folders = locationPath(:intracellular)
 
@@ -166,9 +207,17 @@ function getIntracellularFolder(assembly_manifest::Dict)
             return folder
         end
     end
-    return
+    return nothing
 end
 
+"""
+    intracellularAssemblyManifestsEquivalent(A::Dict, B::Dict)
+
+Compare two intracellular assembly manifests to see if they are equivalent.
+
+Two manifests may assign different IDs to the same components.
+This function compares the component files to see if the manifests are equivalent.
+"""
 function intracellularAssemblyManifestsEquivalent(A::Dict, B::Dict)
 
     function _get_cell_to_components_dict(d::Dict)
@@ -209,6 +258,11 @@ function intracellularAssemblyManifestsEquivalent(A::Dict, B::Dict)
     return true
 end
 
+"""
+    updateIntracellularComponentIDs!(cell_to_components_dict::Dict{String,Vector{PhysiCellComponent}}, path_to_folder::String)
+
+Update the IDs of the components in the given dictionary to match those in the assembly manifest in the given folder.
+"""
 function updateIntracellularComponentIDs!(cell_to_components_dict::Dict{String,Vector{PhysiCellComponent}}, path_to_folder::String)
     path_to_file = joinpath(path_to_folder, "assembly.toml")
     @assert isfile(path_to_file) "Assembly file does not exist: $path_to_file"
@@ -227,6 +281,11 @@ function updateIntracellularComponentIDs!(cell_to_components_dict::Dict{String,V
     end
 end
 
+"""
+    findComponentID(assembly_manifest::Dict, component::PhysiCellComponent)
+
+Find the ID of the given component in the assembly manifest.
+"""
 function findComponentID(assembly_manifest::Dict, component::PhysiCellComponent)
     for (id, component_dict) in assembly_manifest["intracellulars"]
         if component_dict["name"] == component.name && component_dict["type"] == component.type

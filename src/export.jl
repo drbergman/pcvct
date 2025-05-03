@@ -10,22 +10,19 @@ Create a `user_project` folder from a simulation that can be loaded into PhysiCe
 Warning: not all features in drbergman/PhysiCell/latest/release are not supported in MathCancer/PhysiCell.
 
 # Arguments
-- `simulation_id::Integer`: the id of the simulation to export
+- `simulation_id::Integer`: the id of the simulation to export. Can also be a `Simulation` object.
 - `export_folder::AbstractString`: the folder to export the simulation to. Default is the simulation output folder.
 
 # Returns
 - `export_folder::AbstractString`: the folder where the simulation was exported to
 """
-function exportSimulation(simulation_id::Integer, export_folder::AbstractString="$(joinpath(trialFolder("simulation", simulation_id), "UserProjectExport"))")
+function exportSimulation(simulation_id::Integer, export_folder::AbstractString="$(joinpath(trialFolder(Simulation, simulation_id), "UserProjectExport"))")
     simulation = Simulation(simulation_id)
     return exportSimulation(simulation, export_folder)
 end
 
-"""
-    exportSimulation(simulation::Simulation[, export_folder::AbstractString])
-"""
 function exportSimulation(simulation::Simulation, export_folder::AbstractString="$(joinpath(trialFolder(simulation), "UserProjectExport"))")
-    success, physicell_version = prepareFolder(simulation, export_folder)
+    success, physicell_version = createExportFolder(simulation, export_folder)
     if success
         msg = """
         Exported simulation $(simulation.id) successfully to $(export_folder).
@@ -48,7 +45,12 @@ function exportSimulation(simulation::Simulation, export_folder::AbstractString=
     return export_folder
 end
 
-function prepareFolder(simulation::Simulation, export_folder::AbstractString)
+"""
+    createExportFolder(simulation::Simulation, export_folder::AbstractString)
+
+Create and populate the export folder for a simulation.
+"""
+function createExportFolder(simulation::Simulation, export_folder::AbstractString)
     export_config_folder = joinpath(export_folder, "config")
     mkpath(export_config_folder)
 
@@ -128,9 +130,14 @@ function prepareFolder(simulation::Simulation, export_folder::AbstractString)
     return revertSimulationFolderToCurrentPhysiCell(export_folder, physicell_version), physicell_version
 end
 
+"""
+    exportIntracellular(simulation::Simulation, export_folder::AbstractString)
+
+Export the intracellular model for a simulation to the export folder.
+"""
 function exportIntracellular(simulation::Simulation, export_folder::AbstractString)
     path_to_intracellular = joinpath(locationPath(:intracellular, simulation), "intracellular.xml")
-    xml_doc = openXML(path_to_intracellular)
+    xml_doc = parse_file(path_to_intracellular)
     intracellulars_element = retrieveElement(xml_doc, ["intracellulars"])
     intracellular_mapping = Dict{String,Tuple{String,String}}()
     for intracellular_element in child_elements(intracellulars_element)
@@ -142,12 +149,12 @@ function exportIntracellular(simulation::Simulation, export_folder::AbstractStri
         path_end = joinpath("config", "intracellular_$(intracellular_type)_$(intracellular_id).xml")
         new_path = joinpath(export_folder, path_end)
         save_file(new_xml_doc, new_path)
-        closeXML(new_xml_doc)
+        free(new_xml_doc)
         intracellular_mapping[intracellular_id] = (intracellular_type, path_end)
     end
-    
+
     path_to_exported_config = joinpath(export_folder, "config", "PhysiCell_settings.xml")
-    config_xml = openXML(path_to_exported_config)
+    config_xml = parse_file(path_to_exported_config)
 
     cell_definitions_element = retrieveElement(xml_doc, ["cell_definitions"])
     for cell_definition_element in child_elements(cell_definitions_element)
@@ -166,13 +173,19 @@ function exportIntracellular(simulation::Simulation, export_folder::AbstractStri
         sbml_filename_element = makeXMLPath(config_cell_def_intracellular_element, "sbml_filename")
         set_content(sbml_filename_element, intracellular_mapping[intracellular_id][2])
     end
-    
+
     save_file(config_xml, path_to_exported_config)
-    closeXML(config_xml)
-    closeXML(xml_doc)
+    free(config_xml)
+    free(xml_doc)
     return
 end
 
+
+"""
+    revertSimulationFolderToCurrentPhysiCell(export_folder::AbstractString, physicell_version::AbstractString)
+
+Revert the simulation folder to the given PhysiCell version.
+"""
 function revertSimulationFolderToCurrentPhysiCell(export_folder::AbstractString, physicell_version::AbstractString)
     success = revertMain(export_folder, physicell_version)
     success &= revertMakefile(export_folder, physicell_version)
@@ -181,6 +194,11 @@ function revertSimulationFolderToCurrentPhysiCell(export_folder::AbstractString,
     return success
 end
 
+"""
+    revertMain(export_folder::AbstractString, physicell_version::AbstractString)
+
+Revert the main.cpp file in the export folder to the given PhysiCell version.
+"""
 function revertMain(export_folder::AbstractString, physicell_version::AbstractString)
     path_to_main = joinpath(export_folder, "main.cpp")
     lines = readlines(path_to_main)
@@ -218,17 +236,17 @@ function revertMain(export_folder::AbstractString, physicell_version::AbstractSt
     parsing_block = """
         // load and parse settings file(s)
 
-        bool XML_status = false; 
-        char copy_command [1024]; 
+        bool XML_status = false;
+        char copy_command [1024];
         if( argc > 1 )
         {
-            XML_status = load_PhysiCell_config_file( argv[1] ); 
-            sprintf( copy_command , "cp %s %s" , argv[1] , PhysiCell_settings.folder.c_str() ); 
+            XML_status = load_PhysiCell_config_file( argv[1] );
+            sprintf( copy_command , "cp %s %s" , argv[1] , PhysiCell_settings.folder.c_str() );
         }
         else
         {
             XML_status = load_PhysiCell_config_file( "./config/PhysiCell_settings.xml" );
-            sprintf( copy_command , "cp ./config/PhysiCell_settings.xml %s" , PhysiCell_settings.folder.c_str() ); 
+            sprintf( copy_command , "cp ./config/PhysiCell_settings.xml %s" , PhysiCell_settings.folder.c_str() );
         }
         if( !XML_status )
         { exit(-1); }
@@ -246,14 +264,24 @@ function revertMain(export_folder::AbstractString, physicell_version::AbstractSt
     return true
 end
 
+"""
+    revertMakefile(export_folder::AbstractString, physicell_version::AbstractString)
+
+Revert the Makefile in the export folder to the given PhysiCell version.
+"""
 function revertMakefile(export_folder::AbstractString, physicell_version::AbstractString)
     return true #! nothing to do as of yet for the Makefile
 end
 
+"""
+    revertConfig(export_folder::AbstractString, physicell_version::AbstractString)
+
+Revert the config folder in the export folder to the given PhysiCell version.
+"""
 function revertConfig(export_folder::AbstractString, physicell_version::AbstractString)
     path_to_config_folder = joinpath(export_folder, "config")
     path_to_config = joinpath(path_to_config_folder, "PhysiCell_settings.xml")
-    xml_doc = openXML(path_to_config)
+    xml_doc = parse_file(path_to_config)
 
     #! output folder
     folder_element = makeXMLPath(xml_doc, ["save", "folder"])
@@ -301,10 +329,15 @@ function revertConfig(export_folder::AbstractString, physicell_version::Abstract
     #! handled in exportIntracellular
 
     save_file(xml_doc, path_to_config)
-    closeXML(xml_doc)
+    free(xml_doc)
     return true
 end
 
+"""
+    setECMSetupElement(xml_doc::XMLDocument)
+
+Set up the ECM element in the XML document to support the ECM module.
+"""
 function setECMSetupElement(xml_doc::XMLDocument)
     ecm_setup_element = makeXMLPath(xml_doc, ["microenvironment_setup", "ecm_setup"])
     set_attributes(ecm_setup_element; enabled="true", format="csv")
@@ -315,6 +348,11 @@ function setECMSetupElement(xml_doc::XMLDocument)
     return
 end
 
+"""
+    revertCustomModules(export_folder::AbstractString, physicell_version::AbstractString)
+
+Revert the custom modules in the export folder to the given PhysiCell version.
+"""
 function revertCustomModules(export_folder::AbstractString, physicell_version::AbstractString)
     path_to_custom_modules = joinpath(export_folder, "custom_modules")
     success = revertCustomHeader(path_to_custom_modules, physicell_version)
@@ -322,10 +360,20 @@ function revertCustomModules(export_folder::AbstractString, physicell_version::A
     return success
 end
 
+"""
+    revertCustomHeader(path_to_custom_modules::AbstractString, physicell_version::AbstractString)
+
+Revert the custom header file in the export folder to the given PhysiCell version.
+"""
 function revertCustomHeader(::AbstractString, ::AbstractString)
     return true #! nothing to do as of yet for the custom header
 end
 
+"""
+    revertCustomCPP(path_to_custom_modules::AbstractString, physicell_version::AbstractString)
+
+Revert the custom cpp file in the export folder to the given PhysiCell version.
+"""
 function revertCustomCPP(path_to_custom_modules::AbstractString, ::AbstractString)
     path_to_custom_cpp = joinpath(path_to_custom_modules, "custom.cpp")
     lines = readlines(path_to_custom_cpp)

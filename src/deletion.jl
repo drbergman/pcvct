@@ -7,7 +7,7 @@ export deleteSimulation, deleteSimulations, deleteSimulationsByStatus, resetData
 
 Deletes the simulations with the input IDs from the database and from the `data/outputs/simulations` folder.
 
-Works with any vector of integers or a single integer.
+Works with a vector of simulation IDs, a single simulation ID, a vector of `Simulation`s or a single `Simulation`.
 If `delete_supers` is `true`, it will also delete any monads, samplings, and trials that no longer have any simulations associated with them.
 It is recommended to leave this to `true` to keep the database clean.
 The `and_constraints` argument allows for additional SQLite conditions to be added to the `WHERE` clause of the SQLite query. Use this only after inspecting the `simulations` table in the `data/vct.db` database.
@@ -29,7 +29,7 @@ function deleteSimulations(simulation_ids::AbstractVector{<:Union{Integer,Missin
     DBInterface.execute(db,"DELETE FROM simulations WHERE simulation_id IN ($(join(simulation_ids,",")));")
 
     for row in eachrow(sim_df)
-        rm_hpc_safe(trialFolder("simulation", row.simulation_id); force=true, recursive=true)
+        rm_hpc_safe(trialFolder(Simulation, row.simulation_id); force=true, recursive=true)
 
         for (location, location_dict) in pairs(inputs_dict)
             if !any(location_dict["varied"])
@@ -40,11 +40,11 @@ function deleteSimulations(simulation_ids::AbstractVector{<:Union{Integer,Missin
             folder = inputFolderName(location, row_id)
             result_df = constructSelectQuery(
                 "simulations",
-                "WHERE $(id_name) = $(row_id) AND $(locationVarIDName(location)) = $(row[locationVarIDName(location)])";
+                "WHERE $(id_name) = $(row_id) AND $(locationVariationIDName(location)) = $(row[locationVariationIDName(location)])";
                 selection="COUNT(*)"
             ) |> queryToDataFrame
             if result_df.var"COUNT(*)"[1] == 0
-                rm_hpc_safe(joinpath(locationPath(location, folder), variationsTableName(location), "$(location)_variation_$(row[locationVarIDName(location)]).xml"); force=true)
+                rm_hpc_safe(joinpath(locationPath(location, folder), variationsTableName(location), "$(location)_variation_$(row[locationVariationIDName(location)]).xml"); force=true)
             end
         end
     end
@@ -56,7 +56,7 @@ function deleteSimulations(simulation_ids::AbstractVector{<:Union{Integer,Missin
     monad_ids = constructSelectQuery("monads"; selection="monad_id") |> queryToDataFrame |> x -> x.monad_id
     monad_ids_to_delete = Int[]
     for monad_id in monad_ids
-        monad_simulation_ids = readMonadSimulationIDs(monad_id)
+        monad_simulation_ids = readConstituentIDs(Monad, monad_id)
         if !any(x -> x in simulation_ids, monad_simulation_ids) #! if none of the monad simulation ids are among those to be deleted, then nothing to do here
             continue
         end
@@ -64,7 +64,7 @@ function deleteSimulations(simulation_ids::AbstractVector{<:Union{Integer,Missin
         if isempty(monad_simulation_ids)
             push!(monad_ids_to_delete, monad_id)
         else
-            recordSimulationIDs(monad_id, monad_simulation_ids)
+            recordConstituentIDs(Monad, monad_id, monad_simulation_ids)
         end
     end
     if !isempty(monad_ids_to_delete)
@@ -76,17 +76,39 @@ end
 deleteSimulations(simulation_id::Int; kwargs...) = deleteSimulations([simulation_id]; kwargs...)
 deleteSimulations(simulations::Vector{Simulation}; kwargs...) = deleteSimulations([sim.id for sim in simulations]; kwargs...)
 deleteSimulations(simulation::Simulation; kwargs...) = deleteSimulations([simulation]; kwargs...)
+
+"""
+    deleteSimulation(args...; kwargs...)
+
+Alias for [`deleteSimulations`](@ref).
+"""
 deleteSimulation = deleteSimulations #! alias
+
+"""
+    deleteAllSimulations(; delete_supers::Bool=true, and_constraints::String="")
+
+Delete all simulations. See [`deleteSimulations`](@ref) for the meaning of the keyword arguments.
+"""
 deleteAllSimulations(; delete_supers::Bool=true, and_constraints::String="") = getSimulationIDs() |> x -> deleteSimulations(x; delete_supers=delete_supers, and_constraints=and_constraints)
 
+"""
+    deleteMonad(monad_ids::AbstractVector{<:Integer}; delete_subs::Bool=true, delete_supers::Bool=true)
+
+Delete monads from the database by monad ID.
+
+# Arguments
+- `monad_ids`: list of monad IDs to delete. Can also pass an `Integer`.
+- `delete_subs`: If `delete_subs` is `true`, will further delete the simulations corresponding to the monad.
+- `delete_supers`: If `delete_supers` is `true`, will further delete any samplings that no longer have associated monads after the deletion.
+"""
 function deleteMonad(monad_ids::AbstractVector{<:Integer}; delete_subs::Bool=true, delete_supers::Bool=true)
     DBInterface.execute(db,"DELETE FROM monads WHERE monad_id IN ($(join(monad_ids,",")));")
     simulation_ids_to_delete = Int[]
     for monad_id in monad_ids
         if delete_subs
-            append!(simulation_ids_to_delete, readMonadSimulationIDs(monad_id))
+            append!(simulation_ids_to_delete, readConstituentIDs(Monad, monad_id))
         end
-        rm_hpc_safe(trialFolder("monad", monad_id); force=true, recursive=true)
+        rm_hpc_safe(trialFolder(Monad, monad_id); force=true, recursive=true)
     end
     if !isempty(simulation_ids_to_delete)
         deleteSimulations(simulation_ids_to_delete; delete_supers=false)
@@ -99,7 +121,7 @@ function deleteMonad(monad_ids::AbstractVector{<:Integer}; delete_subs::Bool=tru
     sampling_ids = constructSelectQuery("samplings"; selection="sampling_id") |> queryToDataFrame |> x -> x.sampling_id
     sampling_ids_to_delete = Int[]
     for sampling_id in sampling_ids
-        sampling_monad_ids = readSamplingMonadIDs(sampling_id)
+        sampling_monad_ids = readConstituentIDs(Sampling, sampling_id)
         if !any(x -> x in monad_ids, sampling_monad_ids) #! if none of the sampling monad ids are among those to be deleted, then nothing to do here
             continue
         end
@@ -107,7 +129,7 @@ function deleteMonad(monad_ids::AbstractVector{<:Integer}; delete_subs::Bool=tru
         if isempty(sampling_monad_ids)
             push!(sampling_ids_to_delete, sampling_id)
         else
-            recordMonadIDs(sampling_id, sampling_monad_ids)
+            recordConstituentIDs(Sampling, sampling_id, sampling_monad_ids)
         end
     end
     if !isempty(sampling_ids_to_delete)
@@ -118,14 +140,24 @@ end
 
 deleteMonad(monad_id::Int; delete_subs::Bool=true, delete_supers::Bool=true) = deleteMonad([monad_id]; delete_subs=delete_subs, delete_supers=delete_supers)
 
+"""
+    deleteSampling(sampling_ids::AbstractVector{<:Integer}; delete_subs::Bool=true, delete_supers::Bool=true)
+
+Delete samplings from the database by sampling ID.
+
+# Arguments
+- `sampling_ids`: list of sampling IDs to delete. Can also pass an `Integer`.
+- `delete_subs`: If `delete_subs` is `true`, will further delete the monads corresponding to the sampling.
+- `delete_supers`: If `delete_supers` is `true`, will further delete any trials that no longer have associated samplings after the deletion.
+"""
 function deleteSampling(sampling_ids::AbstractVector{<:Integer}; delete_subs::Bool=true, delete_supers::Bool=true)
     DBInterface.execute(db,"DELETE FROM samplings WHERE sampling_id IN ($(join(sampling_ids,",")));")
     monad_ids_to_delete = Int[]
     for sampling_id in sampling_ids
         if delete_subs
-            append!(monad_ids_to_delete, readSamplingMonadIDs(sampling_id))
+            append!(monad_ids_to_delete, readConstituentIDs(Sampling, sampling_id))
         end
-        rm_hpc_safe(trialFolder("sampling", sampling_id); force=true, recursive=true)
+        rm_hpc_safe(trialFolder(Sampling, sampling_id); force=true, recursive=true)
     end
     if !isempty(monad_ids_to_delete)
         all_sampling_ids = constructSelectQuery("samplings"; selection="sampling_id") |> queryToDataFrame |> x -> x.sampling_id
@@ -134,7 +166,7 @@ function deleteSampling(sampling_ids::AbstractVector{<:Integer}; delete_subs::Bo
                 continue #! skip the samplings to be deleted (we want to delete their monads)
             end
             #! this is then a sampling that we are not deleting, do not delete their monads!!
-            monad_ids = readSamplingMonadIDs(sampling_id)
+            monad_ids = readConstituentIDs(Sampling, sampling_id)
             filter!(x -> !(x in monad_ids), monad_ids_to_delete) #! if a monad to delete is in the sampling to keep, then do not delete it!! (or more in line with logic here: if a monad marked for deletion is not in this sampling we are keeping, then leave it in the deletion list)
         end
         deleteMonad(monad_ids_to_delete; delete_subs=true, delete_supers=false)
@@ -147,7 +179,7 @@ function deleteSampling(sampling_ids::AbstractVector{<:Integer}; delete_subs::Bo
     trial_ids = constructSelectQuery("trials"; selection="trial_id") |> queryToDataFrame |> x -> x.trial_id
     trial_ids_to_delete = Int[]
     for trial_id in trial_ids
-        trial_sampling_ids = readTrialSamplingIDs(trial_id)
+        trial_sampling_ids = readConstituentIDs(Trial, trial_id)
         if !any(x -> x in sampling_ids, trial_sampling_ids) #! if none of the trial sampling ids are among those to be deleted, then nothing to do here
             continue
         end
@@ -155,7 +187,7 @@ function deleteSampling(sampling_ids::AbstractVector{<:Integer}; delete_subs::Bo
         if isempty(trial_sampling_ids)
             push!(trial_ids_to_delete, trial_id)
         else
-            recordSamplingIDs(trial_id, trial_sampling_ids)
+            recordConstituentIDs(Trial, trial_id, trial_sampling_ids)
         end
     end
     if !isempty(trial_ids_to_delete)
@@ -166,14 +198,23 @@ end
 
 deleteSampling(sampling_id::Int; delete_subs::Bool=true, delete_supers::Bool=true) = deleteSampling([sampling_id]; delete_subs=delete_subs, delete_supers=delete_supers)
 
+"""
+    deleteTrial(trial_ids::AbstractVector{<:Integer}; delete_subs::Bool=true)
+
+Delete trials from the database by trial ID.
+
+# Arguments
+- `trial_ids`: list of trial IDs to delete. Can also pass an `Integer`.
+- `delete_subs`: If `delete_subs` is `true`, will further delete the samplings corresponding to the trials.
+"""
 function deleteTrial(trial_ids::AbstractVector{<:Integer}; delete_subs::Bool=true)
     DBInterface.execute(db,"DELETE FROM trials WHERE trial_id IN ($(join(trial_ids,",")));")
     sampling_ids_to_delete = Int[]
     for trial_id in trial_ids
         if delete_subs
-            append!(sampling_ids_to_delete, readTrialSamplingIDs(trial_id))
+            append!(sampling_ids_to_delete, readConstituentIDs(Trial, trial_id))
         end
-        rm_hpc_safe(trialFolder("trial", trial_id); force=true, recursive=true)
+        rm_hpc_safe(trialFolder(Trial, trial_id); force=true, recursive=true)
     end
     if !isempty(sampling_ids_to_delete)
         all_trial_ids = constructSelectQuery("trials"; selection="trial_id") |> queryToDataFrame |> x -> x.trial_id
@@ -182,7 +223,7 @@ function deleteTrial(trial_ids::AbstractVector{<:Integer}; delete_subs::Bool=tru
                 continue #! skip the trials to be deleted (we want to delete their samplings)
             end
             #! this is then a trial that we are not deleting, do not delete their samplings!!
-            sampling_ids = readTrialSamplingIDs(trial_id)
+            sampling_ids = readConstituentIDs(Trial, trial_id)
             filter!(x -> !(x in sampling_ids), sampling_ids_to_delete) #! if a sampling to delete is in the trial to keep, then do not delete it!! (or more in line with logic here: if a sampling marked for deletion is not in this trial we are keeping, then leave it in the deletion list)
         end
         deleteSampling(sampling_ids_to_delete; delete_subs=true, delete_supers=false)
@@ -258,6 +299,15 @@ function resetDatabase(; force_reset::Bool=false, force_continue::Bool=false)
     return nothing
 end
 
+"""
+    resetFolder(location::Symbol, folder::String)
+    
+Reset a specific folder in the database for a given location, removing the variations database and variations folder.
+
+# Arguments
+- `location`: The location of the folder to reset.
+- `folder`: The name of the folder to reset.
+"""
 function resetFolder(location::Symbol, folder::String)
     inputs_dict_entry = inputs_dict[location]
     path_to_folder = locationPath(location, folder)
@@ -317,7 +367,7 @@ function deleteSimulationsByStatus(status_codes_to_delete::Vector{String}=["Fail
 end
 
 """
-    eraseSimulationID(simulation_id::Int[; monad_id::Union{Missing,Int}=missing])
+    eraseSimulationIDFromConstituents(simulation_id::Int[; monad_id::Union{Missing,Int}=missing])
 
 Erase a simulation ID from the `simulations.csv` file of the monad it belongs to.
 
@@ -325,13 +375,13 @@ If `monad_id` is not provided, the function will infer it from the simulation ID
 If the monad contains only the given simulation ID, the monad will be deleted.
 This is used when running simulations if they error so that the monads no longer rely on them, but the simulation output can still be checked.
 """
-function eraseSimulationID(simulation_id::Int; monad_id::Union{Missing,Int}=missing)
+function eraseSimulationIDFromConstituents(simulation_id::Int; monad_id::Union{Missing,Int}=missing)
     if ismissing(monad_id)
         query = constructSelectQuery("simulations", "WHERE simulation_id = $(simulation_id)")
         df = queryToDataFrame(query)
         all_id_features = [locationIDName(loc) for loc in project_locations.varied] #! project_locations.varied is a Tuple, so doing locationIDName.(project_locations.varied) makes a Tuple, not a Vector
         add_id_values = [df[1, id_feature] for id_feature in all_id_features]
-        all_variation_id_features = [locationVarIDName(loc) for loc in project_locations.varied] #! project_locations.varied is a Tuple, so doing locationVarIDName.(project_locations.varied) makes a Tuple, not a Vector
+        all_variation_id_features = [locationVariationIDName(loc) for loc in project_locations.varied] #! project_locations.varied is a Tuple, so doing locationVariationIDName.(project_locations.varied) makes a Tuple, not a Vector
         all_variation_id_values = [df[1, variation_id_feature] for variation_id_feature in all_variation_id_features]
         all_features = [all_id_features; all_variation_id_features]
         all_values = [add_id_values; all_variation_id_values]
@@ -340,7 +390,7 @@ function eraseSimulationID(simulation_id::Int; monad_id::Union{Missing,Int}=miss
         df = queryToDataFrame(query)
         monad_id = df.monad_id[1]
     end
-    simulation_ids = readMonadSimulationIDs(monad_id)
+    simulation_ids = readConstituentIDs(Monad, monad_id)
     index = findfirst(x->x==simulation_id, simulation_ids)
     if isnothing(index)
         return #! maybe this could happen? so let's check just in case
@@ -352,9 +402,16 @@ function eraseSimulationID(simulation_id::Int; monad_id::Union{Missing,Int}=miss
         return
     end
     deleteat!(simulation_ids, index)
-    recordSimulationIDs(monad_id, simulation_ids)
+    recordConstituentIDs(Monad, monad_id, simulation_ids)
 end
 
+"""
+    rm_hpc_safe(path::String; force::Bool=false, recursive::Bool=false)
+
+Remove files and take care if on an HPC since the NFS filesystem can leave behind extra files.
+
+If on an HPC, move deleted files into the hidden directory `data/.trash/` in a time-stamped folder.
+"""
 function rm_hpc_safe(path::String; force::Bool=false, recursive::Bool=false)
     if !run_on_hpc
         rm(path; force=force, recursive=recursive)

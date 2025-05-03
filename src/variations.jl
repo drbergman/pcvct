@@ -3,10 +3,11 @@ import Distributions: cdf
 
 export ElementaryVariation, DiscreteVariation, DistributedVariation, CoVariation
 export UniformDistributedVariation, NormalDistributedVariation
-export GridVariation, LHSVariation, SobolVariation
+export GridVariation, LHSVariation, SobolVariation, RBDVariation
 export addDomainVariationDimension!, addCustomDataVariationDimension!, addAttackRateVariationDimension!
 
 ################## XMLPath ##################
+
 """
     XMLPath
 
@@ -25,7 +26,7 @@ struct XMLPath
     function XMLPath(xml_path::Vector{<:AbstractString})
         custom_fields = startswith.(xml_path, "custom:")
         xml_path[custom_fields] = "custom " .* [lstrip(p[8:end]) for p in xml_path[custom_fields]]
-        new(xml_path)
+        return new(xml_path)
     end
 end
 
@@ -35,7 +36,25 @@ Base.show(io::IO, ::MIME"text/plain", xp::XMLPath) = println(io, "XMLPath: $(col
 
 ################## Abstract Variations ##################
 
+"""
+    AbstractVariation
+
+Abstract type for variations.
+
+# Subtypes
+[`ElementaryVariation`](@ref), [`DiscreteVariation`](@ref), [`DistributedVariation`](@ref), [`CoVariation`](@ref)
+
+# Methods
+[`addVariations`](@ref), [`createTrial`](@ref), [`run`](@ref), 
+[`_createTrial`](@ref)
+"""
 abstract type AbstractVariation end
+
+"""
+    ElementaryVariation <: AbstractVariation
+
+The base type for variations of a single parameter.
+"""
 abstract type ElementaryVariation <: AbstractVariation end
 
 """
@@ -93,6 +112,7 @@ struct DiscreteVariation{T} <: ElementaryVariation
     function DiscreteVariation(target::Vector{<:AbstractString}, values::Vector{T}) where T
         return DiscreteVariation(XMLPath(target), values)
     end
+
     function DiscreteVariation(target::XMLPath, values::Vector{T}) where T
         location = variationLocation(target)
         return new{T}(location, target, values)
@@ -104,7 +124,7 @@ DiscreteVariation(xml_path::Vector{<:AbstractString}, value::T) where T = Discre
 Base.length(discrete_variation::DiscreteVariation) = length(discrete_variation.values)
 
 function Base.show(io::IO, ::MIME"text/plain", dv::DiscreteVariation)
-    println(io, "DiscreteVariation ($(dataType(dv))):")
+    println(io, "DiscreteVariation ($(variationDataType(dv))):")
     println(io, "  location: $(dv.location)")
     println(io, "  target: $(columnName(dv))")
     println(io, "  values: $(dv.values)")
@@ -166,9 +186,22 @@ struct DistributedVariation <: ElementaryVariation
     end
 end
 
-target(ev::ElementaryVariation) = ev.target
-location(ev::ElementaryVariation) = ev.location
-columnName(ev::ElementaryVariation) = target(ev) |> columnName
+"""
+    variationTarget(av::AbstractVariation)
+
+Get the type [`XMLPath`](@ref) target(s) of a variation
+"""
+variationTarget(ev::ElementaryVariation) = ev.target
+
+"""
+    variationLocation(av::AbstractVariation)
+
+Get the location of a variation as a `Symbol`, e.g., `:config`, `:rulesets_collection`, etc.
+Can also pass in an [`XMLPath`](@ref) object.
+"""
+variationLocation(ev::ElementaryVariation) = ev.location
+
+columnName(ev::ElementaryVariation) = variationTarget(ev) |> columnName
 
 Base.length(::DistributedVariation) = -1 #! set to -1 to be a convention
 
@@ -197,39 +230,52 @@ function NormalDistributedVariation(xml_path::Vector{<:AbstractString}, mu::T, s
     return DistributedVariation(xml_path, truncated(Normal(mu, sigma), lb, ub), flip)
 end
 
-_values(discrete_variation::DiscreteVariation) = discrete_variation.values
+"""
+    variationValues(ev::ElementaryVariation[, cdf])
 
-function _values(discrete_variation::DiscreteVariation, cdf::Vector{<:Real})
+Get the values of an [`ElementaryVariation`](@ref).
+
+If `ev` is a [`DiscreteVariation`](@ref), all values are returned unless `cdf` is provided.
+In that case, the CDF(s) is linearly converted into an index into the values vector and the corresponding value is returned.
+
+If `ev` is a [`DistributedVariation`](@ref), the `cdf` is required and the iCDF is returned.
+The `cdf` can be a single value or a vector of values.
+
+# Arguments
+- `ev::ElementaryVariation`: The variation to get the values of.
+- `cdf`: The cumulative distribution function (CDF) values to use for the variation.
+"""
+variationValues(discrete_variation::DiscreteVariation) = discrete_variation.values
+
+function variationValues(discrete_variation::DiscreteVariation, cdf::Vector{<:Real})
     index = floor.(Int, cdf * length(discrete_variation)) .+ 1
     index[index.==(length(discrete_variation)+1)] .= length(discrete_variation) #! if cdf = 1, index = length(discrete_variation)+1, so we set it to length(discrete_variation)
     return discrete_variation.values[index]
 end
 
-_values(discrete_variation::DiscreteVariation, cdf::Real) = _values(discrete_variation, [cdf])
-
-function _values(dv::DistributedVariation, cdf::Vector{<:Real})
+function variationValues(dv::DistributedVariation, cdf::Vector{<:Real})
     return map(Base.Fix1(quantile, dv.distribution), dv.flip ? 1 .- cdf : cdf)
 end
 
-_values(dv::DistributedVariation, cdf::Real) = _values(dv, [cdf])
+variationValues(ev, cdf::Real) = variationValues(ev, [cdf])
 
-_values(::DistributedVariation) = error("A cdf must be provided for a DistributedVariation.")
-_values(ev::ElementaryVariation, cdf) = error("values not defined for $(typeof(ev)) with type of cdf = $(typeof(cdf))")
+variationValues(::DistributedVariation) = error("A cdf must be provided for a DistributedVariation.")
 
-dataType(::DiscreteVariation{T}) where T = T
+"""
+    variationDataType(ev::ElementaryVariation)
 
-# function dataType(discrete_variation::DiscreteVariation)
-#     return typeof(discrete_variation).parameters[1] #! typeof(discrete_variation).parameters[1] is the type parameter T in the definition of DiscreteVariation{T}
-# end
+Get the data type of the variation.
+"""
+variationDataType(::DiscreteVariation{T}) where T = T
+variationDataType(dv::DistributedVariation) = eltype(dv.distribution)
 
-function dataType(dv::DistributedVariation)
-    return eltype(dv.distribution)
-end
+"""
+    sqliteDataType(ev::ElementaryVariation)
 
-dataType(ev::ElementaryVariation) = error("dataType not defined for $(typeof(ev))")
-
+Get the SQLite data type to hold the data in the variation.
+"""
 function sqliteDataType(ev::ElementaryVariation)
-    data_type = dataType(ev)
+    data_type = variationDataType(ev)
     if data_type == Bool
         return "TEXT"
     elseif data_type <: Integer
@@ -241,6 +287,16 @@ function sqliteDataType(ev::ElementaryVariation)
     end
 end
 
+"""
+    cdf(ev::ElementaryVariation, x::Real)
+
+Get the cumulative distribution function (CDF) of the variation at `x`.
+
+If `ev` is a [`DiscreteVariation`](@ref), `x` must be in the values of the variation.
+The value returned is from `0:Δ:1` where `Δ=1/(n-1)` and `n` is the number of values in the variation.
+
+If `ev` is a [`DistributedVariation`](@ref), the CDF is computed from the distribution of the variation.
+"""
 function cdf(discrete_variation::DiscreteVariation, x::Real)
     if !(x in discrete_variation.values)
         error("Value not in elementary variation values.")
@@ -275,12 +331,33 @@ end
 ################## Co-Variations ##################
 
 """
-    CoVariation
+    CoVariation{T<:ElementaryVariation} <: AbstractVariation
 
 A co-variation of one or more variations.
+Each must be of the same type, either `DiscreteVariation` or `DistributedVariation`.
 
 # Fields
 - `variations::Vector{T}`: The variations that make up the co-variation.
+
+# Constructors
+- `CoVariation(inputs::Vararg{Tuple{Vector{<:AbstractString},Distribution},N}) where {N}`: Create a co-variation from a vector of XML paths and distributions.
+```julia
+CoVariation((xml_path_1, d_1), (xml_path_2, d_2), ...) # d_i are distributions, e.g. `d_1 = Uniform(1, 2)`
+```
+- `CoVariation(inputs::Vararg{Tuple{Vector{<:AbstractString},Vector},N}) where {N}`: Create a co-variation from a vector of XML paths and values.
+```julia
+CoVariation((xml_path_1, val_1), (xml_path_2, val_2), ...) # val_i are vectors of values, e.g. `val_1 = [0.1, 0.2]`, or singletons, e.g. `val_2 = 0.3`
+```
+- `CoVariation(evs::Vector{ElementaryVariation})`: Create a co-variation from a vector of variations all the same type.
+```julia
+CoVariation([discrete_1, discrete_2, ...]) # all discrete variations and with the same number of values
+CoVariation([distributed_1, distributed_2, ...]) # all distributed variations
+```
+- `CoVariation(inputs::Vararg{T}) where {T<:ElementaryVariation}`: Create a co-variation from a variable number of variations all the same type.
+```julia
+CoVariation(discrete_1, discrete_2, ...) # all discrete variations and with the same number of values
+CoVariation(distributed_1, distributed_2, ...) # all distributed variations
+```
 """
 struct CoVariation{T<:ElementaryVariation} <: AbstractVariation
     variations::Vector{T}
@@ -293,6 +370,7 @@ struct CoVariation{T<:ElementaryVariation} <: AbstractVariation
         end
         return new{DistributedVariation}(variations)
     end
+
     function CoVariation(inputs::Vararg{Tuple{Vector{<:AbstractString},Vector},N}) where {N}
         variations = DiscreteVariation[]
         n_discrete = -1
@@ -307,21 +385,21 @@ struct CoVariation{T<:ElementaryVariation} <: AbstractVariation
         end
         return new{DiscreteVariation}(variations)
     end
+
     CoVariation(evs::Vector{DistributedVariation}) = return new{DistributedVariation}(evs)
+
     function CoVariation(evs::Vector{<:DiscreteVariation})
         @assert (length.(evs) |> unique |> length) == 1 "All DiscreteVariations in a CoVariation must have the same length."
         return new{DiscreteVariation}(evs)
     end
-    function CoVariation(inputs::Vararg{DistributedVariation})
-        return CoVariation(Vector{DistributedVariation}([inputs...]))
-    end
-    function CoVariation(inputs::Vararg{DiscreteVariation})
-        return CoVariation(Vector{DiscreteVariation}([inputs...]))
+
+    function CoVariation(inputs::Vararg{T}) where {T<:ElementaryVariation}
+        return CoVariation(Vector{T}([inputs...]))
     end
 end
 
-target(cv::CoVariation) = target.(cv.variations)
-location(cv::CoVariation) = location.(cv.variations)
+variationTarget(cv::CoVariation) = variationTarget.(cv.variations)
+variationLocation(cv::CoVariation) = variationLocation.(cv.variations)
 columnName(cv::CoVariation) = columnName.(cv.variations) |> x->join(x, " AND ")
 
 function Base.length(cv::CoVariation)
@@ -334,16 +412,16 @@ function Base.show(io::IO, ::MIME"text/plain", cv::CoVariation)
     n = length(data_type_str)
     println(io, "CoVariation ($(data_type_str)):")
     println(io, "------------" * "-"^(n+3))
-    locations = location(cv)
+    locations = variationLocation(cv)
     unique_locations = unique(locations)
-    for loc in unique_locations
-        println(io, "  Location: $loc")
-        loc_inds = findall(isequal(loc), locations)
-        for ind in loc_inds
+    for location in unique_locations
+        println(io, "  Location: $location")
+        location_inds = findall(isequal(location), locations)
+        for ind in location_inds
             println(io, "  Variation $ind:")
             println(io, "    target: $(columnName(cv.variations[ind]))")
             if data_type == DiscreteVariation
-                println(io, "    values: $(_values(cv.variations[ind]))")
+                println(io, "    values: $(variationValues(cv.variations[ind]))")
             elseif data_type == DistributedVariation
                 println(io, "    distribution: $(cv.variations[ind].distribution)")
                 println(io, "    flip: $(cv.variations[ind].flip)")
@@ -426,25 +504,27 @@ end
 
 ################## Database Interface Functions ##################
 
-function addColumns(loc::Symbol, folder_id::Int, evs::Vector{<:ElementaryVariation})
-    @assert all(location.(evs) .== loc) "All variations must be in the same location to do addColumns. Somehow found $(unique(location.(evs))) here."
-    folder = inputFolderName(loc, folder_id)
-    db_columns = variationsDatabase(loc, folder)
-    basenames = inputs_dict[loc]["basename"]
+"""
+    addColumns(location::Symbol, folder_id::Int, evs::Vector{<:ElementaryVariation})
+
+Add columns to the variations database for the given location and folder_id.
+"""
+function addColumns(location::Symbol, folder_id::Int, evs::Vector{<:ElementaryVariation})
+    @assert all(variationLocation.(evs) .== location) "All variations must be in the same location to do addColumns. Somehow found $(unique(variationLocation.(evs))) here."
+    folder = inputFolderName(location, folder_id)
+    db_columns = variationsDatabase(location, folder)
+    basenames = inputs_dict[location]["basename"]
     basenames = basenames isa Vector ? basenames : [basenames] #! force basenames to be a vector to handle all the same way
-    basename_is_varied = inputs_dict[loc]["varied"] .&& ([splitext(bn)[2] .== ".xml" for bn in basenames]) #! the varied entry is either a singleton Boolean or a vector of the same length as basenames
-    basename_ind = findall(basename_is_varied .&& isfile.([joinpath(locationPath(loc, folder), bn) for bn in basenames]))
-    @assert !isnothing(basename_ind) "Folder $(folder) does not contain a valid $(loc) file to support variations. The options are $(basenames[basename_is_varied])."
-    @assert length(basename_ind) == 1 "Folder $(folder) contains multiple valid $(loc) files to support variations. The options are $(basenames[basename_is_varied])."
+    basename_is_varied = inputs_dict[location]["varied"] .&& ([splitext(bn)[2] .== ".xml" for bn in basenames]) #! the varied entry is either a singleton Boolean or a vector of the same length as basenames
+    basename_ind = findall(basename_is_varied .&& isfile.([joinpath(locationPath(location, folder), bn) for bn in basenames]))
+    @assert !isnothing(basename_ind) "Folder $(folder) does not contain a valid $(location) file to support variations. The options are $(basenames[basename_is_varied])."
+    @assert length(basename_ind) == 1 "Folder $(folder) contains multiple valid $(location) files to support variations. The options are $(basenames[basename_is_varied])."
 
-    path_to_xml = joinpath(locationPath(loc, folder), basenames[basename_ind[1]])
-    return addColumns(evs, loc, db_columns, path_to_xml)
-end
+    path_to_xml = joinpath(locationPath(location, folder), basenames[basename_ind[1]])
 
-function addColumns(evs::Vector{<:ElementaryVariation}, location::Symbol, db_columns::SQLite.DB, path_to_xml::String)
-    xps = target.(evs)
+    xps = variationTarget.(evs)
     table_name = variationsTableName(location)
-    id_column_name = locationVarIDName(location)
+    id_column_name = locationVariationIDName(location)
     column_names = queryToDataFrame("PRAGMA table_info($(table_name));"; db=db_columns) |> x->x[!,:name]
     filter!(x -> x != id_column_name, column_names)
     varied_column_names = [columnName(xp.xml_path) for xp in xps]
@@ -453,9 +533,9 @@ function addColumns(evs::Vector{<:ElementaryVariation}, location::Symbol, db_col
     if any(is_new_column)
         new_column_names = varied_column_names[is_new_column]
         new_column_data_types = evs[is_new_column] .|> sqliteDataType
-        xml_doc = openXML(path_to_xml)
+        xml_doc = parse_file(path_to_xml)
         default_values_for_new = [getContent(xml_doc, xp.xml_path) for xp in xps[is_new_column]]
-        closeXML(xml_doc)
+        free(xml_doc)
         for (new_column_name, data_type) in zip(new_column_names, new_column_data_types)
             DBInterface.execute(db_columns, "ALTER TABLE $(table_name) ADD COLUMN '$(new_column_name)' $(data_type);")
         end
@@ -475,35 +555,42 @@ function addColumns(evs::Vector{<:ElementaryVariation}, location::Symbol, db_col
     return static_column_names, varied_column_names
 end
 
-function addVariationRow(location::Symbol, folder_id::Int, table_features::String, values::String)
+"""
+    addVariationRow(location::Symbol, folder_id::Int, table_features::String, static_values::String, varied_values::String)
+
+Add a new row to the variations database for the given location and folder_id if it doesn't already exist.
+"""
+function addVariationRow(location::Symbol, folder_id::Int, table_features::String, static_values::String, varied_values::String)
+    values_str = "$(static_values)$(varied_values)"
     db_columns = variationsDatabase(location, folder_id)
     table_name = variationsTableName(location)
-    variation_id_name = locationVarIDName(location)
+    variation_id_name = locationVariationIDName(location)
 
-    new_id = DBInterface.execute(db_columns, "INSERT OR IGNORE INTO $(table_name) ($(table_features)) VALUES($(values)) RETURNING $(variation_id_name);") |> DataFrame |> x->x[!,1]
+    new_id = DBInterface.execute(db_columns, "INSERT OR IGNORE INTO $(table_name) ($(table_features)) VALUES($(values_str)) RETURNING $(variation_id_name);") |> DataFrame |> x->x[!,1]
     new_added = length(new_id)==1
     if  !new_added
-        query = constructSelectQuery(table_name, "WHERE ($(table_features))=($(values))"; selection=variation_id_name)
+        query = constructSelectQuery(table_name, "WHERE ($(table_features))=($(values_str))"; selection=variation_id_name)
         new_id = queryToDataFrame(query; db=db_columns, is_row=true) |> x->x[!,1]
     end
     return new_id[1]
 end
 
-function addVariationRow(location::Symbol, folder_id::Int, table_features::String, static_values::String, varied_values::String)
-    return addVariationRow(location, folder_id, table_features, "$(static_values)$(varied_values)")
-end
+"""
+    setUpColumns(location::Symbol, evs::Vector{<:ElementaryVariation}, folder_id::Int, reference_variation_id::Int)
 
+Set up the columns for the variations database for the given location and folder_id.
+"""
 function setUpColumns(location::Symbol, evs::Vector{<:ElementaryVariation}, folder_id::Int, reference_variation_id::Int)
     static_column_names, varied_column_names = addColumns(location, folder_id, evs)
-    return prepareAddNewVariations(location, folder_id, static_column_names, varied_column_names, reference_variation_id)
-end
+    db_columns = variationsDatabase(location, folder_id)
+    table_name = variationsTableName(location)
+    variation_id_name = locationVariationIDName(location)
 
-function prepareAddNew(db_columns::SQLite.DB, static_column_names::Vector{String}, varied_column_names::Vector{String}, table_name::String, id_name::String, reference_id::Int)
     if isempty(static_column_names)
         static_values = ""
         table_features = ""
     else
-        query = constructSelectQuery(table_name, "WHERE $(id_name)=$(reference_id);"; selection=join("\"" .* static_column_names .* "\"", ", "))
+        query = constructSelectQuery(table_name, "WHERE $(variation_id_name)=$(reference_variation_id);"; selection=join("\"" .* static_column_names .* "\"", ", "))
         static_values = queryToDataFrame(query; db=db_columns, is_row=true) |> x -> join(x |> eachcol .|> c -> "\"$(string(c[1]))\"", ",")
         table_features = join("\"" .* static_column_names .* "\"", ",")
         if !isempty(varied_column_names)
@@ -515,19 +602,24 @@ function prepareAddNew(db_columns::SQLite.DB, static_column_names::Vector{String
     return static_values, table_features
 end
 
-function prepareAddNewVariations(location::Symbol, folder_id::Int, static_column_names::Vector{String}, varied_column_names::Vector{String}, reference_variation_id::Int)
-    db_columns = variationsDatabase(location, folder_id)
-    table_name = variationsTableName(location)
-    variation_id_name = locationVarIDName(location)
-    return prepareAddNew(db_columns, static_column_names, varied_column_names, table_name, variation_id_name, reference_variation_id)
-end
-
 ################## Specialized Variations ##################
 
+"""
+    AddVariationMethod
+
+Abstract type for variation methods.
+
+# Subtypes
+[`GridVariation`](@ref), [`LHSVariation`](@ref), [`SobolVariation`](@ref), [`RBDVariation`](@ref)
+
+# Methods
+[`addVariations`](@ref), [`createTrial`](@ref), [`run`](@ref), 
+[`_createTrial`](@ref)
+"""
 abstract type AddVariationMethod end
 
 """
-    GridVariation
+    GridVariation <: AddVariationMethod
 
 A variation method that creates a grid of all possible combinations of the values of the variations.
 
@@ -540,7 +632,7 @@ GridVariation()
 struct GridVariation <: AddVariationMethod end
 
 """
-    LHSVariation
+    LHSVariation <: AddVariationMethod
 
 A variation method that creates a Latin Hypercube Sample of the values of the variations.
 
@@ -558,9 +650,9 @@ LHSVariation(4, false, Random.TaskLocalRNG(), true)
 ```
 ```jldoctest
 using Random
-LHSVariation(; n=4, add_noise=true, rng=MersenneTwister(1234), orthogonalize=false)
+LHSVariation(; n=16, add_noise=true, rng=MersenneTwister(1234), orthogonalize=false)
 # output
-LHSVariation(4, true, MersenneTwister(1234), false)
+LHSVariation(16, true, MersenneTwister(1234), false)
 ```
 """
 struct LHSVariation <: AddVariationMethod
@@ -570,10 +662,10 @@ struct LHSVariation <: AddVariationMethod
     orthogonalize::Bool
 end
 LHSVariation(n; add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG, orthogonalize::Bool=true) = LHSVariation(n, add_noise, rng, orthogonalize)
-LHSVariation(; n::Int=4, add_noise::Bool=false, rng::AbstractRNG=Random.GLOBAL_RNG, orthogonalize::Bool=true) = LHSVariation(n, add_noise, rng, orthogonalize)
+LHSVariation(; n::Int=4, kwargs...) = LHSVariation(n; kwargs...)
 
 """
-    SobolVariation
+    SobolVariation <: AddVariationMethod
 
 A variation method that creates a Sobol sequence of the values of the variations.
 
@@ -614,7 +706,7 @@ SobolVariation(n::Int; n_matrices::Int=1, randomization::RandomizationMethod=NoR
 SobolVariation(; pow2::Int=1, n_matrices::Int=1, randomization::RandomizationMethod=NoRand(), skip_start::Union{Missing, Bool, Int}=missing, include_one::Union{Missing, Bool}=missing) = SobolVariation(2^pow2, n_matrices, randomization, skip_start, include_one)
 
 """
-    RBDVariation
+    RBDVariation <: AddVariationMethod
 
 A variation method that creates a Random Balance Design of the values of the variations.
 
@@ -634,11 +726,11 @@ Do not set these next two fields unless you know what you are doing. Let pcvct c
 # Examples
 ```jldoctest
 julia> pcvct.RBDVariation(4) # set `n` and use default values for the rest
-pcvct.RBDVariation(4, Random.TaskLocalRNG(), true, 0, 1//2)
+RBDVariation(4, Random.TaskLocalRNG(), true, 0, 1//2)
 ```
 ```jldoctest
 julia> pcvct.RBDVariation(4; use_sobol=false) # use random permutations of uniformly spaced points
-pcvct.RBDVariation(4, Random.TaskLocalRNG(), false, missing, 1//1)
+RBDVariation(4, Random.TaskLocalRNG(), false, missing, 1//1)
 ```
 """
 struct RBDVariation <: AddVariationMethod
@@ -676,13 +768,35 @@ end
 
 RBDVariation(n::Int; rng::AbstractRNG=Random.GLOBAL_RNG, use_sobol::Bool=true, pow2_diff=missing, num_cycles=missing) = RBDVariation(n, rng, use_sobol, pow2_diff, num_cycles)
 
+"""
+    AddVariationsResult
+
+Abstract type for the result of adding variations to a set of inputs.
+
+# Subtypes
+[`AddGridVariationsResult`](@ref), [`AddLHSVariationsResult`](@ref), [`AddSobolVariationsResult`](@ref), [`AddRBDVariationsResult`](@ref)
+"""
 abstract type AddVariationsResult end
 
+"""
+    addVariations(method::AddVariationMethod, inputs::InputFolders, avs::Vector{<:AbstractVariation}, reference_variation_id::VariationID=VariationID(inputs))
+
+Add variations to the inputs using the specified [`AddVariationMethod`](@ref) and the variations in `avs`.
+"""
 function addVariations(method::AddVariationMethod, inputs::InputFolders, avs::Vector{<:AbstractVariation}, reference_variation_id::VariationID=VariationID(inputs))
     pv = ParsedVariations(avs)
     return addVariations(method, inputs, pv, reference_variation_id)
 end
 
+"""
+    LocationParsedVariations
+
+A struct that holds the variations and their indices into a vector of [`AbstractVariation`](@ref)s for a specific location.
+
+# Fields
+- `variations::Vector{<:ElementaryVariation}`: The variations for the location.
+- `indices::Vector{Int}`: The indices of the variations in the vector of [`AbstractVariation`](@ref)s.
+"""
 struct LocationParsedVariations
     variations::Vector{<:ElementaryVariation}
     indices::Vector{Int}
@@ -692,6 +806,16 @@ struct LocationParsedVariations
     end
 end
 
+"""
+    ParsedVariations
+
+A struct that holds the parsed variations and their sizes for all locations.
+
+# Fields
+- `sz::Vector{Int}`: The sizes of the variations for each location.
+- `variations::Vector{<:AbstractVariation}`: The variations used to create the parsed variations.
+- `location_parsed_variations::NamedTuple`: A named tuple of [`LocationParsedVariations`](@ref)s for each location.
+"""
 struct ParsedVariations
     sz::Vector{Int}
     variations::Vector{<:AbstractVariation}
@@ -702,8 +826,8 @@ struct ParsedVariations
         sz = length.(avs)
 
         location_variations_dict = Dict{Symbol, Any}()
-        for loc in project_locations.varied
-            location_variations_dict[loc] = (ElementaryVariation[], Int[])
+        for location in project_locations.varied
+            location_variations_dict[location] = (ElementaryVariation[], Int[])
         end
 
         for (i, av) in enumerate(avs)
@@ -712,37 +836,51 @@ struct ParsedVariations
             end
             @assert av isa CoVariation "Everything at this point should have been converted to a CoVariation"
             for ev in av.variations
-                push!(location_variations_dict[location(ev)][1], ev)
-                push!(location_variations_dict[location(ev)][2], i)
+                push!(location_variations_dict[variationLocation(ev)][1], ev)
+                push!(location_variations_dict[variationLocation(ev)][2], i)
             end
         end
         for (_, variation_indices) in values(location_variations_dict)
             @assert issorted(variation_indices) "Variation indices must be sorted after parsing."
         end
-        location_parsed_variations = [loc => LocationParsedVariations(variations, variation_indices) for (loc, (variations, variation_indices)) in pairs(location_variations_dict)] |> NamedTuple
+        location_parsed_variations = [location => LocationParsedVariations(variations, variation_indices) for (location, (variations, variation_indices)) in pairs(location_variations_dict)] |> NamedTuple
         return new(sz, avs, location_parsed_variations)
     end
 end
 
-Base.getindex(pv::ParsedVariations, loc::Symbol) = pv.location_parsed_variations[loc]
+Base.getindex(pv::ParsedVariations, location::Symbol) = pv.location_parsed_variations[location]
 
 ################## Grid Variations ##################
 
+"""
+    AddGridVariationsResult <: AddVariationsResult
+
+A struct that holds the result of adding grid variations to a set of inputs.
+
+# Fields
+- `all_variation_ids::AbstractArray{VariationID}`: The variation IDs for all the variations added.
+"""
 struct AddGridVariationsResult <: AddVariationsResult
     all_variation_ids::AbstractArray{VariationID}
 end
 
 function addVariations(::GridVariation, inputs::InputFolders, pv::ParsedVariations, reference_variation_id::VariationID)
     @assert all(pv.sz .!= -1) "GridVariation only works with DiscreteVariations"
-    all_location_variation_ids = [addLocationGridVariations(loc, inputs, pv, reference_variation_id) for loc in project_locations.varied]
-    return [([loc => loc_var_ids[i] for (loc, loc_var_ids) in zip(project_locations.varied, all_location_variation_ids)] |> VariationID) for i in eachindex(all_location_variation_ids[1])] |> AddGridVariationsResult
+    all_location_variation_ids = [addLocationGridVariations(location, inputs, pv, reference_variation_id) for location in project_locations.varied]
+    return [([location => loc_var_ids[i] for (location, loc_var_ids) in zip(project_locations.varied, all_location_variation_ids)] |> VariationID) for i in eachindex(all_location_variation_ids[1])] |> AddGridVariationsResult
 end
 
+"""
+    addLocationGridVariations(location::Symbol, inputs::InputFolders, pv::ParsedVariations, reference_variation_id::VariationID)
+
+Add grid variations for a specific location to the inputs. Used in [`addVariations`](@ref) with a [`GridVariation`](@ref) method.
+"""
 function addLocationGridVariations(location::Symbol, inputs::InputFolders, pv::ParsedVariations, reference_variation_id::VariationID)
     if isempty(pv[location].variations)
         return fill(reference_variation_id[location], pv.sz...)
     end
-    out = gridToDB(location, pv, inputs[location].id, reference_variation_id[location])
+    discrete_variations = Vector{DiscreteVariation}(pv[location].variations)
+    out = gridToDB(location, discrete_variations, inputs[location].id, reference_variation_id[location], pv[location].indices)
     dim_szs = [d in pv[location].indices ? pv.sz[d] : 1 for d in eachindex(pv.sz)]
     out = reshape(out, dim_szs...)
 
@@ -750,24 +888,25 @@ function addLocationGridVariations(location::Symbol, inputs::InputFolders, pv::P
     return repeat(out, other_dims...)
 end
 
-function gridToDB(location::Symbol, pv::ParsedVariations, folder_id::Int, reference_variation_id::Int)
-    return gridToDB(location, pv[location].variations, folder_id, reference_variation_id, pv[location].indices)
+"""
+    gridToDB(evs::Vector{<:DiscreteVariation}, folder_id::Int, reference_variation_id::Int)
+
+Adds a grid of variations to the database from the vector of [`DiscreteVariation`](@ref)s.
+"""
+function gridToDB(evs::Vector{<:DiscreteVariation}, folder_id::Int, reference_variation_id::Int)
+    locations = variationLocation.(evs)
+    @assert all(locations .== locations[1]) "All variations must be in the same location to do gridToDB. Instead got $(locations)."
+    location = locations[1]
+    return gridToDB(location, evs, folder_id, reference_variation_id, 1:length(evs))
 end
 
-function gridToDB(evs::Vector{<:ElementaryVariation}, folder_id::Int, reference_variation_id::Int)
-    locs = location.(evs)
-    @assert all(locs .== locs[1]) "All variations must be in the same location to do gridToDB. Instead got $(locs)."
-    loc = locs[1]
-    return gridToDB(loc, evs, folder_id, reference_variation_id, 1:length(evs))
-end
-
-function gridToDB(location::Symbol, evs::Vector{<:ElementaryVariation}, folder_id::Int, reference_variation_id::Int, ev_dims::AbstractVector{Int})
+function gridToDB(location::Symbol, evs::Vector{<:DiscreteVariation}, folder_id::Int, reference_variation_id::Int, ev_dims::AbstractVector{Int})
     static_values, table_features = setUpColumns(location, evs, folder_id, reference_variation_id)
 
     all_values = []
     for ev_dim in unique(ev_dims)
         dim_indices = findall(ev_dim .== ev_dims)
-        push!(all_values, zip(_values.(evs[dim_indices])...))
+        push!(all_values, zip(variationValues.(evs[dim_indices])...))
     end
 
     NDG = ndgrid(collect.(all_values)...)
@@ -783,6 +922,11 @@ end
 
 ################## Latin Hypercube Sampling Functions ##################
 
+"""
+    orthogonalLHS(k::Int, d::Int)
+
+Generate an orthogonal Latin Hypercube Sample in `d` dimensions with `k` subdivisions in each dimension, requiring `n=k^d` samples.
+"""
 function orthogonalLHS(k::Int, d::Int)
     n = k^d
     lhs_inds = zeros(Int, (n, d))
@@ -842,6 +986,14 @@ function generateLHSCDFs(n::Int, d::Int; add_noise::Bool=false, rng::AbstractRNG
     return cdfs[lhs_inds]
 end
 
+"""
+    AddLHSVariationsResult <: AddVariationsResult
+
+A struct that holds the result of adding LHS variations to a set of inputs.
+
+# Fields
+- `all_variation_ids::AbstractArray{VariationID}`: The variation IDs for all the variations added.
+"""
 struct AddLHSVariationsResult <: AddVariationsResult
     all_variation_ids::AbstractArray{VariationID}
 end
@@ -849,10 +1001,15 @@ end
 function addVariations(lhs_variation::LHSVariation, inputs::InputFolders, pv::ParsedVariations, reference_variation_id::VariationID)
     d = length(pv.sz)
     cdfs = generateLHSCDFs(lhs_variation.n, d; add_noise=lhs_variation.add_noise, rng=lhs_variation.rng, orthogonalize=lhs_variation.orthogonalize)
-    all_location_variation_ids = [addLocationCDFVariations(loc, inputs, pv, reference_variation_id, cdfs) for loc in project_locations.varied]
-    return [([loc => loc_var_ids[i] for (loc, loc_var_ids) in zip(project_locations.varied, all_location_variation_ids)] |> VariationID) for i in eachindex(all_location_variation_ids[1])] |> AddLHSVariationsResult
+    all_location_variation_ids = [addLocationCDFVariations(location, inputs, pv, reference_variation_id, cdfs) for location in project_locations.varied]
+    return [([location => loc_var_ids[i] for (location, loc_var_ids) in zip(project_locations.varied, all_location_variation_ids)] |> VariationID) for i in eachindex(all_location_variation_ids[1])] |> AddLHSVariationsResult
 end
 
+"""
+    addLocationCDFVariations(location::Symbol, inputs::InputFolders, pv::ParsedVariations, reference_variation_id::VariationID, cdfs::AbstractMatrix{Float64})
+
+Add variations for a specific location to the inputs. Used in [`addVariations`](@ref) with the [`LHSVariation`](@ref), [`SobolVariation`](@ref), and [`RBDVariation`](@ref) methods.
+"""
 function addLocationCDFVariations(location::Symbol, inputs::InputFolders, pv::ParsedVariations, reference_variation_id::VariationID, cdfs::AbstractMatrix{Float64})
     if isempty(pv[location].variations)
         #! if the location is not varied, just return the reference variation id
@@ -940,11 +1097,20 @@ function generateSobolCDFs(n::Int, d::Int; n_matrices::Int=1, T::Type=Float64, r
     if include_one===true #! cannot compare missing==true, but can make this comparison
         cdfs = hcat(cdfs, ones(T, d * n_matrices))
     end
-    return reshape(cdfs, (d, n_matrices, n)) 
+    return reshape(cdfs, (d, n_matrices, n))
 end
 
 generateSobolCDFs(sobol_variation::SobolVariation, d::Int) = generateSobolCDFs(sobol_variation.n, d; n_matrices=sobol_variation.n_matrices, randomization=sobol_variation.randomization, skip_start=sobol_variation.skip_start, include_one=sobol_variation.include_one)
 
+"""
+    AddSobolVariationsResult <: AddVariationsResult
+
+A struct that holds the result of adding Sobol variations to a set of inputs.
+
+# Fields
+- `all_variation_ids::AbstractArray{VariationID}`: The variation IDs for all the variations added.
+- `cdfs::Array{Float64, 3}`: The CDFs for the samples. The first dimension is the varied parameters, the second dimension is the design matrices, and the third dimension is the samples.
+"""
 struct AddSobolVariationsResult <: AddVariationsResult
     all_variation_ids::AbstractArray{VariationID}
     cdfs::Array{Float64, 3}
@@ -956,22 +1122,38 @@ function addVariations(sobol_variation::SobolVariation, inputs::InputFolders, pv
     cdfs_reshaped = reshape(cdfs, (d, sobol_variation.n_matrices * sobol_variation.n)) #! reshape to (d, sobol_variation.n_matrices * sobol_variation.n) so that each column is a sobol sample
     cdfs_reshaped = cdfs_reshaped' #! transpose so that each row is a sobol sample
     all_location_variation_ids = [addLocationCDFVariations(location, inputs, pv, reference_variation_id, cdfs_reshaped) for location in project_locations.varied]
-    all_variation_ids = [([loc => loc_var_ids[i] for (loc, loc_var_ids) in zip(project_locations.varied, all_location_variation_ids)] |> VariationID) for i in eachindex(all_location_variation_ids[1])]
+    all_variation_ids = [([location => loc_var_ids[i] for (location, loc_var_ids) in zip(project_locations.varied, all_location_variation_ids)] |> VariationID) for i in eachindex(all_location_variation_ids[1])]
     all_variation_ids = reshape(all_variation_ids, (sobol_variation.n_matrices, sobol_variation.n)) |> permutedims
     return AddSobolVariationsResult(all_variation_ids, cdfs)
 end
 
 ################## Random Balance Design Sampling Functions ##################
 
+"""
+    generateRBDCDFs(rbd_variation::RBDVariation, d::Int)
+
+Generate CDFs for a Random Balance Design (RBD) in `d` dimensions.
+
+# Arguments
+- `rbd_variation::RBDVariation`: The RBD variation method to use.
+- `d::Int`: The number of dimensions to sample.
+
+# Returns
+- `cdfs::Matrix{Float64}`: The CDFs for the samples. Each row is a sample and each column is a dimension (corresponding to a parameter / parameter group from a [`CoVariation`](@ref)).
+- `rbd_sorting_inds::Matrix{Int}`: A `n_samples` x `d` matrix that gives the ordering of the dimensions to use for the RBD. The order along each column is necessary for computing the RBD, sorting the simulations along the periodic curve.
+"""
 function generateRBDCDFs(rbd_variation::RBDVariation, d::Int)
     if rbd_variation.use_sobol
         println("Using Sobol sequence for RBD.")
         if rbd_variation.n == 1
-            S = zeros(Float64, (1, d))
+            rbd_sorting_inds = fill(1, (1, d))
             cdfs = 0.5 .+ zeros(Float64, (1,d))
         else
             @assert !ismissing(rbd_variation.pow2_diff) "pow2_diff must be calculated for RBDVariation constructor with Sobol sequence. How else could we get here?"
             @assert rbd_variation.num_cycles == 1//2 "num_cycles must be 1//2 for RBDVariation constructor with Sobol sequence. How else could we get here?"
+            #! vary along a half period of the sine function since that will cover all CDF values (compare to the full period below). in computing the RBD, we will 
+            #!   /    __\      /\  <- \ is the flipped version of the / in this line of commented code
+            #!  /       /    \/    <- \ is the flipped version of the / in this line of commented code
             if rbd_variation.pow2_diff == -1
                 skip_start = 1
             elseif rbd_variation.pow2_diff == 0
@@ -979,45 +1161,69 @@ function generateRBDCDFs(rbd_variation::RBDVariation, d::Int)
             else
                 skip_start = false
             end
-            S = generateSobolCDFs(rbd_variation.n, d; n_matrices=1, randomization=NoRand(), skip_start=skip_start, include_one=rbd_variation.pow2_diff==1) #! pre_s is (d, n_matrices, rbd_variation.n)
-            S = reshape(S, d, rbd_variation.n)'
-            cdfs = deepcopy(S)
+            cdfs = generateSobolCDFs(rbd_variation.n, d; n_matrices=1, randomization=NoRand(), skip_start=skip_start, include_one=rbd_variation.pow2_diff==1) #! rbd_sorting_inds here is (d, n_matrices=1, rbd_variation.n)
+            cdfs = reshape(cdfs, d, rbd_variation.n) |> permutedims #! cdfs is now (rbd_variation.n, d)
+            rbd_sorting_inds = reduce(hcat, map(sortperm, eachcol(cdfs)))
         end
     else
         @assert rbd_variation.num_cycles == 1 "num_cycles must be 1 for RBDVariation constructor with random sequence. How else could we get here?"
-        pre_s = range(-π, stop = π, length = rbd_variation.n+1) |> collect
-        pop!(pre_s)
-        S = [pre_s[randperm(rbd_variation.rng, rbd_variation.n)] for _ in 1:d] |> x->reduce(hcat, x)
-        cdfs = 0.5 .+ asin.(sin.(S)) ./ π
+        #! vary along the full period of the sine function and do fft as normal
+        #!   /\
+        #! \/  
+        sorted_s_values = range(-π, stop = π, length = rbd_variation.n+1) |> collect
+        pop!(sorted_s_values)
+        permuted_s_values = [sorted_s_values[randperm(rbd_variation.rng, rbd_variation.n)] for _ in 1:d] |> x->reduce(hcat, x)
+        cdfs = 0.5 .+ asin.(sin.(permuted_s_values)) ./ π
+        rbd_sorting_inds = reduce(hcat, map(sortperm, eachcol(permuted_s_values)))
     end
-    return cdfs, S
+    return cdfs, rbd_sorting_inds
 end
 
-function createSortedRBDMatrix(variation_ids::Vector{Int}, S::AbstractMatrix{Float64})
-    variations_matrix = Array{Int}(undef, size(S))
-    for (vm_col, s_col) in zip(eachcol(variations_matrix), eachcol(S))
-        vm_col .= variation_ids[sortperm(s_col)]
+function addVariations(rbd_variation::RBDVariation, inputs::InputFolders, pv::ParsedVariations, reference_variation_id::VariationID)
+    d = length(pv.sz)
+    cdfs, rbd_sorting_inds = generateRBDCDFs(rbd_variation, d)
+    all_location_variation_ids = [addLocationCDFVariations(location, inputs, pv, reference_variation_id, cdfs) for location in project_locations.varied]
+    variation_matrices = [createSortedRBDMatrix(vids, rbd_sorting_inds) for vids in all_location_variation_ids]
+    all_variation_ids = [([location => loc_var_ids[i] for (location, loc_var_ids) in zip(project_locations.varied, all_location_variation_ids)] |> VariationID) for i in eachindex(all_location_variation_ids[1])]
+    location_variation_ids_dict = [location => variation_matrices[i] for (i, location) in enumerate(project_locations.varied)] |> Dict
+    return AddRBDVariationsResult(all_variation_ids, location_variation_ids_dict)
+end
+
+"""
+    createSortedRBDMatrix(variation_ids::Vector{Int}, rbd_sorting_inds::AbstractMatrix{Int})
+
+Create a sorted matrix of variation IDs based on the RBD sorting indices.
+This ensures that the orderings for each parameter stored for the RBD calculations.
+"""
+function createSortedRBDMatrix(variation_ids::Vector{Int}, rbd_sorting_inds::AbstractMatrix{Int})
+    variations_matrix = Array{Int}(undef, size(rbd_sorting_inds))
+    for (vm_col, par_sorting_inds) in zip(eachcol(variations_matrix), eachcol(rbd_sorting_inds))
+        vm_col .= variation_ids[par_sorting_inds]
     end
     return variations_matrix
 end
 
+"""
+    AddRBDVariationsResult <: AddVariationsResult
+
+A struct that holds the result of adding Sobol variations to a set of inputs.
+
+# Fields
+- `all_variation_ids::AbstractArray{VariationID}`: The variation IDs for all the variations added.
+- `location_variation_ids_dict::Dict{Symbol, Matrix{Int}}`: A dictionary of the variation IDs for each location. The keys are the locations and the values are the variation IDs for that location.
+"""
 struct AddRBDVariationsResult <: AddVariationsResult
     all_variation_ids::AbstractArray{VariationID}
     location_variation_ids_dict::Dict{Symbol, Matrix{Int}}
 end
 
-function addVariations(rbd_variation::RBDVariation, inputs::InputFolders, pv::ParsedVariations, reference_variation_id::VariationID)
-    d = length(pv.sz)
-    cdfs, S = generateRBDCDFs(rbd_variation, d)
-    all_location_variation_ids = [addLocationCDFVariations(location, inputs, pv, reference_variation_id, cdfs) for location in project_locations.varied]
-    variation_matrices = [createSortedRBDMatrix(vids, S) for vids in all_location_variation_ids]
-    all_variation_ids = [([loc => loc_var_ids[i] for (loc, loc_var_ids) in zip(project_locations.varied, all_location_variation_ids)] |> VariationID) for i in eachindex(all_location_variation_ids[1])]
-    location_variation_ids_dict = [loc => variation_matrices[i] for (i, loc) in enumerate(project_locations.varied)] |> Dict
-    return AddRBDVariationsResult(all_variation_ids, location_variation_ids_dict)
-end
-
 ################## Sampling Helper Functions ##################
 
+"""
+    cdfsToVariations(location::Symbol, pv::ParsedVariations, folder_id::Int, reference_variation_id::Int, cdfs::AbstractMatrix{Float64})
+
+Convert the CDFs to variation IDs in the database.
+"""
 function cdfsToVariations(location::Symbol, pv::ParsedVariations, folder_id::Int, reference_variation_id::Int, cdfs::AbstractMatrix{Float64})
     evs = pv[location].variations
     static_values, table_features = setUpColumns(location, evs, folder_id, reference_variation_id)
@@ -1026,7 +1232,7 @@ function cdfsToVariations(location::Symbol, pv::ParsedVariations, folder_id::Int
     new_values = []
     ev_dims = pv[location].indices
     for (ev, col_ind) in zip(evs, ev_dims)
-        new_value = _values(ev, cdfs[:,col_ind]) #! ok, all the new values for the given parameter
+        new_value = variationValues(ev, cdfs[:,col_ind]) #! ok, all the new values for the given parameter
         push!(new_values, new_value)
     end
 

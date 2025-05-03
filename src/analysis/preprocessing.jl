@@ -1,3 +1,20 @@
+"""
+    processIncludeCellTypes(include_cell_types, all_cell_types::Vector{String})
+
+Process the `include_cell_types` argument to ensure it is in the correct format.
+
+Uses the `all_cell_types` vector to determine the valid cell types.
+
+# Arguments
+- `include_cell_types`: the cell types to include in the analysis (default is `:all_in_one`). Full list of options:
+    - `:all` - return the vector of all cell types
+    - `:all_in_one` - return a vector with a single element, which is a vector of all cell types
+    - `"cell_type_1"` - return ["cell_type_1"]
+    - `["cell_type_1", "cell_type_2"]` - return ["cell_type_1", "cell_type_2"]
+    - `[["cell_type_1", "cell_type_2"]]` - return [["cell_type_1", "cell_type_2"]]
+    - `[["cell_type_1", "cell_type_2"], "cell_type_3"]` - return [["cell_type_1", "cell_type_2"], "cell_type_3"]
+- `all_cell_types`: a vector of all cell types in the simulation
+"""
 function processIncludeCellTypes(include_cell_types, all_cell_types::Vector{String})
     if include_cell_types isa Symbol
         #! include_cell_types = :all
@@ -21,6 +38,14 @@ function processIncludeCellTypes(include_cell_types, all_cell_types::Vector{Stri
     return include_cell_types
 end
 
+"""
+    processExcludeCellTypes(exclude_cell_types)
+
+Process the `exclude_cell_types` argument to ensure it is in the correct format.
+
+If `exclude_cell_types` is a string, it is converted to a single-element vector.
+If it is a vector, it is returned as is.
+"""
 function processExcludeCellTypes(exclude_cell_types)
     if exclude_cell_types isa String
         return [exclude_cell_types]

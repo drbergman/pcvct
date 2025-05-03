@@ -27,9 +27,8 @@ location_variation_ids = Dict{Symbol,Union{Integer,AbstractArray{<:Integer}}}(
     :rulesets_collection => rulesets_collection_variation_ids,
     :ic_cell => ic_cell_variation_ids
 )
-sampling = Sampling(inputs;
+sampling = Sampling(inputs, location_variation_ids;
     n_replicates=n_replicates,
-    location_variation_ids=location_variation_ids
 )
 @test sampling isa Sampling
 
@@ -49,8 +48,28 @@ trial = Trial(samplings)
 # misc tests
 inputs = InputFolders(; config="0_template", custom_code="0_template")
 simulation = Simulation(Monad(1))
-sampling = Sampling(inputs; location_variation_ids=Dict{Symbol,Union{Integer,AbstractArray{<:Integer}}}(:config => 0, :rulesets_collection => -1, :ic_cell => -1))
-sampling = Sampling(inputs; location_variation_ids=Dict{Symbol,Union{Integer,AbstractArray{<:Integer}}}(:config => [0], :rulesets_collection => -1, :ic_cell => -1))
+
+@test_throws ArgumentError pcvct.constituentsType(Simulation)
+
+getMonadIDs(samplings)
+@test pcvct.lowerClassString(simulation) == "simulation"
+@test pcvct.lowerClassString(Monad(1)) == "monad"
+@test pcvct.lowerClassString(samplings[1]) == "sampling"
+@test pcvct.lowerClassString(trial) == "trial"
+
+old_march_flag = pcvct.march_flag
+new_march_flag = "new_march_flag"
+pcvct.setMarchFlag(new_march_flag)
+@test pcvct.march_flag == new_march_flag
+pcvct.setMarchFlag(old_march_flag)
+@test pcvct.march_flag == old_march_flag #! make sure it is reset
+
+
+#! you probably do not want to use integer variation IDs to initialize a Sampling object. this is just to test edge cases in the constructor
+location_variation_ids = Dict{Symbol,Union{Integer,AbstractArray{<:Integer}}}(:config => 0, :rulesets_collection => -1, :ic_cell => -1)
+sampling = Sampling(inputs, location_variation_ids)
+location_variation_ids = Dict{Symbol,Union{Integer,AbstractArray{<:Integer}}}(:config => [0], :rulesets_collection => -1, :ic_cell => -1)
+sampling = Sampling(inputs, location_variation_ids)
 sampling = Sampling(Monad(1))
 all_monads = getSimulationIDs() .|> Simulation .|> Monad
 all_monad_ids = [monad.id for monad in all_monads] |> unique
