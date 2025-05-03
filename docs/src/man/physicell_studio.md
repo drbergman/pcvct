@@ -22,11 +22,11 @@ It will remember these settings during the session, so you only need to pass the
 See below for the function signature.
 
 ## Launching PhysiCell Studio
-First, launch julia and make sure the project is initialized by running:
+First, launch julia in a new shell session and make sure the project is initialized by running:
 ```julia
 # if you used createProject(), these are the first two lines of GenerateData.jl
 using pcvct
-initializeVCT(path_to_physicell, path_to_data)
+initializeModelManager()
 ```
 As soon as the simulation has begun (so that its PhysiCell-generated `output` folder is created and populated), you can launch PhysiCell Studio.
 If you set the environment variables, you can run the following command for a simulation with id `sim_id::Integer`:

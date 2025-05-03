@@ -1,5 +1,7 @@
 using Statistics
 
+@compat public AverageSubstrateTimeSeries, ExtracellularSubstrateTimeSeries
+
 function averageSubstrate(snapshot::PhysiCellSnapshot, substrate_names::Vector{String}=String[])
     loadSubstrates!(snapshot, substrate_names)
     data = Dict{String, Real}()
@@ -29,7 +31,7 @@ A struct to hold the average substrate concentrations over time for a PhysiCell 
 
 # Example
 ```julia
-asts = AverageSubstrateTimeSeries(1) # Load average substrate time series for Simulation 1
+asts = pcvct.AverageSubstrateTimeSeries(1) # Load average substrate time series for Simulation 1
 asts.time # Get the time points
 asts["time"] # alternative way to get the time points
 asts["oxygen"] # Get the oxygen concentration over time
@@ -154,11 +156,11 @@ A struct to hold the mean extracellular substrate concentrations per cell type o
 
 # Example
 ```julia
-ests = ExtracellularSubstrateTimeSeries(1) # Load extracellular substrate time series for Simulation 1
+ests = pcvct.ExtracellularSubstrateTimeSeries(1) # Load extracellular substrate time series for Simulation 1
 ests.time # Get the time points
 ests["cancer"]["oxygen"] # Get the oxygen concentration over time for the cancer cell type
 
-ests = ExtracellularSubstrateTimeSeries(simulation; include_dead=true) # Load extracellular substrate time series for a Simulation object, including dead cells
+ests = pcvct.ExtracellularSubstrateTimeSeries(simulation; include_dead=true) # Load extracellular substrate time series for a Simulation object, including dead cells
 ests["time"] # Alternate way to get the time points
 ests["cd8"]["IFNg"] # Get the interferon gamma concentration over time for the CD8 cell type
 ```

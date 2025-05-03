@@ -1,5 +1,7 @@
 using PhysiCellECMCreator
 
+@compat public createICECMXMLTemplate
+
 """
     createICECMXMLTemplate(folder::String)
 

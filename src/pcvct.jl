@@ -1,6 +1,6 @@
 module pcvct
 
-using SQLite, DataFrames, LightXML, Dates, CSV, Tables, Distributions, Statistics, Random, QuasiMonteCarlo, Sobol
+using SQLite, DataFrames, LightXML, Dates, CSV, Tables, Distributions, Statistics, Random, QuasiMonteCarlo, Sobol, Compat
 using PhysiCellXMLRules, PhysiCellCellCreator
 
 export initializeModelManager, getSimulationIDs, setNumberOfParallelSims
@@ -30,15 +30,13 @@ include("user_api.jl")
 
 include("loader.jl")
 
-include("analysis.jl")
+include("analysis/analysis.jl")
 include("sensitivity.jl")
 include("import.jl")
 include("movie.jl")
 
 include("physicell_studio.jl")
 include("export.jl")
-
-VERSION >= v"1.11" && include("public.julia")
 
 inputs_dict = Dict{Symbol, Any}()
 
@@ -62,8 +60,10 @@ sbatch_options::Dict{String,Any} = defaultJobOptions() #! this is a dictionary t
 
 function __init__()
     global max_number_of_parallel_simulations = haskey(ENV, "PCVCT_NUM_PARALLEL_SIMS") ? parse(Int, ENV["PCVCT_NUM_PARALLEL_SIMS"]) : 1
-    global path_to_python = haskey(ENV, "PCVCT_PYTHON_PATH") ? ENV["PCVCT_PYTHON_PATH"] : missing 
+    global path_to_python = haskey(ENV, "PCVCT_PYTHON_PATH") ? ENV["PCVCT_PYTHON_PATH"] : missing
     global path_to_studio = haskey(ENV, "PCVCT_STUDIO_PATH") ? ENV["PCVCT_STUDIO_PATH"] : missing
+    global path_to_magick = haskey(ENV, "PCVCT_IMAGEMAGICK_PATH") ? ENV["PCVCT_IMAGEMAGICK_PATH"] : (Sys.iswindows() ? missing : "/opt/homebrew/bin")
+    global path_to_ffmpeg = haskey(ENV, "PCVCT_FFMPEG_PATH") ? ENV["PCVCT_FFMPEG_PATH"] : (Sys.iswindows() ? missing : "/opt/homebrew/bin")
 end
 
 ################## Initialization Functions ##################
