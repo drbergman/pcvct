@@ -16,7 +16,7 @@ There are three ways to allow this function to find these dependencies:
   3. Set environment variables `PCVCT_IMAGEMAGICK_PATH` and `PCVCT_FFMPEG_PATH` before `using pcvct`.
 """
 function makeMovie(simulation_id::Int; magick_path::Union{Missing,String}=path_to_magick, ffmpeg_path::Union{Missing,String}=path_to_ffmpeg)
-    path_to_output_folder = joinpath(trialFolder("simulation", simulation_id), "output")
+    path_to_output_folder = joinpath(trialFolder(Simulation, simulation_id), "output")
     if isfile("$(path_to_output_folder)/out.mp4")
         movie_generated = false
         return movie_generated
@@ -41,14 +41,19 @@ function makeMovie(simulation_id::Int; magick_path::Union{Missing,String}=path_t
     cmd = Cmd(`make movie OUTPUT=$(path_to_output_folder)`; env=env, dir=physicell_dir)
     run(pipeline(cmd; stdout=devnull, stderr=devnull))
     movie_generated = true
-    jpgs = readdir(joinpath(trialFolder("simulation", simulation_id), "output"), sort=false)
+    jpgs = readdir(joinpath(trialFolder(Simulation, simulation_id), "output"), sort=false)
     filter!(f -> endswith(f, ".jpg"), jpgs)
     for jpg in jpgs
-        rm(joinpath(trialFolder("simulation", simulation_id), "output", jpg))
+        rm(joinpath(trialFolder(Simulation, simulation_id), "output", jpg))
     end
     return movie_generated
 end
 
+"""
+    resolveMovieGlobals(magick_path::Union{Missing,String}, ffmpeg_path::Union{Missing,String})
+
+Set the global variables `path_to_magick` and `path_to_ffmpeg` to the provided paths.
+"""
 function resolveMovieGlobals(magick_path::Union{Missing,String}, ffmpeg_path::Union{Missing,String})
     if !ismissing(magick_path)
         global path_to_magick = magick_path

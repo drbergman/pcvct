@@ -1,5 +1,20 @@
 export motilityStatistics
 
+"""
+    _motilityStatistics(p[; direction=:any])
+
+Compute the motility statistics for a single cell in the PhysiCell simulation.
+
+Accounts for cell type transitions and computes the distance traveled, time spent, and mean speed for each cell type the given cell has taken on during the simulation.
+The speed can be restricted to a specific direction (x, y, z) or calculated in any direction.
+In either case, the distance is unsigned.
+
+This function is used internally by [`motilityStatistics`](@ref).
+
+# Returns
+A `Dict{String, NamedTuple}` where each key is a cell type name visited by the cell and the value is a `NamedTuple` with fields `:time`, `:distance`, and `:speed`.
+The values in this named tuple are the time, distance traveled, and mean speed for the cell in that cell type, i.e., all scalars.
+"""
 function _motilityStatistics(p; direction=:any)::Dict{String, NamedTuple}
     x, y, z = [col for col in eachcol(p.position)]
     cell_type_name = p.cell_type_name
@@ -7,11 +22,11 @@ function _motilityStatistics(p; direction=:any)::Dict{String, NamedTuple}
     dy = y[2:end] .- y[1:end-1]
     dz = z[2:end] .- z[1:end-1]
     if direction == :x
-        dist_fn = (dx, dy, dz) -> abs(dx)
+        dist_fn = (dx, _, _) -> abs(dx)
     elseif direction == :y
-        dist_fn = (dx, dy, dz) -> abs(dy)
+        dist_fn = (_, dy, _) -> abs(dy)
     elseif direction == :z
-        dist_fn = (dx, dy, dz) -> abs(dz)
+        dist_fn = (_, _, dz) -> abs(dz)
     elseif direction == :any
         dist_fn = (dx, dy, dz) -> sqrt(dx ^ 2 + dy ^ 2 + dz ^ 2)
     else
@@ -22,7 +37,7 @@ function _motilityStatistics(p; direction=:any)::Dict{String, NamedTuple}
     cell_type_names = unique(cell_type_name)
     distance_dict = Dict{String, Float64}(zip(cell_type_names, zeros(Float64, length(cell_type_names))))
     time_dict = Dict{String, Float64}(zip(cell_type_names, zeros(Float64, length(cell_type_names))))
-    while start_ind <= length(type_change) 
+    while start_ind <= length(type_change)
         I = findfirst(type_change[start_ind:end]) #! from s to I, cell_type_name is constant. at I+1 it changes
         I = isnothing(I) ? length(type_change)+2-start_ind : I #! if the cell_type_name is constant till the end, set I to be at the end
         #! If start_ind = 1 (at start of sim) and I = 2 (so cell_type_name[3] != cell_type_name[2], meaning that for steps [1,2] cell_type_name is constnat), only use dx in stepping from 1->2 since somewhere in 2->3 the type changes. That is, use dx[1]
@@ -48,7 +63,7 @@ If the cell transitions to a new cell type during the simulation, the time is co
 Each cell type taken on by a given cell will be a key in the dictionary returned at that entry.
 
 # Arguments
-- `simulation_id::Integer`: The ID of the PhysiCell simulation.
+- `simulation_id::Integer`: The ID of the PhysiCell simulation. A `Simulation` object can also be passed in.
 - `direction::Symbol`: The direction to compute the mean speed. Can be `:x`, `:y`, `:z`, or `:any` (default). If `:x`, for example, the mean speed is calculated using only the x component of the cell's movement.
 
 # Returns

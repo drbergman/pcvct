@@ -1,5 +1,15 @@
 using PhysiCellXMLRules
 
+"""
+    upgradePCVCT(from_version::VersionNumber, to_version::VersionNumber, auto_upgrade::Bool)
+
+Upgrade the PCVCT database from one version to another.
+
+The upgrade process is done in steps, where each step corresponds to a milestone version.
+The function will apply all necessary upgrades until the target version is reached.
+If `auto_upgrade` is true, the function will automatically apply all upgrades without prompting.
+Otherwise, it will prompt the user for confirmation before large upgrades.
+"""
 function upgradePCVCT(from_version::VersionNumber, to_version::VersionNumber, auto_upgrade::Bool)
     println("Upgrading pcvct from version $(from_version) to $(to_version)...")
     milestone_versions = [v"0.0.1", v"0.0.3", v"0.0.10", v"0.0.11", v"0.0.13", v"0.0.15"]
@@ -26,6 +36,11 @@ function upgradePCVCT(from_version::VersionNumber, to_version::VersionNumber, au
     return success
 end
 
+"""
+    populateTableOnFeatureSubset(db::SQLite.DB, source_table::String, target_table::String; column_mapping::Dict{String, String}=Dict{String,String}())
+
+Populate a target table with data from a source table, using a column mapping if provided.
+"""
 function populateTableOnFeatureSubset(db::SQLite.DB, source_table::String, target_table::String; column_mapping::Dict{String, String}=Dict{String,String}())
     source_columns = queryToDataFrame("PRAGMA table_info($(source_table));") |> x -> x[!, :name]
     target_columns = [haskey(column_mapping, c) ? column_mapping[c] : c for c in source_columns]
@@ -34,6 +49,13 @@ function populateTableOnFeatureSubset(db::SQLite.DB, source_table::String, targe
     query = "INSERT INTO $(target_table) $(insert_into_cols) SELECT $(select_cols) FROM $(source_table);"
     DBInterface.execute(db, query)
 end
+
+"""
+    upgradeToX_Y_Z(auto_upgrade::Bool)
+
+Upgrade the database to pcvct version X.Y.Z. Each milestone version has its own upgrade function.
+"""
+function upgradeToVX_Y_Z end
 
 function upgradeToV0_0_1(::Bool)
     println("\t- Upgrading to version 0.0.1...")
@@ -57,14 +79,14 @@ function upgradeToV0_0_1(::Bool)
             if !isfile(path_to_xml)
                 writeXMLRules(path_to_xml, joinpath(path_to_rulesets_collection_folder, "base_rulesets.csv"))
             end
-            xml_doc = openXML(path_to_xml)
+            xml_doc = parse_file(path_to_xml)
             for column_name in column_names
                 xml_path = columnNameToXMLPath(column_name)
                 base_value = getContent(xml_doc, xml_path)
                 query = "UPDATE rulesets_variations SET '$(column_name)'=$(base_value) WHERE rulesets_collection_variation_id=0;"
                 DBInterface.execute(db_rulesets_variations, query)
             end
-            closeXML(xml_doc)
+            free(xml_doc)
         end
     end
     return true
@@ -172,20 +194,20 @@ function upgradeToV0_0_10(auto_upgrade::Bool)
     println("\t- Upgrading to version 0.0.10...")
 
     createPCVCTTable("physicell_versions", physicellVersionsSchema())
-    global current_physicell_version_id = physicellVersionID()
+    global current_physicell_version_id = resolvePhysiCellVersionID()
 
     println("\t\tPhysiCell version: $(physicellInfo())")
     println("\n\t\tAssuming all output has been generated with this version...")
 
     if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('simulations') WHERE name='physicell_version_id';") |> DataFrame |> isempty
         DBInterface.execute(db, "ALTER TABLE simulations ADD COLUMN physicell_version_id INTEGER;")
-        DBInterface.execute(db, "UPDATE simulations SET physicell_version_id=$(physicellVersionDBEntry());")
+        DBInterface.execute(db, "UPDATE simulations SET physicell_version_id=$(currentPhysiCellVersionID());")
     end
 
     if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('monads') WHERE name='physicell_version_id';") |> DataFrame |> isempty
         DBInterface.execute(db, "ALTER TABLE monads ADD COLUMN physicell_version_id INTEGER;")
         DBInterface.execute(db, "CREATE TABLE monads_temp AS SELECT * FROM monads;")
-        DBInterface.execute(db, "UPDATE monads_temp SET physicell_version_id=$(physicellVersionDBEntry());")
+        DBInterface.execute(db, "UPDATE monads_temp SET physicell_version_id=$(currentPhysiCellVersionID());")
         DBInterface.execute(db, "DROP TABLE monads;")
         createPCVCTTable("monads", monadsSchema())
         populateTableOnFeatureSubset(db, "monads_temp", "monads")
@@ -194,7 +216,7 @@ function upgradeToV0_0_10(auto_upgrade::Bool)
 
     if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('samplings') WHERE name='physicell_version_id';") |> DataFrame |> isempty
         DBInterface.execute(db, "ALTER TABLE samplings ADD COLUMN physicell_version_id INTEGER;")
-        DBInterface.execute(db, "UPDATE samplings SET physicell_version_id=$(physicellVersionDBEntry());")
+        DBInterface.execute(db, "UPDATE samplings SET physicell_version_id=$(currentPhysiCellVersionID());")
     end
     return true
 end
@@ -271,7 +293,7 @@ function upgradeToV0_0_15(auto_upgrade::Bool)
     if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('simulations') WHERE name='ic_ecm_variation_id';") |> DataFrame |> isempty
         DBInterface.execute(db, "ALTER TABLE simulations ADD COLUMN ic_ecm_variation_id INTEGER;")
         DBInterface.execute(db, "UPDATE simulations SET ic_ecm_variation_id=CASE WHEN ic_ecm_id=-1 THEN -1 ELSE 0 END;")
-    end 
+    end
     if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('monads') WHERE name='ic_ecm_variation_id';") |> DataFrame |> isempty
         DBInterface.execute(db, "ALTER TABLE monads ADD COLUMN ic_ecm_variation_id INTEGER;")
         DBInterface.execute(db, "CREATE TABLE monads_temp AS SELECT * FROM monads;")

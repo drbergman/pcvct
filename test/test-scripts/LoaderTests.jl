@@ -26,7 +26,6 @@ simulation_population_time_series[first(cell_types)]
 @test_throws ArgumentError simulation_population_time_series["not_a_cell_type"]
 simulation_population_time_series = pcvct.populationTimeSeries(out.trial; include_dead=false)
 
-
 # brief pause for motility testing
 for direction in [:x, :y, :z, :any]
     local mean_speed_dicts = motilityStatistics(Simulation(out.trial.id); direction=direction)
@@ -34,8 +33,9 @@ end
 @test ismissing(motilityStatistics(pruned_simulation_id))
 
 @test ismissing(PhysiCellSequence(pruned_simulation_id))
-@test pcvct.pathToOutputXML(pruned_simulation_id, :initial) |> pcvct.getLabels |> isempty
-@test pcvct.pathToOutputXML(pruned_simulation_id, :initial) |> pcvct.getSubstrateNames |> isempty
+pruned_simulation = Simulation(pruned_simulation_id)
+@test pcvct.pathToOutputXML(pruned_simulation) |> pcvct.getLabels |> isempty
+@test pcvct.pathToOutputXML(pruned_simulation) |> pcvct.getSubstrateNames |> isempty
 
 monad = createTrial(out.trial; n_replicates=0)
 @test monad isa Monad
@@ -60,6 +60,7 @@ getCellDataSequence(Simulation(1), "position")
 
 simulation = Simulation(monad)
 out = run(simulation; prune_options=PruneOptions(prune_mat=true))
+@test out.n_success == 1 #! confirm that creating a simulation using simulation = Simulation(monad) creates a new simulation (not one already in the db)
 mat_pruned_simulation_id = out.trial.id
 PhysiCellSnapshot(mat_pruned_simulation_id, 0; include_cells=true)
 PhysiCellSnapshot(mat_pruned_simulation_id, 0; include_substrates=true)
@@ -68,7 +69,7 @@ snapshot = PhysiCellSnapshot(mat_pruned_simulation_id, 0)
 
 sequence = PhysiCellSequence(mat_pruned_simulation_id; include_attachments=true, include_spring_attachments=true, include_neighbors=true)
 pcvct.loadGraph!(sequence, :attachments)
-pcvct.loadGraph!(sequence, :spring_attachments)
+pcvct.loadGraph!(sequence, "spring_attachments")
 pcvct.loadGraph!(sequence, :neighbors)
 
 Base.show(stdout, MIME"text/plain"(), snapshot)

@@ -1,7 +1,30 @@
 export Simulation, Monad, Sampling, Trial, InputFolders
 
+"""
+    AbstractTrial
+
+Abstract type for the [`Simulation`](@ref), [`Monad`](@ref), [`Sampling`](@ref), and [`Trial`](@ref) types.
+
+There are no restrictions on inputs or variations for this type.
+"""
 abstract type AbstractTrial end
+
+"""
+    AbstractSampling <: AbstractTrial
+
+Abstract type for the [`Simulation`](@ref), [`Monad`](@ref), and [`Sampling`](@ref) types.
+
+All the inputs must be the same for all associated simulations. Variations can differ.
+"""
 abstract type AbstractSampling <: AbstractTrial end
+
+"""
+    AbstractMonad <: AbstractSampling
+
+Abstract type for the [`Simulation`](@ref) and [`Monad`](@ref) types.
+
+All the inputs and variations must be the same for all associated simulations.
+"""
 abstract type AbstractMonad <: AbstractSampling end
 
 Base.length(T::AbstractTrial) = getSimulationIDs(T) |> length
@@ -14,6 +37,8 @@ Base.length(T::AbstractTrial) = getSimulationIDs(T) |> length
     InputFolder
 
 Hold the information for a single input folder.
+
+Users should use the `InputFolders` to create and access individual `InputFolder` objects.
 
 # Fields
 - `location::Symbol`: The location of the input folder, e.g. `:config`, `:custom_code`, etc. Options are defined in `data/inputs.toml`.
@@ -55,12 +80,14 @@ struct InputFolder
         end
         return new(location, id, folder, basename, required, varied, path_from_inputs)
     end
+
     function InputFolder(location::Symbol, id::Int)
         folder = inputFolderName(location, id)
         return InputFolder(location, id, folder)
     end
+
     function InputFolder(location::Symbol, folder::String)
-        id = retrieveID(location, folder)
+        id = inputFolderID(location, folder)
         return InputFolder(location, id, folder)
     end
 end
@@ -119,8 +146,18 @@ struct InputFolders
     end
 end
 
+#! let the linter know that there will be a function like this after initialization
+#! this is the function that takes in the required inputs as positional arguments and the optional inputs as keyword arguments
 function InputFolders(args...; kwargs...) end
 
+"""
+    createSimpleInputFolders()
+
+Creates a simple method for creating `InputFolders` objects at module initialization based on `data/inputs.toml`.
+
+The required inputs are sorted alphabetically and used as the positional arguments.
+The optional inputs are used as keyword arguments with a default value of `\"\"`, indicating they are unused.
+"""
 function createSimpleInputFolders()
     fn_args = join(["$(location)::String" for location in project_locations.required], ", ")
     fn_kwargs = join(["$(location)::String=\"\"" for location in setdiff(project_locations.all, project_locations.required)], ", ")
@@ -140,6 +177,11 @@ function Base.show(io::IO, ::MIME"text/plain", input_folders::InputFolders)
     printInputFolders(io, input_folders)
 end
 
+"""
+    printInputFolders(io::IO, input_folders::InputFolders, n_indent::Int=1)
+
+Prints the folder information for each input folder in the InputFolders object.
+"""
 function printInputFolders(io::IO, input_folders::InputFolders, n_indent::Int=1)
     for (loc, input_folder) in pairs(input_folders.input_folders)
         if isempty(input_folder.folder)
@@ -185,6 +227,11 @@ function Base.show(io::IO, ::MIME"text/plain", variation_id::VariationID)
     printVariationID(io, variation_id)
 end
 
+"""
+    printVariationID(io::IO, variation_id::VariationID, n_indent::Int=1)
+
+Prints the variation ID information for each varied input in the VariationID object.
+"""
 function printVariationID(io::IO, variation_id::VariationID, n_indent::Int=1)
     for (loc, id) in pairs(variation_id.ids)
         if id == -1
@@ -224,7 +271,7 @@ simulation = Simulation(simulation_id)
 """
 struct Simulation <: AbstractMonad
     id::Int #! integer uniquely identifying this simulation
-    inputs::InputFolders 
+    inputs::InputFolders
     variation_id::VariationID
 
     function Simulation(id::Int, inputs::InputFolders, variation_id::VariationID)
@@ -248,7 +295,7 @@ struct Simulation <: AbstractMonad
 end
 
 function Simulation(inputs::InputFolders, variation_id::VariationID=VariationID(inputs))
-    simulation_id = DBInterface.execute(db, 
+    simulation_id = DBInterface.execute(db,
     """
     INSERT INTO simulations (\
     physicell_version_id,\
@@ -257,7 +304,7 @@ function Simulation(inputs::InputFolders, variation_id::VariationID=VariationID(
     status_code_id\
     ) \
     VALUES(\
-    $(physicellVersionDBEntry()),\
+    $(currentPhysiCellVersionID()),\
     $(join([inputs[loc].id for loc in project_locations.all], ",")),\
     $(join([variation_id[loc] for loc in project_locations.varied],",")),\
     $(getStatusCodeID("Not Started"))
@@ -274,7 +321,7 @@ function Simulation(simulation_id::Int)
         error("Simulation $(simulation_id) not in the database.")
     end
     inputs = [loc => df[1, locationIDName(loc)] for loc in project_locations.all] |> InputFolders
-    variation_id = [loc => df[1, locationVarIDName(loc)] for loc in project_locations.varied] |> VariationID
+    variation_id = [loc => df[1, locationVariationIDName(loc)] for loc in project_locations.varied] |> VariationID
 
     return Simulation(simulation_id, inputs, variation_id)
 end
@@ -339,7 +386,7 @@ struct Monad <: AbstractMonad
         """
         value_str = """
         (\
-        $(physicellVersionDBEntry()),\
+        $(currentPhysiCellVersionID()),\
         $(join([inputs[loc].id for loc in project_locations.all], ",")),\
         $(join([variation_id[loc] for loc in project_locations.varied],","))\
         ) \
@@ -367,7 +414,7 @@ struct Monad <: AbstractMonad
         @assert id > 0 "Monad id must be positive. Got $id."
         @assert n_replicates >= 0 "Monad n_replicates must be non-negative. Got $n_replicates."
 
-        previous_simulation_ids = readMonadSimulationIDs(id)
+        previous_simulation_ids = readConstituentIDs(Monad, id)
         new_simulation_ids = Int[]
         num_sims_to_add = n_replicates - (use_previous ? length(previous_simulation_ids) : 0)
         if num_sims_to_add > 0
@@ -375,7 +422,7 @@ struct Monad <: AbstractMonad
                 simulation = Simulation(inputs, variation_id) #! create a new simulation
                 push!(new_simulation_ids, simulation.id)
             end
-            recordSimulationIDs(id, [previous_simulation_ids; new_simulation_ids]) #! record the simulation ids in a .csv file
+            recordConstituentIDs(Monad, id, [previous_simulation_ids; new_simulation_ids]) #! record the simulation ids in a .csv file
         end
 
         return new(id, inputs, variation_id)
@@ -389,7 +436,7 @@ function Monad(monad_id::Integer; n_replicates::Integer=0, use_previous::Bool=tr
         error("Monad $(monad_id) not in the database.")
     end
     inputs = [loc => df[1, locationIDName(loc)] for loc in project_locations.all] |> InputFolders
-    variation_id = [loc => df[1, locationVarIDName(loc)] for loc in project_locations.varied] |> VariationID
+    variation_id = [loc => df[1, locationVariationIDName(loc)] for loc in project_locations.varied] |> VariationID
     return Monad(monad_id, inputs, variation_id, n_replicates, use_previous)
 end
 
@@ -403,16 +450,26 @@ function Monad(monad::Monad; n_replicates::Integer=0, use_previous::Bool=true)
     return Monad(monad.id, monad.inputs, monad.variation_id, n_replicates, use_previous)
 end
 
+"""
+    addSimulationID(monad::Monad, simulation_id::Int)
+
+Adds a simulation ID to the monad's list of simulation IDs.
+"""
 function addSimulationID(monad::Monad, simulation_id::Int)
     simulation_ids = getSimulationIDs(monad)
     if simulation_id in simulation_ids
         return
     end
     push!(simulation_ids, simulation_id)
-    recordSimulationIDs(monad, simulation_ids)
+    recordConstituentIDs(monad, simulation_ids)
     return
 end
 
+"""
+    Simulation(monad::Monad)
+
+Creates a new `Simulation` object belonging to the monad, i.e., will not use a simulation already in the database.
+"""
 function Simulation(monad::Monad)
     return Simulation(monad.inputs, monad.variation_id)
 end
@@ -454,6 +511,7 @@ If there is a previously created sampling that you wish to access, you can use i
 ```
 sampling = Sampling(sampling_id)
 sampling = Sampling(sampling_id; n_replicates=5) # ensures at least 5 simulations in each monad (using previous sims)
+sampling = Sampling(sampling_id; n_replicates=5, use_previous=false) # creates 5 new simulations in each monad
 ```
 
 # Fields
@@ -477,7 +535,7 @@ struct Sampling <: AbstractSampling
             $(join(locationIDNames(), ","))\
             )=\
             (\
-            $(physicellVersionDBEntry()),\
+            $(currentPhysiCellVersionID()),\
             $(join([inputs[loc].id for loc in project_locations.all], ","))\
             );\
             """;
@@ -487,16 +545,16 @@ struct Sampling <: AbstractSampling
         monad_ids = [monad.id for monad in monads]
         if !isempty(sampling_ids) #! if there are previous samplings with the same parameters
             for sampling_id in sampling_ids #! check if the monad_ids are the same with any previous monad_ids
-                monad_ids_in_sampling = readSamplingMonadIDs(sampling_id) #! get the monad_ids belonging to this sampling
+                monad_ids_in_sampling = readConstituentIDs(Sampling, sampling_id) #! get the monad_ids belonging to this sampling
                 if symdiff(monad_ids_in_sampling, monad_ids) |> isempty #! if the monad_ids are the same
                     id = sampling_id #! use the existing sampling_id
                     break
                 end
             end
         end
-    
+
         if id==-1 #! if no previous sampling was found matching these parameters
-            id = DBInterface.execute(db, 
+            id = DBInterface.execute(db,
                 """
                 INSERT INTO samplings \
                 (\
@@ -504,12 +562,12 @@ struct Sampling <: AbstractSampling
                 $(join(locationIDNames(), ","))\
                 ) \
                 VALUES(\
-                $(physicellVersionDBEntry()),\
+                $(currentPhysiCellVersionID()),\
                 $(join([inputs[loc].id for loc in project_locations.all], ","))\
                 ) RETURNING sampling_id;
                 """
             ) |> DataFrame |> x -> x.sampling_id[1] #! get the sampling_id
-            recordMonadIDs(id, monad_ids) #! record the monad ids in a .csv file
+            recordConstituentIDs(Sampling, id, monad_ids) #! record the monad ids in a .csv file
         end
         return Sampling(id, inputs, monads)
     end
@@ -520,7 +578,7 @@ struct Sampling <: AbstractSampling
         for monad in monads
             @assert monad.inputs == inputs "All monads must have the same inputs. You can instead make these into a Trial. Got $(monad.inputs) and $(inputs)."
         end
-        @assert Set(readSamplingMonadIDs(id)) == Set([monad.id for monad in monads]) "Monad ids do not match those in the database."
+        @assert Set(readConstituentIDs(Sampling, id)) == Set([monad.id for monad in monads]) "Monad ids do not match those in the database for Sampling $(id):\n$(Set(readConstituentIDs(Sampling, id)))\nvs\n$(Set([monad.id for monad in monads]))"
         return new(id, inputs, monads)
     end
 end
@@ -530,8 +588,8 @@ function Sampling(inputs::InputFolders, variation_ids::AbstractArray{VariationID
     return Sampling(monads, inputs)
 end
 
-function Sampling(inputs::InputFolders;
-                  location_variation_ids::Dict{Symbol,<:Union{Integer,AbstractArray{<:Integer}}},
+function Sampling(inputs::InputFolders,
+                  location_variation_ids::Dict{Symbol,<:Union{Integer,AbstractArray{<:Integer}}};
                   n_replicates::Integer=0,
                   use_previous::Bool=true)
     #! allow for passing in a single config_variation_id and/or rulesets_collection_variation_id
@@ -557,6 +615,18 @@ function Sampling(inputs::InputFolders;
     return Sampling(inputs, variation_ids; n_replicates=n_replicates, use_previous=use_previous)
 end
 
+"""
+    Sampling(Ms::AbstractArray{<:AbstractMonad}; n_replicates::Integer=0, use_previous::Bool=true)
+
+Creates a new `Sampling` object from a vector of `Monad` objects.
+
+The monads must all have the same `InputFolders` object so that they can actually be grouped into a sampling.
+
+# Arguments
+- `Ms::AbstractArray{<:AbstractMonad}`: A vector of `Monad` objects. A single `Monad` object can also be passed in.
+- `n_replicates::Integer=0`: The number of replicates to create for each monad. New simulations will be created as needed for each monad.
+- `use_previous::Bool=true`: Whether to use previous simulations for each monad. If `false`, new simulations will be created for each monad.
+"""
 function Sampling(Ms::AbstractArray{<:AbstractMonad}; n_replicates::Integer=0, use_previous::Bool=true)
     @assert !isempty(Ms) "At least one monad must be provided"
     inputs = Ms[1].inputs
@@ -564,7 +634,7 @@ function Sampling(Ms::AbstractArray{<:AbstractMonad}; n_replicates::Integer=0, u
         @assert M.inputs == inputs "All Ms must have the same inputs. You can instead make these into a Trial. Got $(M.inputs) and $(inputs)."
     end
     monads = [Monad(M; n_replicates=n_replicates, use_previous=use_previous) for M in Ms] #! this step ensures that the monads all have the min number of replicates ready
-    return Sampling(monads, inputs) 
+    return Sampling(monads, inputs)
 end
 
 Sampling(M::AbstractMonad; kwargs...) = Sampling([M]; kwargs...)
@@ -574,9 +644,9 @@ function Sampling(sampling_id::Int; n_replicates::Integer=0, use_previous::Bool=
     if isempty(df)
         error("Sampling $(sampling_id) not in the database.")
     end
-    monad_ids = readSamplingMonadIDs(sampling_id)
+    monad_ids = readConstituentIDs(Sampling, sampling_id)
     monads = Monad.(monad_ids; n_replicates=n_replicates, use_previous=use_previous)
-    inputs = monads[1].inputs #! readSamplingMonadIDs() should be returning monads already associated with a Sampling and thus having the same inputs
+    inputs = monads[1].inputs #! readConstituentIDs() should be returning monads already associated with a Sampling and thus having the same inputs
     return Sampling(sampling_id, inputs, monads)
 end
 
@@ -590,7 +660,7 @@ function Base.show(io::IO, ::MIME"text/plain", sampling::Sampling)
 end
 
 function printMonadIDs(io::IO, sampling::Sampling, n_indent::Int=1)
-    monad_ids = readSamplingMonadIDs(sampling) |> compressIDs
+    monad_ids = readConstituentIDs(sampling) |> compressIDs
     monad_ids = join(monad_ids[1], ", ")
     monad_ids = replace(monad_ids, ":" => "-")
     println(io, "  "^n_indent, "Monads: $(monad_ids)")
@@ -619,6 +689,7 @@ If there is a previous trial that you wish to access, you can use its ID to crea
 ```
 trial = Trial(trial_id)
 trial = Trial(trial_id; n_replicates=5) # ensures at least 5 simulations in each monad (using previous sims)
+trial = Trial(trial_id; n_replicates=5, use_previous=false) # creates 5 new simulations in each monad
 ```
 
 # Fields
@@ -633,7 +704,7 @@ struct Trial <: AbstractTrial
 
     function Trial(id::Integer, samplings::Vector{Sampling})
         @assert id > 0 "Trial id must be positive. Got $id."
-        @assert Set(readTrialSamplingIDs(id)) == Set([sampling.id for sampling in samplings]) "Samplings do not match the samplings in the database."
+        @assert Set(readConstituentIDs(Trial, id)) == Set([sampling.id for sampling in samplings]) "Samplings do not match the samplings in the database."
         return new(id, samplings)
     end
 end
@@ -647,19 +718,24 @@ end
 function Trial(trial_id::Int; n_replicates::Integer=0, use_previous::Bool=true)
     df = constructSelectQuery("trials", "WHERE trial_id=$(trial_id);") |> queryToDataFrame
     @assert !isempty(df) "Trial $(trial_id) not in the database."
-    samplings = Sampling.(readTrialSamplingIDs(trial_id); n_replicates=n_replicates, use_previous=use_previous)
+    samplings = Sampling.(readConstituentIDs(Trial, trial_id); n_replicates=n_replicates, use_previous=use_previous)
     @assert !isempty(samplings) "No samplings found for trial_id=$trial_id. This trial has not been created."
-    samplings = Sampling.(readTrialSamplingIDs(trial_id); n_replicates=n_replicates, use_previous=use_previous)
+    samplings = Sampling.(readConstituentIDs(Trial, trial_id); n_replicates=n_replicates, use_previous=use_previous)
     return Trial(trial_id, samplings)
 end
 
+"""
+    getTrialID(samplings::Vector{Sampling})
+
+Get the trial ID for a vector of samplings or create a new trial if one does not exist.
+"""
 function getTrialID(samplings::Vector{Sampling})
     sampling_ids = [sampling.id for sampling in samplings]
     id = -1
     trial_ids = constructSelectQuery("trials"; selection="trial_id") |> queryToDataFrame |> x -> x.trial_id
     if !isempty(trial_ids) #! if there are previous trials
         for trial_id in trial_ids #! check if the sampling_ids are the same with any previous sampling_ids
-            sampling_ids_in_db = readTrialSamplingIDs(trial_id) #! get the sampling_ids belonging to this trial
+            sampling_ids_in_db = readConstituentIDs(Trial, trial_id) #! get the sampling_ids belonging to this trial
             if symdiff(sampling_ids_in_db, sampling_ids) |> isempty #! if the sampling_ids are the same
                 id = trial_id #! use the existing trial_id
                 break
@@ -669,7 +745,7 @@ function getTrialID(samplings::Vector{Sampling})
 
     if id==-1 #! if no previous trial was found matching these parameters
         id = DBInterface.execute(db, "INSERT INTO trials (datetime) VALUES($(Dates.format(now(),"yymmddHHMM"))) RETURNING trial_id;") |> DataFrame |> x -> x.trial_id[1] #! get the trial_id
-        recordSamplingIDs(id, sampling_ids) #! record the sampling ids in a .csv file
+        recordConstituentIDs(Trial, id, sampling_ids) #! record the sampling ids in a .csv file
     end
 
     return id

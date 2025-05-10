@@ -1,32 +1,26 @@
-function recordIDs(path_to_folder::String, filename::String, ids::Array{Int})
+"""
+    recordConstituentIDs(T::Type{<:AbstractTrial}, id::Int, ids::Array{Int})
+    recordConstituentIDs(T::AbstractTrial, ids::Array{Int})
+
+Record the IDs of the constituents of an [`AbstractTrial`](@ref) object in a CSV file.
+"""
+function recordConstituentIDs(T::Type{<:AbstractTrial}, id::Int, ids::Array{Int})
+    path_to_folder = trialFolder(T, id)
     mkpath(path_to_folder)
-    path_to_csv = joinpath(path_to_folder, "$(filename).csv")
+    path_to_csv = joinpath(path_to_folder, constituentsTypeFilename(T))
     lines_table = compressIDs(ids)
     CSV.write(path_to_csv, lines_table; header=false)
 end
 
-function recordSimulationIDs(monad_id::Int, simulation_ids::Array{Int})
-    path_to_folder = trialFolder("monad", monad_id)
-    recordIDs(path_to_folder, "simulations", simulation_ids)
-end
-
-recordSimulationIDs(monad::Monad, simulation_ids::AbstractArray{Int}) = recordSimulationIDs(monad.id, simulation_ids)
-
-function recordMonadIDs(sampling_id::Int, monad_ids::Array{Int})
-    path_to_folder = trialFolder("sampling", sampling_id)
-    recordIDs(path_to_folder, "monads", monad_ids)
-end
-
-function recordSamplingIDs(trial_id::Int, sampling_ids::Array{Int})
-    recordSamplingIDs(trialFolder("trial", trial_id), sampling_ids)
-end
-
-function recordSamplingIDs(path_to_folder::String, sampling_ids::Array{Int})
-    recordIDs(path_to_folder, "samplings", sampling_ids)
-end
+recordConstituentIDs(T::AbstractTrial, ids::Array{Int}) = recordConstituentIDs(typeof(T), T.id, ids)
 
 ################## Compression Functions ##################
 
+"""
+    compressIDs(ids::AbstractArray{Int})
+    
+Compress a list of IDs into a more compact representation by grouping consecutive IDs together.
+"""
 function compressIDs(ids::AbstractArray{Int})
     ids = ids |> vec |> unique |> sort
     lines = String[]

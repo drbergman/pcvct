@@ -33,7 +33,7 @@ out2 = run(inputs, discrete_variations)
 @test out2.n_scheduled == 0
 @test out2.n_success == 0
 
-@test out.trial.id == out2.trial.id 
+@test out.trial.id == out2.trial.id
 @test out.trial.inputs == out2.trial.inputs
 @test out.trial.variation_id == out2.trial.variation_id
 
@@ -60,7 +60,7 @@ out2 = run(simulation, discrete_variations; n_replicates=n_replicates, force_rec
 @test out2.trial isa Sampling
 @test out2.trial.id == sampling.id
 @test out2.trial.inputs == sampling.inputs
-@test Set(pcvct.readSamplingMonadIDs(out2.trial)) == Set(pcvct.readSamplingMonadIDs(sampling))
+@test Set(pcvct.readConstituentIDs(out2.trial)) == Set(pcvct.readConstituentIDs(sampling))
 @test Set(pcvct.getSimulationIDs(out2.trial)) == Set(pcvct.getSimulationIDs(sampling))
 @test out2.n_scheduled == 0
 @test out2.n_success == 0

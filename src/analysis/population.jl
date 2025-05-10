@@ -2,7 +2,23 @@ using RecipesBase
 
 export finalPopulationCount
 
-function populationCount(snapshot::PhysiCellSnapshot; include_dead::Bool=false, cell_type_to_name_dict::Dict{Int,String}=Dict{Int,String}(), labels::Vector{String}=String[])
+"""
+    populationCount(snapshot, cell_type_to_name_dict::Dict{Int,String}=Dict{Int,String}(), labels::Vector{String}=String[]; include_dead::Bool=false)
+
+Return the population count of a snapshot as a dictionary with cell type names as keys and their counts as values.
+
+If the snapshot is missing, it will return missing.
+This helps in cases where the files have been deleted, for example by pruning.
+
+# Arguments
+- `snapshot::PhysiCellSnapshot`: The snapshot to count the cells in.
+- `cell_type_to_name_dict::Dict{Int,String}`: A dictionary mapping cell type IDs to names (default is an empty dictionary). If not provided, it is read from the snapshot files.
+- `labels::Vector{String}`: The labels to identify the cell data. If not provided, it is read from the snapshot files.
+
+# Keyword Arguments
+- `include_dead::Bool`: Whether to include dead cells in the count. Default is `false`.
+"""
+function populationCount(snapshot::PhysiCellSnapshot, cell_type_to_name_dict::Dict{Int,String}=Dict{Int,String}(), labels::Vector{String}=String[]; include_dead::Bool=false)
     loadCells!(snapshot, cell_type_to_name_dict, labels)
     data = Dict{String, Int}()
     if include_dead
@@ -22,6 +38,11 @@ end
 
 populationCount(::Missing, args...; kwargs...) = missing
 
+"""
+    AbstractPopulationTimeSeries
+
+Abstract type representing a population time series for either a simulation or a monad.
+"""
 abstract type AbstractPopulationTimeSeries end
 
 """
@@ -54,7 +75,7 @@ function SimulationPopulationTimeSeries(sequence::PhysiCellSequence; include_dea
     time = [snapshot.time for snapshot in sequence.snapshots]
     cell_count = Dict{String, Vector{Integer}}()
     for (i, snapshot) in enumerate(sequence.snapshots)
-        population_count = populationCount(snapshot; include_dead=include_dead, cell_type_to_name_dict=sequence.cell_type_to_name_dict, labels=sequence.labels)
+        population_count = populationCount(snapshot, sequence.cell_type_to_name_dict, sequence.labels; include_dead=include_dead)
         ismissing(population_count) && continue #! skip if the population count is missing (could happen if the snapshot is empty, which would happen if, e.g., the xml is missing)
         for (ID, count) in pairs(population_count)
             if !(string(ID) in keys(cell_count))
@@ -68,7 +89,7 @@ end
 
 function SimulationPopulationTimeSeries(simulation_id::Integer; include_dead::Bool=false, verbose::Bool=true)
     verbose ? print("Computing SimulationPopulationTimeSeries for Simulation $simulation_id...") : nothing
-    simulation_folder = trialFolder("simulation", simulation_id)
+    simulation_folder = trialFolder(Simulation, simulation_id)
     path_to_summary = joinpath(simulation_folder, "summary")
     path_to_file = joinpath(path_to_summary, "population_time_series$(include_dead ? "_include_dead" : "").csv")
     if isfile(path_to_file)
@@ -105,11 +126,18 @@ end
 
 function Base.show(io::IO, ::MIME"text/plain", spts::SimulationPopulationTimeSeries)
     println(io, "SimulationPopulationTimeSeries for Simulation $(spts.simulation_id):")
-    println(io, "  Time: $(check_and_format_range(spts.time))")
+    println(io, "  Time: $(formatTimeRange(spts.time))")
     println(io, "  Cell types: $(join(keys(spts.cell_count), ", "))")
 end
 
-function check_and_format_range(v)
+"""
+    formatTimeRange(v::Vector{Real})
+
+Format a vector of time points into a string representation.
+
+Used only for printing certain classes to the console.
+"""
+function formatTimeRange(v)
     @assert !isempty(v) "Vector is empty."
     if length(v) == 1
         return "$(v[1])"
@@ -231,10 +259,9 @@ Base.keys(apts::AbstractPopulationTimeSeries; exclude_time::Bool=false) = exclud
 function Base.show(io::IO, ::MIME"text/plain", mpts::MonadPopulationTimeSeries)
     println(io, "MonadPopulationTimeSeries for Monad $(mpts.monad_id):")
     printSimulationIDs(io, Monad(mpts.monad_id))
-    println(io, "  Time: $(check_and_format_range(mpts.time))")
+    println(io, "  Time: $(formatTimeRange(mpts.time))")
     println(io, "  Cell types: $(join(keys(mpts.cell_count), ", "))")
 end
-
 
 """
     populationTimeSeries(M::AbstractMonad[; include_dead::Bool=false])
@@ -252,6 +279,11 @@ function populationTimeSeries(M::AbstractMonad; include_dead::Bool=false)
 end
 
 #! plot recipes
+"""
+    getMeanCounts(apts::AbstractPopulationTimeSeries)
+
+Return the mean counts of a population time series.
+"""
 getMeanCounts(s::SimulationPopulationTimeSeries) = s.cell_count
 getMeanCounts(m::MonadPopulationTimeSeries) = [k => v.mean for (k, v) in pairs(m.cell_count)] |> Dict
 
@@ -331,7 +363,7 @@ end
     end
 end
 
-@recipe function f(::Type{PCVCTOutput}, out::PCVCTOutput) 
+@recipe function f(::Type{PCVCTOutput}, out::PCVCTOutput)
     if out.trial isa Trial
         throw(ArgumentError("Plotting an entire trial not (yet?) defined. Break it down into at least Samplings first."))
     end
@@ -372,7 +404,7 @@ end
     end
 
     simulation_id = getSimulationIDs(T) |> first
-    all_cell_types = pathToOutputXML(simulation_id, :initial) |> getCellTypeToNameDict |> values |> collect
+    all_cell_types = getCellTypeToNameDict(simulation_id) |> values |> collect
     include_cell_types = processIncludeCellTypes(include_cell_types, all_cell_types)
     exclude_cell_types = processExcludeCellTypes(exclude_cell_types)
 

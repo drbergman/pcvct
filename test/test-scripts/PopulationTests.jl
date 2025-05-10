@@ -1,4 +1,5 @@
 using Plots
+
 filename = @__FILE__
 filename = split(filename, "/") |> last
 str = "TESTING WITH $(filename)"
@@ -20,7 +21,6 @@ plot(out)
 plot(out.trial)
 plotbycelltype(out)
 plotbycelltype(out.trial)
-
 
 all_cell_types = ["cancer", "immune", "epi", "mes"]
 pcvct.processIncludeCellTypes(["cancer", "immune"], all_cell_types)

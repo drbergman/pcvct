@@ -12,7 +12,7 @@ simulation_id = getSimulationIDs(out.trial)[1]
 deleteSimulation(simulation_id:simulation_id)
 @test !isdir(joinpath(pcvct.data_dir, "outputs", "simulations", string(simulation_id)))
 
-pcvct.eraseSimulationID(getSimulationIDs(out.trial)[2])
+pcvct.eraseSimulationIDFromConstituents(getSimulationIDs(out.trial)[2])
 
 pcvct.deleteMonad(1:4)
 pcvct.deleteSampling(1)

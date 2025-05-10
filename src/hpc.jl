@@ -1,3 +1,8 @@
+"""
+    shellCommandExists(cmd::Union{String,Cmd})
+
+Check if a shell command exists in the current environment.
+"""
 function shellCommandExists(cmd::Union{String,Cmd})
     cmd_ = Sys.iswindows() ? `where $cmd` : `which $cmd`
     p = run(pipeline(ignorestatus(cmd_); stdout=devnull, stderr=devnull))
@@ -29,15 +34,14 @@ function useHPC(use::Bool=true)
     global run_on_hpc = use
 end
 
-raw"""
+"""
     defaultJobOptions()
 
 Return a dictionary with default options for a job script for use with SLURM. See [`setJobOptions`](@ref) for setting these options and others.
 
 Current defaults are:
-- `"job-name"`: simulation_id -> "S$(simulation_id)"
-- `"mem"`: "1G"
-```
+- `job-name`: `simulation_id -> \"S\$(simulation_id)\"` (use the simulation ID for the job name)
+- `mem`: `"1G"` (1 GB of memory)
 """
 function defaultJobOptions()
     return Dict(

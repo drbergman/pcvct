@@ -2,6 +2,11 @@ using DataFrames, MAT, Graphs, MetaGraphsNext
 
 export getCellDataSequence, PhysiCellSnapshot, PhysiCellSequence
 
+"""
+    AbstractPhysiCellSequence
+
+Abstract type representing either a single snapshot or a sequence of snapshots from a PhysiCell simulation.
+"""
 abstract type AbstractPhysiCellSequence end
 
 """
@@ -21,6 +26,17 @@ The `cells`, `substrates`, and `mesh` fields may remain empty until they are nee
 - `attachments::MetaGraph`: A graph of cell attachment data with vertices labeled by cell IDs.
 - `spring_attachments::MetaGraph`: A graph of spring attachment data with vertices labeled by cell IDs.
 - `neighbors::MetaGraph`: A graph of cell neighbor data with vertices labeled by cell IDs.
+
+# Examples
+```julia
+simulation_id = 1
+index = 3 # index of the snapshot in the output folder
+snapshot = PhysiCellSnapshot(simulation_id, index)
+
+simulation = Simulation(simulation_id)
+index = :initial # :initial or :final are the accepted symbols
+snapshot = PhysiCellSnapshot(simulation, index)
+```
 """
 struct PhysiCellSnapshot <: AbstractPhysiCellSequence
     simulation_id::Int
@@ -34,12 +50,32 @@ struct PhysiCellSnapshot <: AbstractPhysiCellSequence
     neighbors::MetaGraph
 end
 
-function PhysiCellSnapshot(simulation_id::Int, index::Union{Integer, Symbol};
+"""
+    PhysiCellSnapshot(simulation_id::Int, index::Union{Integer, Symbol}, labels::Vector{String}=String[], substrate_names::Vector{String}=String[]; kwargs...)
+    
+Creates a snapshot of the PhysiCell simulation with optional parameters to include various data types.
+
+# Arguments
+- `simulation_id::Int`: The ID of the simulation. Can also be a `Simulation` object.
+- `index::Union{Integer, Symbol}`: The index of the snapshot. Can be an integer or a symbol (`:initial` or `:final`).
+- `labels::Vector{String}=String[]`: A vector of cell data labels.
+- `substrate_names::Vector{String}=String[]`: A vector of substrate names.
+
+# Keyword Arguments
+- `include_cells::Bool=false`: Whether to load cell data.
+- `cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}()`: A dictionary mapping cell type IDs to cell type names.
+- `include_substrates::Bool=false`: Whether to load substrate data.
+- `include_mesh::Bool=false`: Whether to load mesh data.
+- `include_attachments::Bool=false`: Whether to load attachment data.
+- `include_spring_attachments::Bool=false`: Whether to load spring attachment data.
+- `include_neighbors::Bool=false`: Whether to load neighbor data.
+"""
+function PhysiCellSnapshot(simulation_id::Int, index::Union{Integer, Symbol},
+    labels::Vector{String}=String[],
+    substrate_names::Vector{String}=String[];
     include_cells::Bool=false,
     cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}(),
-    labels::Vector{String}=String[],
     include_substrates::Bool=false,
-    substrate_names::Vector{String}=String[],
     include_mesh::Bool=false,
     include_attachments::Bool=false,
     include_spring_attachments::Bool=false,
@@ -51,7 +87,7 @@ function PhysiCellSnapshot(simulation_id::Int, index::Union{Integer, Symbol};
         println("Could not find file $path_to_xml. Returning missing.")
         return missing
     end
-    xml_doc = openXML("$(filepath_base).xml")
+    xml_doc = parse_file("$(filepath_base).xml")
     time = getContent(xml_doc, ["metadata","current_time"]) |> x->parse(Float64, x)
     cells = DataFrame()
     if include_cells
@@ -74,32 +110,32 @@ function PhysiCellSnapshot(simulation_id::Int, index::Union{Integer, Symbol};
 
     attachments = physicellEmptyGraph()
     if include_attachments
-        if loadGraph!(attachments, "$(filepath_base)_attached_cells_graph.txt", :attachments) |> ismissing
+        if loadGraph!(attachments, "$(filepath_base)_attached_cells_graph.txt") |> ismissing
             println("Could not load attachments for snapshot $(index) of simulation $simulation_id. Returning missing.")
             return missing
         end
     end
-    
+
     spring_attachments = physicellEmptyGraph()
     if include_spring_attachments
-        if loadGraph!(spring_attachments, "$(filepath_base)_spring_attached_cells_graph.txt", :spring_attachments) |> ismissing
+        if loadGraph!(spring_attachments, "$(filepath_base)_spring_attached_cells_graph.txt") |> ismissing
             println("Could not load spring attachments for snapshot $(index) of simulation $simulation_id. Returning missing.")
             return missing
         end
     end
-    
+
     neighbors = physicellEmptyGraph()
     if include_neighbors
-        if loadGraph!(neighbors, "$(filepath_base)_cell_neighbor_graph.txt", :neighbors) |> ismissing
+        if loadGraph!(neighbors, "$(filepath_base)_cell_neighbor_graph.txt") |> ismissing
             println("Could not load neighbors for snapshot $(index) of simulation $simulation_id. Returning missing.")
             return missing
         end
     end
-    closeXML(xml_doc)
+    free(xml_doc)
     return PhysiCellSnapshot(simulation_id, index, time, DataFrame(cells), substrates, mesh, attachments, spring_attachments, neighbors)
 end
 
-PhysiCellSnapshot(simulation::Simulation, index::Union{Integer,Symbol}; kwargs...) = PhysiCellSnapshot(simulation.id, index; kwargs...)
+PhysiCellSnapshot(simulation::Simulation, index::Union{Integer,Symbol}, args...; kwargs...) = PhysiCellSnapshot(simulation.id, index, args...; kwargs...)
 
 function Base.show(io::IO, ::MIME"text/plain", snapshot::PhysiCellSnapshot)
     println(io, "PhysiCellSnapshot (SimID=$(snapshot.simulation_id), Index=$(snapshot.index))")
@@ -112,6 +148,22 @@ function Base.show(io::IO, ::MIME"text/plain", snapshot::PhysiCellSnapshot)
     println(io, "  Neighbors: $(nv(snapshot.neighbors)==0 ? "NOT LOADED" : graphInfo(snapshot.neighbors))")
 end
 
+"""
+    indexToFilename(index)
+
+Convert an index to a filename in the output folder.
+
+The index can be an integer or a symbol (`:initial` or `:final`).
+
+```jldoctest
+julia> pcvct.indexToFilename(0)
+"output00000000"
+```
+```jldoctest
+julia> pcvct.indexToFilename(:initial)
+"initial"
+```
+"""
 function indexToFilename(index::Symbol)
     @assert index in [:initial, :final] "The non-integer index must be either :initial or :final"
     return string(index)
@@ -133,6 +185,14 @@ end
 
 Base.parse(::Type{AgentID}, s::AbstractString) = AgentID(parse(Int, s))
 
+"""
+    physicellEmptyGraph()
+
+Create an empty graph for use with PhysiCell.
+
+For all PhysiCell graphs, the vertices are labeled with `AgentID`s and the vertices carry no other information.
+The edges also carry no extra information other than that the edge exists.
+"""
 function physicellEmptyGraph()
     return MetaGraph(SimpleDiGraph();
         label_type=AgentID,
@@ -140,6 +200,13 @@ function physicellEmptyGraph()
         edge_data_type=Nothing)
 end
 
+"""
+    readPhysiCellGraph!(g::MetaGraph, path_to_txt_file::String)
+
+Read a PhysiCell graph from a text file into a MetaGraph.
+
+Users should use [`loadGraph!`](@ref) instead of this function directly.
+"""
 function readPhysiCellGraph!(g::MetaGraph, path_to_txt_file::String)
     lines = readlines(path_to_txt_file)
     for line in lines
@@ -203,10 +270,9 @@ function PhysiCellSequence(simulation_id::Integer;
     end
     labels = getLabels(path_to_xml)
     substrate_names = include_substrates ? getSubstrateNames(path_to_xml) : String[]
-    index_to_snapshot = index -> PhysiCellSnapshot(simulation_id, index;
+    index_to_snapshot = index -> PhysiCellSnapshot(simulation_id, index, labels, substrate_names;
                                                    include_cells=include_cells,
                                                    cell_type_to_name_dict=cell_type_to_name_dict,
-                                                   labels=labels,
                                                    include_substrates=include_substrates,
                                                    include_mesh=include_mesh,
                                                    include_attachments=include_attachments,
@@ -233,19 +299,59 @@ function Base.show(io::IO, ::MIME"text/plain", sequence::PhysiCellSequence)
     println(io, "  Mesh: $(meshInfo(sequence))")
 end
 
-pathToOutputFolder(simulation_id::Integer) = joinpath(trialFolder("simulation", simulation_id), "output")
+"""
+    pathToOutputFolder(simulation_id::Integer)
+
+Return the path to the output folder for a PhysiCell simulation.
+"""
+pathToOutputFolder(simulation_id::Integer) = joinpath(trialFolder(Simulation, simulation_id), "output")
+
+"""
+    pathToOutputFileBase(simulation_id::Integer, index::Union{Integer,Symbol})
+
+Return the path to the output files for a snapshot of a PhysiCell simulation, i.e., everything but the file extension.
+"""
 pathToOutputFileBase(simulation_id::Integer, index::Union{Integer,Symbol}) = joinpath(pathToOutputFolder(simulation_id), indexToFilename(index))
+
+"""
+    pathToOutputFileBase(snapshot::PhysiCellSnapshot)
+
+Return the path to the output files for a snapshot of a PhysiCell simulation, i.e., everything but the file extension.
+"""
 pathToOutputFileBase(snapshot::PhysiCellSnapshot) = pathToOutputFileBase(snapshot.simulation_id, snapshot.index)
-pathToOutputXML(simulation_id::Integer, index::Union{Integer,Symbol}) = "$(pathToOutputFileBase(simulation_id, index)).xml"
+
+"""
+    pathToOutputXML(simulation_id::Integer, index::Union{Integer,Symbol}=:initial)
+
+Return the path to the XML output file for a snapshot of a PhysiCell simulation.
+Can also pass in a `Simulation` object for the first argument.
+"""
+pathToOutputXML(simulation_id::Integer, index::Union{Integer,Symbol}=:initial) = "$(pathToOutputFileBase(simulation_id, index)).xml"
+
+pathToOutputXML(simulation::Simulation, index::Union{Integer,Symbol}=:initial) = pathToOutputXML(simulation.id, index)
+
+"""
+    pathToOutputXML(snapshot::PhysiCellSnapshot)
+
+Return the path to the XML output file for a snapshot of a PhysiCell simulation.
+"""
 pathToOutputXML(snapshot::PhysiCellSnapshot) = pathToOutputXML(snapshot.simulation_id, snapshot.index)
 
+"""
+    getLabels(simulation::Simulation)
+
+Return the labels from the XML file for a PhysiCell simulation, i.e., the names of the cell data fields.
+
+# Arguments
+- `simulation`: The simulation object. Can also use the simulation ID, an [`AbstractPhysiCellSequence`](@ref), `XMLDocument`, or the path to the XML file (`String`).
+"""
 function getLabels(path_to_file::String)
     if !isfile(path_to_file)
         return String[]
     end
-    xml_doc = openXML(path_to_file)
+    xml_doc = parse_file(path_to_file)
     labels = getLabels(xml_doc)
-    closeXML(xml_doc)
+    free(xml_doc)
     return labels
 end
 
@@ -272,14 +378,24 @@ end
 
 getLabels(snapshot::PhysiCellSnapshot) = pathToOutputXML(snapshot) |> getLabels
 getLabels(sequence::PhysiCellSequence) = sequence.labels
+getLabels(simulation_id::Integer) = getLabels(pathToOutputXML(simulation_id, :initial))
+getLabels(simulation::Simulation) = getLabels(simulation.id)
 
+"""
+    getCellTypeToNameDict(simulation::Simulation)
+
+Return a dictionary mapping cell type IDs to cell type names from the simulation.
+
+# Arguments
+- `simulation`: The simulation object. Can also use the simulation ID, an [`AbstractPhysiCellSequence`](@ref), `XMLDocument`, or the path to the XML file (`String`).
+"""
 function getCellTypeToNameDict(path_to_file::String)
     if !isfile(path_to_file)
         return Dict{Int,String}()
     end
-    xml_doc = openXML(path_to_file)
+    xml_doc = parse_file(path_to_file)
     cell_type_to_name_dict = getCellTypeToNameDict(xml_doc)
-    closeXML(xml_doc)
+    free(xml_doc)
     return cell_type_to_name_dict
 end
 
@@ -298,14 +414,24 @@ end
 
 getCellTypeToNameDict(snapshot::PhysiCellSnapshot) = pathToOutputXML(snapshot) |> getCellTypeToNameDict
 getCellTypeToNameDict(sequence::PhysiCellSequence) = sequence.cell_type_to_name_dict
+getCellTypeToNameDict(simulation_id::Integer) = getCellTypeToNameDict(pathToOutputXML(simulation_id, :initial))
+getCellTypeToNameDict(simulation::Simulation) = getCellTypeToNameDict(simulation.id)
 
+"""
+    getSubstrateNames(simulation::Simulation)
+
+Return the names of the substrates from the simulation.
+
+# Arguments
+- `simulation`: The simulation object. Can also use the simulation ID, an [`AbstractPhysiCellSequence`](@ref), `XMLDocument`, or the path to the XML file (`String`).
+"""
 function getSubstrateNames(path_to_file::String)
     if !isfile(path_to_file)
         return String[]
     end
-    xml_doc = openXML(path_to_file)
+    xml_doc = parse_file(path_to_file)
     substrate_names = getSubstrateNames(xml_doc)
-    closeXML(xml_doc)
+    free(xml_doc)
     return substrate_names
 end
 
@@ -330,26 +456,33 @@ end
 
 getSubstrateNames(snapshot::PhysiCellSnapshot) = pathToOutputXML(snapshot) |> getSubstrateNames
 getSubstrateNames(sequence::PhysiCellSequence) = sequence.substrate_names
+getSubstrateNames(simulation_id::Integer) = getSubstrateNames(pathToOutputXML(simulation_id, :initial))
+getSubstrateNames(simulation::Simulation) = getSubstrateNames(simulation.id)
 
+"""
+    loadCells!(cells::DataFrame, filepath_base::String, cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}(), labels::Vector{String}=String[])
+
+Internal function to load cell data into a DataFrame associated with an [`AbstractPhysiCellSequence`](@ref) object.
+"""
 function loadCells!(cells::DataFrame, filepath_base::String, cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}(), labels::Vector{String}=String[])
     if !isempty(cells)
         return
     end
 
     if isempty(labels) || isempty(cell_type_to_name_dict)
-        xml_doc = openXML("$(filepath_base).xml")
+        xml_doc = parse_file("$(filepath_base).xml")
         if isempty(labels)
             labels = getLabels(xml_doc)
         end
         if isempty(cell_type_to_name_dict)
             cell_type_to_name_dict = getCellTypeToNameDict(xml_doc)
         end
-        closeXML(xml_doc)
+        free(xml_doc)
 
         #! confirm that these were both found
         @assert !isempty(labels) && !isempty(cell_type_to_name_dict) "Could not find cell type information and/or labels in $(filepath_base).xml"
     end
-        
+
     mat_file = "$(filepath_base)_cells.mat"
     if !isfile(mat_file)
         println("When loading cells, could not find file $mat_file. Returning missing.")
@@ -368,6 +501,26 @@ function loadCells!(cells::DataFrame, filepath_base::String, cell_type_to_name_d
     return
 end
 
+"""
+    loadCells!(S::AbstractPhysiCellSequence[, cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}(), labels::Vector{String}=String[]])
+
+Load the cell data for a PhysiCell simulation into an [`AbstractPhysiCellSequence`](@ref) object.
+
+If the `cell_type_to_name_dict` and `labels` are not provided, they will be loaded from the XML file.
+Users do not need to compute and pass these in.
+
+# Arguments
+- `S::AbstractPhysiCellSequence`: The sequence or snapshot to load the cell data into.
+- `cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}()`: A dictionary mapping cell type IDs to cell type names. If not provided, it will be loaded from the XML file.
+- `labels::Vector{String}=String[]`: A vector of cell data labels. If not provided, they will be loaded from the XML file.
+
+# Examples
+```julia
+simulation = Simulation(1)
+sequence = PhysiCellSequence(simulation) # does not load cell data without setting `PhysiCellSequence(simulation; include_cells=true)`
+loadCells!(sequence)
+```
+"""
 function loadCells!(snapshot::PhysiCellSnapshot, cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}(), labels::Vector{String}=String[])
     loadCells!(snapshot.cells, pathToOutputFileBase(snapshot), cell_type_to_name_dict, labels)
 end
@@ -380,6 +533,11 @@ function loadCells!(sequence::PhysiCellSequence)
     end
 end
 
+"""
+    loadSubstrates!(substrates::DataFrame, filepath_base::String, substrate_names::Vector{String}=String[])
+
+Internal function to load substrate data into a DataFrame associated with an [`AbstractPhysiCellSequence`](@ref) object.
+"""
 function loadSubstrates!(substrates::DataFrame, filepath_base::String, substrate_names::Vector{String})
     if !isempty(substrates)
         return
@@ -402,6 +560,18 @@ function loadSubstrates!(substrates::DataFrame, filepath_base::String, substrate
     end
 end
 
+"""
+    loadSubstrates!(S::AbstractPhysiCellSequence[, substrate_names::Vector{String}=String[]])
+
+Load the substrate data for a PhysiCell simulation into an [`AbstractPhysiCellSequence`](@ref) object.
+
+If the `substrate_names` are not provided, they will be loaded from the XML file.
+Users do not need to compute and pass these in.
+
+# Arguments
+- `S::AbstractPhysiCellSequence`: The sequence or snapshot to load the substrate data into.
+- `substrate_names::Vector{String}=String[]`: The names of the substrates to load. If not provided, they will be loaded from the XML file.
+"""
 function loadSubstrates!(snapshot::PhysiCellSnapshot, substrate_names::Vector{String}=String[])
     loadSubstrates!(snapshot.substrates, pathToOutputFileBase(snapshot), substrate_names)
 end
@@ -412,6 +582,11 @@ function loadSubstrates!(sequence::PhysiCellSequence)
     end
 end
 
+"""
+    loadMesh!(mesh::Dict{String, Vector{Float64}}, xml_doc::XMLDocument)
+
+Internal function to load mesh data into a dictionary associated with an [`AbstractPhysiCellSequence`](@ref) object.
+"""
 function loadMesh!(mesh::Dict{String, Vector{Float64}}, xml_doc::XMLDocument)
     if !isempty(mesh)
         return
@@ -425,11 +600,20 @@ function loadMesh!(mesh::Dict{String, Vector{Float64}}, xml_doc::XMLDocument)
     end
 end
 
+"""
+    loadMesh!(S::AbstractPhysiCellSequence)
+
+Load the mesh data for a PhysiCell simulation into an [`AbstractPhysiCellSequence`](@ref) object.
+
+# Arguments
+- `S::AbstractPhysiCellSequence`: The sequence or snapshot to load the mesh data into.
+"""
 function loadMesh!(snapshot::PhysiCellSnapshot)
     path_to_file = pathToOutputXML(snapshot)
-    xml_doc = openXML(path_to_file)
+    @assert isfile(path_to_file) "Could not find file $path_to_file. However, snapshot required this file to be created."
+    xml_doc = parse_file(path_to_file)
     loadMesh!(snapshot.mesh, xml_doc)
-    closeXML(xml_doc)
+    free(xml_doc)
     return
 end
 
@@ -439,6 +623,11 @@ function loadMesh!(sequence::PhysiCellSequence)
     end
 end
 
+"""
+    meshInfo(S::AbstractPhysiCellSequence)
+
+Return a string describing the mesh for an [`AbstractPhysiCellSequence`](@ref) object.
+"""
 function meshInfo(snapshot::PhysiCellSnapshot)
     mesh = snapshot.mesh
     grid_size = [length(mesh[k]) for k in ["x", "y", "z"] if length(mesh[k]) > 1]
@@ -448,17 +637,34 @@ end
 
 meshInfo(sequence::PhysiCellSequence) = meshInfo(sequence.snapshots[1])
 
-function loadGraph!(G::MetaGraph, path_to_txt_file::String, graph::Symbol)
-    if nv(G) > 0
+"""
+    loadGraph!(G::MetaGraph, path_to_txt_file::String)
+
+Load a graph from a text file into a MetaGraph.
+
+This is a helper function for loading graphs from PhysiCell simulation output files.
+Users should use [`loadGraph!`](@ref) instead of this function directly.
+"""
+function loadGraph!(G::MetaGraph, path_to_txt_file::String)
+    if nv(G) > 0 #! If the graph is already loaded, do nothing
         return
     end
     if !isfile(path_to_txt_file)
-        println("When loading graph $(graph), could not find file $path_to_txt_file. Returning missing.")
+        println("When loading graph, could not find file $path_to_txt_file. Returning missing.")
         return missing
     end
     readPhysiCellGraph!(G, path_to_txt_file)
 end
 
+"""
+    loadGraph!(S, graph)
+
+Load a graph for a snapshot or sequence into a MetaGraph(s).
+
+# Arguments
+- `S`: The snapshot or sequence to load the graph into.
+- `graph`: The type of graph to load (must be one of `:attachments`, `:spring_attachments`, or `:neighbors`). Can also be a string.
+"""
 function loadGraph!(snapshot::PhysiCellSnapshot, graph::Symbol)
     @assert graph in [:attachments, :spring_attachments, :neighbors] "Graph must be one of [:attachments, :spring_attachments, :neighbors]"
     if graph == :attachments
@@ -468,11 +674,7 @@ function loadGraph!(snapshot::PhysiCellSnapshot, graph::Symbol)
     elseif graph == :neighbors
         path_to_txt_file = pathToOutputFileBase(snapshot) * "_cell_neighbor_graph.txt"
     end
-    loadGraph!(snapshot, path_to_txt_file, graph)
-end
-
-function loadGraph!(snapshot::PhysiCellSnapshot, path_to_txt_file::String, graph::Symbol)
-    loadGraph!(getfield(snapshot, graph), path_to_txt_file, graph)
+    loadGraph!(getfield(snapshot, graph), path_to_txt_file)
 end
 
 function loadGraph!(sequence::PhysiCellSequence, graph::Symbol)
@@ -481,6 +683,15 @@ function loadGraph!(sequence::PhysiCellSequence, graph::Symbol)
     end
 end
 
+loadGraph!(S::AbstractPhysiCellSequence, graph::String) = loadGraph!(S, Symbol(graph))
+
+"""
+    graphInfo(g::MetaGraph)
+
+Return a string describing the graph.
+
+Used for printing the graph information in the `show` function.
+"""
 function graphInfo(g::MetaGraph)
     return "directed graph with $(nv(g)) vertices and $(ne(g)) edges"
 end
@@ -489,8 +700,10 @@ end
     getCellDataSequence(simulation_id::Integer, labels::Vector{String}; include_dead::Bool=false, include_cell_type::Bool=false)
 
 Return a dictionary where the keys are cell IDs from the PhysiCell simulation and the values are NamedTuples containing the time and the values of the specified labels for that cell.
+
 For scalar values, such as `volume`, the values are in a length `N` vector, where `N` is the number of snapshots in the simulation.
 In the case of a label that has multiple columns, such as `position`, the values are concatenated into a length(snapshots) x number of columns array.
+Note: If doing multiple calls to this function, it is recommended to use the `PhysiCellSequence` object so that all the data is loaded one time instead of once per call.
 
 # Arguments
 - `simulation_id::Integer`: The ID of the PhysiCell simulation. Alternatively, can be a `Simulation` object or a `PhysiCellSequence` object.

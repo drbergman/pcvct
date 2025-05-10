@@ -2,6 +2,36 @@ using Graphs, MetaGraphsNext
 
 export connectedComponents
 
+"""
+    connectedComponents(snapshot::PhysiCellSnapshot, graph=:neighbors; include_cell_types=:all_in_one, exclude_cell_types::String[], include_dead::Bool=false)
+
+Find the connected components of a graph in a PhysiCell snapshot.
+
+The computation can be done on subsets of cells based on their cell types.
+
+# Arguments
+- `snapshot::PhysiCellSnapshot`: the snapshot to analyze
+- `graph`: the graph data to use (default is `:neighbors`); must be one of `:neighbors`, `:attachments`, or `:spring_attachments`; can also be a string
+- `include_cell_types`: the cell types to include in the analysis (default is `:all_in_one`). Full list of options:
+    - `:all` - compute connected components for all cell types individually
+    - `:all_in_one` - compute connected components for all cell types together
+    - `"cell_type_1"` - compute connected components only for the cells of type `cell_type_1`
+    - `["cell_type_1", "cell_type_2"]` - compute connected components for the cells of type `cell_type_1` and `cell_type_2` separately
+    - `[["cell_type_1", "cell_type_2"]]` - compute connected components for the cells of type `cell_type_1` and `cell_type_2` together
+    - `[["cell_type_1", "cell_type_2"], "cell_type_3"]` - compute connected components for the cells of type `cell_type_1` and `cell_type_2` together, and for the cells of type `cell_type_3` separately
+- `exclude_cell_types`: the cell types to exclude from the analysis (default is `String[]`); can be a single string or a vector of strings
+- `include_dead`: whether to include dead cells in the analysis (default is `false`)
+
+# Returns
+A dictionary in which each key is one of the following:
+- cell type name (String)
+- list of cell type names (Vector{String})
+- list of cell type names followed by the symbol :include_dead (Vector{Any})
+
+For each key, the value is a list of connected components in the graph.
+Each component is represented as a vector of vertex labels.
+As of this writing, the vertex labels are the simple `AgentID` class that wraps the cell ID.
+"""
 function connectedComponents(snapshot::PhysiCellSnapshot, graph::Symbol=:neighbors; include_cell_types=:all_in_one, exclude_cell_types=String[], include_dead::Bool=false)
     is_all_in_one = include_cell_types == :all_in_one
     cell_type_to_name_dict = getCellTypeToNameDict(snapshot)
@@ -12,9 +42,9 @@ function connectedComponents(snapshot::PhysiCellSnapshot, graph::Symbol=:neighbo
     if is_all_in_one
         G = getfield(snapshot, graph) |> deepcopy
         if include_dead
-            key = "$include_cell_types (include dead)"
+            key = [include_cell_types[1]; :include_dead]
         else
-            key = include_cell_types
+            key = include_cell_types[1]
             loadCells!(snapshot)
             dead_cell_ids = snapshot.cells.ID[snapshot.cells.dead] |> Set
             vertices_to_remove = [v for v in vertices(G) if G.vertex_labels[v].id in dead_cell_ids]
@@ -23,44 +53,58 @@ function connectedComponents(snapshot::PhysiCellSnapshot, graph::Symbol=:neighbo
                 rem_vertex!(G, v)
             end
         end
-        return Dict(key => connectedComponents(G))
+        return Dict(key => _connectedComponents(G))
     end
 
     loadCells!(snapshot)
 
     #! if not all_in_one, then we need to manage the cells carefully
     data = Dict{Any,Any}()
+    if include_dead
+        id_to_name = [row.ID => cell_type_to_name_dict[row.cell_type] for row in eachrow(snapshot.cells)] |> Dict
+    else
+        #! map any dead cells to the Symbol :dead so it cannot be in the list of String cell types
+        id_to_name = [row.ID => (row.dead ? :dead : cell_type_to_name_dict[row.cell_type]) for row in eachrow(snapshot.cells)] |> Dict
+    end
 
-    for output_key in include_cell_types
-        if output_key isa String
-            internal_keys = [output_key] #! standardize so that all are vectors
+    for cell_group in include_cell_types
+        if cell_group isa String
+            internal_keys = [cell_group] #! standardize so that all are vectors
         else
-            internal_keys = output_key
+            internal_keys = cell_group
+            @assert internal_keys isa Vector{String} "include_cell_types must be a vector of strings"
         end
         setdiff!(internal_keys, exclude_cell_types) #! remove any cell types that are to be excluded (also removes duplicates)
         if isempty(internal_keys)
             continue
         end
         G = getfield(snapshot, graph) |> deepcopy
-        vertices_to_remove = Int[]
-        for v in vertices(G)
-            agent_id = G.vertex_labels[v]
-            row_log = snapshot.cells.ID .== agent_id.id
-            cell_type = cell_type_to_name_dict[snapshot.cells.cell_type[row_log][1]]
-            if !(cell_type in internal_keys)
-                push!(vertices_to_remove, v)
-            end
-        end
+        vertices_to_remove = [v for v in vertices(G) if !in(id_to_name[G.vertex_labels[v].id], internal_keys)]
         sort!(vertices_to_remove; rev=true)
         for v in vertices_to_remove
             rem_vertex!(G, v)
         end
-        data[output_key] = connectedComponents(G)
+
+        output_key = include_dead ? [internal_keys; :include_dead] : internal_keys
+        if length(output_key) == 1
+            output_key = output_key[1]
+        end
+        data[output_key] = _connectedComponents(G)
     end
     return data
 end
 
-function connectedComponents(G::MetaGraph)
+"""
+    _connectedComponents(G::MetaGraph)
+
+Find the connected components of a graph.
+
+First compute the transitive closure of the underlying `Graphs.Graph` object.
+Then, update the edge data of the `MetaGraph` object to reflect the new edges.
+Finally, loop over vertex labels and find the vertices they are connected to until all vertices are accounted for.
+Returns a list of connected components, where each component is represented as a vector of vertex labels.
+"""
+function _connectedComponents(G::MetaGraph)
     transitiveclosure!(G.graph)
     for e in edges(G.graph)
         edge_datum = (G.vertex_labels[e.src], G.vertex_labels[e.dst])

@@ -27,6 +27,13 @@ function runStudio(simulation_id::Int; python_path::Union{Missing,String}=path_t
     end
 end
 
+"""
+    resolveStudioGlobals(python_path::Union{Missing,String}, studio_path::Union{Missing,String})
+
+Set the global variables `path_to_python` and `path_to_studio` to the given paths.
+
+They are required to not be `missing` so that the function `runStudio` works.
+"""
 function resolveStudioGlobals(python_path::Union{Missing,String}, studio_path::Union{Missing,String})
     if ismissing(python_path)
         throw(ArgumentError("Path to python not set. Please set the PCVCT_PYTHON_PATH environment variable or pass the path as an argument."))
@@ -40,6 +47,12 @@ function resolveStudioGlobals(python_path::Union{Missing,String}, studio_path::U
     end
 end
 
+"""
+    setUpStudioInputs(simulation_id::Int)
+
+Set up the inputs for PhysiCell Studio.
+Creates a temporary XML file and a temporary rules file (if applicable) in the output folder of the simulation.
+"""
 function setUpStudioInputs(simulation_id::Int)
     path_to_output = pathToOutputFolder(simulation_id)
 
@@ -56,7 +69,7 @@ function setUpStudioInputs(simulation_id::Int)
 
     path_to_xml = joinpath(path_to_output, "PhysiCell_settings.xml")
     @assert isfile(path_to_xml) "The file $path_to_xml does not exist. Please check the simulation ID and try again."
-    xml_doc = openXML(path_to_xml)
+    xml_doc = parse_file(path_to_xml)
     save_folder_element = makeXMLPath(xml_doc, ["save", "folder"])
     set_content(save_folder_element, path_to_output)
     if isfile(joinpath(path_to_output, output_rules_file))
@@ -81,11 +94,16 @@ function setUpStudioInputs(simulation_id::Int)
 
     path_to_temp_xml = joinpath(path_to_output, "PhysiCell_settings_temp.xml")
     save_file(xml_doc, path_to_temp_xml)
-    closeXML(xml_doc)
+    free(xml_doc)
 
     return path_to_temp_xml, path_to_input_rules
 end
 
+"""
+    executeStudio(path_to_temp_xml::String)
+
+Run PhysiCell Studio with the given temporary XML file.
+"""
 function executeStudio(path_to_temp_xml::String)
     cmd = `$path_to_python $(joinpath(path_to_studio, "bin", "studio.py")) -c $(path_to_temp_xml)`
     try
@@ -104,7 +122,12 @@ function executeStudio(path_to_temp_xml::String)
     end
 end
 
-function cleanUpStudioInputs(path_to_temp_xml::String, path_to_input_rules)
+"""
+    cleanUpStudioInputs(path_to_temp_xml::String, path_to_input_rules::Union{Nothing,String})
+
+Clean up the temporary files created for PhysiCell Studio.
+"""
+function cleanUpStudioInputs(path_to_temp_xml::String, path_to_input_rules::Union{Nothing,String})
     rm(path_to_temp_xml, force=true)
     if !isnothing(path_to_input_rules)
         rm(path_to_input_rules, force=true)

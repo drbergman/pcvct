@@ -8,7 +8,7 @@ hashBorderPrint(str)
 simulation_id = 1
 simulation = Simulation(simulation_id)
 snapshot = PhysiCellSnapshot(simulation_id, :initial)
-cell_types = pcvct.getCellTypeToNameDict(snapshot) |> values |> collect
+cell_types = pcvct.getCellTypeToNameDict(simulation) |> values |> collect
 result = pcf(simulation, cell_types[1])
 
 plot(result)

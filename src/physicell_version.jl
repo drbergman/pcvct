@@ -1,6 +1,11 @@
 using SQLite
 
-function physicellVersionID()
+"""
+    resolvePhysiCellVersionID()
+
+Get the PhysiCell version ID from the database, adding it to the database if it doesn't exist.
+"""
+function resolvePhysiCellVersionID()
     if !physicellIsGit()
         tag = readlines(joinpath(physicell_dir, "VERSION.txt"))[1]
         df = DBInterface.execute(db, "INSERT OR IGNORE INTO physicell_versions (commit_hash) VALUES ('$(tag)-download') RETURNING physicell_version_id;") |> DataFrame
@@ -68,6 +73,11 @@ function physicellVersionID()
     return df.physicell_version_id[1]
 end
 
+"""
+    physicellIsGit()
+
+Check if the PhysiCell directory is a git repository.
+"""
 function physicellIsGit()
     is_git = isdir(joinpath(physicell_dir, ".git"))
     if !is_git #! possible it is a submodule
@@ -85,6 +95,11 @@ function physicellIsGit()
     return is_git
 end
 
+"""
+    gitDirectoryIsClean(dir::String)
+
+Check if the git directory is clean (i.e., no uncommitted changes).
+"""
 function gitDirectoryIsClean(dir::String)
     cmd = `git -C $dir status --porcelain` #! -C flag is for changing directory, --porcelain flag is for machine-readable output (much easier to tell if clean this way)
     output = read(cmd, String)
@@ -115,6 +130,11 @@ function gitDirectoryIsClean(dir::String)
     return is_clean
 end
 
+"""
+    getCommitHashToTagDict(dir::String)
+
+Get a dictionary mapping commit hashes to tags in the git repository at `dir`.
+"""
 function getCommitHashToTagDict(dir::String)
     hash_to_tag_dict = Dict{String, String}()
     has_tags = !isempty(readchomp(`git -C $dir tag`))
@@ -136,6 +156,11 @@ function getCommitHashToTagDict(dir::String)
     return hash_to_tag_dict
 end
 
+"""
+    repoOwner(commit_hash::String, tag::String)
+
+Get the owner of the repository for a given commit hash and tag.
+"""
 function repoOwner(commit_hash, tag::String)
     if tag == "NULL"
         return "NULL"
@@ -160,12 +185,24 @@ function repoOwner(commit_hash, tag::String)
     return "NULL"
 end
 
+"""
+    gitRemotes(dir::String)
+
+Get the remotes for the git repository at `dir`.
+"""
 function gitRemotes(dir::String)
     remotes_output = readchomp(`git -C $dir remote`)
     remotes = split(remotes_output, "\n")
     return remotes
 end
 
+"""
+    physicellVersion()
+    physiCellVersion(physicell_version_id::Int)
+    physiCellVersion(simulation::Simulation)
+
+Get the PhysiCell version from the database or, if not in the database, from the VERSION.txt file.
+"""
 function physicellVersion(physicell_version_id::Int)
     query = constructSelectQuery("physicell_versions", "WHERE physicell_version_id = $(physicell_version_id)")
     df = queryToDataFrame(query; is_row=true)
@@ -187,6 +224,11 @@ function physicellVersion(simulation::Simulation)
     return physicellVersion(df.physicell_version_id[1])
 end
 
+"""
+    physicellInfo()
+
+Return a string representing the PhysiCell version information to display on initializing the model manager.
+"""
 function physicellInfo()
     query = constructSelectQuery("physicell_versions", "WHERE physicell_version_id = $(current_physicell_version_id)")
     df = queryToDataFrame(query; is_row=true)
@@ -196,10 +238,20 @@ function physicellInfo()
     return "$str_begin$str_middle$str_end"
 end
 
+"""
+    physicellCommitHash()
+
+Get the commit hash for the current PhysiCell version.
+"""
 function physiCellCommitHash()
     query = constructSelectQuery("physicell_versions", "WHERE physicell_version_id = $(current_physicell_version_id)"; selection="commit_hash")
     df = queryToDataFrame(query; is_row=true)
     return df.commit_hash[1]
 end
 
-physicellVersionDBEntry() = current_physicell_version_id
+"""
+    currentPhysiCellVersionID()
+
+Get the current PhysiCell version ID.
+"""
+currentPhysiCellVersionID() = current_physicell_version_id

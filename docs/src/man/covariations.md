@@ -48,7 +48,7 @@ flip = true
 dv2 = UniformDistributedVariation(timing_2_path, 100.0, 200.0, flip)
 covariation = CoVariation(dv1, dv2)
 cdf = 0.1
-pcvct._values.(covariation.variations, cdf) # pcvct internal for getting values for an ElementaryVariation
+pcvct.variationValues.(covariation.variations, cdf) # pcvct internal for getting values for an ElementaryVariation
 # output
 2-element Vector{Vector{Float64}}:
  [110.0]
