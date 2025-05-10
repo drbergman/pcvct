@@ -44,7 +44,7 @@ julia> out = run(inputs; n_replicates = 1)
 ```
 8. Check the output:
 ```julia-repl
-julia> using Plots
+julia> using Plots # make sure to install Plots first
 julia> plot(out)
 julia> plotbycelltype(out)
 ```

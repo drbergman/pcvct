@@ -86,7 +86,6 @@ If you use this option, then the GenerateData.jl script must be updated to refle
 By default, the folder names are taken from the name of the project with an integer appended if it already exists.
 If you want to use a different name, you can pass 
 
-
 ## Running first trial
 The `createProject()` command creates three folder, including a `VCT` folder with a single file: `VCT/GenerateData.jl`.
 The name of this folder and this file are purely convention, change them as you like.
