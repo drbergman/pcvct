@@ -61,6 +61,20 @@ end
 
 createTrial(reference::AbstractMonad, args...; kwargs...) = createTrial(GridVariation(), reference, args...; kwargs...)
 
+"""
+    _createTrial(args...; kwargs...)
+
+Internal function to create a trial with the given input folders and elementary variations.
+Users should use [`createTrial`](@ref) instead.
+
+# Arguments
+- `method::AddVariationMethod`: The method to use for creating the trial. Default is `GridVariation()`.
+- `inputs::InputFolders`: The input folders for the simulation.
+- `reference_variation_id::VariationID`: The variation ID of the reference simulation or monad.
+- `avs::Vector{<:AbstractVariation}`: A vector of variations to add to the reference simulation or monad.
+- `n_replicates::Integer`: The number of replicates to create. Default is 1.
+- `use_previous::Bool`: Whether to use previous simulations.
+"""
 function _createTrial(method::AddVariationMethod, inputs::InputFolders, reference_variation_id::VariationID,
                       avs::Vector{<:AbstractVariation}, n_replicates::Integer, use_previous::Bool)
 
@@ -76,9 +90,9 @@ function _createTrial(method::AddVariationMethod, inputs::InputFolders, referenc
     else
         location_variation_ids = [loc => [variation_id[loc] for variation_id in all_variation_ids] for loc in project_locations.varied] |>
             Dict{Symbol,Union{Integer,AbstractArray{<:Integer}}}
-            
-        return Sampling(inputs; n_replicates=n_replicates,
-            location_variation_ids=location_variation_ids,
+
+        return Sampling(inputs, location_variation_ids;
+            n_replicates=n_replicates,
             use_previous=use_previous
         )
     end
@@ -89,7 +103,7 @@ end
 
 Run a simulation, monad, sampling, or trial with the same signatures available to [`createTrial`](@ref).
 """
-function run(method::AddVariationMethod, args...; force_recompile::Bool=false, 
+function run(method::AddVariationMethod, args...; force_recompile::Bool=false,
              prune_options::PruneOptions=PruneOptions(), kwargs...)
     trial = createTrial(method, args...; kwargs...)
     return run(trial; force_recompile=force_recompile, prune_options=prune_options)

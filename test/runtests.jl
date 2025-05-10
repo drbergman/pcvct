@@ -6,7 +6,7 @@ include("./test-scripts/PrintHelpers.jl")
     #! Write your tests here.
     include("./test-scripts/CreateProjectTests.jl")
 
-    include("./VCT/GenerateData.jl") #! this file is created by CreateProjectTests.jl
+    include("./scripts/GenerateData.jl") #! this file is created by CreateProjectTests.jl
 
     include("./test-scripts/ProjectConfigurationTests.jl")
 
@@ -27,14 +27,12 @@ include("./test-scripts/PrintHelpers.jl")
 
     #! post-processing tests
     include("./test-scripts/LoaderTests.jl")
-    if Sys.isapple()
-        include("./test-scripts/MovieTests.jl")
-    end
+    include("./test-scripts/MovieTests.jl")
     include("./test-scripts/PopulationTests.jl")
     include("./test-scripts/SubstrateTests.jl")
     include("./test-scripts/GraphsTests.jl")
     include("./test-scripts/PCFTests.jl")
-    
+
     include("./test-scripts/VariationsTests.jl")
     include("./test-scripts/HPCTests.jl")
     include("./test-scripts/ModuleTests.jl")

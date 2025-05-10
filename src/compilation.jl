@@ -50,7 +50,7 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
         run(pipeline(cmd; stdout=joinpath(path_to_input_custom_codes, "compilation.log"), stderr=joinpath(path_to_input_custom_codes, "compilation.err")))
     catch e
         println("""
-        Compilation failed. 
+        Compilation failed.
         Error: $e
         Check $(joinpath(path_to_input_custom_codes, "compilation.err")) for more information.
         Here is the compilation.log:
@@ -106,11 +106,10 @@ function compilerFlags(S::AbstractSampling)
         cflags *= " -mfpmath=both"
     end
 
-    current_macros = readMacrosFile(S) #! this will get all macros already in the macros file
-    addMacrosIfNeeded(S)
+    macros_updated = addMacrosIfNeeded(S)
     updated_macros = readMacrosFile(S) #! this will get all macros already in the macros file
 
-    if length(updated_macros) != length(current_macros)
+    if macros_updated
         recompile = true
         clean = true
     end
@@ -133,6 +132,13 @@ function compilerFlags(S::AbstractSampling)
     return cflags, recompile, clean
 end
 
+"""
+    writePhysiCellCommitHash(S::AbstractSampling)
+
+Write the commit hash of the PhysiCell repository to a file associated with the custom code folder of the sampling object `S`.
+
+If the commit hash has changed since the last write, if the repository is in a dirty state, or if PhysiCell is downloaded (not cloned), recompile the custom code.
+"""
 function writePhysiCellCommitHash(S::AbstractSampling)
     path_to_commit_hash = joinpath(locationPath(:custom_code, S), "physicell_commit_hash.txt")
     physicell_commit_hash = physiCellCommitHash()
@@ -155,16 +161,36 @@ function writePhysiCellCommitHash(S::AbstractSampling)
     return recompile
 end
 
+"""
+    executableExists(custom_code_folder::String)
+
+Check if the executable for the custom code folder exists.
+"""
 executableExists(custom_code_folder::String) = isfile(joinpath(locationPath(:custom_code, custom_code_folder), baseToExecutable("project")))
 
+"""
+    addMacrosIfNeeded(S::AbstractSampling)
+
+Check if the macros needed for the sampling object `S` are already present in the macros file.
+"""
 function addMacrosIfNeeded(S::AbstractSampling)
     #! else get the macros neeeded
-    addPhysiECMIfNeeded(S)
-    addRoadRunnerIfNeeded(S)
+    macros_updated = false
+
+    #! julia's |= operator seems to evaluate the RHS even if the LHS is already true, but I don't trust that will always be the case
+    macros_updated = macros_updated || addPhysiECMIfNeeded(S)
+    macros_updated = macros_updated || addRoadRunnerIfNeeded(S)
 
     #! check others...
+
+    return macros_updated
 end
 
+"""
+    addMacro(S::AbstractSampling, macro_name::String)
+
+Add a macro to the macros file for the sampling object `S`.
+"""
 function addMacro(S::AbstractSampling, macro_name::String)
     path_to_macros = joinpath(locationPath(:custom_code, S), "macros.txt")
     open(path_to_macros, "a") do f
@@ -172,53 +198,52 @@ function addMacro(S::AbstractSampling, macro_name::String)
     end
 end
 
+"""
+    addPhysiECMIfNeeded(S::AbstractSampling)
+
+Check if the PhysiECM macro needs to be added for the sampling object `S`.
+
+The macro will need to be added if it is not present AND either 1) the `inputs` includes `ic_ecm` or 2) the configuration file has `ecm_setup` enabled.
+"""
 function addPhysiECMIfNeeded(S::AbstractSampling)
     if "ADDON_PHYSIECM" in readMacrosFile(S)
         #! if the custom codes folder for the sampling already has the macro, then we don't need to do anything
-        return
+        return false
     end
     if S.inputs[:ic_ecm].id != -1
         #! if this sampling is providing an ic file for ecm, then we need to add the macro
         addMacro(S, "ADDON_PHYSIECM")
-        return
+        return true
     end
     #! check if ecm_setup element has enabled="true" in config files
     prepareVariedInputFolder(:config, S)
     if isPhysiECMInConfig(S)
         #! if the base config file says that the ecm is enabled, then we need to add the macro
         addMacro(M, "ADDON_PHYSIECM")
+        return true
     end
+    return false
 end
 
-function addRoadRunnerIfNeeded(S::AbstractSampling)
-    if "ADDON_ROADRUNNER" in readMacrosFile(S)
-        #! if the custom codes folder for the sampling already has the macro, then we don't need to do anything
-        return
-    end
+"""
+    isPhysiECMInConfig(S::AbstractSampling)
 
-    need_to_add = false
-    prepareVariedInputFolder(:config, S)
-    need_to_add = isRoadRunnerInInputs(S) || isRoadRunnerInConfig(S)
-    if need_to_add
-        addMacro(S, "ADDON_ROADRUNNER")
-    end
-    return
-end
-
+Check if any of the simulations in `S` have a configuration file with `ecm_setup` enabled.
+"""
 function isPhysiECMInConfig(M::AbstractMonad)
     path_to_xml = joinpath(locationPath(:config, M), "config_variations", "config_variation_$(M.variation_id[:config]).xml")
-    xml_doc = openXML(path_to_xml)
+    xml_doc = parse_file(path_to_xml)
     xml_path = ["microenvironment_setup", "ecm_setup"]
     ecm_setup_element = retrieveElement(xml_doc, xml_path; required=false)
     physi_ecm_in_config = !isnothing(ecm_setup_element) && attribute(ecm_setup_element, "enabled") == "true" #! note: attribute returns nothing if the attribute does not exist
-    closeXML(xml_doc)
+    free(xml_doc)
     return physi_ecm_in_config
 end
 
 function isPhysiECMInConfig(sampling::Sampling)
     #! otherwise, no previous sampling saying to use the macro, no ic file for ecm, and the base config file does not have ecm enabled,
     #! now just check that the variation is not enabling the ecm
-    for monad in Monad.(readSamplingMonadIDs(sampling))
+    for monad in Monad.(readConstituentIDs(sampling))
         if isPhysiECMInConfig(monad)
             return true
         end
@@ -226,9 +251,52 @@ function isPhysiECMInConfig(sampling::Sampling)
     return false
 end
 
+"""
+    addRoadRunnerIfNeeded(S::AbstractSampling)
+
+Check if the RoadRunner macro needs to be added for the sampling object `S`.
+
+The macro will need to be added if it is not present AND either 1) the `inputs` defines an `intracellular` file with `roadrunner` intracellulars or 2) the configuration file has `roadrunner` intracellulars defined.
+"""
+function addRoadRunnerIfNeeded(S::AbstractSampling)
+    if "ADDON_ROADRUNNER" in readMacrosFile(S)
+        #! if the custom codes folder for the sampling already has the macro, then we don't need to do anything
+        return false
+    end
+
+    macros_updated = false
+    prepareVariedInputFolder(:config, S)
+    macros_updated = isRoadRunnerInInputs(S) || isRoadRunnerInConfig(S)
+    if macros_updated
+        addMacro(S, "ADDON_ROADRUNNER")
+    end
+    return macros_updated
+end
+
+"""
+    isRoadRunnerInInputs(S::AbstractSampling)
+
+Check if the `inputs` for the sampling object `S` defines an `intracellular` file with `roadrunner` intracellulars.
+"""
+function isRoadRunnerInInputs(S::AbstractSampling)
+    if S.inputs[:intracellular].id == -1
+        return false
+    end
+    path_to_xml = joinpath(locationPath(:intracellular, S), S.inputs[:intracellular].basename)
+    xml_doc = parse_file(path_to_xml)
+    is_nothing = retrieveElement(xml_doc, ["intracellulars"; "intracellular:type:roadrunner"]) |> isnothing
+    free(xml_doc)
+    return !is_nothing
+end
+
+"""
+    isRoadRunnerInConfig(S::AbstractSampling)
+
+Check if any of the simulations in `S` have a configuration file with `roadrunner` intracellulars defined.
+"""
 function isRoadRunnerInConfig(S::AbstractSampling)
     path_to_xml = joinpath(locationPath(:config, S), "PhysiCell_settings.xml")
-    xml_doc = openXML(path_to_xml)
+    xml_doc = parse_file(path_to_xml)
     cell_definitions_element = retrieveElement(xml_doc, ["cell_definitions"])
     ret_val = false
     for child in child_elements(cell_definitions_element)
@@ -242,33 +310,27 @@ function isRoadRunnerInConfig(S::AbstractSampling)
             break
         end
     end
-    closeXML(xml_doc)
+    free(xml_doc)
     return ret_val
 end
 
-function isRoadRunnerInInputs(S::AbstractSampling)
-    if S.inputs[:intracellular].id == -1
-        return false
-    end
-    path_to_xml = joinpath(locationPath(:intracellular, S), S.inputs[:intracellular].basename)
-    xml_doc = openXML(path_to_xml)
-    is_nothing = retrieveElement(xml_doc, ["intracellulars"; "intracellular:type:roadrunner"]) |> isnothing
-    closeXML(xml_doc)
-    return !is_nothing
-end
+"""
+    prepareLibRoadRunner(physicell_dir::String)
 
+Prepare the libRoadRunner library for use with PhysiCell.
+"""
 function prepareLibRoadRunner(physicell_dir::String)
     #! this is how PhysiCell handles downloading libRoadrunner
     librr_file = joinpath(physicell_dir, "addons", "libRoadrunner", "roadrunner", "include", "rr", "C", "rrc_api.h")
     if !isfile(librr_file)
         python = Sys.iswindows() ? "python" : "python3"
-        cd(() -> run(pipeline(`$(python) ./beta/setup_libroadrunner.py`; stdout=devnull, stderr=devnull)), physicell_dir)
+        cd(() -> run(pipeline(`$(python) $(joinpath(".", "beta", "setup_libroadrunner.py"))`; stdout=devnull, stderr=devnull)), physicell_dir)
         @assert isfile(librr_file) "libRoadrunner was not downloaded properly."
 
         #! remove the downloaded binary (I would think the script would handle this, but it does not)
         files = readdir(joinpath(physicell_dir, "addons", "libRoadrunner"); join=true, sort=false)
         for path_to_file in files
-            if isfile(path_to_file) && 
+            if isfile(path_to_file) &&
                 (
                     endswith(path_to_file, "roadrunner_macos_arm64.tar.gz") ||
                     endswith(path_to_file, "roadrunner-osx-10.9-cp36m.tar.gz") ||
@@ -299,10 +361,15 @@ function prepareLibRoadRunner(physicell_dir::String)
             echo "export $env_var=$env_var:./addons/libRoadrunner/roadrunner/lib" > $(path_to_env_file)
 
         """)
-        ENV[env_var] = ":./addons/libRoadrunner/roadrunner/lib"
+        ENV[env_var] = ":./addons/libRoadrunner/roadrunner/lib" #! at this point, we know this is not a Windows system
     end
 end
 
+"""
+    readMacrosFile(S::AbstractSampling)
+
+Read the macros file for the sampling object `S` into a vector of strings, one macro per entry.
+"""
 function readMacrosFile(S::AbstractSampling)
     path_to_macros = joinpath(locationPath(:custom_code, S), "macros.txt")
     if !isfile(path_to_macros)

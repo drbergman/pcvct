@@ -7,8 +7,3 @@ The [pcvct](https://github.com/drbergman/pcvct) (PhysiCell Virtual Clinical Tria
 
 ## Issues
 Have an issue? First check the [Known limitations](@ref) and [Best practices](@ref) sections. If you still have an issue, please submit it [here](https://github.com/drbergman/pcvct/issues).
-
-
-## Index
-```@index
-```

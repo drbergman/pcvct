@@ -1,7 +1,25 @@
 using TOML
 
+"""
+    project_locations::ProjectLocations
+
+The global [`ProjectLocations`](@ref) object that contains information about the locations of input files in the project.
+"""
 project_locations = NamedTuple()
 
+"""
+    ProjectLocations
+
+A struct that contains information about the locations of input files in the project.
+
+The global instance of this struct is [`project_locations`](@ref) and is created by reading the `inputs.toml` file in the `data_dir` directory.
+It is instantiated with the [`parseProjectInputsConfigurationFile`](@ref) function.
+
+# Fields
+- `all::NTuple{L,Symbol}`: A tuple of all locations in the project.
+- `required::NTuple{M,Symbol}`: A tuple of required locations in the project.
+- `varied::NTuple{N,Symbol}`: A tuple of varied locations in the project.
+"""
 struct ProjectLocations{L,M,N}
     all::NTuple{L,Symbol}
     required::NTuple{M,Symbol}
@@ -15,28 +33,34 @@ struct ProjectLocations{L,M,N}
     end
 end
 
-function sanitizePathElements(path_elements::Vector{String})
-    for element in path_elements
-        #! Disallow `..` to prevent directory traversal
-        if element == ".."
-            throw(ArgumentError("Path element '..' is not allowed"))
-        end
+"""
+    sanitizePathElement(path_elements::String)
 
-        #! Disallow absolute paths
-        if isabspath(element)
-            throw(ArgumentError("Absolute paths are not allowed"))
-        end
-
-        #! Disallow special characters or sequences (e.g., `~`, `*`, etc.)
-        if contains(element, r"[~*?<>|:]")
-            throw(ArgumentError("Path element contains invalid characters"))
-        end
+Disallow certain path elements to prevent security issues.
+"""
+function sanitizePathElement(path_element::String)
+    #! Disallow `..` to prevent directory traversal
+    if path_element == ".."
+        throw(ArgumentError("Path element '..' is not allowed"))
     end
-    return path_elements
+
+    #! Disallow absolute paths
+    if isabspath(path_element)
+        throw(ArgumentError("Absolute paths are not allowed"))
+    end
+
+    #! Disallow special characters or sequences (e.g., `~`, `*`, etc.)
+    if contains(path_element, r"[~*?<>|:]")
+        throw(ArgumentError("Path element contains invalid characters"))
+    end
+    return path_element
 end
 
-sanitizePathElements(path_element::String) = sanitizePathElements([path_element])
+"""
+    parseProjectInputsConfigurationFile()
 
+Parse the `inputs.toml` file in the `data_dir` directory and create a global [`ProjectLocations`](@ref) object.
+"""
 function parseProjectInputsConfigurationFile()
     inputs_dict_temp = Dict{String, Any}()
     try
@@ -49,7 +73,7 @@ function parseProjectInputsConfigurationFile()
         if !("path_from_inputs" in keys(location_dict))
             location_dict["path_from_inputs"] = tableName(location)
         else
-            location_dict["path_from_inputs"] = location_dict["path_from_inputs"] |> sanitizePathElements |> joinpath
+            location_dict["path_from_inputs"] = location_dict["path_from_inputs"] .|> sanitizePathElement |> joinpath
         end
         if !("basename" in keys(location_dict))
             location_dict["basename"] = missing
@@ -63,31 +87,103 @@ function parseProjectInputsConfigurationFile()
     global inputs_dict = [Symbol(location) => location_dict for (location, location_dict) in pairs(inputs_dict_temp)] |> Dict{Symbol, Any}
     global project_locations = ProjectLocations(inputs_dict)
     createSimpleInputFolders()
-    println(rpad("Path to inputs.toml:", 25, ' ') * joinpath(data_dir, "inputs.toml"))
     return true
 end
 
+"""
+    locationIDName(location)
+
+Return the name of the ID column for the location (as either a String or Symbol).
+
+# Examples
+```jldoctest
+julia> pcvct.locationIDName(:config)
+"config_id"
+```
+"""
 locationIDName(location::Union{String,Symbol}) = "$(location)_id"
-locationVarIDName(location::Union{String,Symbol}) = "$(location)_variation_id"
+
+"""
+    locationVariationIDName(location)
+
+Return the name of the variation ID column for the location (as either a String or Symbol).
+# Examples
+```jldoctest
+julia> pcvct.locationVariationIDName(:config)
+"config_variation_id"
+```
+"""
+locationVariationIDName(location::Union{String,Symbol}) = "$(location)_variation_id"
+
+"""
+    locationIDNames()
+
+Return the names of the ID columns for all locations.
+"""
 locationIDNames() = (locationIDName(loc) for loc in project_locations.all)
-locationVariationIDNames() = (locationVarIDName(loc) for loc in project_locations.varied)
+
+"""
+    locationVariationIDNames()
+
+Return the names of the variation ID columns for all varied locations.
+"""
+locationVariationIDNames() = (locationVariationIDName(loc) for loc in project_locations.varied)
+
+"""
+    tableName(location)
+
+Return the name of the table for the location (as either a String or Symbol).
+# Examples
+```jldoctest
+julia> pcvct.tableName(:config)
+"configs"
+```
+"""
 tableName(location::Union{String,Symbol}) = "$(location)s"
+
+"""
+    variationsTableName(location)
+
+Return the name of the variations table for the location (as either a String or Symbol).
+"""
 variationsTableName(location::Union{String,Symbol}) = "$(location)_variations"
 
+"""
+    locationPath(location::Symbol, folder=missing)
+
+Return the path to the location folder in the `inputs` directory.
+
+If `folder` is not specified, the path to the location folder is returned.
+"""
 function locationPath(location::Symbol, folder=missing)
     location_dict = inputs_dict[Symbol(location)]
     path_to_locations = joinpath(data_dir, "inputs", location_dict["path_from_inputs"])
     return ismissing(folder) ? path_to_locations : joinpath(path_to_locations, folder)
 end
 
+"""
+    locationPath(input_folder::InputFolder)
+
+Return the path to the location folder in the `inputs` directory for the [`InputFolder`](@ref) object.
+"""
 function locationPath(input_folder::InputFolder)
     return locationPath(input_folder.location, input_folder.folder)
 end
 
+"""
+    locationPath(location::Symbol, S::AbstractSampling)
+
+Return the path to the location folder in the `inputs` directory for the [`AbstractSampling`](@ref) object.
+"""
 function locationPath(location::Symbol, S::AbstractSampling)
     return locationPath(location, S.inputs[location].folder)
 end
 
+"""
+    folderIsVaried(location::Symbol, folder::String)
+
+Return `true` if the location folder allows for varying the input files, `false` otherwise.
+"""
 function folderIsVaried(location::Symbol, folder::String)
     location_dict = inputs_dict[location]
     varieds = location_dict["varied"]
@@ -110,6 +206,14 @@ function folderIsVaried(location::Symbol, folder::String)
     throw(ErrorException("No basename files found in folder $(path_to_folder). Must be one of $(basenames)"))
 end
 
+"""
+    createInputsTOMLTemplate(path_to_toml::String)
+
+Create a template TOML file for the inputs configuration at the specified path.
+
+This is something users should not be changing.
+It is something in the codebase to hopefully facilitate extending this framework to other ABM frameworks.
+"""
 function createInputsTOMLTemplate(path_to_toml::String)
     s = """
     [config]

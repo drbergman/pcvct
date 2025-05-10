@@ -2,6 +2,8 @@ using PairCorrelationFunction, RecipesBase
 
 import PairCorrelationFunction: pcf
 
+@compat public pcf
+
 """
     PCVCTPCFResult
 
@@ -17,7 +19,7 @@ Each column of `g` corresponds to a time point in the `time` field, hence `size(
 
 # Example
 ```jldoctest
-using pcvct, PairCorrelationFunction
+using PairCorrelationFunction
 time = 12.0
 radii = [0.0, 1.0, 2.0]
 g = [0.5, 1.2]
@@ -29,7 +31,7 @@ PCVCTPCFResult:
   g: 0.5 - 1.2 (min - max)
 ```
 ```jldoctest
-using pcvct, PairCorrelationFunction
+using PairCorrelationFunction
 time = [12.0; 24.0; 36.0]
 radii = [0.0, 1.0, 2.0]
 g = [0.5 0.6 0.4; 1.2 1.15 1.4]
@@ -47,12 +49,12 @@ struct PCVCTPCFResult
 
     function PCVCTPCFResult(time::Float64, result::PairCorrelationFunction.PCFResult)
         @assert size(result.g, 2) == 1 "If time is a single value, g must be a vector or a matrix with one column. Found $(size(result.g, 2)) columns."
-        new([time], result)
+        return new([time], result)
     end
 
     function PCVCTPCFResult(time::Vector{Float64}, result::PairCorrelationFunction.PCFResult)
         @assert size(result.g, 2) == length(time) "If time is a vector, g must be a matrix with matching number of columns. Found $(length(time)) timepoints but $(size(result.g, 2)) columns."
-        new(time, result)
+        return new(time, result)
     end
 end
 
@@ -83,9 +85,9 @@ function Base.show(io::IO, ::MIME"text/plain", p::PCVCTPCFResult)
 end
 
 """
-    pcf(snapshot::PhysiCellSnapshot, center_cell_types, target_cell_types=center_cell_types; include_dead::Union{Bool,Tuple{Bool,Bool}}=false, dr::Float64=20.0)
+    pcf(S::AbstractPhysiCellSequence, center_cell_types, target_cell_types=center_cell_types; include_dead::Union{Bool,Tuple{Bool,Bool}}=false, dr::Float64=20.0)
 
-Calculate the pair correlation function (PCF) between two sets of cell types in a PhysiCell simulation snapshot.
+Calculate the pair correlation function (PCF) between two sets of cell types in a PhysiCell simulation snapshot or sequence.
 
 The `center_cell_types` and `target_cell_types` can be strings or vectors of strings.
 This will compute one PCF rather than one for each pair of (center, target) cell types, i.e., all centers are compared to all targets.
@@ -94,7 +96,7 @@ The `include_dead` argument can be a boolean or a tuple of booleans to indicate 
 The `dr` argument specifies the bin size (thickness of each annulus) for the PCF calculation.
 
 # Arguments
-- `snapshot::PhysiCellSnapshot`: The snapshot of the PhysiCell simulation.
+- `S::AbstractPhysiCellSequence`: A [`PhysiCellSnapshot`](@ref) or [`PhysiCellSequence`](@ref) object.
 - `center_cell_types`: The cell type name(s) to use as the center of the PCF.
 - `target_cell_types`: The cell type name(s) to use as the target of the PCF.
 
@@ -102,22 +104,23 @@ The `dr` argument specifies the bin size (thickness of each annulus) for the PCF
 - `include_dead::Union{Bool,Tuple{Bool,Bool}}`: Whether to include dead cells in the PCF calculation. If a tuple, the first element indicates whether to include dead centers and the second element indicates whether to include dead targets.
 - `dr::Float64`: The bin size for the PCF calculation.
 
+# Alternate methods
+- `pcf(simulation::Simulation, index::Union{Integer, Symbol}, center_cell_types, target_cell_types=center_cell_types; kwargs...)`: Calculate the PCF for a specific snapshot in a simulation.
+- `pcf(simulation_id::Integer, index::Union{Integer, Symbol}, center_cell_types, target_cell_types=center_cell_types; kwargs...)`: Calculate the PCF for a specific snapshot in a simulation by ID.
+- `pcf(simulation_id::Integer, center_cell_types, target_cell_types=center_cell_types; kwargs...)`: Calculate the PCF for all snapshots in a simulation by ID.
+- `pcf(simulation::Simulation, center_cell_types, target_cell_types=center_cell_types; kwargs...)`: Calculate the PCF for all snapshots in a simulation.
+
 # Returns
-- `PCVCTPCFResult`: A struct containing the time, radii, and g values of the PCF.
+A [`PCVCTPCFResult`](@ref) object containing the time, radii, and g values of the PCF.
+Regardless of the type of `S`, the time and radii will always be vectors.
+If `S` is a snapshot, the g values will be a vector of the PCF.
+If `S` is a sequence, the g values will be a (length(radii)-1 x length(time)) matrix of the PCF.
 """
 function pcf(snapshot::PhysiCellSnapshot, center_cell_types, target_cell_types=center_cell_types; include_dead::Union{Bool,Tuple{Bool,Bool}}=false, dr::Float64=20.0)
     args = preparePCF!(snapshot, center_cell_types, target_cell_types, include_dead, dr)
     return pcfSnapshotCalculation(snapshot, args...)
 end
 
-"""
-    pcf(sequence::PhysiCellSequence, center_cell_types, target_cell_types=center_cell_types; kwargs...)
-
-Calculate the pair correlation function (PCF) across all snapshots in a PhysiCell simulation sequence.
-
-# Returns
-- `PCVCTPCFResult`: A struct containing the times, radii, and g values as a (length(radii)-1 x length(time)) matrix of the PCF.
-"""
 function pcf(sequence::PhysiCellSequence, center_cell_types, target_cell_types=center_cell_types; include_dead::Union{Bool,Tuple{Bool,Bool}}=false, dr::Float64=20.0)
     args = preparePCF!(sequence, center_cell_types, target_cell_types, include_dead, dr)
     all_results = [pcfSnapshotCalculation(snapshot, args...) for snapshot in sequence.snapshots]
@@ -137,6 +140,11 @@ end
 pcf(simulation::Simulation, center_cell_types, target_cell_types=center_cell_types; kwargs...) = pcf(simulation.id, center_cell_types, target_cell_types; kwargs...)
 
 #! pcf helper functions
+"""
+    preparePCF!(S::AbstractPhysiCellSequence, center_cell_types, target_cell_types, include_dead::Union{Bool,Tuple{Bool,Bool}}, dr::Float64)
+
+Prepare the arguments for the PCF calculation.
+"""
 function preparePCF!(S::AbstractPhysiCellSequence, center_cell_types, target_cell_types, include_dead::Union{Bool,Tuple{Bool,Bool}}, dr::Float64)
     loadCells!(S)
     loadMesh!(S)
@@ -151,6 +159,11 @@ function preparePCF!(S::AbstractPhysiCellSequence, center_cell_types, target_cel
     return (center_cell_types, target_cell_types, cell_name_to_type_dict, include_dead, is_cross_pcf, constants)
 end
 
+"""
+    pcfConstants(S::AbstractPhysiCellSequence, dr::Float64)
+
+Create a `Constants` object for the PCF calculation based on the mesh of the snapshot or sequence.
+"""
 function pcfConstants(snapshot::PhysiCellSnapshot, dr::Float64)
     dx = snapshot.mesh["x"][2] - snapshot.mesh["x"][1]
     dy = snapshot.mesh["y"][2] - snapshot.mesh["y"][1]
@@ -171,6 +184,11 @@ function pcfConstants(sequence::PhysiCellSequence, dr::Float64)
     return pcfConstants(snapshot, dr)
 end
 
+"""
+    pcfSnapshotCalculation(snapshot::PhysiCellSnapshot, center_cell_types::Vector{String}, target_cell_types::Vector{String}, cell_name_to_type_dict::Dict{String,Int}, include_dead::Union{Bool,Tuple{Bool,Bool}}, is_cross_pcf::Bool, constants::Constants)
+
+Calculate the pair correlation function (PCF) for a given snapshot.
+"""
 function pcfSnapshotCalculation(snapshot::PhysiCellSnapshot, center_cell_types::Vector{String}, target_cell_types::Vector{String}, cell_name_to_type_dict::Dict{String,Int}, include_dead::Union{Bool,Tuple{Bool,Bool}}, is_cross_pcf::Bool, constants::Constants)
     is_3d = ndims(constants) == 3
     cells = snapshot.cells
@@ -184,6 +202,11 @@ function pcfSnapshotCalculation(snapshot::PhysiCellSnapshot, center_cell_types::
     return PCVCTPCFResult(snapshot.time, pcf_result)
 end
 
+"""
+    processPCFCellTypes(cell_types)
+
+Process the cell types for the PCF calculation so that they are always a vector of strings.
+"""
 function processPCFCellTypes(cell_types)
     if cell_types isa String
         return [cell_types]
@@ -193,6 +216,11 @@ function processPCFCellTypes(cell_types)
     throw(ArgumentError("Cell types must be a string or a vector of strings. Got $(typeof(cell_types))."))
 end
 
+"""
+    isCrossPCF(center_cell_types::Vector{String}, target_cell_types::Vector{String})
+
+Check if the center and target cell types are the same (PCF) or disjoint (cross-PCF); if neither, throw an error.
+"""
 function isCrossPCF(center_cell_types::Vector{String}, target_cell_types::Vector{String})
     center_set = Set(center_cell_types)
     target_set = Set(target_cell_types)
@@ -205,6 +233,11 @@ function isCrossPCF(center_cell_types::Vector{String}, target_cell_types::Vector
     end
 end
 
+"""
+    getCellPositionsForPCF(cells::DataFrame, cell_types::Vector{String}, cell_name_to_type_dict::Dict{String,Int}, include_dead::Bool, is_3d::Bool)
+
+Get the positions of the cells for the PCF calculation.
+"""
 function getCellPositionsForPCF(cells::DataFrame, cell_types::Vector{String}, cell_name_to_type_dict::Dict{String,Int}, include_dead::Bool, is_3d::Bool)
     cell_type_id_set = [cell_name_to_type_dict[cell_type] for cell_type in cell_types] |> Set
     cell_type_df = cells[[ct in cell_type_id_set for ct in cells.cell_type], :]
@@ -235,6 +268,11 @@ end
     end
 end
 
+"""
+    preparePCFPlot(results::Vector{PCVCTPCFResult}; time_unit=:min, distance_unit=:um)
+
+Prepare the time and radii for the PCF plot.
+"""
 function preparePCFPlot(results::Vector{PCVCTPCFResult}; time_unit=:min, distance_unit=:um)
     @assert all([r.time == results[1].time for r in results]) "All PCFResults must have the same time vector."
     time = processTime(results[1].time, time_unit) #! we need to make a copy of the time vector anyways, so no need to have a ! function
@@ -242,6 +280,12 @@ function preparePCFPlot(results::Vector{PCVCTPCFResult}; time_unit=:min, distanc
     return time, radii, [r.pcf_result for r in results]
 end
 
+"""
+    processTime(time::Vector{Float64}, time_unit::Symbol)
+
+Process the time vector to convert it to the desired time unit.
+Options are :min, :s, :h, :d, :w, :mo, and :y.
+"""
 function processTime(time, time_unit)
     time_unit = Symbol(time_unit)
     if time_unit in [:min, :minute, :minutes]
@@ -263,6 +307,12 @@ function processTime(time, time_unit)
     return time
 end
 
+"""
+    processDistance(distance::Vector{Float64}, distance_unit::Symbol)
+
+Process the distance vector to convert it to the desired distance unit.
+Options are :um, :mm, and :cm.
+"""
 function processDistance(distance, distance_unit)
     distance_unit = Symbol(distance_unit)
     if distance_unit in [:um, :micrometer, :micrometers, :μm, :micron, :microns]

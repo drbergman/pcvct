@@ -1,5 +1,10 @@
 using Pkg
 
+"""
+    pcvctVersion()
+
+Returns the version of the pcvct package.
+"""
 function pcvctVersion()
     proj = Pkg.project()
     version = if proj.name == "pcvct"
@@ -11,6 +16,11 @@ function pcvctVersion()
     return version
 end
 
+"""
+    pcvctDBVersion(is_new_db::Bool)
+
+Returns the version of the pcvct database. If the database does not exist, it creates a new one with the current pcvct version.
+"""
 function pcvctDBVersion(is_new_db::Bool)
     #! check if versions table exists
     table_name = "pcvct_version"
@@ -21,6 +31,12 @@ function pcvctDBVersion(is_new_db::Bool)
     return queryToDataFrame("SELECT * FROM $(table_name);") |> x -> x.version[1] |> VersionNumber
 end
 
+"""
+    createPCVCTVersionTable(is_new_db::Bool)
+
+Creates the pcvct_version table in the database if it does not exist.
+If is_new_db is true, it inserts the current pcvct version into the table.
+"""
 function createPCVCTVersionTable(is_new_db::Bool)
     table_name = "pcvct_version"
     DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS $(table_name) (version TEXT PRIMARY KEY);")
@@ -28,6 +44,14 @@ function createPCVCTVersionTable(is_new_db::Bool)
     DBInterface.execute(db, "INSERT INTO $(table_name) (version) VALUES ('$version');")
 end
 
+"""
+    resolvePCVCTVersion(is_new_db::Bool, auto_upgrade::Bool)
+
+Resolve differences between the pcvct version and the database version.
+If the pcvct version is lower than the database version, it returns false (upgrade your version of pcvct to match what was already used for the database).
+If the pcvct version is equal to the database version, it returns true.
+If the pcvct version is higher than the database version, it upgrades the database to the current pcvct version and returns true.
+"""
 function resolvePCVCTVersion(is_new_db::Bool, auto_upgrade::Bool)
     pcvct_version = pcvctVersion()
     pcvct_db_version = pcvctDBVersion(is_new_db)

@@ -22,5 +22,5 @@ out = run(method, reference, dv)
 method = SobolVariation(4)
 out = run(method, reference, dv)
 
-method = pcvct.RBDVariation(5)
+method = RBDVariation(5)
 out = run(method, reference, dv)

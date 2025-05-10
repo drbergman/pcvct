@@ -1,3 +1,5 @@
+using LightXML
+
 filename = @__FILE__
 filename = split(filename, "/") |> last
 str = "TESTING WITH $(filename)"
@@ -29,12 +31,12 @@ element_paths = [
 "attack_rates_path" => pcvct.attackRatesPath(cell_type)
 ]
 
-xml_doc = pcvct.openXML(path_to_xml)
+xml_doc = parse_file(path_to_xml)
 for ep in element_paths
     ce = pcvct.retrieveElement(xml_doc, ep[2]; required=false)
     @test !isnothing(ce) #! make sure the element was found
 end
-pcvct.closeXML(xml_doc)
+free(xml_doc)
 
 node_paths = [
 "speed_path" => pcvct.motilityPath(cell_type, "speed")
@@ -123,7 +125,7 @@ out = run(reference_monad, discrete_variations; n_replicates=n_replicates)
 
 hashBorderPrint("SUCCESSFULLY VARIED CONFIG AND RULESETS PARAMETERS!")
 
-# one last set of tests for coverage 
+# one last set of tests for coverage
 discrete_variations = DiscreteVariation[]
 
 addAttackRateVariationDimension!(discrete_variations, cell_type, cell_type, [0.1])
@@ -137,8 +139,7 @@ out = run(reference_monad, discrete_variations; n_replicates=n_replicates)
 @test_nowarn pcvct.shortVariationName(:intracellular, "intracellular_variation_id")
 @test_throws ArgumentError pcvct.shortVariationName(:not_a_location, "not_a_var")
 
-
-xml_doc = pcvct.openXML(path_to_xml)
+xml_doc = parse_file(path_to_xml)
 xml_path = ["not", "a", "path"]
 @test_throws ArgumentError pcvct.retrieveElement(xml_doc, xml_path)
 

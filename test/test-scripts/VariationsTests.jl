@@ -15,7 +15,7 @@ cell_type = "default"
 
 xml_path = pcvct.apoptosisPath(cell_type, "death_rate")
 dv = UniformDistributedVariation(xml_path, 0.0, 1.0)
-@test_throws ErrorException pcvct._values(dv)
+@test_throws ErrorException pcvct.variationValues(dv)
 
 discrete_variation = DiscreteVariation(xml_path, [0.0, 1.0])
 @test_throws ErrorException cdf(discrete_variation, 0.5)
@@ -38,7 +38,7 @@ add_variations_result = pcvct.addVariations(LHSVariation(4), inputs, discrete_va
 discrete_variations = DiscreteVariation[]
 xml_path = pcvct.cyclePath(cell_type, "phase_durations", "duration:index:0")
 push!(discrete_variations, DiscreteVariation(xml_path, [1.0, 2.0]))
-add_variations_result = pcvct.addVariations(LHSVariation(4), inputs, discrete_variations)
+add_variations_result = pcvct.addVariations(LHSVariation(; n=4), inputs, discrete_variations)
 
 discrete_variations = DiscreteVariation[]
 xml_path = icCellsPath("default", "disc", 1, "x0")
@@ -92,9 +92,10 @@ cycle_rate_path = pcvct.cyclePath(cell_type, "phase_durations", "duration:index:
 val_1 = [0.0, 1.0]
 val_2 = [1000.0, 2000.0]
 cv = CoVariation((apoptosis_rate_path, val_1), (cycle_rate_path, val_2))
+show(stdout, MIME"text/plain"(), cv)
 
 sampling = createTrial(inputs, [dv_max_time, cv]; n_replicates=2)
-@test length(pcvct.readSamplingMonadIDs(sampling)) == 2
+@test length(pcvct.readConstituentIDs(sampling)) == 2
 @test length(sampling) == 4
 
 df = pcvct.simulationsTable(sampling)
@@ -113,21 +114,21 @@ x0s = [0.0, -100.0]
 cv_new = CoVariation([cv.variations; DiscreteVariation(max_response_path, mrs); DiscreteVariation(x0_path, x0s)])
 cv_test = CoVariation(cv_new.variations...)
 sampling = createTrial(inputs, [dv_max_time, cv_new]; n_replicates=3)
-@test length(pcvct.readSamplingMonadIDs(sampling)) == 2
+@test length(pcvct.readConstituentIDs(sampling)) == 2
 @test length(sampling) == 6
 
 d_1 = Uniform(0, 1)
 d_2 = Normal(3, 0.01)
 cv = CoVariation((apoptosis_rate_path, d_1), (cycle_rate_path, d_2))
 sampling = createTrial(LHSVariation(5), inputs, cv; n_replicates=3)
-@test length(pcvct.readSamplingMonadIDs(sampling)) == 5
+@test length(pcvct.readConstituentIDs(sampling)) == 5
 @test length(sampling) == 15
-@test pcvct.location(cv) == [:config, :config]
-@test pcvct.target(cv) == pcvct.XMLPath.([apoptosis_rate_path, cycle_rate_path])
+@test pcvct.variationLocation(cv) == [:config, :config]
+@test pcvct.variationTarget(cv) == pcvct.XMLPath.([apoptosis_rate_path, cycle_rate_path])
 
 cv = CoVariation(cv.variations[1], cv.variations[2]) #! CoVariation(ev1, ev2, ...)
 sampling = createTrial(SobolVariation(7), inputs, cv; n_replicates=2)
-@test length(pcvct.readSamplingMonadIDs(sampling)) == 7
+@test length(pcvct.readConstituentIDs(sampling)) == 7
 
 # more tests for coverage
 ev = DiscreteVariation(rulePath("default", "cycle entry", "decreasing_signals", "signal:name:pressure", "applies_to_dead"), [true, false])

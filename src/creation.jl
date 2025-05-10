@@ -12,9 +12,9 @@ Creates a new project directory at `project_dir` with the following structure:
 project_dir
 ├── data
 ├── PhysiCell # The latest release from https://github.com/drbergman/PhysiCell
-└── VCT
+└── scripts
 ```
-`data` is populated with the standard structure. `PhysiCell` is a copy of PhysiCell. `VCT` contains a generated `GenerateData.jl` file.
+`data` is populated with the standard structure. `PhysiCell` is a copy of PhysiCell. `scripts` contains a generated `GenerateData.jl` file.
 
 # Arguments
 - `project_dir::String="."`: The directory in which to create the project. Relative paths are resolved from the current working directory where Julia was launched.
@@ -24,7 +24,7 @@ project_dir
 
 # Note
 The names of the `data` and `PhysiCell` directories are fixed and cannot be changed. Their relative locations should not be changed without updating the `GenerateData.jl` file.
-The name of the `VCT` file and the `GenerateData.jl` are just by convention and can be changed.
+The name of the `scripts` folder and the `GenerateData.jl` are just by convention and can be changed.
 """
 function createProject(project_dir::String="."; clone_physicell::Bool=true, template_as_default::Bool=true, terse::Bool=false)
     mkpath(project_dir)
@@ -33,18 +33,31 @@ function createProject(project_dir::String="."; clone_physicell::Bool=true, temp
 
     setUpInputs(data_dir, physicell_dir, template_as_default)
     setUpComponents(data_dir, physicell_dir)
-    setUpVCT(project_dir, physicell_dir, data_dir, template_as_default, terse)
+    setUpScripts(project_dir, physicell_dir, data_dir, template_as_default, terse)
 end
 
+"""
+    getLatestReleaseTag(repo_url::String)
+
+Get the latest release tag from a GitHub repository.
+"""
 function getLatestReleaseTag(repo_url::String)
     api_url = replace(repo_url, "github.com" => "api.github.com/repos") * "/releases/latest"
     #! include this header for CI testing to not exceed request limit (I think?): macos for some reason raised a `RequestError: HTTP/2 403`; users should not need to set this ENV variable
-    headers = haskey(ENV, "PCVCT_PUBLIC_REPO_AUTH") ? Dict("Authorization" => "token $(ENV["PCVCT_PUBLIC_REPO_AUTH"])") : Pair{String,String}[] 
+    headers = haskey(ENV, "PCVCT_PUBLIC_REPO_AUTH") ? Dict("Authorization" => "token $(ENV["PCVCT_PUBLIC_REPO_AUTH"])") : Pair{String,String}[]
     response = Downloads.download(api_url; headers=headers)
     release_info = JSON3.read(response, Dict{String, Any})
     return release_info["tag_name"]
 end
 
+"""
+    setUpPhysiCell(project_dir::String, clone_physicell::Bool)
+
+Set up the PhysiCell directory in the project directory.
+
+If the directory already exists, it will not be created again.
+If `clone_physicell` is `true`, the latest release of the PhysiCell repository will be cloned.
+"""
 function setUpPhysiCell(project_dir::String, clone_physicell::Bool)
     physicell_dir = joinpath(project_dir, "PhysiCell")
     if isdir(physicell_dir)
@@ -84,6 +97,11 @@ function setUpPhysiCell(project_dir::String, clone_physicell::Bool)
     return physicell_dir
 end
 
+"""
+    setUpComponents(data_dir::String, physicell_dir::String)
+
+Set up the components directory in the data directory and populate it with the `\"Toy_Metabolic_Model.xml\"` file.
+"""
 function setUpComponents(data_dir::String, physicell_dir::String)
     components_dir = joinpath(data_dir, "components")
     mkpath(components_dir)
@@ -94,6 +112,11 @@ function setUpComponents(data_dir::String, physicell_dir::String)
     cp(joinpath(physicell_dir, "sample_projects_intracellular", "ode", "ode_energy", "config", "Toy_Metabolic_Model.xml"), joinpath(roadrunner_components_dir, "Toy_Metabolic_Model.xml"); force=true)
 end
 
+"""
+    setUpInputs(data_dir::String, physicell_dir::String, template_as_default::Bool)
+
+Set up the inputs directory in the data directory, if the data directory does not already exist.
+"""
 function setUpInputs(data_dir::String, physicell_dir::String, template_as_default::Bool)
     if isdir(data_dir)
         println("Data directory already exists ($(data_dir)). Skipping setup of data directory.")
@@ -119,6 +142,11 @@ function setUpInputs(data_dir::String, physicell_dir::String, template_as_defaul
     end
 end
 
+"""
+    setUpRequiredFolders(path_to_template::String, inputs_dir::String, folder::String)
+
+Set up the required folders in the inputs directory.
+"""
 function setUpRequiredFolders(path_to_template::String, inputs_dir::String, folder::String)
     config_folder = joinpath(inputs_dir, "configs", folder)
     mkpath(config_folder)
@@ -131,6 +159,11 @@ function setUpRequiredFolders(path_to_template::String, inputs_dir::String, fold
     cp(joinpath(path_to_template, "Makefile"), joinpath(custom_codes_folder, "Makefile"))
 end
 
+"""
+    icFilename(table_name::String)
+
+Get the filename for the given IC type for setting up the IC folder.
+"""
 function icFilename(table_name::String)
     if table_name == "cells"
         return "cells.csv"
@@ -145,6 +178,11 @@ function icFilename(table_name::String)
     end
 end
 
+"""
+    setUpICFolder(path_to_template::String, inputs_dir::String, ic_name::String, folder::String)
+
+Set up the IC folder in the inputs directory for the given IC type.
+"""
 function setUpICFolder(path_to_template::String, inputs_dir::String, ic_name::String, folder::String)
     ic_folder = joinpath(inputs_dir, "ics", ic_name, folder)
     mkpath(ic_folder)
@@ -152,6 +190,11 @@ function setUpICFolder(path_to_template::String, inputs_dir::String, ic_name::St
     cp(joinpath(path_to_template, "config", filename), joinpath(ic_folder, filename))
 end
 
+"""
+    setUpTemplate(physicell_dir::String, inputs_dir::String)
+
+Set up the template project in the inputs directory.
+"""
 function setUpTemplate(physicell_dir::String, inputs_dir::String)
     path_to_template = joinpath(physicell_dir, "sample_projects", "template")
 
@@ -170,13 +213,18 @@ function setUpTemplate(physicell_dir::String, inputs_dir::String)
     pcvct.createICCellXMLTemplate(joinpath(inputs_dir, "ics", "cells", "1_xml"))
 end
 
-function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, template_as_default::Bool, terse::Bool)
-    path_to_vct = joinpath(project_dir, "VCT")
-    mkpath(path_to_vct)
+"""
+    setUpScripts(project_dir::String, physicell_dir::String, data_dir::String, template_as_default::Bool, terse::Bool)
 
-    path_to_generate_data = joinpath(path_to_vct, "GenerateData.jl")
+Set up the scripts directory in the project directory.
+"""
+function setUpScripts(project_dir::String, physicell_dir::String, data_dir::String, template_as_default::Bool, terse::Bool)
+    path_to_scripts = joinpath(project_dir, "scripts")
+    mkpath(path_to_scripts)
+
+    path_to_generate_data = joinpath(path_to_scripts, "GenerateData.jl")
     if isfile(path_to_generate_data)
-        println("GenerateData.jl already exists ($(joinpath(path_to_vct,"GenerateData.jl"))). Skipping creation of this starter file.")
+        println("GenerateData.jl already exists ($(joinpath(path_to_scripts,"GenerateData.jl"))). Skipping creation of this starter file.")
         return
     end
     path_to_configs = joinpath(data_dir, "inputs", "configs")
@@ -195,7 +243,7 @@ function setUpVCT(project_dir::String, physicell_dir::String, data_dir::String, 
     tersify(s::String) = (terse ? "" : s)
     generate_data_lines = """
     using pcvct
-    initializeModelManager() # this works if launching from the project directory, i.e. the directory containing the VCT folder
+    initializeModelManager() # this works if launching from the project directory, i.e. the directory containing the data and PhysiCell folders
     # initializeModelManager(\"$(abspath(physicell_dir))\", \"$(abspath(data_dir))\") # use this if not calling this from the project directory
 
     ############ set up ############
