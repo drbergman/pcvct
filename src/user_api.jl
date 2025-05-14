@@ -44,8 +44,8 @@ function createTrial(method::AddVariationMethod, inputs::InputFolders, avs::Vect
     return _createTrial(method, inputs, VariationID(inputs), avs, n_replicates, use_previous)
 end
 
-function createTrial(method::AddVariationMethod, inputs::InputFolders, av::AbstractVariation; kwargs...)
-    return createTrial(method, inputs, [av]; kwargs...)
+function createTrial(method::AddVariationMethod, inputs::InputFolders, avs::Vararg{AbstractVariation}; kwargs...)
+    return createTrial(method, inputs, [avs...]; kwargs...)
 end
 
 createTrial(inputs::InputFolders, args...; kwargs...) = createTrial(GridVariation(), inputs, args...; kwargs...)
@@ -55,8 +55,8 @@ function createTrial(method::AddVariationMethod, reference::AbstractMonad, avs::
     return _createTrial(method, reference.inputs, reference.variation_id, avs, n_replicates, use_previous)
 end
 
-function createTrial(method::AddVariationMethod, reference::AbstractMonad, av::AbstractVariation; kwargs...)
-    return createTrial(method, reference, [av]; kwargs...)
+function createTrial(method::AddVariationMethod, reference::AbstractMonad, avs::Vararg{AbstractVariation}; kwargs...)
+    return createTrial(method, reference, [avs...]; kwargs...)
 end
 
 createTrial(reference::AbstractMonad, args...; kwargs...) = createTrial(GridVariation(), reference, args...; kwargs...)
