@@ -641,10 +641,9 @@ meshInfo(sequence::PhysiCellSequence) = meshInfo(sequence.snapshots[1])
 """
     loadGraph!(G::MetaGraph, path_to_txt_file::String)
 
-Load a graph from a text file into a MetaGraph.
+Load a graph from a text file into a `MetaGraph`.
 
-This is a helper function for loading graphs from PhysiCell simulation output files.
-Users should use [`loadGraph!`](@ref) instead of this function directly.
+Users should use `loadGraph!` with an [`AbstractPhysiCellSequence`](@ref) object instead of this function directly.`
 """
 function loadGraph!(G::MetaGraph, path_to_txt_file::String)
     if nv(G) > 0 #! If the graph is already loaded, do nothing
@@ -658,12 +657,12 @@ function loadGraph!(G::MetaGraph, path_to_txt_file::String)
 end
 
 """
-    loadGraph!(S, graph)
+    loadGraph!(S::AbstractPhysiCellSequence, graph::Symbol)
 
 Load a graph for a snapshot or sequence into a MetaGraph(s).
 
 # Arguments
-- `S`: The snapshot or sequence to load the graph into.
+- `S::AbstractPhysiCellSequence`: The [`pcvct.AbstractPhysiCellSequence`](@ref) object to load the graph into.
 - `graph`: The type of graph to load (must be one of `:attachments`, `:spring_attachments`, or `:neighbors`). Can also be a string.
 """
 function loadGraph!(snapshot::PhysiCellSnapshot, graph::Symbol)
