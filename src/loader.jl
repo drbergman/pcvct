@@ -1,6 +1,7 @@
 using DataFrames, MAT, Graphs, MetaGraphsNext
 
-export getCellDataSequence, PhysiCellSnapshot, PhysiCellSequence
+export getCellDataSequence, PhysiCellSnapshot, PhysiCellSequence,
+       loadCells!, loadSubstrates!, loadMesh!, loadGraph!
 
 """
     AbstractPhysiCellSequence
