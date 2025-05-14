@@ -18,6 +18,7 @@ out = run(inputs, discrete_variations; use_previous=false)
 sequence = PhysiCellSequence(out.trial.id; include_cells=true, include_substrates=true)
 
 seq_dict = cellDataSequence(sequence, "elapsed_time_in_phase"; include_dead=true)
+@test_warn "`getCellDataSequence` is deprecated. Use `cellDataSequence` instead." getCellDataSequence(sequence, "elapsed_time_in_phase"; include_dead=true)
 
 simulation_population_time_series = pcvct.populationTimeSeries(out.trial; include_dead=true)
 simulation_population_time_series["time"]
@@ -82,5 +83,3 @@ txt_pruned_simulation_id = out.trial.id
 @test ismissing(PhysiCellSnapshot(txt_pruned_simulation_id, 0; include_attachments=true))
 @test ismissing(PhysiCellSnapshot(txt_pruned_simulation_id, 0; include_spring_attachments=true))
 @test ismissing(PhysiCellSnapshot(txt_pruned_simulation_id, 0; include_neighbors=true))
-
-@test_warn "`getCellDataSequence` is deprecated. Use `cellDataSequence` instead." getCellDataSequence(sequence, "elapsed_time_in_phase"; include_dead=true)
