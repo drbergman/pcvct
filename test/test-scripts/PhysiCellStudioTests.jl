@@ -12,8 +12,8 @@ fake_studio_path = "fake_studio_path"
 
 @test_throws Base.IOError runStudio(1; python_path=fake_python_path, studio_path=fake_studio_path)
 
-@test pcvct.path_to_python == fake_python_path
-@test pcvct.path_to_studio == fake_studio_path
+@test pcvct.pcvct_globals.path_to_python == fake_python_path
+@test pcvct.pcvct_globals.path_to_studio == fake_studio_path
 
 #! test that the studio launches even when the rules file cannot be found
 simulation_id = 1

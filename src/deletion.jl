@@ -26,12 +26,12 @@ function deleteSimulations(simulation_ids::AbstractVector{<:Union{Integer,Missin
     where_stmt = "WHERE simulation_id IN ($(join(simulation_ids,","))) $(and_constraints)"
     sim_df = constructSelectQuery("simulations", where_stmt) |> queryToDataFrame
     simulation_ids = sim_df.simulation_id #! update based on the constraints added
-    DBInterface.execute(db,"DELETE FROM simulations WHERE simulation_id IN ($(join(simulation_ids,",")));")
+    DBInterface.execute(centralDB(),"DELETE FROM simulations WHERE simulation_id IN ($(join(simulation_ids,",")));")
 
     for row in eachrow(sim_df)
         rm_hpc_safe(trialFolder(Simulation, row.simulation_id); force=true, recursive=true)
 
-        for (location, location_dict) in pairs(inputs_dict)
+        for (location, location_dict) in pairs(inputsDict())
             if !any(location_dict["varied"])
                 continue
             end
@@ -89,7 +89,7 @@ deleteSimulation = deleteSimulations #! alias
 
 Delete all simulations. See [`deleteSimulations`](@ref) for the meaning of the keyword arguments.
 """
-deleteAllSimulations(; delete_supers::Bool=true, and_constraints::String="") = getSimulationIDs() |> x -> deleteSimulations(x; delete_supers=delete_supers, and_constraints=and_constraints)
+deleteAllSimulations(; delete_supers::Bool=true, and_constraints::String="") = simulationIDs() |> x -> deleteSimulations(x; delete_supers=delete_supers, and_constraints=and_constraints)
 
 """
     deleteMonad(monad_ids::AbstractVector{<:Integer}; delete_subs::Bool=true, delete_supers::Bool=true)
@@ -102,7 +102,7 @@ Delete monads from the database by monad ID.
 - `delete_supers`: If `delete_supers` is `true`, will further delete any samplings that no longer have associated monads after the deletion.
 """
 function deleteMonad(monad_ids::AbstractVector{<:Integer}; delete_subs::Bool=true, delete_supers::Bool=true)
-    DBInterface.execute(db,"DELETE FROM monads WHERE monad_id IN ($(join(monad_ids,",")));")
+    DBInterface.execute(centralDB(),"DELETE FROM monads WHERE monad_id IN ($(join(monad_ids,",")));")
     simulation_ids_to_delete = Int[]
     for monad_id in monad_ids
         if delete_subs
@@ -151,7 +151,7 @@ Delete samplings from the database by sampling ID.
 - `delete_supers`: If `delete_supers` is `true`, will further delete any trials that no longer have associated samplings after the deletion.
 """
 function deleteSampling(sampling_ids::AbstractVector{<:Integer}; delete_subs::Bool=true, delete_supers::Bool=true)
-    DBInterface.execute(db,"DELETE FROM samplings WHERE sampling_id IN ($(join(sampling_ids,",")));")
+    DBInterface.execute(centralDB(),"DELETE FROM samplings WHERE sampling_id IN ($(join(sampling_ids,",")));")
     monad_ids_to_delete = Int[]
     for sampling_id in sampling_ids
         if delete_subs
@@ -208,7 +208,7 @@ Delete trials from the database by trial ID.
 - `delete_subs`: If `delete_subs` is `true`, will further delete the samplings corresponding to the trials.
 """
 function deleteTrial(trial_ids::AbstractVector{<:Integer}; delete_subs::Bool=true)
-    DBInterface.execute(db,"DELETE FROM trials WHERE trial_id IN ($(join(trial_ids,",")));")
+    DBInterface.execute(centralDB(),"DELETE FROM trials WHERE trial_id IN ($(join(trial_ids,",")));")
     sampling_ids_to_delete = Int[]
     for trial_id in trial_ids
         if delete_subs
@@ -265,10 +265,10 @@ function resetDatabase(; force_reset::Bool=false, force_continue::Bool=false)
         end
     end
     for folder in ["simulations", "monads", "samplings", "trials"]
-        rm_hpc_safe(joinpath(data_dir, "outputs", folder); force=true, recursive=true)
+        rm_hpc_safe(joinpath(dataDir(), "outputs", folder); force=true, recursive=true)
     end
 
-    for (location, location_dict) in pairs(inputs_dict)
+    for (location, location_dict) in pairs(inputsDict())
         if !any(location_dict["varied"])
             continue
         end
@@ -294,8 +294,8 @@ function resetDatabase(; force_reset::Bool=false, force_continue::Bool=false)
         rm_hpc_safe(joinpath(locationPath(:custom_code, custom_code_folder), baseToExecutable("project")); force=true)
     end
 
-    rm_hpc_safe("$(db.file)"; force=true)
-    initializeDatabase("$(db.file)")
+    rm_hpc_safe("$(centralDB().file)"; force=true)
+    initializeDatabase("$(centralDB().file)")
     return nothing
 end
 
@@ -309,7 +309,7 @@ Reset a specific folder in the database for a given location, removing the varia
 - `folder`: The name of the folder to reset.
 """
 function resetFolder(location::Symbol, folder::String)
-    inputs_dict_entry = inputs_dict[location]
+    inputs_dict_entry = inputsDict()[location]
     path_to_folder = locationPath(location, folder)
     if !isdir(path_to_folder)
         return
@@ -379,9 +379,9 @@ function eraseSimulationIDFromConstituents(simulation_id::Int; monad_id::Union{M
     if ismissing(monad_id)
         query = constructSelectQuery("simulations", "WHERE simulation_id = $(simulation_id)")
         df = queryToDataFrame(query)
-        all_id_features = [locationIDName(loc) for loc in project_locations.varied] #! project_locations.varied is a Tuple, so doing locationIDName.(project_locations.varied) makes a Tuple, not a Vector
+        all_id_features = [locationIDName(loc) for loc in projectLocations().varied] #! projectLocations().varied is a Tuple, so doing locationIDName.(projectLocations().varied) makes a Tuple, not a Vector
         add_id_values = [df[1, id_feature] for id_feature in all_id_features]
-        all_variation_id_features = [locationVariationIDName(loc) for loc in project_locations.varied] #! project_locations.varied is a Tuple, so doing locationVariationIDName.(project_locations.varied) makes a Tuple, not a Vector
+        all_variation_id_features = [locationVariationIDName(loc) for loc in projectLocations().varied] #! projectLocations().varied is a Tuple, so doing locationVariationIDName.(projectLocations().varied) makes a Tuple, not a Vector
         all_variation_id_values = [df[1, variation_id_feature] for variation_id_feature in all_variation_id_features]
         all_features = [all_id_features; all_variation_id_features]
         all_values = [add_id_values; all_variation_id_values]
@@ -413,7 +413,7 @@ Remove files and take care if on an HPC since the NFS filesystem can leave behin
 If on an HPC, move deleted files into the hidden directory `data/.trash/` in a time-stamped folder.
 """
 function rm_hpc_safe(path::String; force::Bool=false, recursive::Bool=false)
-    if !run_on_hpc
+    if !pcvct_globals.run_on_hpc
         rm(path; force=force, recursive=recursive)
         return
     end
@@ -422,9 +422,9 @@ function rm_hpc_safe(path::String; force::Bool=false, recursive::Bool=false)
     end
     #! NFS filesystem could stop the deletion by putting a lock on the folder or something
     src = path
-    path_rel_to_data = replace(path, "$(data_dir)/" => "")
+    path_rel_to_data = replace(path, "$(dataDir())/" => "")
     date_time = Dates.format(now(),"yymmdd")
-    initial_dest = joinpath(data_dir, ".trash", "data-$(date_time)", path_rel_to_data)
+    initial_dest = joinpath(dataDir(), ".trash", "data-$(date_time)", path_rel_to_data)
     main_path, file_ext = splitext(initial_dest)
     suffix = ""
     path_to_dest(main_path, suffix, file_ext) = suffix == "" ? "$(main_path)$(file_ext)" : "$(main_path)-$(suffix)$(file_ext)"

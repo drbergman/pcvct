@@ -43,9 +43,18 @@ node_paths = [
 "persistence_time_path" => pcvct.motilityPath(cell_type, "persistence_time")
 "migration_bias_path" => pcvct.motilityPath(cell_type, "migration_bias")
 
-"live_phagocytosis_rates_path" => pcvct.cellInteractionsPath(cell_type, "live_phagocytosis_rates")
+"volume_path" => pcvct.volumePath(cell_type, "total")
+"mechanics_path" => pcvct.mechanicsPath(cell_type, "cell_cell_adhesion_strength")
+"secretion_path" => pcvct.secretionPath(cell_type, "substrate", "secretion_rate")
 
+"apop_phagocytosis_path" => pcvct.phagocytosisPath(cell_type, :apoptotic)
+"live_phagocytosis_path" => pcvct.phagocytosisPath(cell_type, cell_type)
 "attack_rate_default_path" => pcvct.attackRatesPath(cell_type, cell_type)
+"fusion_path" => pcvct.fusionPath(cell_type, cell_type)
+
+"transformation_path" => pcvct.transformationPath(cell_type, cell_type)
+
+"integrity_path" => pcvct.integrityPath(cell_type, "damage_rate")
 
 "custom_data_path" => pcvct.customDataPath(cell_type, "sample")
 

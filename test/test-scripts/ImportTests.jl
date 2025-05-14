@@ -13,6 +13,7 @@ dest["config"] = config_folder
 
 src = Dict()
 src["config"] = "PhysiCell_settings.xml"
+src["rulesets_collection"] = "cell_rules.csv"
 success = importProject(path_to_project, src, dest)
 @test success
 
@@ -23,11 +24,11 @@ push!(discrete_variations, DiscreteVariation(["overall","max_time"], 12.0))
 push!(discrete_variations, DiscreteVariation(["save","full_data","interval"], 6.0))
 push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], 6.0))
 
-sampling_from_import = createTrial(inputs, discrete_variations; n_replicates=1) #! save this for PopulationTests.jl and GraphsTests.jl, etc.
+simulation_from_import = createTrial(inputs, discrete_variations; n_replicates=1) #! save this for PopulationTests.jl and GraphsTests.jl, etc.
 
-out = run(sampling_from_import; force_recompile=false)
+out = run(simulation_from_import; force_recompile=false)
 
-@test out.n_success == length(sampling_from_import)
+@test out.n_success == length(simulation_from_import)
 
 success = importProject(path_to_project, src, dest)
 @test success
@@ -93,5 +94,8 @@ success = importProject(path_to_project, src)
 path_to_project = joinpath("PhysiCell", "sample_projects_intracellular", "ode", "ode_energy")
 success = importProject(path_to_project)
 @test success
+
+# import the template xml rules (simple) project
+path_to_project = joinpath("PhysiCell", "sample_projects", "template_xml_rules")
 success = importProject(path_to_project)
 @test success

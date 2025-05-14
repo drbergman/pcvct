@@ -1,3 +1,5 @@
+using Dates
+
 export Simulation, Monad, Sampling, Trial, InputFolders
 
 """
@@ -27,7 +29,7 @@ All the inputs and variations must be the same for all associated simulations.
 """
 abstract type AbstractMonad <: AbstractSampling end
 
-Base.length(T::AbstractTrial) = getSimulationIDs(T) |> length
+Base.length(T::AbstractTrial) = simulationIDs(T) |> length
 
 ##########################################
 ############   InputFolders   ############
@@ -59,7 +61,7 @@ struct InputFolder
     path_from_inputs::String
 
     function InputFolder(location::Symbol, id::Int, folder::String)
-        location_dict = inputs_dict[location]
+        location_dict = inputsDict()[location]
         required = location_dict["required"]
         if isempty(folder)
             if required
@@ -133,9 +135,9 @@ struct InputFolders
 
     function InputFolders(location_pairs::Vector{<:Pair{Symbol,<:Union{String,Int}}})
         locs_already_here = first.(location_pairs)
-        invalid_locations = setdiff(locs_already_here, project_locations.all)
-        @assert isempty(invalid_locations) "Invalid locations: $invalid_locations.\nPossible locations are: $(project_locations.all)"
-        for loc in setdiff(project_locations.all, locs_already_here)
+        invalid_locations = setdiff(locs_already_here, projectLocations().all)
+        @assert isempty(invalid_locations) "Invalid locations: $invalid_locations.\nPossible locations are: $(projectLocations()).all)"
+        for loc in setdiff(projectLocations().all, locs_already_here)
             push!(location_pairs, loc => "")
         end
         return new([loc => InputFolder(loc, val) for (loc, val) in location_pairs] |> NamedTuple)
@@ -159,9 +161,9 @@ The required inputs are sorted alphabetically and used as the positional argumen
 The optional inputs are used as keyword arguments with a default value of `\"\"`, indicating they are unused.
 """
 function createSimpleInputFolders()
-    fn_args = join(["$(location)::String" for location in project_locations.required], ", ")
-    fn_kwargs = join(["$(location)::String=\"\"" for location in setdiff(project_locations.all, project_locations.required)], ", ")
-    ret_val = "[$(join([":$(location) => $(location)" for location in project_locations.all], ", "))] |> InputFolders"
+    fn_args = join(["$(location)::String" for location in projectLocations().required], ", ")
+    fn_kwargs = join(["$(location)::String=\"\"" for location in setdiff(projectLocations().all, projectLocations().required)], ", ")
+    ret_val = "[$(join([":$(location) => $(location)" for location in projectLocations().all], ", "))] |> InputFolders"
     """
     function InputFolders($(fn_args); $(fn_kwargs))
         return $(ret_val)
@@ -209,7 +211,7 @@ struct VariationID
     ids::NamedTuple
 
     function VariationID(inputs::InputFolders)
-        return new((loc => inputs[loc].id == -1 ? -1 : 0 for loc in project_locations.varied) |> NamedTuple)
+        return new((loc => inputs[loc].id == -1 ? -1 : 0 for loc in projectLocations().varied) |> NamedTuple)
     end
 
     function VariationID(x::Vector{Pair{Symbol,Int}})
@@ -276,7 +278,7 @@ struct Simulation <: AbstractMonad
 
     function Simulation(id::Int, inputs::InputFolders, variation_id::VariationID)
         @assert id > 0 "Simulation id must be positive. Got $id."
-        for location in project_locations.varied
+        for location in projectLocations().varied
             if inputs[location].required
                 @assert variation_id[location] >= 0 "$(location) variation id must be non-negative. Got $(variation_id[location])."
             elseif inputs[location].id == -1
@@ -295,7 +297,7 @@ struct Simulation <: AbstractMonad
 end
 
 function Simulation(inputs::InputFolders, variation_id::VariationID=VariationID(inputs))
-    simulation_id = DBInterface.execute(db,
+    simulation_id = DBInterface.execute(centralDB(),
     """
     INSERT INTO simulations (\
     physicell_version_id,\
@@ -305,9 +307,9 @@ function Simulation(inputs::InputFolders, variation_id::VariationID=VariationID(
     ) \
     VALUES(\
     $(currentPhysiCellVersionID()),\
-    $(join([inputs[loc].id for loc in project_locations.all], ",")),\
-    $(join([variation_id[loc] for loc in project_locations.varied],",")),\
-    $(getStatusCodeID("Not Started"))
+    $(join([inputs[loc].id for loc in projectLocations().all], ",")),\
+    $(join([variation_id[loc] for loc in projectLocations().varied],",")),\
+    $(statusCodeID("Not Started"))
     )
     RETURNING simulation_id;
     """
@@ -320,8 +322,8 @@ function Simulation(simulation_id::Int)
     if isempty(df)
         error("Simulation $(simulation_id) not in the database.")
     end
-    inputs = [loc => df[1, locationIDName(loc)] for loc in project_locations.all] |> InputFolders
-    variation_id = [loc => df[1, locationVariationIDName(loc)] for loc in project_locations.varied] |> VariationID
+    inputs = [loc => df[1, locationIDName(loc)] for loc in projectLocations().all] |> InputFolders
+    variation_id = [loc => df[1, locationVariationIDName(loc)] for loc in projectLocations().varied] |> VariationID
 
     return Simulation(simulation_id, inputs, variation_id)
 end
@@ -387,11 +389,11 @@ struct Monad <: AbstractMonad
         value_str = """
         (\
         $(currentPhysiCellVersionID()),\
-        $(join([inputs[loc].id for loc in project_locations.all], ",")),\
-        $(join([variation_id[loc] for loc in project_locations.varied],","))\
+        $(join([inputs[loc].id for loc in projectLocations().all], ",")),\
+        $(join([variation_id[loc] for loc in projectLocations().varied],","))\
         ) \
         """
-        monad_id = DBInterface.execute(db,
+        monad_id = DBInterface.execute(centralDB(),
             """
             INSERT OR IGNORE INTO monads $feature_str VALUES $value_str RETURNING monad_id;
             """
@@ -435,8 +437,8 @@ function Monad(monad_id::Integer; n_replicates::Integer=0, use_previous::Bool=tr
     if isempty(df)
         error("Monad $(monad_id) not in the database.")
     end
-    inputs = [loc => df[1, locationIDName(loc)] for loc in project_locations.all] |> InputFolders
-    variation_id = [loc => df[1, locationVariationIDName(loc)] for loc in project_locations.varied] |> VariationID
+    inputs = [loc => df[1, locationIDName(loc)] for loc in projectLocations().all] |> InputFolders
+    variation_id = [loc => df[1, locationVariationIDName(loc)] for loc in projectLocations().varied] |> VariationID
     return Monad(monad_id, inputs, variation_id, n_replicates, use_previous)
 end
 
@@ -456,7 +458,7 @@ end
 Adds a simulation ID to the monad's list of simulation IDs.
 """
 function addSimulationID(monad::Monad, simulation_id::Int)
-    simulation_ids = getSimulationIDs(monad)
+    simulation_ids = simulationIDs(monad)
     if simulation_id in simulation_ids
         return
     end
@@ -484,7 +486,7 @@ function Base.show(io::IO, ::MIME"text/plain", monad::Monad)
 end
 
 function printSimulationIDs(io::IO, T::AbstractTrial, n_indent::Int=1)
-    simulation_ids = getSimulationIDs(T) |> compressIDs
+    simulation_ids = simulationIDs(T) |> compressIDs
     simulation_ids = join(simulation_ids[1], ", ")
     simulation_ids = replace(simulation_ids, ":" => "-")
     println(io, "  "^n_indent, "Simulations: $simulation_ids")
@@ -536,7 +538,7 @@ struct Sampling <: AbstractSampling
             )=\
             (\
             $(currentPhysiCellVersionID()),\
-            $(join([inputs[loc].id for loc in project_locations.all], ","))\
+            $(join([inputs[loc].id for loc in projectLocations().all], ","))\
             );\
             """;
             selection="sampling_id"
@@ -554,7 +556,7 @@ struct Sampling <: AbstractSampling
         end
 
         if id==-1 #! if no previous sampling was found matching these parameters
-            id = DBInterface.execute(db,
+            id = DBInterface.execute(centralDB(),
                 """
                 INSERT INTO samplings \
                 (\
@@ -563,7 +565,7 @@ struct Sampling <: AbstractSampling
                 ) \
                 VALUES(\
                 $(currentPhysiCellVersionID()),\
-                $(join([inputs[loc].id for loc in project_locations.all], ","))\
+                $(join([inputs[loc].id for loc in projectLocations().all], ","))\
                 ) RETURNING sampling_id;
                 """
             ) |> DataFrame |> x -> x.sampling_id[1] #! get the sampling_id
@@ -608,7 +610,7 @@ function Sampling(inputs::InputFolders,
         end
     end
     n = location_variation_ids |> values |> first |> length
-    for loc in setdiff(project_locations.varied, keys(location_variation_ids))
+    for loc in setdiff(projectLocations().varied, keys(location_variation_ids))
         location_variation_ids[loc] = fill(inputs[loc].id==-1 ? -1 : 0, n)
     end
     variation_ids = [([loc => loc_var_ids[i] for (loc, loc_var_ids) in pairs(location_variation_ids)] |> VariationID) for i in 1:n]
@@ -711,7 +713,7 @@ end
 
 function Trial(Ss::AbstractArray{<:AbstractSampling}; n_replicates::Integer=0, use_previous::Bool=true)
     samplings = Sampling.(Ss; n_replicates=n_replicates, use_previous=use_previous)
-    id = getTrialID(samplings)
+    id = trialID(samplings)
     return Trial(id, samplings)
 end
 
@@ -725,11 +727,11 @@ function Trial(trial_id::Int; n_replicates::Integer=0, use_previous::Bool=true)
 end
 
 """
-    getTrialID(samplings::Vector{Sampling})
+    trialID(samplings::Vector{Sampling})
 
 Get the trial ID for a vector of samplings or create a new trial if one does not exist.
 """
-function getTrialID(samplings::Vector{Sampling})
+function trialID(samplings::Vector{Sampling})
     sampling_ids = [sampling.id for sampling in samplings]
     id = -1
     trial_ids = constructSelectQuery("trials"; selection="trial_id") |> queryToDataFrame |> x -> x.trial_id
@@ -744,7 +746,7 @@ function getTrialID(samplings::Vector{Sampling})
     end
 
     if id==-1 #! if no previous trial was found matching these parameters
-        id = DBInterface.execute(db, "INSERT INTO trials (datetime) VALUES($(Dates.format(now(),"yymmddHHMM"))) RETURNING trial_id;") |> DataFrame |> x -> x.trial_id[1] #! get the trial_id
+        id = DBInterface.execute(centralDB(), "INSERT INTO trials (datetime) VALUES($(Dates.format(now(),"yymmddHHMM"))) RETURNING trial_id;") |> DataFrame |> x -> x.trial_id[1] #! get the trial_id
         recordConstituentIDs(Trial, id, sampling_ids) #! record the sampling ids in a .csv file
     end
 
