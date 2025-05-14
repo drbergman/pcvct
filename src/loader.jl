@@ -662,7 +662,7 @@ end
 Load a graph for a snapshot or sequence into a MetaGraph(s).
 
 # Arguments
-- `S::AbstractPhysiCellSequence`: The [`pcvct.AbstractPhysiCellSequence`](@ref) object to load the graph into.
+- `S::AbstractPhysiCellSequence`: The [`AbstractPhysiCellSequence`](@ref) object to load the graph into.
 - `graph`: The type of graph to load (must be one of `:attachments`, `:spring_attachments`, or `:neighbors`). Can also be a string.
 """
 function loadGraph!(snapshot::PhysiCellSnapshot, graph::Symbol)
