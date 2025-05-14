@@ -46,7 +46,7 @@ function resolvePhysiCellVersionID()
     entry_dict = Dict{String,String}()
 
     #! then, compare that hash with remote hashes to identify the tag, repo owner, and date
-    hash_to_tag_dict = getCommitHashToTagDict(physicell_dir)
+    hash_to_tag_dict = commitHashToTagDict(physicell_dir)
     if !repo_is_dirty && haskey(hash_to_tag_dict, commit_hash)
         entry_dict["tag"] = hash_to_tag_dict[commit_hash]
     else
@@ -131,11 +131,11 @@ function gitDirectoryIsClean(dir::String)
 end
 
 """
-    getCommitHashToTagDict(dir::String)
+    commitHashToTagDict(dir::String)
 
 Get a dictionary mapping commit hashes to tags in the git repository at `dir`.
 """
-function getCommitHashToTagDict(dir::String)
+function commitHashToTagDict(dir::String)
     hash_to_tag_dict = Dict{String, String}()
     has_tags = !isempty(readchomp(`git -C $dir tag`))
     if !has_tags

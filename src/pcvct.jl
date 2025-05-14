@@ -278,23 +278,23 @@ readConstituentIDs(T::AbstractTrial) = readConstituentIDs(joinpath(trialFolder(T
 readConstituentIDs(T::Type{<:AbstractTrial}, id::Int) = readConstituentIDs(joinpath(trialFolder(T, id), constituentsTypeFilename(T)))
 
 """
-    getSamplingSimulationIDs(sampling_id::Int)
+    samplingSimulationIDs(sampling_id::Int)
 
 Internal function to get the simulation IDs for a given sampling ID. Users should use [`getSimulationIDs`](@ref) instead.
 """
-function getSamplingSimulationIDs(sampling_id::Int)
+function samplingSimulationIDs(sampling_id::Int)
     monad_ids = readConstituentIDs(Sampling, sampling_id)
     return vcat([readConstituentIDs(Monad, monad_id) for monad_id in monad_ids]...)
 end
 
 """
-    getTrialSimulationIDs(trial_id::Int)
+    trialSimulationIDs(trial_id::Int)
 
 Internal function to get the simulation IDs for a given trial ID. Users should use [`getSimulationIDs`](@ref) instead.
 """
-function getTrialSimulationIDs(trial_id::Int)
+function trialSimulationIDs(trial_id::Int)
     sampling_ids = readConstituentIDs(Trial, trial_id)
-    return vcat([getSamplingSimulationIDs(sampling_id) for sampling_id in sampling_ids]...)
+    return vcat([samplingSimulationIDs(sampling_id) for sampling_id in sampling_ids]...)
 end
 
 """
@@ -317,16 +317,16 @@ getSimulationIDs([trial1, trial2]) # all simulation IDs between trial1 and trial
 getSimulationIDs() = constructSelectQuery("simulations"; selection="simulation_id") |> queryToDataFrame |> x -> x.simulation_id
 getSimulationIDs(simulation::Simulation) = [simulation.id]
 getSimulationIDs(monad::Monad) = readConstituentIDs(monad)
-getSimulationIDs(sampling::Sampling) = getSamplingSimulationIDs(sampling.id)
-getSimulationIDs(trial::Trial) = getTrialSimulationIDs(trial.id)
+getSimulationIDs(sampling::Sampling) = samplingSimulationIDs(sampling.id)
+getSimulationIDs(trial::Trial) = trialSimulationIDs(trial.id)
 getSimulationIDs(Ts::AbstractArray{<:AbstractTrial}) = reduce(vcat, getSimulationIDs.(Ts))
 
 """
-    getTrialMonads(trial_id::Int)
+    trialMonads(trial_id::Int)
 
 Internal function to get the monad IDs for a given trial ID. Users should use [`getMonadIDs`](@ref) instead.
 """
-function getTrialMonads(trial_id::Int)
+function trialMonads(trial_id::Int)
     sampling_ids = readConstituentIDs(Trial, trial_id)
     return vcat([readConstituentIDs(Sampling, sampling_id) for sampling_id in sampling_ids]...)
 end
@@ -350,7 +350,7 @@ getMonadIDs([trial1, trial2]) # all monad IDs between trial1 and trial2
 getMonadIDs() = constructSelectQuery("monads"; selection="monad_id") |> queryToDataFrame |> x -> x.monad_id
 getMonadIDs(monad::Monad) = [monad.id]
 getMonadIDs(sampling::Sampling) = readConstituentIDs(sampling)
-getMonadIDs(trial::Trial) = getTrialMonads(trial.id)
+getMonadIDs(trial::Trial) = trialMonads(trial.id)
 getMonadIDs(Ts::AbstractArray{<:AbstractTrial}) = reduce(vcat, getMonadIDs.(Ts))
 
 ################## Miscellaneous Functions ##################

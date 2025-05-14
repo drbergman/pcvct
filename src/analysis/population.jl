@@ -27,7 +27,7 @@ function populationCount(snapshot::PhysiCellSnapshot, cell_type_to_name_dict::Di
         cell_df = @view snapshot.cells[snapshot.cells.dead .== false, :]
     end
     if isempty(cell_type_to_name_dict)
-        cell_type_to_name_dict = getCellTypeToNameDict(snapshot)
+        cell_type_to_name_dict = cellTypeToNameDict(snapshot)
     end
     cell_type_names = values(cell_type_to_name_dict)
     for cell_type_name in cell_type_names
@@ -404,7 +404,7 @@ end
     end
 
     simulation_id = getSimulationIDs(T) |> first
-    all_cell_types = getCellTypeToNameDict(simulation_id) |> values |> collect
+    all_cell_types = cellTypeToNameDict(simulation_id) |> values |> collect
     include_cell_types = processIncludeCellTypes(include_cell_types, all_cell_types)
     exclude_cell_types = processExcludeCellTypes(exclude_cell_types)
 

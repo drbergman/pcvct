@@ -66,7 +66,7 @@ end
 Set the status code of the simulation to "Failed" and erase the simulation ID from the `simulations.csv` file for the monad it belongs to.
 """
 function simulationFailedToRun(simulation::Simulation, monad_id::Int)
-    DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Failed")) WHERE simulation_id=$(simulation.id);" )
+    DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(statusCodeID("Failed")) WHERE simulation_id=$(simulation.id);" )
     eraseSimulationIDFromConstituents(simulation.id; monad_id=monad_id)
     return
 end
@@ -98,7 +98,7 @@ struct SimulationProcess
         end
     
         path_to_simulation_folder = trialFolder(simulation)
-        DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Running")) WHERE simulation_id=$(simulation.id);" )
+        DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(statusCodeID("Running")) WHERE simulation_id=$(simulation.id);" )
         println("\tRunning simulation: $(simulation.id)...")
         flush(stdout)
         if run_on_hpc
@@ -168,7 +168,7 @@ function resolveSimulation(simulation_process::SimulationProcess, prune_options:
     if success
         rm(path_to_err; force=true)
         rm(joinpath(path_to_simulation_folder, "hpc.err"); force=true)
-        DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Completed")) WHERE simulation_id=$(simulation.id);" )
+        DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(statusCodeID("Completed")) WHERE simulation_id=$(simulation.id);" )
     else
         println("\nWARNING: Simulation $(simulation.id) failed. Please check $(path_to_err) for more information.\n")
         #! write the execution command to output.err
@@ -181,7 +181,7 @@ function resolveSimulation(simulation_process::SimulationProcess, prune_options:
                 println(io, line)
             end
         end
-        DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Failed")) WHERE simulation_id=$(simulation.id);" )
+        DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(statusCodeID("Failed")) WHERE simulation_id=$(simulation.id);" )
         eraseSimulationIDFromConstituents(simulation.id; monad_id=monad_id)
     end
 

@@ -17,7 +17,7 @@ out = run(inputs, discrete_variations; use_previous=false)
 @test out.trial isa Simulation
 sequence = PhysiCellSequence(out.trial.id; include_cells=true, include_substrates=true)
 
-seq_dict = getCellDataSequence(sequence, "elapsed_time_in_phase"; include_dead=true)
+seq_dict = cellDataSequence(sequence, "elapsed_time_in_phase"; include_dead=true)
 
 simulation_population_time_series = pcvct.populationTimeSeries(out.trial; include_dead=true)
 simulation_population_time_series["time"]
@@ -34,8 +34,8 @@ end
 
 @test ismissing(PhysiCellSequence(pruned_simulation_id))
 pruned_simulation = Simulation(pruned_simulation_id)
-@test pcvct.pathToOutputXML(pruned_simulation) |> pcvct.getLabels |> isempty
-@test pcvct.pathToOutputXML(pruned_simulation) |> pcvct.getSubstrateNames |> isempty
+@test pcvct.pathToOutputXML(pruned_simulation) |> pcvct.cellLabels |> isempty
+@test pcvct.pathToOutputXML(pruned_simulation) |> pcvct.substrateNames |> isempty
 
 monad = createTrial(out.trial; n_replicates=0)
 @test monad isa Monad
@@ -49,14 +49,14 @@ monad_population_time_series["time"]
 
 # misc testing
 snapshot = sequence.snapshots[1]
-pcvct.getLabels(snapshot)
-pcvct.getSubstrateNames(snapshot)
+pcvct.cellLabels(snapshot)
+pcvct.substrateNames(snapshot)
 pcvct.loadSubstrates!(sequence)
 pcvct.loadMesh!(sequence)
 snapshot = PhysiCellSnapshot(1, 0)
 sequence = PhysiCellSequence(Simulation(1))
-getCellDataSequence(1, "position")
-getCellDataSequence(Simulation(1), "position")
+cellDataSequence(1, "position")
+cellDataSequence(Simulation(1), "position")
 
 simulation = Simulation(monad)
 out = run(simulation; prune_options=PruneOptions(prune_mat=true))
@@ -82,3 +82,5 @@ txt_pruned_simulation_id = out.trial.id
 @test ismissing(PhysiCellSnapshot(txt_pruned_simulation_id, 0; include_attachments=true))
 @test ismissing(PhysiCellSnapshot(txt_pruned_simulation_id, 0; include_spring_attachments=true))
 @test ismissing(PhysiCellSnapshot(txt_pruned_simulation_id, 0; include_neighbors=true))
+
+@test_warn "`getCellDataSequence` is deprecated. Use `cellDataSequence` instead." getCellDataSequence(sequence, "elapsed_time_in_phase"; include_dead=true)

@@ -19,14 +19,14 @@ A `PhysiCellSequence` is the full sequence of snapshots corresponding to a singl
 As with `PhysiCellSnapshot`'s, these are currently considered internals and their API may change.
 In addition to the path to the PhysiCell output folder and the vector of `PhysiCellSnapshot`'s, it holds metadata for the simulation.
 
-### `getCellDataSequence`
-The main function to get sequences of cell data is `getCellDataSequence`.
+### `cellDataSequence`
+The main function to get sequences of cell data is `cellDataSequence`.
 It accepts any of a simulation ID (`<:Integer`), a simulation (`::Simulation`), or a sequence (`::PhysiCellSequence`) and either a single label (`::String`) or a vector of labels (`::Vector{String}`).
 For each cell in the simulation (as determined by the cell ID), the output creates a dictionary entry (the key is the integer cell ID) whose value is a named tuple with the input labels as keys as well as `:time`.
 This means that if one sets
 
 ```julia
-data = getCellDataSequence(1, "position")
+data = cellDataSequence(1, "position")
 ```
 Then one can access the positions of the cell with ID 78 by
 ```julia
@@ -40,7 +40,7 @@ using Plots
 plot(cell_78_times, cell_78_positions[:,1])
 ```
 
-**Note**: Each call to `getCellDataSequence` will load *all* the data unless a `PhysiCellSequence` is passed in.
+**Note**: Each call to `cellDataSequence` will load *all* the data unless a `PhysiCellSequence` is passed in.
 Plan your analyses accordingly as loading simulation data is not fast.
 
 ## Population plots

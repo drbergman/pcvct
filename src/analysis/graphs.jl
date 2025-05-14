@@ -34,7 +34,7 @@ As of this writing, the vertex labels are the simple `AgentID` class that wraps 
 """
 function connectedComponents(snapshot::PhysiCellSnapshot, graph::Symbol=:neighbors; include_cell_types=:all_in_one, exclude_cell_types=String[], include_dead::Bool=false)
     is_all_in_one = include_cell_types == :all_in_one
-    cell_type_to_name_dict = getCellTypeToNameDict(snapshot)
+    cell_type_to_name_dict = cellTypeToNameDict(snapshot)
     cell_type_names = values(cell_type_to_name_dict) |> collect
     include_cell_types = processIncludeCellTypes(include_cell_types, cell_type_names)
     exclude_cell_types = processExcludeCellTypes(exclude_cell_types)

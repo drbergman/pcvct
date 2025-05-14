@@ -8,7 +8,7 @@ hashBorderPrint(str)
 simulation_id = 1
 simulation = Simulation(simulation_id)
 snapshot = PhysiCellSnapshot(simulation_id, :initial)
-cell_types = pcvct.getCellTypeToNameDict(simulation) |> values |> collect
+cell_types = pcvct.cellTypeToNameDict(simulation) |> values |> collect
 result = pcf(simulation, cell_types[1])
 
 plot(result)
@@ -43,6 +43,6 @@ result = pcvct.pcf(simulation_id, :final, cell_types[1])
 
 simulation_id = sampling_from_import |> getSimulationIDs |> first
 snapshot = PhysiCellSnapshot(simulation_id, :final)
-cell_types = pcvct.getCellTypeToNameDict(snapshot) |> values |> collect
+cell_types = pcvct.cellTypeToNameDict(snapshot) |> values |> collect
 result = pcvct.pcf(snapshot, cell_types[1], cell_types[2])
 @test_throws ArgumentError pcvct.pcf(snapshot, cell_types[1], cell_types[1:2])
