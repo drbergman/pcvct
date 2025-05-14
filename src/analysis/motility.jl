@@ -67,15 +67,15 @@ Each cell type taken on by a given cell will be a key in the dictionary returned
 - `direction::Symbol`: The direction to compute the mean speed. Can be `:x`, `:y`, `:z`, or `:any` (default). If `:x`, for example, the mean speed is calculated using only the x component of the cell's movement.
 
 # Returns
-- `Vector{Dict{String, NamedTuple}}`: A vector of dictionaries, one per cell in the simulation. Each dictionary has keys for each cell type taken on by the cell. The values are NamedTuples with fields `:time`, `:distance`, and `:speed`.
+- `AgentDict{Dict{String, NamedTuple}}`: An [`AgentDict`](@ref), i.e., one entry per cell in the simulation. Each dictionary has keys for each cell type taken on by the cell. The values are NamedTuples with fields `:time`, `:distance`, and `:speed`.
 
 # Example
 ```julia
-ms = motilityStatistics(1) # a vector of dictionaries, one per cell in the simulation
-ms[1]["epithelial"] # NamedTuple with fields :time, :distance, :speed for the first cell in the simulation corresponding to its time as an `epithelial` cell
-ms[1]["mesenchymal"].time # time spent as a `mesenchymal` cell for the first cell in the simulation
-ms[1]["mesenchymal"].distance # distance traveled as a `mesenchymal` cell for the first cell in the simulation
-ms[1]["mesenchymal"].speed # mean speed as a `mesenchymal` cell for the first cell in the simulation
+ms = motilityStatistics(1) # an AgentDict{Dict{String, NamedTuple}}, one per cell in the simulation
+ms[1]["epithelial"] # NamedTuple with fields :time, :distance, :speed for the cell with ID 1 in the simulation corresponding to its time as an `epithelial` cell
+ms[1]["mesenchymal"].time # time spent as a `mesenchymal` cell for the cell with ID 1 in the simulation
+ms[1]["mesenchymal"].distance # distance traveled as a `mesenchymal` cell for the cell with ID 1 in the simulation
+ms[1]["mesenchymal"].speed # mean speed as a `mesenchymal` cell for the cell with ID 1 in the simulation
 ```
 """
 function motilityStatistics(simulation_id::Integer; direction=:any)
@@ -83,8 +83,8 @@ function motilityStatistics(simulation_id::Integer; direction=:any)
     if ismissing(sequence)
         return missing
     end
-    pos = getCellDataSequence(sequence, "position"; include_dead=false, include_cell_type=true)
-    return [_motilityStatistics(p; direction=direction) for p in values(pos) if length(p.time) > 1]
+    pos = cellDataSequence(sequence, "position"; include_dead=false, include_cell_type_name=true)
+    return [k => _motilityStatistics(p; direction=direction) for (k, p) in pairs(pos) if length(p.time) > 1] |> AgentDict
 end
 
 motilityStatistics(simulation::Simulation; direction=:any) = motilityStatistics(simulation.id; direction=direction)

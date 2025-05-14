@@ -115,8 +115,8 @@ config_folder = "default"
 custom_codes = "default"
 inputs = InputFolders(config_folder, custom_codes)
 n_replicates = 3
-evs = [NormalDistributedVariation(pcvct.apoptosisPath("cancer", "rate"), 1e-3, 1e-4; lb=0),
-       UniformDistributedVariation(pcvct.cyclePath("cancer", "phase_durations", "duration:index:0"), 720, 2880)]
+evs = [NormalDistributedVariation(configPath("cancer", "apoptosis", "rate"), 1e-3, 1e-4; lb=0),
+       UniformDistributedVariation(configPath("cancer", "cycle", "duration", 0), 720, 2880)]
 method = MOAT(15)
 sensitivity_sampling = run(method, inputs, n_replicates, evs)
 ```

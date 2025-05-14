@@ -24,7 +24,7 @@ Returns the version of the pcvct database. If the database does not exist, it cr
 function pcvctDBVersion(is_new_db::Bool)
     #! check if versions table exists
     table_name = "pcvct_version"
-    versions_exists = DBInterface.execute(db, "SELECT name FROM sqlite_master WHERE type='table' AND name='$(table_name)';") |> DataFrame |> x -> (length(x.name)==1)
+    versions_exists = DBInterface.execute(centralDB(), "SELECT name FROM sqlite_master WHERE type='table' AND name='$(table_name)';") |> DataFrame |> x -> (length(x.name)==1)
     if !versions_exists
         createPCVCTVersionTable(is_new_db)
     end
@@ -39,9 +39,9 @@ If is_new_db is true, it inserts the current pcvct version into the table.
 """
 function createPCVCTVersionTable(is_new_db::Bool)
     table_name = "pcvct_version"
-    DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS $(table_name) (version TEXT PRIMARY KEY);")
+    DBInterface.execute(centralDB(), "CREATE TABLE IF NOT EXISTS $(table_name) (version TEXT PRIMARY KEY);")
     version = is_new_db ? pcvctVersion() : v"0.0.0"
-    DBInterface.execute(db, "INSERT INTO $(table_name) (version) VALUES ('$version');")
+    DBInterface.execute(centralDB(), "INSERT INTO $(table_name) (version) VALUES ('$version');")
 end
 
 """

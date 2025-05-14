@@ -18,7 +18,8 @@ n_replicates = 1
 
 dv1 = DiscreteVariation(["overall", "max_time"], 12.0)
 dv2 = DiscreteVariation(icECMPath(2, "ellipse", 1, "density"), [0.25, 0.75])
-out = run(inputs, [dv1, dv2]; n_replicates=n_replicates)
+dv3 = DiscreteVariation(icECMPath(2, "ellipse_with_shell", 1, "interior", "density"), 0.2)
+out = run(inputs, [dv1, dv2, dv3]; n_replicates=n_replicates)
 
 macros_lines = pcvct.readMacrosFile(out.trial)
 @test "ADDON_PHYSIECM" in macros_lines
