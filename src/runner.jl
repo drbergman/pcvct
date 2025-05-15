@@ -259,19 +259,23 @@ function collectSimulationTasks(trial::Trial; force_recompile::Bool=false)
 end
 
 """
-    PCVCTOutput
+    PCVCTOutput{T<:AbstractTrial}
 
 A struct to hold the output of the PCVCT run, including the [`AbstractTrial`](@ref) object, the number of scheduled simulations, and the number of successful simulations.
 
 # Fields
-- `trial::AbstractTrial`: The trial, sampling, monad, or simulation that was run.
+- `trial::T`: The trial, sampling, monad, or simulation that was run.
 - `n_scheduled::Int`: The number of simulations that were scheduled to run.
 - `n_success::Int`: The number of simulations that were successfully completed.
 """
-struct PCVCTOutput
-    trial::AbstractTrial
+struct PCVCTOutput{T<:AbstractTrial}
+    trial::T
     n_scheduled::Int
     n_success::Int
+
+    function PCVCTOutput(trial::T, n_scheduled::Int, n_success::Int) where T<:AbstractTrial
+        new{T}(trial, n_scheduled, n_success)
+    end
 end
 
 function Base.show(io::IO, ::MIME"text/plain", output::PCVCTOutput)

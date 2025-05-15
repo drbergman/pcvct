@@ -53,22 +53,22 @@ Each panel will correspond to a `Monad` (replicates using the same parameter val
 
 Finer-grained control of the output is possible, too!
 - to include dead cells in your counts: `plot(...; ..., include_dead=true, ...)`
-- select a subset of cell types to include: `plot(...; ..., include_cell_types="cancer", ...)`
-- select a subset of cell types to exclude: `plot(...; ..., exclude_cell_types="cancer", ...)`
+- select a subset of cell types to include: `plot(...; ..., include_cell_type_names="cancer", ...)`
+- select a subset of cell types to exclude: `plot(...; ..., exclude_cell_type_names="cancer", ...)`
 
-The `include_cell_types` and `exclude_cell_types` can also accept a `Vector{String}` to include or exclude certain cell types, respectively.
-Furthermore, if the value of `include_cell_types` is a `Vector` and one of its entries is a `Vector{String}`, pcvct will interpret this to sum up those cell types.
+The `include_cell_type_names` and `exclude_cell_type_names` can also accept a `Vector{String}` to include or exclude certain cell types, respectively.
+Furthermore, if the value of `include_cell_type_names` is a `Vector` and one of its entries is a `Vector{String}`, pcvct will interpret this to sum up those cell types.
 In other words, to get the total tumor cell count in addition to the epithelial (`"epi"`) and mesenchymal (`"mes"`) components, you could use
 ```julia
 using Plots
-plot(Monad(1); include_cell_types=["epi", "mes", ["epi", "mes"]])
+plot(Monad(1); include_cell_type_names=["epi", "mes", ["epi", "mes"]])
 ``` 
 
 Finally, this makes use of Julia's Plot Recipes (see [RecipesBase.jl](https://docs.juliaplots.org/stable/RecipesBase/)) so any standard plotting keywords can be passed in:
 ```julia
 using Plots
 colors = [:blue :red] # Note the absence of a `,` or `;`. This is how Julia requires different series parameters to be passed in 
-plot(Simulation(1); color=colors, include_cell_types=["cd8", "cancer"]) # will plot cd8s in blue and cancer in red.
+plot(Simulation(1); color=colors, include_cell_type_names=["cd8", "cancer"]) # will plot cd8s in blue and cancer in red.
 ```
 
 ### Group by cell type
@@ -78,7 +78,7 @@ Everything above for `plot` applies here.
 
 ```julia
 using Plots
-plotbycelltype(Sampling(1); include_cell_types=["epi", "mes", ["epi", "mes"]], color=[:blue :red :purple], labels=["epi" "mes" "both"], legend=true)
+plotbycelltype(Sampling(1); include_cell_type_names=["epi", "mes", ["epi", "mes"]], color=[:blue :red :purple], labels=["epi" "mes" "both"], legend=true)
 ```
 
 ## Substrate analysis
@@ -218,7 +218,7 @@ If you want to compute connected components for subsets of cells, pass in a vect
 ```julia
 subset_1 = ["cd8_active", "cd8_inactive"]
 subset_2 = ["cancer_epi", "cancer_mes"]
-connected_components = connectedComponents(snapshot; include_cell_types=[subset_1, subset_2])
+connected_components = connectedComponents(snapshot; include_cell_type_names=[subset_1, subset_2])
 ```
 In this case, the `connected_components` object is a `Dict` with `subset_1` and `subset_2` as the keys (the values stored in them, not the strings `"subset_1"` and `"subset_2"`).
 The value `connected_components[subset_1]` is a vector of vectors of the cell IDs belonging to each connected component just considering the cells in `subset_1`.

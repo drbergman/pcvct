@@ -731,9 +731,9 @@ function graphInfo(g::MetaGraph)
 end
 
 """
-    cellDataSequence(simulation_id::Integer, labels::Vector{String}; include_dead::Bool=false, include_cell_type::Bool=false)
+    cellDataSequence(simulation_id::Integer, labels::Vector{String}; include_dead::Bool=false, include_cell_type_name::Bool=false)
 
-Return a dictionary where the keys are cell IDs from the PhysiCell simulation and the values are NamedTuples containing the time and the values of the specified labels for that cell.
+Return an [`AgentDict`](@ref) where the keys are cell IDs from the PhysiCell simulation and the values are NamedTuples containing the time and the values of the specified labels for that cell.
 
 For scalar values, such as `volume`, the values are in a length `N` vector, where `N` is the number of snapshots in the simulation.
 In the case of a label that has multiple columns, such as `position`, the values are concatenated into a length(snapshots) x number of columns array.
@@ -743,12 +743,12 @@ Note: If doing multiple calls to this function, it is recommended to use the `Ph
 - `simulation_id::Integer`: The ID of the PhysiCell simulation. Alternatively, can be a `Simulation` object or a `PhysiCellSequence` object.
 - `labels::Vector{String}`: The labels to extract from the cell data. If a label has multiple columns, such as `position`, the columns are concatenated into a single array. Alternatively, a single label string can be passed.
 - `include_dead::Bool=false`: Whether to include dead cells in the data.
-- `include_cell_type::Bool=false`: Whether to include the cell type name in the data. Equivalent to including `\"cell_type_name\"` in `labels`.
+- `include_cell_type_name::Bool=false`: Whether to include the cell type name in the data. Equivalent to including `\"cell_type_name\"` in `labels`.
 
 # Examples
 ```
-data = cellDataSequence(sequence, ["position", "elapsed_time_in_phase"]; include_dead=true, include_cell_type=true)
-data[1] # the first cell's data
+data = cellDataSequence(sequence, ["position", "elapsed_time_in_phase"]; include_dead=true, include_cell_type_name=true)
+data[1] # the data for cell with ID 1
 data[1].position # an Nx3 array of the cell's position over time
 data[1].elapsed_time_in_phase # an Nx1 array of the cell's elapsed time in phase over time
 data[1].cell_type_name # an Nx1 array of the cell type name of the first cell over time
@@ -776,7 +776,7 @@ function cellDataSequence(sequence::PhysiCellSequence, label::String; kwargs...)
     return cellDataSequence(sequence, [label]; kwargs...)
 end
 
-function cellDataSequence(sequence::PhysiCellSequence, labels::Vector{String}; include_dead::Bool=false, include_cell_type::Bool=false)
+function cellDataSequence(sequence::PhysiCellSequence, labels::Vector{String}; include_dead::Bool=false, include_cell_type_name::Bool=false)
     loadCells!(sequence)
     cell_features = cellLabels(sequence)
     label_features = Symbol[]
@@ -798,7 +798,7 @@ function cellDataSequence(sequence::PhysiCellSequence, labels::Vector{String}; i
         end
     end
     labels = Symbol.(labels)
-    if include_cell_type && !(:cell_type_name in labels)
+    if include_cell_type_name && !(:cell_type_name in labels)
         push!(labels, :cell_type_name)
         push!(label_features, :cell_type_name)
         temp_dict[:cell_type_name] = [:cell_type_name]

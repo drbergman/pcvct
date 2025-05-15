@@ -83,7 +83,7 @@ function motilityStatistics(simulation_id::Integer; direction=:any)
     if ismissing(sequence)
         return missing
     end
-    pos = cellDataSequence(sequence, "position"; include_dead=false, include_cell_type=true)
+    pos = cellDataSequence(sequence, "position"; include_dead=false, include_cell_type_name=true)
     return [k => _motilityStatistics(p; direction=direction) for (k, p) in pairs(pos) if length(p.time) > 1] |> AgentDict
 end
 

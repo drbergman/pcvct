@@ -287,17 +287,17 @@ Return the mean counts of a population time series.
 getMeanCounts(s::SimulationPopulationTimeSeries) = s.cell_count
 getMeanCounts(m::MonadPopulationTimeSeries) = [k => v.mean for (k, v) in pairs(m.cell_count)] |> Dict
 
-@recipe function f(M::AbstractMonad; include_dead=false, include_cell_types=:all, exclude_cell_types=String[])
+@recipe function f(M::AbstractMonad; include_dead=false, include_cell_type_names=:all, exclude_cell_type_names=String[])
     pts = populationTimeSeries(M; include_dead=include_dead)
     #! allow for single string input for either of these
-    include_cell_types = processIncludeCellTypes(include_cell_types, keys(pts; exclude_time=true) |> collect)
-    exclude_cell_types = processExcludeCellTypes(exclude_cell_types)
+    include_cell_type_names = processIncludeCellTypes(include_cell_type_names, keys(pts; exclude_time=true) |> collect)
+    exclude_cell_type_names = processExcludeCellTypes(exclude_cell_type_names)
 
-    for k in include_cell_types
+    for k in include_cell_type_names
         if k isa String
             k = [k] #! standardize so that all are vectors
         end
-        setdiff!(k, exclude_cell_types) #! remove any cell types that are to be excluded (also removes duplicates)
+        setdiff!(k, exclude_cell_type_names) #! remove any cell types that are to be excluded (also removes duplicates)
         if isempty(k)
             continue #! skip if all cell types were excluded
         end
@@ -331,7 +331,7 @@ getMeanCounts(m::MonadPopulationTimeSeries) = [k => v.mean for (k, v) in pairs(m
     end
 end
 
-@recipe function f(sampling::Sampling; include_dead=false, include_cell_types=:all, exclude_cell_types=String[])
+@recipe function f(sampling::Sampling; include_dead=false, include_cell_type_names=:all, exclude_cell_type_names=String[])
     df = pcvct.simulationsTable(sampling)
     monads = []
     title_tuples = []
@@ -356,22 +356,23 @@ end
             subplot := i
             legend := false
             include_dead --> include_dead
-            include_cell_types --> include_cell_types
-            exclude_cell_types --> exclude_cell_types
+            include_cell_type_names --> include_cell_type_names
+            exclude_cell_type_names --> exclude_cell_type_names
             monad
         end
     end
 end
 
-@recipe function f(::Type{PCVCTOutput}, out::PCVCTOutput)
-    if out.trial isa Trial
-        throw(ArgumentError("Plotting an entire trial not (yet?) defined. Break it down into at least Samplings first."))
-    end
+@recipe function f(::Type{PCVCTOutput{T}}, out::PCVCTOutput{T}) where T <: AbstractSampling
     out.trial
 end
 
+@recipe function f(::Type{PCVCTOutput{Trial}}, out::PCVCTOutput{Trial})
+    throw(ArgumentError("Plotting an entire trial not (yet?) defined. Break it down into at least Samplings first."))
+end
+
 """
-    plotbycelltype(T::AbstractTrial; include_dead::Bool=false, include_cell_types=:all, exclude_cell_types=String[])
+    plotbycelltype(T::AbstractTrial; include_dead::Bool=false, include_cell_type_names=:all, exclude_cell_type_names=String[])
 
 Plot the population time series of a trial by cell type.
 
@@ -388,7 +389,7 @@ struct CellTypeInMonads
     cell_count_stds::Vector{Vector{Real}}
 end
 
-@recipe function f(p::PlotByCellType; include_dead=false, include_cell_types=:all, exclude_cell_types=String[])
+@recipe function f(p::PlotByCellType; include_dead=false, include_cell_type_names=:all, exclude_cell_type_names=String[])
     @assert length(p.args) == 1 "Expected exactly 1 argument, got $(length(p.args))."
     if (p.args[1] isa PCVCTOutput)
         T = p.args[1].trial
@@ -405,8 +406,8 @@ end
 
     simulation_id = getSimulationIDs(T) |> first
     all_cell_types = cellTypeToNameDict(simulation_id) |> values |> collect
-    include_cell_types = processIncludeCellTypes(include_cell_types, all_cell_types)
-    exclude_cell_types = processExcludeCellTypes(exclude_cell_types)
+    include_cell_type_names = processIncludeCellTypes(include_cell_type_names, all_cell_types)
+    exclude_cell_type_names = processExcludeCellTypes(exclude_cell_type_names)
 
     monad_summary = Dict{Int,Any}()
     all_cell_types = Set()
@@ -423,11 +424,11 @@ end
             else
                 @assert time == spts.time "Simulations $(simulation_ids[1]) and $(simulation_id) in monad $(monad.id) have different times in their time series."
             end
-            for k in include_cell_types
+            for k in include_cell_type_names
                 if k isa String
                     k = [k] #! standardize so that all are vectors
                 end
-                setdiff!(k, exclude_cell_types) #! remove any cell types that are to be excluded (also removes duplicates)
+                setdiff!(k, exclude_cell_type_names) #! remove any cell types that are to be excluded (also removes duplicates)
                 if isempty(k)
                     continue #! skip if all cell types were excluded
                 end

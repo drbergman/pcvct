@@ -236,7 +236,7 @@ constituentsType(T::AbstractTrial) = constituentsType(typeof(T))
 
 Return the filename of the constituents of `T`. Used in the [`readConstituentIDs`](@ref) function.
 """
-constituentsTypeFilename(T) = "$(constituentsType(T))s.csv"
+constituentsTypeFilename(T) = "$(T |> constituentsType |> lowerClassString)s.csv"
 
 """
     readConstituentIDs(T::AbstractTrial)
@@ -354,15 +354,6 @@ getMonadIDs(trial::Trial) = trialMonads(trial.id)
 getMonadIDs(Ts::AbstractArray{<:AbstractTrial}) = reduce(vcat, getMonadIDs.(Ts))
 
 ################## Miscellaneous Functions ##################
-
-# """
-#     trialFolder(lower_class_str::AbstractString, id::Int)
-
-# Return the path to the [`AbstractTrial`](@ref) folder for a given class string and ID.
-# """
-# function trialFolder(lower_class_str::AbstractString, id::Int)
-#     return joinpath(data_dir, "outputs", lower_class_str * "s", string(id))
-# end
 
 """
     trialFolder(T::Type{<:AbstractTrial}, id::Int)

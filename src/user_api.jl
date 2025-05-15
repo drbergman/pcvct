@@ -111,6 +111,10 @@ end
 
 run(inputs::InputFolders, args...; kwargs...) = run(GridVariation(), inputs, args...; kwargs...)
 
-function run(reference::AbstractMonad, avs::Union{AbstractVariation,Vector{<:AbstractVariation}}; kwargs...)
+function run(reference::AbstractMonad, av1::AbstractVariation, avs::Vararg{AbstractVariation}; kwargs...)
+    return run(GridVariation(), reference, [av1; avs...]; kwargs...)
+end
+
+function run(reference::AbstractMonad, avs::Vector{<:AbstractVariation}; kwargs...)
     return run(GridVariation(), reference, avs; kwargs...)
 end
