@@ -30,13 +30,13 @@ pcvct.processIncludeCellTypes(["epi", "mes", ["epi", "mes"]], all_cell_types)
 
 pcvct.processExcludeCellTypes("cancer")
 @test_throws ArgumentError pcvct.processExcludeCellTypes(:mes)
-plot(out; include_cell_type_names="default", exclude_ctns="default")
+plot(out; include_cell_type_names="default", exclude_cell_type_names="default")
 
 plot(sampling_from_import; include_cell_type_names=[["fast T cell", "slow T cell", "effector T cell", "exhausted T cell"]])
 
 @test_throws ArgumentError plot(run(Trial(1)))
 
-plotbycelltype(sampling_from_import; include_cell_type_names="fast T cell", exclude_ctns="fast T cell")
+plotbycelltype(sampling_from_import; include_cell_type_names="fast T cell", exclude_cell_type_names="fast T cell")
 
 @test ismissing(PhysiCellSnapshot(pruned_simulation_id, :initial))
 @test ismissing(finalPopulationCount(pruned_simulation_id))

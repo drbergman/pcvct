@@ -15,9 +15,13 @@ push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], 6.0))
 
 out = run(inputs, discrete_variations; use_previous=false)
 @test out.trial isa Simulation
+cell_labels = pcvct.cellLabels(out.trial)
+substrate_names = pcvct.substrateNames(out.trial)
 sequence = PhysiCellSequence(out.trial.id; include_cells=true, include_substrates=true)
 
 seq_dict = cellDataSequence(sequence, "elapsed_time_in_phase"; include_dead=true)
+@test length(seq_dict) == length(seq_dict.dict)
+@test seq_dict[pcvct.AgentID(0)] == seq_dict[0]
 @test_warn "`getCellDataSequence` is deprecated. Use `cellDataSequence` instead." getCellDataSequence(sequence, "elapsed_time_in_phase"; include_dead=true)
 
 simulation_population_time_series = pcvct.populationTimeSeries(out.trial; include_dead=true)
