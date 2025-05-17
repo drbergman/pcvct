@@ -32,7 +32,7 @@ hashBorderPrint("SUCCESSFULLY CREATED SAMPLING WITH IC CELL VARIATION!")
 
 @test out.n_success == length(out.trial)
 
-simulation_with_ic_cell_xml_id = getSimulationIDs(out.trial)[1] #! used in ExportTests.jl
+simulation_with_ic_cell_xml_id = simulationIDs(out.trial)[1] #! used in ExportTests.jl
 
 hashBorderPrint("SUCCESSFULLY RAN SAMPLING WITH IC CELL VARIATION!")
 

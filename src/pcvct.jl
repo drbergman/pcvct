@@ -3,7 +3,7 @@ module pcvct
 using SQLite, DataFrames, LightXML, Dates, CSV, Tables, Distributions, Statistics, Random, QuasiMonteCarlo, Sobol, Compat
 using PhysiCellXMLRules, PhysiCellCellCreator
 
-export initializeModelManager, getSimulationIDs, setNumberOfParallelSims, getMonadIDs
+export initializeModelManager, simulationIDs, setNumberOfParallelSims, getMonadIDs, getSimulationIDs
 
 #! put these first as they define classes the rest rely on
 include("classes.jl")
@@ -280,7 +280,7 @@ readConstituentIDs(T::Type{<:AbstractTrial}, id::Int) = readConstituentIDs(joinp
 """
     samplingSimulationIDs(sampling_id::Int)
 
-Internal function to get the simulation IDs for a given sampling ID. Users should use [`getSimulationIDs`](@ref) instead.
+Internal function to get the simulation IDs for a given sampling ID. Users should use [`simulationIDs`](@ref) instead.
 """
 function samplingSimulationIDs(sampling_id::Int)
     monad_ids = readConstituentIDs(Sampling, sampling_id)
@@ -290,7 +290,7 @@ end
 """
     trialSimulationIDs(trial_id::Int)
 
-Internal function to get the simulation IDs for a given trial ID. Users should use [`getSimulationIDs`](@ref) instead.
+Internal function to get the simulation IDs for a given trial ID. Users should use [`simulationIDs`](@ref) instead.
 """
 function trialSimulationIDs(trial_id::Int)
     sampling_ids = readConstituentIDs(Trial, trial_id)
@@ -298,7 +298,7 @@ function trialSimulationIDs(trial_id::Int)
 end
 
 """
-    getSimulationIDs()
+    simulationIDs()
 
 Return a vector of all simulation IDs in the database.
 
@@ -306,20 +306,30 @@ Alternate forms take a simulation, monad, sampling, or trial object (or an array
 
 # Examples
 ```julia
-getSimulationIDs() # all simulation IDs in the database
-getSimulationIDs(simulation) # just a vector with the simulation ID, i.e. [simulation.id]
-getSimulationIDs(monad) # all simulation IDs in a monad
-getSimulationIDs(sampling) # all simulation IDs in a sampling
-getSimulationIDs(trial) # all simulation IDs in a trial
-getSimulationIDs([trial1, trial2]) # all simulation IDs between trial1 and trial2
+simulationIDs() # all simulation IDs in the database
+simulationIDs(simulation) # just a vector with the simulation ID, i.e. [simulation.id]
+simulationIDs(monad) # all simulation IDs in a monad
+simulationIDs(sampling) # all simulation IDs in a sampling
+simulationIDs(trial) # all simulation IDs in a trial
+simulationIDs([trial1, trial2]) # all simulation IDs between trial1 and trial2
 ```
 """
-getSimulationIDs() = constructSelectQuery("simulations"; selection="simulation_id") |> queryToDataFrame |> x -> x.simulation_id
-getSimulationIDs(simulation::Simulation) = [simulation.id]
-getSimulationIDs(monad::Monad) = readConstituentIDs(monad)
-getSimulationIDs(sampling::Sampling) = samplingSimulationIDs(sampling.id)
-getSimulationIDs(trial::Trial) = trialSimulationIDs(trial.id)
-getSimulationIDs(Ts::AbstractArray{<:AbstractTrial}) = reduce(vcat, getSimulationIDs.(Ts))
+simulationIDs() = constructSelectQuery("simulations"; selection="simulation_id") |> queryToDataFrame |> x -> x.simulation_id
+simulationIDs(simulation::Simulation) = [simulation.id]
+simulationIDs(monad::Monad) = readConstituentIDs(monad)
+simulationIDs(sampling::Sampling) = samplingSimulationIDs(sampling.id)
+simulationIDs(trial::Trial) = trialSimulationIDs(trial.id)
+simulationIDs(Ts::AbstractArray{<:AbstractTrial}) = reduce(vcat, simulationIDs.(Ts))
+
+"""
+    getSimulationIDs(args...)
+
+Deprecated alias for [`simulationIDs`](@ref). Use `simulationIDs` instead.
+"""
+function getSimulationIDs(args...)
+    Base.depwarn("`getSimulationIDs` is deprecated. Use `simulationIDs` instead.", :getSimulationIDs; force=true)
+    return simulationIDs(args...)
+end
 
 """
     trialMonads(trial_id::Int)

@@ -27,7 +27,7 @@ All the inputs and variations must be the same for all associated simulations.
 """
 abstract type AbstractMonad <: AbstractSampling end
 
-Base.length(T::AbstractTrial) = getSimulationIDs(T) |> length
+Base.length(T::AbstractTrial) = simulationIDs(T) |> length
 
 ##########################################
 ############   InputFolders   ############
@@ -456,7 +456,7 @@ end
 Adds a simulation ID to the monad's list of simulation IDs.
 """
 function addSimulationID(monad::Monad, simulation_id::Int)
-    simulation_ids = getSimulationIDs(monad)
+    simulation_ids = simulationIDs(monad)
     if simulation_id in simulation_ids
         return
     end
@@ -484,7 +484,7 @@ function Base.show(io::IO, ::MIME"text/plain", monad::Monad)
 end
 
 function printSimulationIDs(io::IO, T::AbstractTrial, n_indent::Int=1)
-    simulation_ids = getSimulationIDs(T) |> compressIDs
+    simulation_ids = simulationIDs(T) |> compressIDs
     simulation_ids = join(simulation_ids[1], ", ")
     simulation_ids = replace(simulation_ids, ":" => "-")
     println(io, "  "^n_indent, "Simulations: $simulation_ids")

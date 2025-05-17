@@ -86,7 +86,7 @@ function _createTrial(method::AddVariationMethod, inputs::InputFolders, referenc
         if n_replicates != 1
             return monad
         end
-        return Simulation(getSimulationIDs(monad)[end])
+        return Simulation(simulationIDs(monad)[end])
     else
         location_variation_ids = [loc => [variation_id[loc] for variation_id in all_variation_ids] for loc in project_locations.varied] |>
             Dict{Symbol,Union{Integer,AbstractArray{<:Integer}}}

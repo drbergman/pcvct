@@ -77,7 +77,7 @@ makeMovie(sampling) # make movies for all simulations in sampling
 ```
 """
 function makeMovie(T::Union{AbstractTrial,PCVCTOutput}; kwargs...)
-    simulation_ids = getSimulationIDs(T)
+    simulation_ids = simulationIDs(T)
     println("Making movies for $(typeof(T)) $(T.id) with $(length(simulation_ids)) simulations...")
     for simulation_id in simulation_ids
         print("  Making movie for simulation $simulation_id...")

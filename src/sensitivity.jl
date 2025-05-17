@@ -30,7 +30,7 @@ Store the information that comes out of a global sensitivity analysis method.
 
 # Methods
 [`calculateGSA!`](@ref), [`evaluateFunctionOnSampling`](@ref),
-[`getMonadIDDataFrame`](@ref), [`getSimulationIDs`](@ref), [`methodString`](@ref),
+[`getMonadIDDataFrame`](@ref), [`simulationIDs`](@ref), [`methodString`](@ref),
 [`sensitivityResults!`](@ref), [`recordSensitivityScheme`](@ref)
 """
 abstract type GSASampling end
@@ -43,11 +43,11 @@ Get the DataFrame of monad IDs that define the scheme of the sensitivity analysi
 getMonadIDDataFrame(gsa_sampling::GSASampling) = gsa_sampling.monad_ids_df
 
 """
-    getSimulationIDs(gsa_sampling::GSASampling)
+    simulationIDs(gsa_sampling::GSASampling)
 
 Get the simulation IDs that were run in the sensitivity analysis.
 """
-getSimulationIDs(gsa_sampling::GSASampling) = getSimulationIDs(gsa_sampling.sampling)
+simulationIDs(gsa_sampling::GSASampling) = simulationIDs(gsa_sampling.sampling)
 
 """
     methodString(gsa_sampling::GSASampling)

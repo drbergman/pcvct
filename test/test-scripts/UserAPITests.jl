@@ -16,7 +16,7 @@ out = run(method, inputs, dv)
 
 method = LHSVariation(3)
 dv = UniformDistributedVariation(["overall","max_time"], 12.0, 20.0)
-reference = getSimulationIDs(out)[1] |> Simulation
+reference = simulationIDs(out)[1] |> Simulation
 out = run(method, reference, dv)
 
 method = SobolVariation(4)

@@ -71,7 +71,7 @@ sampling = Sampling(inputs, location_variation_ids)
 location_variation_ids = Dict{Symbol,Union{Integer,AbstractArray{<:Integer}}}(:config => [0], :rulesets_collection => -1, :ic_cell => -1)
 sampling = Sampling(inputs, location_variation_ids)
 sampling = Sampling(Monad(1))
-all_monads = getSimulationIDs() .|> Simulation .|> Monad
+all_monads = simulationIDs() .|> Simulation .|> Monad
 all_monad_ids = [monad.id for monad in all_monads] |> unique
 trial = Trial(Monad.(all_monad_ids))
 

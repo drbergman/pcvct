@@ -216,9 +216,15 @@ end
 Base.getindex(d::AgentDict, args...) = getindex(d.dict, args...)
 Base.length(d::AgentDict) = length(d.dict)
 Base.iterate(d::AgentDict, args...) = iterate(d.dict, args...)
+Base.haskey(d::AgentDict, k::AgentID) = haskey(d.dict, k)
+Base.setindex!(d::AgentDict, v, k::AgentID) = setindex!(d.dict, v, k)
+Base.delete!(d::AgentDict, k::AgentID) = delete!(d.dict, k)
 
 #! allow users to use integers as keys
 Base.getindex(d::AgentDict, k::Integer) = d.dict[AgentID(k)]
+Base.haskey(d::AgentDict, k::Integer) = haskey(d.dict, AgentID(k))
+Base.setindex!(d::AgentDict, v, k::Integer) = setindex!(d.dict, v, AgentID(k))
+Base.delete!(d::AgentDict, k::Integer) = delete!(d.dict, AgentID(k))
 
 """
     physicellEmptyGraph()

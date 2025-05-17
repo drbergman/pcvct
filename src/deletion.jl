@@ -89,7 +89,7 @@ deleteSimulation = deleteSimulations #! alias
 
 Delete all simulations. See [`deleteSimulations`](@ref) for the meaning of the keyword arguments.
 """
-deleteAllSimulations(; delete_supers::Bool=true, and_constraints::String="") = getSimulationIDs() |> x -> deleteSimulations(x; delete_supers=delete_supers, and_constraints=and_constraints)
+deleteAllSimulations(; delete_supers::Bool=true, and_constraints::String="") = simulationIDs() |> x -> deleteSimulations(x; delete_supers=delete_supers, and_constraints=and_constraints)
 
 """
     deleteMonad(monad_ids::AbstractVector{<:Integer}; delete_subs::Bool=true, delete_supers::Bool=true)

@@ -95,7 +95,7 @@ sobol_sampling = run(Sobolʼ(n_points; sobol_index_methods=sobol_index_methods),
 sobol_index_methods = (first_order=:Saltelli2010, total_order=:Sobol2007)
 sobol_sampling = run(Sobolʼ(n_points; sobol_index_methods=sobol_index_methods), n_replicates, inputs, av; force_recompile=force_recompile, reference_variation_id=reference_variation_id, functions=[gs_fn])
 
-reference = getSimulationIDs(sobol_sampling)[1] |> Simulation
+reference = simulationIDs(sobol_sampling)[1] |> Simulation
 sobol_sampling = run(Sobolʼ(2), n_replicates, reference, av)
 
 # Testing sensitivity with CoVariations

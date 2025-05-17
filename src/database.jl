@@ -613,7 +613,7 @@ There are three options for `T`:
 - If omitted, creates a DataFrame for all the simulations.
 """
 function simulationsTable(T::Union{AbstractTrial,AbstractArray{<:AbstractTrial}}; kwargs...)
-    query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(getSimulationIDs(T),",")));")
+    query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(simulationIDs(T),",")));")
     return simulationsTableFromQuery(query; kwargs...)
 end
 

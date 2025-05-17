@@ -219,7 +219,7 @@ function collectSimulationTasks(monad::Monad; do_full_setup::Bool=true, force_re
     end
 
     simulation_tasks = Task[]
-    for simulation_id in getSimulationIDs(monad)
+    for simulation_id in simulationIDs(monad)
         if isStarted(simulation_id; new_status_code="Queued")
             continue #! if the simulation has already been started (or even completed), then don't run it again
         end
@@ -289,11 +289,11 @@ function Base.show(io::IO, ::MIME"text/plain", output::PCVCTOutput)
 end
 
 """
-    getSimulationIDs(output::PCVCTOutput)
+    simulationIDs(output::PCVCTOutput)
 
 Get the simulation IDs from the output of the PCVCT run.
 """
-getSimulationIDs(output::PCVCTOutput) = getSimulationIDs(output.trial)
+simulationIDs(output::PCVCTOutput) = simulationIDs(output.trial)
 
 """
     run(T::AbstractTrial[; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions()])`

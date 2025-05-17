@@ -55,6 +55,7 @@ Finer-grained control of the output is possible, too!
 - to include dead cells in your counts: `plot(...; ..., include_dead=true, ...)`
 - select a subset of cell types to include: `plot(...; ..., include_cell_type_names="cancer", ...)`
 - select a subset of cell types to exclude: `plot(...; ..., exclude_cell_type_names="cancer", ...)`
+- choose time units for the x-axis: `plot(...; ..., time_unit=:h, ...)`
 
 The `include_cell_type_names` and `exclude_cell_type_names` can also accept a `Vector{String}` to include or exclude certain cell types, respectively.
 Furthermore, if the value of `include_cell_type_names` is a `Vector` and one of its entries is a `Vector{String}`, pcvct will interpret this to sum up those cell types.
@@ -178,12 +179,12 @@ plot(result) # heatmap of proximity of (living) cd8s to (living) cancer cells th
 ```
 ```julia
 monad = Monad(1) # let's assume that there are >1 simulations in this monad
-results = [pcvct.pcf(simulation_id, :final, "cancer", "cd8") for simulation_id in getSimulationIDs(monad)] # one vector of PCF values for each simulation at the final snapshot
+results = [pcvct.pcf(simulation_id, :final, "cancer", "cd8") for simulation_id in simulationIDs(monad)] # one vector of PCF values for each simulation at the final snapshot
 plot(results) # line plot of average PCF values against radius across the monad +/- 1 SD
 ```
 ```julia
 monad = Monad(1) # let's assume that there are >1 simulations in this monad
-results = [pcvct.pcf(simulation_id, "cancer", "cd8") for simulation_id in getSimulationIDs(monad)] # one matrix of PCF values for each simulation across all time points
+results = [pcvct.pcf(simulation_id, "cancer", "cd8") for simulation_id in simulationIDs(monad)] # one matrix of PCF values for each simulation across all time points
 plot(results) # heatmap of average PCF values with time on the x-axis and radius on the y-axis; averages omit NaN values that can occur at higher radii
 ```
 

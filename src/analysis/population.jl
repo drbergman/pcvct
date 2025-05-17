@@ -208,7 +208,7 @@ struct MonadPopulationTimeSeries <: AbstractPopulationTimeSeries
 end
 
 function MonadPopulationTimeSeries(monad::Monad; include_dead::Bool=false)
-    simulation_ids = getSimulationIDs(monad)
+    simulation_ids = simulationIDs(monad)
     monad_length = length(simulation_ids)
     time = Real[]
     cell_count = Dict{String, NamedTuple}()
@@ -287,8 +287,10 @@ Return the mean counts of a population time series.
 getMeanCounts(s::SimulationPopulationTimeSeries) = s.cell_count
 getMeanCounts(m::MonadPopulationTimeSeries) = [k => v.mean for (k, v) in pairs(m.cell_count)] |> Dict
 
-@recipe function f(M::AbstractMonad; include_dead=false, include_cell_type_names=:all, exclude_cell_type_names=String[])
+@recipe function f(M::AbstractMonad; include_dead=false, include_cell_type_names=:all, exclude_cell_type_names=String[], time_unit=:min)
     pts = populationTimeSeries(M; include_dead=include_dead)
+    time = processTime(pts.time, time_unit)
+
     #! allow for single string input for either of these
     include_cell_type_names = processIncludeCellTypes(include_cell_type_names, keys(pts; exclude_time=true) |> collect)
     exclude_cell_type_names = processExcludeCellTypes(exclude_cell_type_names)
@@ -305,24 +307,24 @@ getMeanCounts(m::MonadPopulationTimeSeries) = [k => v.mean for (k, v) in pairs(m
             name = k[1]
             @series begin
                 label --> name
-                x = pts.time
+                x = time
                 y = getMeanCounts(pts)[name]
-                if length(getSimulationIDs(M)) > 1
+                if length(simulationIDs(M)) > 1
                     ribbon := pts[name].std
                 end
                 x, y
             end
         else #! need to basically recalculate since we are combining multiple cell types
-            simulation_ids = getSimulationIDs(M)
+            simulation_ids = simulationIDs(M)
             sptss = [SimulationPopulationTimeSeries(simulation_id; include_dead=include_dead, verbose=false) for simulation_id in simulation_ids]
             filter!(!ismissing, sptss) #! remove any that failed to load
             sim_sums = [sum([spts[name] for name in k]) for spts in sptss]
             all_counts = reduce(hcat, sim_sums)
             @series begin
                 label --> join(k, ", ")
-                x = pts.time
+                x = time
                 y = mean(all_counts, dims=2) |> vec
-                if length(getSimulationIDs(M)) > 1
+                if length(simulationIDs(M)) > 1
                     ribbon := std(all_counts, dims=2) |> vec
                 end
                 x, y
@@ -331,13 +333,13 @@ getMeanCounts(m::MonadPopulationTimeSeries) = [k => v.mean for (k, v) in pairs(m
     end
 end
 
-@recipe function f(sampling::Sampling; include_dead=false, include_cell_type_names=:all, exclude_cell_type_names=String[])
+@recipe function f(sampling::Sampling; include_dead=false, include_cell_type_names=:all, exclude_cell_type_names=String[], time_unit=:min)
     df = pcvct.simulationsTable(sampling)
     monads = []
     title_tuples = []
     for monad in sampling.monads
         push!(monads, monad)
-        sim_id = getSimulationIDs(monad)[1]
+        sim_id = simulationIDs(monad)[1]
         row_ind = findfirst(df[!, :SimID] .== sim_id)
         row = df[row_ind, :]
         title_tuple = [row[name] for name in names(row) if !(name in ["SimID"; shortLocationVariationID.(String, project_locations.varied)])]
@@ -358,6 +360,7 @@ end
             include_dead --> include_dead
             include_cell_type_names --> include_cell_type_names
             exclude_cell_type_names --> exclude_cell_type_names
+            time_unit --> time_unit
             monad
         end
     end
@@ -372,12 +375,21 @@ end
 end
 
 """
-    plotbycelltype(T::AbstractTrial; include_dead::Bool=false, include_cell_type_names=:all, exclude_cell_type_names=String[])
+    plotbycelltype(T::AbstractTrial; include_dead::Bool=false, include_cell_type_names=:all, exclude_cell_type_names=String[], time_unit=:min)
 
 Plot the population time series of a trial by cell type.
 
 Each cell type gets its own subplot.
 Each monad gets its own series within each subplot.
+
+# Arguments
+- `T::AbstractTrial`: The trial to plot.
+
+# Keyword Arguments
+- `include_dead::Bool`: Whether to include dead cells in the count. Default is `false`.
+- `include_cell_type_names::Vector{String}`: A vector of cell type names to include in the plot. Default is `:all`, which includes all cell types in separate plots.
+- `exclude_cell_type_names::Vector{String}`: A vector of cell type names to exclude from the plot. Default is an empty vector, i.e., no cell types are excluded.
+- `time_unit::Symbol`: The time unit to use for the x-axis. Default is `:min`, which uses minutes.
 """
 plotbycelltype
 
@@ -389,7 +401,7 @@ struct CellTypeInMonads
     cell_count_stds::Vector{Vector{Real}}
 end
 
-@recipe function f(p::PlotByCellType; include_dead=false, include_cell_type_names=:all, exclude_cell_type_names=String[])
+@recipe function f(p::PlotByCellType; include_dead=false, include_cell_type_names=:all, exclude_cell_type_names=String[], time_unit=:min)
     @assert length(p.args) == 1 "Expected exactly 1 argument, got $(length(p.args))."
     if (p.args[1] isa PCVCTOutput)
         T = p.args[1].trial
@@ -404,7 +416,7 @@ end
         monads = Monad.(getMonadIDs(T))
     end
 
-    simulation_id = getSimulationIDs(T) |> first
+    simulation_id = simulationIDs(T) |> first
     all_cell_types = cellTypeToNameDict(simulation_id) |> values |> collect
     include_cell_type_names = processIncludeCellTypes(include_cell_type_names, all_cell_types)
     exclude_cell_type_names = processExcludeCellTypes(exclude_cell_type_names)
@@ -412,7 +424,7 @@ end
     monad_summary = Dict{Int,Any}()
     all_cell_types = Set()
     for monad in monads
-        simulation_ids = getSimulationIDs(monad)
+        simulation_ids = simulationIDs(monad)
         monad_length = length(simulation_ids)
         time = Real[]
         cell_count_arrays = Dict{Any, Array{Int,2}}()
@@ -454,6 +466,7 @@ end
     for (i, cell_type) in enumerate(all_cell_types)
         @series begin
             title --> cell_type
+            time_unit --> time_unit
             legend := false
             subplot := i
             x = [monad_summary[monad.id].time for monad in monads]
@@ -464,11 +477,12 @@ end
     end
 end
 
-@recipe function f(ctim::CellTypeInMonads)
+@recipe function f(ctim::CellTypeInMonads; time_unit=:min)
     for (x, y, z) in zip(ctim.time, ctim.cell_count_means, ctim.cell_count_stds)
+        time = processTime(x, time_unit)
         @series begin
             ribbon := z
-            x, y
+            time, y
         end
     end
 end
