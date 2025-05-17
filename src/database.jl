@@ -315,11 +315,11 @@ function createDefaultStatusCodesTable()
 end
 
 """
-    getStatusCodeID(status_code::String)
+    statusCodeID(status_code::String)
 
 Get the ID of a status code from the database.
 """
-function getStatusCodeID(status_code::String)
+function statusCodeID(status_code::String)
     @assert status_code in recognizedStatusCodes() "Status code $(status_code) is not recognized. Must be one of $(recognizedStatusCodes())."
     query = constructSelectQuery("status_codes", "WHERE status_code='$status_code';"; selection="status_code_id")
     return queryToDataFrame(query; is_row=true) |> x -> x[1,:status_code_id]
@@ -338,9 +338,9 @@ function isStarted(simulation_id::Int; new_status_code::Union{Missing,String}=mi
     mode = ismissing(new_status_code) ? "DEFERRED" : "EXCLUSIVE" #! if we are possibly going to update, then set to exclusive mode
     SQLite.transaction(db, mode)
     status_code = queryToDataFrame(query; is_row=true) |> x -> x[1,:status_code_id]
-    is_started = status_code != getStatusCodeID("Not Started")
+    is_started = status_code != statusCodeID("Not Started")
     if !ismissing(new_status_code) && !is_started
-        query = "UPDATE simulations SET status_code_id=$(getStatusCodeID(new_status_code)) WHERE simulation_id=$(simulation_id);"
+        query = "UPDATE simulations SET status_code_id=$(statusCodeID(new_status_code)) WHERE simulation_id=$(simulation_id);"
         DBInterface.execute(db, query)
     end
     SQLite.commit(db)
@@ -613,7 +613,7 @@ There are three options for `T`:
 - If omitted, creates a DataFrame for all the simulations.
 """
 function simulationsTable(T::Union{AbstractTrial,AbstractArray{<:AbstractTrial}}; kwargs...)
-    query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(getSimulationIDs(T),",")));")
+    query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(simulationIDs(T),",")));")
     return simulationsTableFromQuery(query; kwargs...)
 end
 

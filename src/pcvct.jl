@@ -3,7 +3,7 @@ module pcvct
 using SQLite, DataFrames, LightXML, Dates, CSV, Tables, Distributions, Statistics, Random, QuasiMonteCarlo, Sobol, Compat
 using PhysiCellXMLRules, PhysiCellCellCreator
 
-export initializeModelManager, getSimulationIDs, setNumberOfParallelSims, getMonadIDs
+export initializeModelManager, simulationIDs, setNumberOfParallelSims, getMonadIDs, getSimulationIDs
 
 #! put these first as they define classes the rest rely on
 include("classes.jl")
@@ -236,7 +236,7 @@ constituentsType(T::AbstractTrial) = constituentsType(typeof(T))
 
 Return the filename of the constituents of `T`. Used in the [`readConstituentIDs`](@ref) function.
 """
-constituentsTypeFilename(T) = "$(constituentsType(T))s.csv"
+constituentsTypeFilename(T) = "$(T |> constituentsType |> lowerClassString)s.csv"
 
 """
     readConstituentIDs(T::AbstractTrial)
@@ -278,27 +278,27 @@ readConstituentIDs(T::AbstractTrial) = readConstituentIDs(joinpath(trialFolder(T
 readConstituentIDs(T::Type{<:AbstractTrial}, id::Int) = readConstituentIDs(joinpath(trialFolder(T, id), constituentsTypeFilename(T)))
 
 """
-    getSamplingSimulationIDs(sampling_id::Int)
+    samplingSimulationIDs(sampling_id::Int)
 
-Internal function to get the simulation IDs for a given sampling ID. Users should use [`getSimulationIDs`](@ref) instead.
+Internal function to get the simulation IDs for a given sampling ID. Users should use [`simulationIDs`](@ref) instead.
 """
-function getSamplingSimulationIDs(sampling_id::Int)
+function samplingSimulationIDs(sampling_id::Int)
     monad_ids = readConstituentIDs(Sampling, sampling_id)
     return vcat([readConstituentIDs(Monad, monad_id) for monad_id in monad_ids]...)
 end
 
 """
-    getTrialSimulationIDs(trial_id::Int)
+    trialSimulationIDs(trial_id::Int)
 
-Internal function to get the simulation IDs for a given trial ID. Users should use [`getSimulationIDs`](@ref) instead.
+Internal function to get the simulation IDs for a given trial ID. Users should use [`simulationIDs`](@ref) instead.
 """
-function getTrialSimulationIDs(trial_id::Int)
+function trialSimulationIDs(trial_id::Int)
     sampling_ids = readConstituentIDs(Trial, trial_id)
-    return vcat([getSamplingSimulationIDs(sampling_id) for sampling_id in sampling_ids]...)
+    return vcat([samplingSimulationIDs(sampling_id) for sampling_id in sampling_ids]...)
 end
 
 """
-    getSimulationIDs()
+    simulationIDs()
 
 Return a vector of all simulation IDs in the database.
 
@@ -306,27 +306,37 @@ Alternate forms take a simulation, monad, sampling, or trial object (or an array
 
 # Examples
 ```julia
-getSimulationIDs() # all simulation IDs in the database
-getSimulationIDs(simulation) # just a vector with the simulation ID, i.e. [simulation.id]
-getSimulationIDs(monad) # all simulation IDs in a monad
-getSimulationIDs(sampling) # all simulation IDs in a sampling
-getSimulationIDs(trial) # all simulation IDs in a trial
-getSimulationIDs([trial1, trial2]) # all simulation IDs between trial1 and trial2
+simulationIDs() # all simulation IDs in the database
+simulationIDs(simulation) # just a vector with the simulation ID, i.e. [simulation.id]
+simulationIDs(monad) # all simulation IDs in a monad
+simulationIDs(sampling) # all simulation IDs in a sampling
+simulationIDs(trial) # all simulation IDs in a trial
+simulationIDs([trial1, trial2]) # all simulation IDs between trial1 and trial2
 ```
 """
-getSimulationIDs() = constructSelectQuery("simulations"; selection="simulation_id") |> queryToDataFrame |> x -> x.simulation_id
-getSimulationIDs(simulation::Simulation) = [simulation.id]
-getSimulationIDs(monad::Monad) = readConstituentIDs(monad)
-getSimulationIDs(sampling::Sampling) = getSamplingSimulationIDs(sampling.id)
-getSimulationIDs(trial::Trial) = getTrialSimulationIDs(trial.id)
-getSimulationIDs(Ts::AbstractArray{<:AbstractTrial}) = reduce(vcat, getSimulationIDs.(Ts))
+simulationIDs() = constructSelectQuery("simulations"; selection="simulation_id") |> queryToDataFrame |> x -> x.simulation_id
+simulationIDs(simulation::Simulation) = [simulation.id]
+simulationIDs(monad::Monad) = readConstituentIDs(monad)
+simulationIDs(sampling::Sampling) = samplingSimulationIDs(sampling.id)
+simulationIDs(trial::Trial) = trialSimulationIDs(trial.id)
+simulationIDs(Ts::AbstractArray{<:AbstractTrial}) = reduce(vcat, simulationIDs.(Ts))
 
 """
-    getTrialMonads(trial_id::Int)
+    getSimulationIDs(args...)
+
+Deprecated alias for [`simulationIDs`](@ref). Use `simulationIDs` instead.
+"""
+function getSimulationIDs(args...)
+    Base.depwarn("`getSimulationIDs` is deprecated. Use `simulationIDs` instead.", :getSimulationIDs; force=true)
+    return simulationIDs(args...)
+end
+
+"""
+    trialMonads(trial_id::Int)
 
 Internal function to get the monad IDs for a given trial ID. Users should use [`getMonadIDs`](@ref) instead.
 """
-function getTrialMonads(trial_id::Int)
+function trialMonads(trial_id::Int)
     sampling_ids = readConstituentIDs(Trial, trial_id)
     return vcat([readConstituentIDs(Sampling, sampling_id) for sampling_id in sampling_ids]...)
 end
@@ -350,19 +360,10 @@ getMonadIDs([trial1, trial2]) # all monad IDs between trial1 and trial2
 getMonadIDs() = constructSelectQuery("monads"; selection="monad_id") |> queryToDataFrame |> x -> x.monad_id
 getMonadIDs(monad::Monad) = [monad.id]
 getMonadIDs(sampling::Sampling) = readConstituentIDs(sampling)
-getMonadIDs(trial::Trial) = getTrialMonads(trial.id)
+getMonadIDs(trial::Trial) = trialMonads(trial.id)
 getMonadIDs(Ts::AbstractArray{<:AbstractTrial}) = reduce(vcat, getMonadIDs.(Ts))
 
 ################## Miscellaneous Functions ##################
-
-# """
-#     trialFolder(lower_class_str::AbstractString, id::Int)
-
-# Return the path to the [`AbstractTrial`](@ref) folder for a given class string and ID.
-# """
-# function trialFolder(lower_class_str::AbstractString, id::Int)
-#     return joinpath(data_dir, "outputs", lower_class_str * "s", string(id))
-# end
 
 """
     trialFolder(T::Type{<:AbstractTrial}, id::Int)

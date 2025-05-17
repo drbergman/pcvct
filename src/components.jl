@@ -115,7 +115,7 @@ function assembleIntracellular!(cell_to_components_dict::Dict{String,Vector{Phys
     end
 
     #! compare against previously-assembled intracellulars
-    path_to_folder = getIntracellularFolder(assembly_manifest)
+    path_to_folder = intracellularFolder(assembly_manifest)
     if !isnothing(path_to_folder)
         updateIntracellularComponentIDs!(cell_to_components_dict, path_to_folder)
         return splitpath(path_to_folder)[end]
@@ -188,13 +188,13 @@ function assembleIntracellular!(cell_to_components_dict::Dict{String,Vector{Phys
 end
 
 """
-    getIntracellularFolder(assembly_manifest::Dict)
+    intracellularFolder(assembly_manifest::Dict)
 
 Get the folder that contains the intracellular assembly manifest that is equivalent to the given assembly manifest, if one exists.
 
 If no such folder exists, return nothing.
 """
-function getIntracellularFolder(assembly_manifest::Dict)
+function intracellularFolder(assembly_manifest::Dict)
     path_to_location_folders = locationPath(:intracellular)
 
     for folder in readdir(path_to_location_folders; join=true, sort=false)

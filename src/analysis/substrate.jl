@@ -87,7 +87,7 @@ end
 function AverageSubstrateTimeSeries(sequence::PhysiCellSequence)
     time = [snapshot.time for snapshot in sequence.snapshots]
     substrate_concentrations = Dict{String, Vector{Real}}()
-    substrate_names = getSubstrateNames(sequence)
+    substrate_names = substrateNames(sequence)
     for substrate_name in substrate_names
         substrate_concentrations[substrate_name] = zeros(Float64, length(time))
     end
@@ -249,7 +249,7 @@ function ExtracellularSubstrateTimeSeries(sequence::PhysiCellSequence; include_d
     time = [snapshot.time for snapshot in sequence.snapshots]
     data = Dict{String, Dict{String, Vector{Real}}}()
     cell_type_to_name_dict = sequence.cell_type_to_name_dict
-    substrate_names = getSubstrateNames(sequence)
+    substrate_names = substrateNames(sequence)
     for (i, snapshot) in enumerate(sequence.snapshots)
         snapshot_data = averageExtracellularSubstrate(snapshot, cell_type_to_name_dict, substrate_names, sequence.labels; include_dead=include_dead)
         for cell_type_name in keys(snapshot_data)

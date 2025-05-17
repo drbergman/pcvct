@@ -27,7 +27,7 @@ All the inputs and variations must be the same for all associated simulations.
 """
 abstract type AbstractMonad <: AbstractSampling end
 
-Base.length(T::AbstractTrial) = getSimulationIDs(T) |> length
+Base.length(T::AbstractTrial) = simulationIDs(T) |> length
 
 ##########################################
 ############   InputFolders   ############
@@ -307,7 +307,7 @@ function Simulation(inputs::InputFolders, variation_id::VariationID=VariationID(
     $(currentPhysiCellVersionID()),\
     $(join([inputs[loc].id for loc in project_locations.all], ",")),\
     $(join([variation_id[loc] for loc in project_locations.varied],",")),\
-    $(getStatusCodeID("Not Started"))
+    $(statusCodeID("Not Started"))
     )
     RETURNING simulation_id;
     """
@@ -456,7 +456,7 @@ end
 Adds a simulation ID to the monad's list of simulation IDs.
 """
 function addSimulationID(monad::Monad, simulation_id::Int)
-    simulation_ids = getSimulationIDs(monad)
+    simulation_ids = simulationIDs(monad)
     if simulation_id in simulation_ids
         return
     end
@@ -484,7 +484,7 @@ function Base.show(io::IO, ::MIME"text/plain", monad::Monad)
 end
 
 function printSimulationIDs(io::IO, T::AbstractTrial, n_indent::Int=1)
-    simulation_ids = getSimulationIDs(T) |> compressIDs
+    simulation_ids = simulationIDs(T) |> compressIDs
     simulation_ids = join(simulation_ids[1], ", ")
     simulation_ids = replace(simulation_ids, ":" => "-")
     println(io, "  "^n_indent, "Simulations: $simulation_ids")
@@ -711,7 +711,7 @@ end
 
 function Trial(Ss::AbstractArray{<:AbstractSampling}; n_replicates::Integer=0, use_previous::Bool=true)
     samplings = Sampling.(Ss; n_replicates=n_replicates, use_previous=use_previous)
-    id = getTrialID(samplings)
+    id = trialID(samplings)
     return Trial(id, samplings)
 end
 
@@ -725,11 +725,11 @@ function Trial(trial_id::Int; n_replicates::Integer=0, use_previous::Bool=true)
 end
 
 """
-    getTrialID(samplings::Vector{Sampling})
+    trialID(samplings::Vector{Sampling})
 
 Get the trial ID for a vector of samplings or create a new trial if one does not exist.
 """
-function getTrialID(samplings::Vector{Sampling})
+function trialID(samplings::Vector{Sampling})
     sampling_ids = [sampling.id for sampling in samplings]
     id = -1
     trial_ids = constructSelectQuery("trials"; selection="trial_id") |> queryToDataFrame |> x -> x.trial_id

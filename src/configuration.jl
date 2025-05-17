@@ -560,7 +560,7 @@ function shortConfigVariationName(name::String)
     elseif name == "save/SVG/interval"
         return "SVG Save Interval"
     elseif startswith(name, "cell_definitions")
-        return getCellParameterName(name)
+        return cellParameterName(name)
     else
         return name
     end
@@ -575,7 +575,7 @@ function shortRulesetsVariationName(name::String)
     if name == "rulesets_collection_variation_id"
         return shortLocationVariationID(String, "rulesets_collection")
     else
-        return getRuleParameterName(name)
+        return ruleParameterName(name)
     end
 end
 
@@ -601,7 +601,7 @@ function shortICCellVariationName(name::String)
     if name == "ic_cell_variation_id"
         return shortLocationVariationID(String, "ic_cell")
     else
-        return getICCellParameterName(name)
+        return icCellParameterName(name)
     end
 end
 
@@ -614,16 +614,16 @@ function shortICECMVariationName(name::String)
     if name == "ic_ecm_variation_id"
         return shortLocationVariationID(String, "ic_ecm")
     else
-        return getICECMParameterName(name)
+        return icECMParameterName(name)
     end
 end
 
 """
-    getCellParameterName(column_name::String)
+    cellParameterName(column_name::String)
 
 Return the short name of the varied parameter associated with a cell definition for the given column name used in creating a DataFrame summary table.
 """
-function getCellParameterName(column_name::String)
+function cellParameterName(column_name::String)
     xml_path = columnNameToXMLPath(column_name)
     cell_type = split(xml_path[2], ":")[3]
     target_name = ""
@@ -650,11 +650,11 @@ function getCellParameterName(column_name::String)
 end
 
 """
-    getRuleParameterName(name::String)
+    ruleParameterName(name::String)
 
 Return the short name of the varied parameter associated with a ruleset for the given name used in creating a DataFrame summary table.
 """
-function getRuleParameterName(name::String)
+function ruleParameterName(name::String)
     @assert startswith(name, "behavior_ruleset") "'name' for a rulesets variation name must start with 'behavior_ruleset'. Got $(name)"
     xml_path = columnNameToXMLPath(name)
     cell_type = split(xml_path[1], ":")[3]
@@ -671,11 +671,11 @@ function getRuleParameterName(name::String)
 end
 
 """
-    getICCellParameterName(name::String)
+    icCellParameterName(name::String)
 
 Return the short name of the varied parameter associated with a cell patch for the given name used in creating a DataFrame summary table.
 """
-function getICCellParameterName(name::String)
+function icCellParameterName(name::String)
     @assert startswith(name, "cell_patches") "'name' for a cell variation name must start with 'cell_patches'. Got $(name)"
     xml_path = columnNameToXMLPath(name)
     cell_type = split(xml_path[1], ":")[3]
@@ -686,11 +686,11 @@ function getICCellParameterName(name::String)
 end
 
 """
-    getICECMParameterName(name::String)
+    icECMParameterName(name::String)
 
 Return the short name of the varied parameter associated with a ECM patch for the given name used in creating a DataFrame summary table.
 """
-function getICECMParameterName(name::String)
+function icECMParameterName(name::String)
     @assert startswith(name, "layer") "'name' for a ecm variation name must start with 'layer'. Got $(name)"
     xml_path = columnNameToXMLPath(name)
     layer_id = split(xml_path[1], ":")[3]
