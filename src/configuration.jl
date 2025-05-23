@@ -315,6 +315,9 @@ end
 
 Return the XML path to the configuration for the given tokens, inferring the path based on the tokens.
 
+This function works by calling the explicit path functions for the given tokens:
+[`domainPath`](@ref), [`timePath`](@ref), [`fullSavePath`](@ref), [`svgSavePath`](@ref), [`substratePath`](@ref), [`cyclePath`](@ref), [`apoptosisPath`](@ref), [`necrosisPath`](@ref), [`volumePath`](@ref), [`mechanicsPath`](@ref), [`motilityPath`](@ref), [`secretionPath`](@ref), [`cellInteractionsPath`](@ref), [`phagocytosisPath`](@ref), [`attackRatePath`](@ref), [`fusionPath`](@ref), [`transformationPath`](@ref), [`integrityPath`](@ref), [`customDataPath`](@ref), and [`userParameterPath`](@ref).
+
 This is an experimental feature that can perhaps standardize ways to access the configuration XML path with (hopefully) minimal referencing of the XML file.
 Take a guess at what you think the inputs should be.
 Depending on the number of tokens passed in, the function will try to infer the path or throw an error if it cannot.
