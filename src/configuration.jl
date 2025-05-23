@@ -39,15 +39,30 @@ Otherwise, `nothing` is returned if the element is not found.
 function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString}; required::Bool=true)
     current_element = root(xml_doc)
     for path_element in xml_path
-        if !occursin(":", path_element)
-            current_element = find_element(current_element, path_element)
-            if isnothing(current_element)
-                required ? retrieveElementError(xml_path, path_element) : return nothing
+        if contains(path_element, "::")
+            tag, child_scheme = split(path_element, "::")
+            tokens = split(child_scheme, ":")
+            @assert length(tokens) == 2 "Invalid child scheme for $(path_element). Expected format: <tag>::<child_tag>:<child_content>"
+            child_tag, child_content = tokens
+            candidate_elements = get_elements_by_tagname(current_element, tag)
+            found = false
+            for ce in candidate_elements
+                child_element = find_element(ce, child_tag)
+                if !isnothing(child_element) && content(child_element) == child_content
+                    current_element = ce
+                    found = true
+                    break
+                end
             end
-            continue
+            if !found
+                current_element = nothing
+            end
+        else
+            current_element = contains(path_element, ":") ?
+                getChildByAttribute(current_element, split(path_element, ":")) :
+                find_element(current_element, path_element)
         end
-        #! Deal with checking attributes
-        current_element = getChildByAttribute(current_element, split(path_element, ":"))
+
         if isnothing(current_element)
             required ? retrieveElementError(xml_path, path_element) : return nothing
         end
@@ -118,24 +133,44 @@ Similar functionality to the shell command `mkdir -p`, but for XML elements.
 """
 function makeXMLPath(current_element::XMLElement, xml_path::AbstractVector{<:AbstractString})
     for path_element in xml_path
-        if !occursin(":",path_element)
+        if contains(path_element, "::")
+            tag, child_scheme = split(path_element, "::")
+            tokens = split(child_scheme, ":")
+            @assert length(tokens) == 2 "Invalid child scheme for $(path_element). Expected format: <tag>::<child_tag>:<child_content>"
+            child_tag, child_content = tokens
+            candidate_elements = get_elements_by_tagname(current_element, tag)
+            found = false
+            for ce in candidate_elements
+                child_element = find_element(ce, child_tag)
+                if !isnothing(child_element) && content(child_element) == child_content
+                    current_element = ce
+                    found = true
+                    break
+                end
+            end
+            if !found
+                current_element = new_child(current_element, tag)
+                child_element = new_child(current_element, child_tag)
+                set_content(child_element, child_content)
+            end
+        elseif !contains(path_element, ":")
             child_element = find_element(current_element, path_element)
             if isnothing(child_element)
                 current_element = new_child(current_element, path_element)
             else
                 current_element = child_element
             end
-            continue
+        else
+            #! Deal with checking attributes
+            path_element_split = split(path_element, ":")
+            child_element = getChildByAttribute(current_element, path_element_split)
+            if isnothing(child_element)
+                path_element_name, attribute_name, attribute_value = path_element_split
+                child_element = new_child(current_element, path_element_name)
+                set_attribute(child_element, attribute_name, attribute_value)
+            end
+            current_element = child_element
         end
-        #! Deal with checking attributes
-        path_element_split = split(path_element, ":")
-        child_element = getChildByAttribute(current_element, path_element_split)
-        if isnothing(child_element)
-            path_element_name, attribute_name, attribute_value = path_element_split
-            child_element = new_child(current_element, path_element_name)
-            set_attribute(child_element, attribute_name, attribute_value)
-        end
-        current_element = child_element
     end
     return current_element
 end
@@ -316,7 +351,7 @@ end
 Return the XML path to the configuration for the given tokens, inferring the path based on the tokens.
 
 This function works by calling the explicit path functions for the given tokens:
-[`domainPath`](@ref), [`timePath`](@ref), [`fullSavePath`](@ref), [`svgSavePath`](@ref), [`substratePath`](@ref), [`cyclePath`](@ref), [`apoptosisPath`](@ref), [`necrosisPath`](@ref), [`volumePath`](@ref), [`mechanicsPath`](@ref), [`motilityPath`](@ref), [`secretionPath`](@ref), [`cellInteractionsPath`](@ref), [`phagocytosisPath`](@ref), [`attackRatePath`](@ref), [`fusionPath`](@ref), [`transformationPath`](@ref), [`integrityPath`](@ref), [`customDataPath`](@ref), and [`userParameterPath`](@ref).
+[`domainPath`](@ref), [`timePath`](@ref), [`fullSavePath`](@ref), [`svgSavePath`](@ref), [`substratePath`](@ref), [`cyclePath`](@ref), [`apoptosisPath`](@ref), [`necrosisPath`](@ref), [`volumePath`](@ref), [`mechanicsPath`](@ref), [`motilityPath`](@ref), [`secretionPath`](@ref), [`cellInteractionsPath`](@ref), [`phagocytosisPath`](@ref), [`attackRatePath`](@ref), [`fusionPath`](@ref), [`transformationPath`](@ref), [`integrityPath`](@ref), [`customDataPath`](@ref), [`initialParameterDistributionPath`](@ref), and [`userParameterPath`](@ref).
 
 This is an experimental feature that can perhaps standardize ways to access the configuration XML path with (hopefully) minimal referencing of the XML file.
 Take a guess at what you think the inputs should be.
@@ -464,6 +499,8 @@ function configPath(tokens::Vararg{Union{AbstractString,Integer}})
         elseif token2 == "necrosis"
             @assert token3 ∈ ["duration", "transition_rate"] "Unrecognized third token for necrosis with four tokens passed in to configPath: $(token3). Needs to be either \"duration\" or \"transition_rate\""
             return inferDeathModelPath(:necrosis, token1, "$(token3)_$(token4)")
+        elseif contains(token2, "initial") && contains(token2, "parameter") && contains(token2, "distribution")
+            return initialParameterDistributionPath(token1, token3, token4)
         else
             msg = """
             Unrecognized four tokens for configPath: $(tokens)
@@ -472,6 +509,7 @@ function configPath(tokens::Vararg{Union{AbstractString,Integer}})
             - `configPath(<cell_type>, "cycle", "rate", <start_index>)` (see `cyclePath`)
             - `configPath(<cell_type>, "necrosis", "duration", <index>)` (see `necrosisPath`)
             - `configPath(<cell_type>, "necrosis", "transition_rate", <start_index>)` (see `necrosisPath`)
+            - `configPath(<cell_type>, "initial_parameter_distribution", <behavior>, <parameter>)` (see `initialParameterDistributionPath`)
             """
             throw(ArgumentError(msg))
         end
@@ -888,6 +926,22 @@ Return the XML path to the custom data tag for the given cell type.
 customDataPath(cell_definition::AbstractString, tag::AbstractString) = cellDefinitionPath(cell_definition, "custom_data", tag)
 
 """
+    customDataPath(cell_definition::AbstractString, tag::AbstractString, path_elements::Vararg{AbstractString})
+
+Return the XML path to the initial parameter distribution tag for the given cell type.
+
+Possible `path_elements` depend on the `type` of the distribution:
+- `type="Uniform"`    : `min`, `max`
+- `type="LogUniform"` : `min`, `max`
+- `type="Normal"`     : `mu`, `sigma`, `lower_bound`, `upper_bound`
+- `type="LogNormal"`  : `mu`, `sigma`, `lower_bound`, `upper_bound`
+- `type="Log10Normal"`: `mu`, `sigma`, `lower_bound`, `upper_bound`
+"""
+function initialParameterDistributionPath(cell_definition::AbstractString, behavior::AbstractString, path_elements::Vararg{AbstractString})
+    return cellDefinitionPath(cell_definition, "initial_parameter_distributions", "distribution::behavior:$(behavior)", path_elements...)
+end
+
+"""
     userParameterPath(tag::AbstractString)
 
 Return the XML path to the user parameter for the given field name.
@@ -1123,7 +1177,11 @@ function cellParameterName(column_name::String)
     cell_type = split(xml_path[2], ":"; limit=3) |> last
     target_name = ""
     for component in xml_path[3:end]
-        if contains(component, ":name:")
+        if contains(component, "::")
+            #! something like "distribution::behavior:oxygen uptake" for initial parameter distributions
+            target_name = split(component, "::"; limit=2) |> last
+            target_name = split(target_name, ":"; limit=2) |> last
+        elseif contains(component, ":name:")
             target_name = split(component, ":"; limit=3) |> last
             break
         elseif contains(component, ":code:")

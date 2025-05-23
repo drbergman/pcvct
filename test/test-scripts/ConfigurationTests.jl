@@ -59,6 +59,8 @@ push!(element_paths, configPath(cell_type, "custom", "sample"))
     #! four token paths
 append!(element_paths, [configPath(cell_type, "cycle", tag, 0) for tag in ["duration", "rate"]])
 append!(element_paths, [configPath(cell_type, "necrosis", tag1, tag2) for tag1 in ["duration", "transition_rate"], tag2 in [0, 1]] |> vec)
+append!(element_paths, [configPath(cell_type, "initial_parameter_distribution", "Volume", tag) for tag in ["mu", "sigma", "lower_bound", "upper_bound"]])
+append!(element_paths, [configPath(cell_type, "initial_parameter_distribution", "apoptosis", tag) for tag in ["min", "max"]])
 
 #! these paths are known not to be in the template xml (but could be in other xmls)
 paths_not_in_template = [
@@ -66,7 +68,8 @@ paths_not_in_template = [
     configPath(cell_type, "cycle", "rate", 0),
     configPath(cell_type, "apoptosis", "transition_rate"),
     configPath(cell_type, "necrosis", "transition_rate", 0),
-    configPath(cell_type, "necrosis", "transition_rate", 1)
+    configPath(cell_type, "necrosis", "transition_rate", 1),
+    configPath(cell_type, "initial_parameter_distribution", "Volume", "lower_bound")
 ]
 
 #! these are paths that have already been accounted for or don't want to try varying (maybe not a number)
