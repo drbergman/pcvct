@@ -390,6 +390,8 @@ function configPath(tokens::Vararg{Union{AbstractString,Integer}})
             return substratePath(token1, "physical_parameter_set", token2)
         elseif token2 ∈ ["initial_condition", "Dirichlet_boundary_condition"]
             return substratePath(token1, token2)
+        elseif token2 ∈ ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"]
+            return substratePath(token1, "Dirichlet_options", "boundary_value:ID:$(token2)")
         elseif token2 ∈ ["total", "fluid_fraction", "nuclear", "fluid_change_rate", "cytoplasmic_biomass_change_rate", "nuclear_biomass_change_rate", "calcified_fraction", "calcification_rate", "relative_rupture_volume"]
             return volumePath(token1, token2)
         elseif token2 ∈ ["cell_cell_adhesion_strength", "cell_cell_repulsion_strength", "relative_maximum_adhesion_distance", "attachment_elastic_constant", "attachment_rate", "detachment_rate", "maximum_number_of_attachments"]
@@ -413,6 +415,7 @@ function configPath(tokens::Vararg{Union{AbstractString,Integer}})
             Possible second tokens include:
             - "diffusion_coefficient", "decay_rate" (see `substratePath`)
             - "initial_condition", "Dirichlet_boundary_condition" (see `substratePath`)
+            - "xmin", "xmax", "ymin", "ymax", "zmin", "zmax" (see `substratePath`)
             - "total", "fluid_fraction", "nuclear", "fluid_change_rate", "cytoplasmic_biomass_change_rate", "nuclear_biomass_change_rate", "calcified_fraction", "calcification_rate", "relative_rupture_volume" (see `volumePath`)
             - "cell_cell_adhesion_strength", "cell_cell_repulsion_strength", "relative_maximum_adhesion_distance", "attachment_elastic_constant", "attachment_rate", "detachment_rate", "maximum_number_of_attachments" (see `mechanicsPath`)
             - "set_relative_equilibrium_distance", "set_absolute_equilibrium_distance" (see `mechanicsPath`)
@@ -470,7 +473,7 @@ function configPath(tokens::Vararg{Union{AbstractString,Integer}})
             msg = """
             Unrecognized triple of tokens for configPath: $(tokens)
             Possible triple tokens include:
-            - `configPath(<substrate_name>, "Dirichlet_options", "boundary_value:ID:<boundary_id>")` (see `substratePath`)
+            - `configPath(<substrate_name>, "Dirichlet_options", <boundary_id>)` (see `substratePath`)
             - `configPath(<cell_type>, "cycle_rate", "0")` (see `cyclePath`)
             - `configPath(<cell_type>, "cycle_duration", "0")` (see `cyclePath`)
             - `configPath(<cell_type>, "apoptosis", <parameter>)` (see `apoptosisPath`)
