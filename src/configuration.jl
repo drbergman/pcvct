@@ -5,7 +5,7 @@ export rulePath, icCellsPath, icECMPath
 @compat public cellDefinitionPath, phenotypePath, cyclePath,
                apoptosisPath, necrosisPath, volumePath, mechanicsPath,
                motilityPath, secretionPath, cellInteractionsPath,
-               phagocytosisPath, attackRatesPath, fusionPath,
+               phagocytosisPath, attackRatePath, fusionPath,
                transformationPath, integrityPath, customDataPath,
                userParameterPath
 
@@ -310,106 +310,103 @@ end
 ################## XML Path Helper Functions ##################
 
 """
-    cellDefinitionPath(cell_definition::String, path_elements::Vararg{AbstractString})
+    cellDefinitionPath(cell_definition::AbstractString, path_elements::Vararg{AbstractString})
 
 Return the XML path to the cell definition or deeper if more path elements are given.
 """
-function cellDefinitionPath(cell_definition::String, path_elements::Vararg{AbstractString})::Vector{String}
+function cellDefinitionPath(cell_definition::AbstractString, path_elements::Vararg{AbstractString})
     return ["cell_definitions"; "cell_definition:name:$(cell_definition)"; path_elements...]
 end
 
 """
-    phenotypePath(cell_definition::String, path_elements::Vararg{AbstractString})
+    phenotypePath(cell_definition::AbstractString, path_elements::Vararg{AbstractString})
 
-Return the XML path to the phenotype for the given cell definition (or deeper if more path elements are given).
+Return the XML path to the phenotype for the given cell type (or deeper if more path elements are given).
 """
-function phenotypePath(cell_definition::String, path_elements::Vararg{AbstractString})::Vector{String}
+function phenotypePath(cell_definition::AbstractString, path_elements::Vararg{AbstractString})
     return cellDefinitionPath(cell_definition, "phenotype", path_elements...)
 end
 
 """
-    cyclePath(cell_definition::String, path_elements::Vararg{AbstractString})
+    cyclePath(cell_definition::AbstractString, path_elements::Vararg{AbstractString})
 
-Return the XML path to the cycle for the given cell definition (or deeper if more path elements are given).
+Return the XML path to the cycle for the given cell type (or deeper if more path elements are given).
 
 Possible `path_elements` include:
 - `cyclePath(<cell_type>, "phase_durations", "duration:index:0")` # replace 0 with the index of the phase
 - `cyclePath(<cell_type>, "phase_transition_rates", "rate:start_index:0")` # replace 0 with the start index of the phase
 """
-cyclePath(cell_definition::String, path_elements::Vararg{AbstractString})::Vector{String} = phenotypePath(cell_definition, "cycle", path_elements...)
+cyclePath(cell_definition::AbstractString, path_elements::Vararg{AbstractString}) = phenotypePath(cell_definition, "cycle", path_elements...)
 
 """
-    deathPath(cell_definition::String, path_elements::Vararg{AbstractString})
+    deathPath(cell_definition::AbstractString, path_elements::Vararg{AbstractString})
 
-Return the XML path to the death for the given cell definition (or deeper if more path elements are given).
+Return the XML path to the death for the given cell type (or deeper if more path elements are given).
 Users are encouraged to use the [`apoptosisPath`](@ref) or [`necrosisPath`](@ref) functions.
 """
-deathPath(cell_definition::String, path_elements::Vararg{AbstractString})::Vector{String} = phenotypePath(cell_definition, "death", path_elements...)
+deathPath(cell_definition::AbstractString, path_elements::Vararg{AbstractString}) = phenotypePath(cell_definition, "death", path_elements...)
 
 """
-    apoptosisPath(cell_definition::String, path_elements::Vararg{AbstractString})
+    apoptosisPath(cell_definition::AbstractString, path_elements::Vararg{AbstractString})
 
-Return the XML path to the apoptosis for the given cell definition (or deeper if more path elements are given).
+Return the XML path to the apoptosis for the given cell type (or deeper if more path elements are given).
 
 Possible `path_elements` include:
 - `apoptosisPath(<cell_type>, "death_rate")`
 - `apoptosisPath(<cell_type>, "phase_durations", "duration:index:0")` # apoptosis only has one phase, so index is always 0
 - `apoptosisPath(<cell_type>, "phase_transition_rates", "rate:start_index:0")` # apoptosis only has one phase, so start index is always 0
-- `apoptosisPath(<cell_type>, "parameters", <parameter_name>)`
-where `<parameter_name>` is one of the following:
-- `unlysed_fluid_change_rate`
-- `lysed_fluid_change_rate`
-- `cytoplasmic_biomass_change_rate`
-- `nuclear_biomass_change_rate`
-- `calcification_rate`
-- `relative_rupture_volume`
+- `apoptosisPath(<cell_type>, "parameters", <tag>)` with `<tag>` one of
+  - `unlysed_fluid_change_rate`
+  - `lysed_fluid_change_rate`
+  - `cytoplasmic_biomass_change_rate`
+  - `nuclear_biomass_change_rate`
+  - `calcification_rate`
+  - `relative_rupture_volume`
 """
-apoptosisPath(cell_definition::String, path_elements::Vararg{AbstractString})::Vector{String} = deathPath(cell_definition, "model:code:100", path_elements...)
+apoptosisPath(cell_definition::AbstractString, path_elements::Vararg{AbstractString}) = deathPath(cell_definition, "model:code:100", path_elements...)
 
 """
-    necrosisPath(cell_definition::String, path_elements::Vararg{AbstractString})
+    necrosisPath(cell_definition::AbstractString, path_elements::Vararg{AbstractString})
 
-Return the XML path to the necrosis for the given cell definition (or deeper if more path elements are given).
+Return the XML path to the necrosis for the given cell type (or deeper if more path elements are given).
 
 Possible `path_elements` are identical to those for [`apoptosisPath`](@ref) with one exception: Necrosis has two phases so the phase index can be either 0 or 1.
 They include:
 - `necrosisPath(<cell_type>, "death_rate")`
 - `necrosisPath(<cell_type>, "phase_durations", "duration:index:0")` # necrosis has two phases, so index is either 0 or 1
 - `necrosisPath(<cell_type>, "phase_transition_rates", "rate:start_index:0")` # necrosis has two phases, so start index is either 0 or 1
-- `necrosisPath(<cell_type>, "parameters", <parameter_name>)`
-where `<parameter_name>` is one of the following:
-- `unlysed_fluid_change_rate`
-- `lysed_fluid_change_rate`
-- `cytoplasmic_biomass_change_rate`
-- `nuclear_biomass_change_rate`
-- `calcification_rate`
-- `relative_rupture_volume`
+- `necrosisPath(<cell_type>, "parameters", <tag>)` with `<tag>` one of
+  - `unlysed_fluid_change_rate`
+  - `lysed_fluid_change_rate`
+  - `cytoplasmic_biomass_change_rate`
+  - `nuclear_biomass_change_rate`
+  - `calcification_rate`
+  - `relative_rupture_volume`
 """
-necrosisPath(cell_definition::String, path_elements::Vararg{AbstractString})::Vector{String} = deathPath(cell_definition, "model:code:101", path_elements...)
-
-"""
-    volumePath(cell_definition::String, path_elements::Vararg{AbstractString})
-
-Return the XML path to the volume for the given cell definition (or deeper if more path elements are given).
-
-Possible `path_elements` include:
-- `volumePath(<cell_type>, <tag>)` with `<tag>` one of
-  - `"total"`
-  - `"fluid_fraction"`
-  - `"nuclear"`
-  - `"fluid_change_rate"`
-  - `"cytoplasmic_biomass_change_rate"`
-  - `"nuclear_biomass_change_rate"`
-  - `"calcified_fraction"`
-  - `"calcification_rate"`
-  - `"relative_rupture_volume"`
-"""
-volumePath(cell_definition::String, path_elements::Vararg{AbstractString})::Vector{String} = phenotypePath(cell_definition, "volume", path_elements...)
+necrosisPath(cell_definition::AbstractString, path_elements::Vararg{AbstractString}) = deathPath(cell_definition, "model:code:101", path_elements...)
 
 """
-    mechanicsPath(cell_definition::String, path_elements::Vararg{AbstractString})
+    volumePath(cell_definition::AbstractString, tag::AbstractString)
 
-Return the XML path to the mechanics for the given cell definition (or deeper if more path elements are given).
+Return the XML path to the volume for the given cell type (or deeper if more path elements are given).
+
+Possible `tag`s include:
+- `"total"`
+- `"fluid_fraction"`
+- `"nuclear"`
+- `"fluid_change_rate"`
+- `"cytoplasmic_biomass_change_rate"`
+- `"nuclear_biomass_change_rate"`
+- `"calcified_fraction"`
+- `"calcification_rate"`
+- `"relative_rupture_volume"`
+"""
+volumePath(cell_definition::AbstractString, tag::AbstractString) = phenotypePath(cell_definition, "volume", tag)
+
+"""
+    mechanicsPath(cell_definition::AbstractString, path_elements::Vararg{AbstractString})
+
+Return the XML path to the mechanics for the given cell type (or deeper if more path elements are given).
 
 Possible `path_elements` include:
 - `mechanicsPath(<cell_type>, <tag>)` with `<tag>` one of
@@ -426,12 +423,12 @@ Possible `path_elements` include:
   - `"set_relative_equilibrium_distance"`
   - `"set_absolute_equilibrium_distance"`
 """
-mechanicsPath(cell_definition::String, path_elements::Vararg{AbstractString})::Vector{String} = phenotypePath(cell_definition, "mechanics", path_elements...)
+mechanicsPath(cell_definition::AbstractString, path_elements::Vararg{AbstractString}) = phenotypePath(cell_definition, "mechanics", path_elements...)
 
 """
-    motilityPath(cell_definition::String, path_elements::Vararg{AbstractString})
+    motilityPath(cell_definition::AbstractString, path_elements::Vararg{AbstractString})
 
-Return the XML path to the motility for the given cell definition (or deeper if more path elements are given).
+Return the XML path to the motility for the given cell type (or deeper if more path elements are given).
 
 Possible `path_elements` include:
 - `motilityPath(<cell_type>, <tag>)` with `<tag>` one of
@@ -451,26 +448,25 @@ Possible `path_elements` include:
 - `motilityPath(<cell_type>, "options", "advanced_chemotaxis", "chemotactic_sensitivities", "chemotactic_sensitivity:substrate:<substrate_name>")`
   - `<substrate_name>` is a string of the model substrate
 """
-motilityPath(cell_definition::String, path_elements::Vararg{AbstractString})::Vector{String} = phenotypePath(cell_definition, "motility", path_elements...)
+motilityPath(cell_definition::AbstractString, path_elements::Vararg{AbstractString}) = phenotypePath(cell_definition, "motility", path_elements...)
 
 """
-    secretionPath(cell_definition::String, substrate_name::String, path_elements::Vararg{AbstractString})
+    secretionPath(cell_definition::AbstractString, substrate_name::AbstractString, tag::AbstractString)
 
-Return the XML path to the secretion rate of the given substrate for the given cell definition (or deeper if more path elements are given).
+Return the XML path to the secretion tag of the given substrate for the given cell type.
 
-Possible `path_elements` include:
-- `secretionPath(<cell_type>, <substrate_name>, <tag>)` with `<tag>` one of
-  - `"secretion_rate"`
-  - `"secretion_target"`
-  - `"uptake_rate"`
-  - `"net_export_rate"`
+Possible `tag`s include:
+- `"secretion_rate"`
+- `"secretion_target"`
+- `"uptake_rate"`
+- `"net_export_rate"`
 """
-secretionPath(cell_definition::String, substrate_name::String, path_elements::Vararg{AbstractString})::Vector{String} = phenotypePath(cell_definition, "secretion", "substrate:name:$(substrate_name)", path_elements...)
+secretionPath(cell_definition::AbstractString, substrate_name::AbstractString, tag::AbstractString) = phenotypePath(cell_definition, "secretion", "substrate:name:$(substrate_name)", tag)
 
 """
-    cellInteractionsPath(cell_definition::String, path_elements::Vararg{AbstractString})
+    cellInteractionsPath(cell_definition::AbstractString, path_elements::Vararg{AbstractString})
 
-Return the XML path to the cell interactions for the given cell definition (or deeper if more path elements are given).
+Return the XML path to the cell interactions for the given cell type (or deeper if more path elements are given).
 
 Possible `path_elements` include:
 - `cellInteractionsPath(<cell_type>, <tag>)` with `<tag>` one of
@@ -479,15 +475,15 @@ Possible `path_elements` include:
   - `"other_dead_phagocytosis_rate"`
   - `"attack_damage_rate"`
   - `"attack_duration"`
-For other elements in `<cell_interactions>`, use [`phagocytosisPath`](@ref), [`attackRatesPath`](@ref), or [`fusionPath`](@ref) as needed.
+For other elements in `<cell_interactions>`, use [`phagocytosisPath`](@ref), [`attackRatePath`](@ref), or [`fusionPath`](@ref) as needed.
 """
-cellInteractionsPath(cell_definition::String, path_elements::Vararg{AbstractString})::Vector{String} = phenotypePath(cell_definition, "cell_interactions", path_elements...)
+cellInteractionsPath(cell_definition::AbstractString, path_elements::Vararg{AbstractString}) = phenotypePath(cell_definition, "cell_interactions", path_elements...)
 
 """
-    phagocytosisPath(cell_definition::String, target_cell_definition::String)
-    phagocytosisPath(cell_definition::String, death_process::Symbol)
+    phagocytosisPath(cell_definition::AbstractString, target_cell_definition::AbstractString)
+    phagocytosisPath(cell_definition::AbstractString, death_process::Symbol)
 
-Return the XML path to the phagocytosis element for the given cell definition.
+Return the XML path to the phagocytosis element for the given cell type.
 If a string is supplied, it is treated as a cell type.
 If a symbol is supplied, it specifies a death model and must be one of `:apoptosis`, `:necrosis`, or `:other`.
 
@@ -512,9 +508,9 @@ julia> pcvct.phagocytosisPath("M1", :apoptotic)
  "apoptotic_phagocytosis_rate"
 ```
 """
-phagocytosisPath(cell_definition::String, target_cell_definition::String) = cellInteractionsPath(cell_definition, "live_phagocytosis_rates", "phagocytosis_rate:name:$(target_cell_definition)")
+phagocytosisPath(cell_definition::AbstractString, target_cell_definition::AbstractString) = cellInteractionsPath(cell_definition, "live_phagocytosis_rates", "phagocytosis_rate:name:$(target_cell_definition)")
 
-function phagocytosisPath(cell_definition::String, death_process::Symbol)
+function phagocytosisPath(cell_definition::AbstractString, death_process::Symbol)
     tag = begin
         if death_process in [:apoptosis, :apoptotic]
             "apoptotic_phagocytosis_rate"
@@ -536,47 +532,45 @@ function phagocytosisPath(cell_definition::String, death_process::Symbol)
 end
 
 """
-    attackRatesPath(cell_definition::String, path_elements::Vararg{AbstractString})
+    attackRatePath(cell_definition::AbstractString, target_cell_definition::AbstractString)
 
-Return the XML path to the attack rates for the given cell definition (or deeper if more path elements are given).
+Return the XML path to the attack rate of the first cell type attacking the second cell type.
 
-Possible `path_elements` include:
-- `pcvct.attackRatesPath("cd8", <tag>)` with `<tag>` one of
-  - `<cell_type>`
-  - `"attack_rate:name:<cell_type>"`
+# Examples
+```jldoctest
+julia> pcvct.attackRatePath("cd8", "cancer")
+6-element Vector{String}:
+ "cell_definitions"
+ "cell_definition:name:cd8"
+ "phenotype"
+ "cell_interactions"
+ "attack_rates"
+ "attack_rate:name:cancer"
+```
 """
-function attackRatesPath(cell_definition::String, path_elements::Vararg{AbstractString})::Vector{String}
-    if isempty(path_elements)
-        return cellInteractionsPath(cell_definition, "attack_rates")
-    end
-    if contains(path_elements[1], ":")
-        return cellInteractionsPath(cell_definition, "attack_rates", path_elements...)
-    end
-    return cellInteractionsPath(cell_definition, "attack_rates", "attack_rate:name:$(path_elements[1])", path_elements[2:end]...)
-end
-
-"""
-    fusionPath(cell_definition::String, path_elements::Vararg{AbstractString})
-
-Return the XML path to the fusion rates for the given cell definition and (optionally) the target cell type.
-
-Possible `path_elements` include:
-- `pcvct.fusionPath("cd8", <tag>)` with `<tag>` one of
-  - `<cell_type>`
-  - `"fusion_rate:name:<cell_type>"`
-"""
-function fusionPath(cell_definition::String, path_elements::Vararg{AbstractString})::Vector{String}
-    if isempty(path_elements)
-        return cellInteractionsPath(cell_definition, "fusion_rates")
-    end
-    if contains(path_elements[1], ":")
-        return cellInteractionsPath(cell_definition, "fusion_rates", path_elements...)
-    end
-    return cellInteractionsPath(cell_definition, "fusion_rates", "fusion_rate:name:$(path_elements[1])", path_elements[2:end]...)
-end
+attackRatePath(cell_definition::AbstractString, target_cell_definition::AbstractString) = cellInteractionsPath(cell_definition, "attack_rates", "attack_rate:name:$(target_cell_definition)")
 
 """
-    transformationPath(from_cell_definition::String, to_cell_definition::String)
+    fusionPath(cell_definition::AbstractString, target_cell_definition::AbstractString)
+
+Return the XML path to the fusion rate of the first cell type fusing to the second cell type.
+
+# Examples
+```jldoctest
+julia> pcvct.fusionPath("epi", "epi")
+6-element Vector{String}:
+ "cell_definitions"
+ "cell_definition:name:epi"
+ "phenotype"
+ "cell_interactions"
+ "fusion_rates"
+ "fusion_rate:name:epi"
+```
+"""
+fusionPath(cell_definition::AbstractString, target_cell_definition::AbstractString) = cellInteractionsPath(cell_definition, "fusion_rates", "fusion_rate:name:$(target_cell_definition)")
+
+"""
+    transformationPath(from_cell_definition::AbstractString, to_cell_definition::AbstractString)
 
 Return the XML path to the transformation rates for the first cell definition to the second cell definition.
 
@@ -592,42 +586,41 @@ julia> pcvct.transformationPath("M1", "M2")
  "transformation_rate:name:M2"
 ```
 """
-function transformationPath(from_cell_definition::String, to_cell_definition::String)
+function transformationPath(from_cell_definition::AbstractString, to_cell_definition::AbstractString)
     return phenotypePath(from_cell_definition, "cell_transformations", "transformation_rates", "transformation_rate:name:$(to_cell_definition)")
 end
 
 """
-    integrityPath(cell_definition::String, path_elements::Vararg{AbstractString})
+    integrityPath(cell_definition::AbstractString, tag::AbstractString)
 
-Return the XML path to the cell integrity for the given cell definition (or deeper if more path elements are given).
+Return the XML path to the cell integrity tag for the given cell type.
 
-Possible `path_elements` include:
-- `integrityPath(<cell_type>, <tag>)` with `<tag>` one of
-  - `"damage_rate"`
-  - `"damage_repair_rate"`
+Possible `tag`s include:
+- `"damage_rate"`
+- `"damage_repair_rate"`
 """
-integrityPath(cell_definition::String, path_elements::Vararg{AbstractString})::Vector{String} = phenotypePath(cell_definition, "cell_integrity", path_elements...)
-
-"""
-    customDataPath(cell_definition::String, path_elements::Vararg{AbstractString})
-
-Return the XML path to the custom data for the given cell definition (or deeper if more path elements are given).
-"""
-customDataPath(cell_definition::String, path_elements::Vararg{AbstractString})::Vector{String} = cellDefinitionPath(cell_definition, "custom_data", path_elements...)
+integrityPath(cell_definition::AbstractString, tag::AbstractString) = phenotypePath(cell_definition, "cell_integrity", tag)
 
 """
-    userParameterPath(field_name::String)
+    customDataPath(cell_definition::AbstractString, tag::AbstractString)
+
+Return the XML path to the custom data tag for the given cell type.
+"""
+customDataPath(cell_definition::AbstractString, tag::AbstractString) = cellDefinitionPath(cell_definition, "custom_data", tag)
+
+"""
+    userParameterPath(tag::AbstractString)
 
 Return the XML path to the user parameter for the given field name.
 """
-userParameterPath(field_name::String)::Vector{String} = ["user_parameters"; field_name]
+userParameterPath(tag::AbstractString) = ["user_parameters"; tag]
 
 ############# XML Path Helper Functions (non-config) #############
 
 """
     rulePath(cell_definition::AbstractString, behavior::AbstractString, path_elements::Vararg{AbstractString})
 
-Return the XML path to the rule for the given cell definition and behavior.
+Return the XML path to the rule for the given cell type and behavior.
 
 Optionally, add more path_elements to the path as extra arguments.
 
@@ -648,14 +641,14 @@ julia> rulePath("cancer", "cycle entry", "increasing_signals", "signal:name:oxyg
  "half_max"
 ```
 """
-function rulePath(cell_definition::AbstractString, behavior::AbstractString, path_elements::Vararg{AbstractString})::Vector{String}
+function rulePath(cell_definition::AbstractString, behavior::AbstractString, path_elements::Vararg{AbstractString})
     return ["behavior_ruleset:name:$(cell_definition)"; "behavior:name:$(behavior)"; path_elements...]
 end
 
 """
-    icCellsPath(cell_definition::AbstractString, patch_type::AbstractString, patch_id path_elements::Vararg{AbstractString})
+    icCellsPath(cell_definition::AbstractString, patch_type::AbstractString, patch_id, path_elements::Vararg{AbstractString})
 
-Return the XML path to the IC cell patch for the given cell definition, patch type, and patch ID.
+Return the XML path to the IC cell patch for the given cell type, patch type, and patch ID.
 Optionally, add more path_elements to the path as extra arguments.
 
 # Example
@@ -675,7 +668,7 @@ julia> icCellsPath("default", "disc", 1, "x0")
  "x0"
 ```
 """
-function icCellsPath(cell_definition::String, patch_type::String, patch_id, path_elements::Vararg{AbstractString})::Vector{String}
+function icCellsPath(cell_definition::AbstractString, patch_type::AbstractString, patch_id, path_elements::Vararg{AbstractString})
     supported_patch_types = PhysiCellCellCreator.supportedPatchTypes()
     @assert patch_type in supported_patch_types "IC Cell patch_type must be one of the available patch types, i.e., in $(supported_patch_types). Got $(patch_type)"
     return ["cell_patches:name:$(cell_definition)"; "patch_collection:type:$(patch_type)"; "patch:ID:$(patch_id)"; path_elements...]
@@ -704,7 +697,7 @@ julia> icECMPath(2, "elliptical_disc", 1, "density")
  "density"
 ```
 """
-function icECMPath(layer_id, patch_type::AbstractString, patch_id, path_elements::Vararg{AbstractString})::Vector{String}
+function icECMPath(layer_id, patch_type::AbstractString, patch_id, path_elements::Vararg{AbstractString})
     supported_patch_types = PhysiCellECMCreator.supportedPatchTypes()
     @assert patch_type in supported_patch_types "IC ECM patch_type must be one of the available patch types, i.e., in $(supported_patch_types). Got $(patch_type)"
     return ["layer:ID:$(layer_id)"; "patch_collection:type:$(patch_type)"; "patch:ID:$(patch_id)"; path_elements...]

@@ -483,7 +483,7 @@ addAttackRateVariationDimension!(evs, "immune", "cancer", [0.1, 0.2, 0.3])
 ```
 """
 function addAttackRateVariationDimension!(evs::Vector{<:ElementaryVariation}, cell_definition::String, target_name::String, values::Vector{T} where T)
-    xml_path = attackRatesPath(cell_definition, target_name)
+    xml_path = attackRatePath(cell_definition, target_name)
     push!(evs, DiscreteVariation(xml_path, values))
 end
 

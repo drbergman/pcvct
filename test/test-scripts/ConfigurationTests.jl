@@ -28,7 +28,7 @@ element_paths = [
 "motility_path" => pcvct.motilityPath(cell_type)
 
 "cell_interactions_path" => pcvct.cellInteractionsPath(cell_type)
-"attack_rates_path" => pcvct.attackRatesPath(cell_type)
+"attack_rates_path" => pcvct.attackRatePath(cell_type, cell_type)
 ]
 
 xml_doc = parse_file(path_to_xml)
@@ -48,8 +48,11 @@ node_paths = [
 "secretion_path" => pcvct.secretionPath(cell_type, "substrate", "secretion_rate")
 
 "apop_phagocytosis_path" => pcvct.phagocytosisPath(cell_type, :apoptotic)
+"nec_phagocytosis_path" => pcvct.phagocytosisPath(cell_type, :necrotic)
+"other_phagocytosis_path" => pcvct.phagocytosisPath(cell_type, :other)
+
 "live_phagocytosis_path" => pcvct.phagocytosisPath(cell_type, cell_type)
-"attack_rate_default_path" => pcvct.attackRatesPath(cell_type, cell_type)
+"attack_rate_default_path" => pcvct.attackRatePath(cell_type, cell_type)
 "fusion_path" => pcvct.fusionPath(cell_type, cell_type)
 
 "transformation_path" => pcvct.transformationPath(cell_type, cell_type)
@@ -69,7 +72,7 @@ for (i, xml_path) in enumerate(values(node_paths))
         push!(discrete_variations, DiscreteVariation(xml_path, float(i)))
     end
 end
-
+@test_throws ArgumentError pcvct.phagocytosisPath(cell_type, :not_a_type)
 push!(discrete_variations, DiscreteVariation(["overall", "max_time"], [12.0]))
 
 out = run(inputs, discrete_variations; n_replicates=n_replicates)
@@ -151,5 +154,3 @@ out = run(reference_monad, discrete_variations; n_replicates=n_replicates)
 xml_doc = parse_file(path_to_xml)
 xml_path = ["not", "a", "path"]
 @test_throws ArgumentError pcvct.retrieveElement(xml_doc, xml_path)
-
-pcvct.attackRatesPath(cell_type, "attack_rate:name:$(cell_type)")
