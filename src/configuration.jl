@@ -59,7 +59,7 @@ function retrieveElement(xml_doc::XMLDocument, xml_path::Vector{<:AbstractString
             end
         else
             current_element = contains(path_element, ":") ?
-                getChildByAttribute(current_element, split(path_element, ":")) :
+                getChildByAttribute(current_element, split(path_element, ":"; limit=3)) :
                 find_element(current_element, path_element)
         end
 
@@ -162,7 +162,7 @@ function makeXMLPath(current_element::XMLElement, xml_path::AbstractVector{<:Abs
             end
         else
             #! Deal with checking attributes
-            path_element_split = split(path_element, ":")
+            path_element_split = split(path_element, ":"; limit=3)
             child_element = getChildByAttribute(current_element, path_element_split)
             if isnothing(child_element)
                 path_element_name, attribute_name, attribute_value = path_element_split
@@ -403,7 +403,7 @@ function configPath(tokens::Vararg{Union{AbstractString,Integer}})
         elseif token2 ∈ ["damage_rate", "damage_repair_rate"]
             return integrityPath(token1, token2)
         elseif startswith(token2, "custom")
-            new_token2 = token2[8:end] #! remove "custom:" or "custom " from the token
+            new_token2 = token2[8:end] |> lstrip #! remove "custom:", "custom ", or "custom: " from the token
             return customDataPath(token1, new_token2)
         elseif token1 ∈ ["user_parameter", "user_parameters"]
             return userParameterPath(token2)
@@ -926,9 +926,9 @@ Return the XML path to the custom data tag for the given cell type.
 customDataPath(cell_definition::AbstractString, tag::AbstractString) = cellDefinitionPath(cell_definition, "custom_data", tag)
 
 """
-    customDataPath(cell_definition::AbstractString, tag::AbstractString, path_elements::Vararg{AbstractString})
+    initialParameterDistributionPath(cell_definition::AbstractString, behavior::AbstractString, path_elements::Vararg{AbstractString})
 
-Return the XML path to the initial parameter distribution tag for the given cell type.
+Return the XML path to the initial parameter distribution of the behavior for the given cell type.
 
 Possible `path_elements` depend on the `type` of the distribution:
 - `type="Uniform"`    : `min`, `max`

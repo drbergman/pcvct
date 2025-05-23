@@ -99,3 +99,8 @@ success = importProject(path_to_project)
 path_to_project = joinpath("PhysiCell", "sample_projects", "template_xml_rules")
 success = importProject(path_to_project)
 @test success
+
+# import the template xml rules (extended) project
+path_to_project = joinpath("PhysiCell", "sample_projects", "template_xml_rules_extended")
+success = importProject(path_to_project)
+@test success

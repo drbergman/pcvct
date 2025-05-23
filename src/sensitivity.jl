@@ -280,8 +280,8 @@ function calculateGSA!(moat_sampling::MOATSampling, f::Function)
     if f in keys(moat_sampling.results)
         return
     end
-    values = evaluateFunctionOnSampling(moat_sampling, f)
-    effects = 2 * (values[:,2:end] .- values[:,1]) #! all diffs in the design matrix are 0.5
+    vals = evaluateFunctionOnSampling(moat_sampling, f)
+    effects = 2 * (vals[:,2:end] .- vals[:,1]) #! all diffs in the design matrix are 0.5
     means = mean(effects, dims=1)
     means_star = mean(abs.(effects), dims=1)
     variances = var(effects, dims=1)
@@ -395,11 +395,11 @@ function calculateGSA!(sobol_sampling::SobolSampling, f::Function)
     if f in keys(sobol_sampling.results)
         return
     end
-    values = evaluateFunctionOnSampling(sobol_sampling, f)
-    d = size(values, 2) - 2
-    A_values = @view values[:, 1]
-    B_values = @view values[:, 2]
-    Aᵦ_values = [values[:, 2+i] for i in 1:d]
+    vals = evaluateFunctionOnSampling(sobol_sampling, f)
+    d = size(vals, 2) - 2
+    A_values = @view vals[:, 1]
+    B_values = @view vals[:, 2]
+    Aᵦ_values = [vals[:, 2+i] for i in 1:d]
     expected_value² = mean(A_values .* B_values) #! see Saltelli, 2002 Eq 21
     total_variance = var([A_values; B_values])
     first_order_variances = zeros(Float64, d)
@@ -518,12 +518,12 @@ function calculateGSA!(rbd_sampling::RBDSampling, f::Function)
     if f in keys(rbd_sampling.results)
         return
     end
-    values = evaluateFunctionOnSampling(rbd_sampling, f)
+    vals = evaluateFunctionOnSampling(rbd_sampling, f)
     if rbd_sampling.num_cycles == 1 // 2
-        values = vcat(values, values[end-1:-1:2, :])
+        vals = vcat(vals, vals[end-1:-1:2, :])
     end
-    ys = fft(values, 1) .|> abs2
-    ys ./= size(values, 1)
+    ys = fft(vals, 1) .|> abs2
+    ys ./= size(vals, 1)
     V = sum(ys[2:end, :], dims=1)
     Vi = 2 * sum(ys[2:(min(size(ys, 1), rbd_sampling.num_harmonics + 1)), :], dims=1)
     rbd_sampling.results[f] = (Vi ./ V) |> vec
@@ -551,7 +551,7 @@ Evaluate the given function on the sampling scheme of the global sensitivity ana
 function evaluateFunctionOnSampling(gsa_sampling::GSASampling, f::Function)
     monad_id_df = getMonadIDDataFrame(gsa_sampling)
     value_dict = Dict{Int, Float64}()
-    values = zeros(Float64, size(monad_id_df))
+    vals = zeros(Float64, size(monad_id_df))
     for (ind, monad_id) in enumerate(monad_id_df |> Matrix)
         if !haskey(value_dict, monad_id)
             simulation_ids = readConstituentIDs(Monad, monad_id)
@@ -559,9 +559,9 @@ function evaluateFunctionOnSampling(gsa_sampling::GSASampling, f::Function)
             value = sim_values |> mean
             value_dict[monad_id] = value
         end
-        values[ind] = value_dict[monad_id]
+        vals[ind] = value_dict[monad_id]
     end
-    return values
+    return vals
 end
 
 """

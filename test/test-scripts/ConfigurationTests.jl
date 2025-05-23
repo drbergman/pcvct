@@ -203,3 +203,13 @@ out = run(reference_monad, discrete_variations; n_replicates=n_replicates)
 xml_doc = parse_file(path_to_xml)
 xml_path = ["not", "a", "path"]
 @test_throws ArgumentError pcvct.retrieveElement(xml_doc, xml_path)
+
+# test the xml rules extended
+xml_path = rulePath("increasing_partial_hill", "custom:sample", "increasing_signals", "max_response")
+vals = [0.1, 1.0]
+dv = DiscreteVariation(xml_path, vals)
+
+config_folder = rules_folder = custom_code_folder = ic_cell_folder = "template_xml_rules_extended"
+inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rules_folder, ic_cell=ic_cell_folder)
+simulation = createTrial(inputs, dv)
+pcvct.prepareVariedInputFolder(:rulesets_collection, simulation)

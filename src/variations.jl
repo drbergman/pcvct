@@ -24,8 +24,20 @@ struct XMLPath
     xml_path::Vector{String}
 
     function XMLPath(xml_path::Vector{<:AbstractString})
-        custom_fields = startswith.(xml_path, "custom:")
-        xml_path[custom_fields] = "custom " .* [lstrip(p[8:end]) for p in xml_path[custom_fields]]
+        for path_element in xml_path
+            tokens = split(path_element, ":")
+            if length(tokens) < 4
+                continue
+            end
+            msg = """
+            Invalid XML path: $(path_element)
+            It has $(length(tokens)) tokens (':' is the delimiter) but the only valid path element with >3 tokens if one of:
+            - <tag>::<child_tag>:<child_tag_content>
+            - <tag>:<attribute>:custom:<custom_data_name> (where the final ':' is part of how PhysiCell denotes custom data)
+            - <tag>:<attribute>:custom: <custom_data_name> (where the final ':' is part of how PhysiCell denotes custom data)
+            """
+            @assert (isempty(tokens[2]) || tokens[3] == "custom") msg
+        end
         return new(xml_path)
     end
 end
