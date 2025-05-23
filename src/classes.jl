@@ -253,16 +253,16 @@ end
 A simulation that represents a single run of the model.
 
 To create a new simulation, best practice is to use `createTrial` and supply it with the `InputFolders` and any number of single-valued DiscreteVariations:
-```
+```julia
 inputs = InputFolders(config_folder, custom_code_folder)
 simulation = createTrial(inputs) # uses the default config file as-is
 
-ev = DiscreteVariation(["overall","max_time"], 1440)
+ev = DiscreteVariation(configPath("max_time"), 1440)
 simulation = createTrial(inputs, ev) # uses the config file with the specified variation
 ```
 
 If there is a previously created simulation that you wish to access, you can use its ID to create a `Simulation` object:
-```
+```julia
 simulation = Simulation(simulation_id)
 ```
 
@@ -351,18 +351,18 @@ To create a new monad, best practice is to use `createTrial` and supply it with 
 Set `n_replicates=0` to avoid adding new simulations to the database. This is useful for creating references for later use.
 Otherwise, set `n_replicates` > 1 to create the simulations to go with this monad.
 If `n_replicates` = 1, it will return a `Simulation` object.
-```
+```julia
 inputs = InputFolders(config_folder, custom_code_folder)
 monad = createTrial(inputs; n_replicates=0) # uses the default config file as-is
 
-ev = DiscreteVariation(["overall","max_time"], 1440)
+ev = DiscreteVariation(configPath("max_time"), 1440)
 monad = createTrial(inputs, ev; n_replicates=10) # uses the config file with the specified variation
 
 monad = createTrial(inputs, ev; n_replicates=10, use_previous=false) # changes the default behavior and creates 10 new simulations for this monad
 ```
 
 If there is a previously created monad that you wish to access, you can use its ID to create a `Monad` object:
-```
+```julia
 monad = Monad(monad_id)
 monad = Monad(monad_id; n_replicates=5) # ensures at least 5 simulations in the monad (using previous sims)
 ```
@@ -503,14 +503,14 @@ A group of monads that have the same input folders, but differ in parameter valu
 
 To create a new sampling, best practice is to use `createTrial` and supply it with the `InputFolders` and any number of DiscreteVariations.
 At least one should have multiple values to create a sampling.
-```
+```julia
 inputs = InputFolders(config_folder, custom_code_folder)
-ev = DiscreteVariation(["overall","max_time"], [1440, 2880]))
+ev = DiscreteVariation(configPath("max_time"), [1440, 2880]))
 sampling = createTrial(inputs, ev; n_replicates=3, use_previous=true)
 ```
 
 If there is a previously created sampling that you wish to access, you can use its ID to create a `Sampling` object:
-```
+```julia
 sampling = Sampling(sampling_id)
 sampling = Sampling(sampling_id; n_replicates=5) # ensures at least 5 simulations in each monad (using previous sims)
 sampling = Sampling(sampling_id; n_replicates=5, use_previous=false) # creates 5 new simulations in each monad
@@ -678,17 +678,17 @@ end
 A group of samplings that can have different input folders.
 
 To create a new trial, best practice currently is to create a vector of `Sampling` objects and passing them to `Trial`.
-```
+```julia
 inputs_1 = InputFolders(config_folder_1, custom_code_folder_1)
 inputs_2 = InputFolders(config_folder_2, custom_code_folder_2)
-ev = DiscreteVariation(["overall","max_time"], [1440, 2880]))
+ev = DiscreteVariation(configPath("max_time"), [1440, 2880]))
 sampling_1 = createTrial(inputs_1, ev; n_replicates=3, use_previous=true)
 sampling_2 = createTrial(inputs_2, ev; n_replicates=3, use_previous=true)
 trial = Trial([sampling_1, sampling_2])
 ```
 
 If there is a previous trial that you wish to access, you can use its ID to create a `Trial` object:
-```
+```julia
 trial = Trial(trial_id)
 trial = Trial(trial_id; n_replicates=5) # ensures at least 5 simulations in each monad (using previous sims)
 trial = Trial(trial_id; n_replicates=5, use_previous=false) # creates 5 new simulations in each monad

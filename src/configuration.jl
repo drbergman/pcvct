@@ -1,8 +1,9 @@
 using PhysiCellXMLRules, PhysiCellCellCreator, PhysiCellECMCreator, LightXML
 
-export rulePath, icCellsPath, icECMPath
+export configPath, rulePath, icCellsPath, icECMPath
 
-@compat public cellDefinitionPath, phenotypePath, cyclePath,
+@compat public domainPath, timePath, fullSavePath, svgSavePath, substratePath,
+               cellDefinitionPath, phenotypePath, cyclePath,
                apoptosisPath, necrosisPath, volumePath, mechanicsPath,
                motilityPath, secretionPath, cellInteractionsPath,
                phagocytosisPath, attackRatePath, fusionPath,
@@ -310,6 +311,281 @@ end
 ################## XML Path Helper Functions ##################
 
 """
+    configPath(tokens::Vararg{Union{AbstractString,Integer}})
+
+Return the XML path to the configuration for the given tokens, inferring the path based on the tokens.
+
+This is an experimental feature that can perhaps standardize ways to access the configuration XML path with (hopefully) minimal referencing of the XML file.
+Take a guess at what you think the inputs should be.
+Depending on the number of tokens passed in, the function will try to infer the path or throw an error if it cannot.
+The error message will include the possible tokens that can be used for the given number of tokens as well as the more explicit function that has specific documentation.
+"""
+function configPath(tokens::Vararg{Union{AbstractString,Integer}})
+    @assert length(tokens) > 0 "At least one token is required"
+    if length(tokens) == 1
+        token = tokens[1]
+        if token ∈ ["x_min", "x_max", "y_min", "y_max", "z_min", "z_max", "dx", "dy", "dz", "use_2D"]
+            return domainPath(token)
+        elseif token ∈ ["max_time", "dt_intracellular", "dt_diffusion", "dt_mechanics", "dt_phenotype"]
+            return timePath(token)
+        elseif contains(token, "full") && contains(token, "data")
+            return fullSavePath()
+        elseif contains(lowercase(token), "svg") && contains(token, "save")
+            return svgSavePath()
+        else
+            msg = """
+            Unrecognized singular token for configPath: $(token)
+            Possible singular tokens include:
+            - "x_min", "x_max", "y_min", "y_max", "z_min", "z_max", "dx", "dy", "dz", "use_2D" (see `domainPath`)
+            - "max_time", "dt_intracellular", "dt_diffusion", "dt_mechanics", "dt_phenotype" (see `timePath`)
+            - "full_data_interval" (see `fullSavePath`)
+            - "SVG_save_interval" (see `svgSavePath`)
+
+            If this is a user parameter, use two tokens instead:
+              configPath("user_parameter", $(token)) # see `userParameterPath`
+            """
+            throw(ArgumentError(msg))
+        end
+    elseif length(tokens) == 2
+        token1, token2 = tokens
+        if token2 ∈ ["diffusion_coefficient", "decay_rate"]
+            return substratePath(token1, "physical_parameter_set", token2)
+        elseif token2 ∈ ["initial_condition", "Dirichlet_boundary_condition"]
+            return substratePath(token1, token2)
+        elseif token2 ∈ ["total", "fluid_fraction", "nuclear", "fluid_change_rate", "cytoplasmic_biomass_change_rate", "nuclear_biomass_change_rate", "calcified_fraction", "calcification_rate", "relative_rupture_volume"]
+            return volumePath(token1, token2)
+        elseif token2 ∈ ["cell_cell_adhesion_strength", "cell_cell_repulsion_strength", "relative_maximum_adhesion_distance", "attachment_elastic_constant", "attachment_rate", "detachment_rate", "maximum_number_of_attachments"]
+            return mechanicsPath(token1, token2)
+        elseif token2 ∈ ["set_relative_equilibrium_distance", "set_absolute_equilibrium_distance"]
+            return mechanicsPath(token1, "options", token2)
+        elseif token2 ∈ ["speed", "persistence_time", "migration_bias"]
+            return motilityPath(token1, token2)
+        elseif token2 ∈ ["apoptotic_phagocytosis_rate", "necrotic_phagocytosis_rate", "other_dead_phagocytosis_rate", "attack_damage_rate", "attack_duration"]
+            return cellInteractionsPath(token1, token2)
+        elseif token2 ∈ ["damage_rate", "damage_repair_rate"]
+            return integrityPath(token1, token2)
+        elseif startswith(token2, "custom")
+            new_token2 = token2[8:end] #! remove "custom:" or "custom " from the token
+            return customDataPath(token1, new_token2)
+        elseif token1 ∈ ["user_parameter", "user_parameters"]
+            return userParameterPath(token2)
+        else
+            msg = """
+            Unrecognized tokens for configPath: $(tokens)
+            Possible second tokens include:
+            - "diffusion_coefficient", "decay_rate" (see `substratePath`)
+            - "initial_condition", "Dirichlet_boundary_condition" (see `substratePath`)
+            - "total", "fluid_fraction", "nuclear", "fluid_change_rate", "cytoplasmic_biomass_change_rate", "nuclear_biomass_change_rate", "calcified_fraction", "calcification_rate", "relative_rupture_volume" (see `volumePath`)
+            - "cell_cell_adhesion_strength", "cell_cell_repulsion_strength", "relative_maximum_adhesion_distance", "attachment_elastic_constant", "attachment_rate", "detachment_rate", "maximum_number_of_attachments" (see `mechanicsPath`)
+            - "set_relative_equilibrium_distance", "set_absolute_equilibrium_distance" (see `mechanicsPath`)
+            - "speed", "persistence_time", "migration_bias" (see `motilityPath`)
+            - "apoptotic_phagocytosis_rate", "necrotic_phagocytosis_rate", "other_dead_phagocytosis_rate", "attack_damage_rate", "attack_duration" (see `cellInteractionsPath`)
+            - "damage_rate", "damage_repair_rate" (see `integrityPath`)
+            - "custom:<tag>" (see `customDataPath`)
+
+            Alternatively, if this is a user parameter, make sure it is of the form:
+              configPath("user_parameter", <parameter>)
+            """
+            throw(ArgumentError(msg))
+        end
+    elseif length(tokens) == 3
+        token1, token2, token3 = tokens
+        if token2 == "Dirichlet_options"
+            return substratePath(token1, token2, "boundary_value:ID:$(token3)")
+        elseif contains(token2, "cycle") && contains(token2, "rate") && (token3 isa Integer || all(c -> isdigit(c), token3))
+            return cyclePath(token1, "phase_transition_rates", "rate:start_index:$(token3)")
+        elseif contains(token2, "cycle") && contains(token2, "duration") && (token3 isa Integer || all(c -> isdigit(c), token3))
+            return cyclePath(token1, "phase_durations", "duration:index:$(token3)")
+        elseif token2 == "apoptosis"
+            return inferDeathModelPath(:apoptosis, token1, token3)
+        elseif token2 == "necrosis"
+            return inferDeathModelPath(:necrosis, token1, token3)
+        elseif token2 ∈ ["adhesion", "adhesion_affinity", "adhesion_affinities", "cell_adhesion", "cell_adhesion_affinity", "cell_adhesion_affinities"]
+            return mechanicsPath(token1, "cell_adhesion_affinities", "cell_adhesion_affinity:name:$(token3)")
+        elseif token2 == "motility"
+            return motilityPath(token1, "options", token3)
+        elseif token2 == "chemotaxis"
+            return motilityPath(token1, "options", "chemotaxis", token3)
+        elseif contains(token2, "chemotaxis") && contains(token2, "advanced")
+            if token3 ∈ ["enabled", "normalize_each_gradient"]
+                return motilityPath(token1, "options", "advanced_chemotaxis", token3)
+            else
+                return motilityPath(token1, "options", "advanced_chemotaxis", "chemotactic_sensitivities", "chemotactic_sensitivity:substrate:$(token3)")
+            end
+        elseif token3 ∈ ["secretion_rate", "secretion_target", "uptake_rate", "net_export_rate"]
+            return secretionPath(token1, token2, token3)
+        elseif token2 ∈ ["phagocytosis", "phagocytose"]
+            if token3 ∈ ["apoptotic", "necrotic", "other_dead"]
+                return phagocytosisPath(token1, Symbol(token3))
+            else
+                return phagocytosisPath(token1, token3)
+            end
+        elseif token2 ∈ ["fusion", "fuse to"]
+            return fusionPath(token1, token3)
+        elseif token2 ∈ ["transformation", "transform to"]
+            return transformationPath(token1, token3)
+        elseif token2 ∈ ["attack", "attack_rate"]
+            return attackRatePath(token1, token3)
+        elseif token2 == "custom"
+            return customDataPath(token1, token3)
+        else
+            msg = """
+            Unrecognized triple of tokens for configPath: $(tokens)
+            Possible triple tokens include:
+            - `configPath(<substrate_name>, "Dirichlet_options", "boundary_value:ID:<boundary_id>")` (see `substratePath`)
+            - `configPath(<cell_type>, "cycle_rate", "0")` (see `cyclePath`)
+            - `configPath(<cell_type>, "cycle_duration", "0")` (see `cyclePath`)
+            - `configPath(<cell_type>, "apoptosis", <parameter>)` (see `apoptosisPath`)
+            - `configPath(<cell_type>, "necrosis", <parameter>)` (see `necrosisPath`)
+            - `configPath(<cell_type>, "adhesion", <cell_type>)` (see `mechanicsPath`)
+            - `configPath(<cell_type>, "motility", <parameter>)` (see `motilityPath`)
+            - `configPath(<cell_type>, "chemotaxis", <parameter>)` (see `motilityPath`)
+            - `configPath(<cell_type>, "advanced_chemotaxis", <parameter>)` (see `motilityPath`)
+            - `configPath(<cell_type>, "advanced_chemotaxis", <substrate_name>)` (see `motilityPath`)
+            - `configPath(<cell_type>, <substrate_name>, <parameter>)` (see `secretionPath`)
+            - `configPath(<cell_type>, <interaction>, <cell_type>)` (`<interaction>` is one of "phagocytosis", "fusion", "transformation", "attack_rate") (see `cellInteractionsPath`)
+            - `configPath(<cell_type>, "custom", <tag>)` (see `customDataPath`)
+            """
+            throw(ArgumentError(msg))
+        end
+    elseif length(tokens) == 4
+        token1, token2, token3, token4 = tokens
+        recognized_duration_tokens = ["duration"]
+        recognized_rate_tokens = ["rate", "transition_rate", "phase_transition_rate"]
+        if token2 == "cycle" && (token3 ∈ recognized_duration_tokens || token3 ∈ recognized_rate_tokens)
+            if token3 ∈ recognized_duration_tokens
+                return cyclePath(token1, "phase_durations", "duration:index:$(token4)")
+            else
+                return cyclePath(token1, "phase_transition_rates", "rate:start_index:$(token4)")
+            end
+        elseif token2 == "necrosis"
+            @assert token3 ∈ ["duration", "transition_rate"] "Unrecognized third token for necrosis with four tokens passed in to configPath: $(token3). Needs to be either \"duration\" or \"transition_rate\""
+            return inferDeathModelPath(:necrosis, token1, "$(token3)_$(token4)")
+        else
+            msg = """
+            Unrecognized four tokens for configPath: $(tokens)
+            Possible four tokens include:
+            - `configPath(<cell_type>, "cycle", "duration", <index>)` (see `cyclePath`)
+            - `configPath(<cell_type>, "cycle", "rate", <start_index>)` (see `cyclePath`)
+            - `configPath(<cell_type>, "necrosis", "duration", <index>)` (see `necrosisPath`)
+            - `configPath(<cell_type>, "necrosis", "transition_rate", <start_index>)` (see `necrosisPath`)
+            """
+            throw(ArgumentError(msg))
+        end
+    else
+        throw(ArgumentError("Only one token or two tokens is allowed for now..."))
+    end
+end
+
+"""
+    inferDeathModelPath(death_model::Symbol, token1::AbstractString, token3::AbstractString)
+
+Helper function to infer the death model path based on the death model and the third token passed in to [`configPath`](@ref).
+"""
+function inferDeathModelPath(death_model::Symbol, token1::AbstractString, token3::AbstractString)
+    path_fn = death_model == :apoptosis ? apoptosisPath : necrosisPath
+    if token3 ∈ ["unlysed_fluid_change_rate", "lysed_fluid_change_rate", "cytoplasmic_biomass_change_rate", "nuclear_biomass_change_rate", "calcification_rate", "relative_rupture_volume"]
+        return path_fn(token1, "parameters", token3)
+    elseif token3 == "rate" || (contains(token3, "death") && contains(token3, "rate"))
+        return path_fn(token1, "death_rate")
+    elseif token3 ∈ ["duration", "duration_0"]
+        return path_fn(token1, "phase_durations", "duration:index:0")
+    elseif token3 == "duration_1"
+        return path_fn(token1, "phase_durations", "duration:index:1")
+    elseif token3 ∈ ["transition_rate", "transition_rate_0"]
+        return path_fn(token1, "phase_transition_rates", "rate:start_index:0")
+    elseif token3 == "transition_rate_1"
+        return path_fn(token1, "phase_transition_rates", "rate:start_index:1")
+    else
+        msg = """
+        Unrecognized third token for configPath when second token is "$(death_model)": $(token3)
+        Possible third tokens include:
+        - "unlysed_fluid_change_rate", "lysed_fluid_change_rate", "cytoplasmic_biomass_change_rate", "nuclear_biomass_change_rate", "calcification_rate", "relative_rupture_volume"
+        - "death_rate"
+        """
+        if death_model == :apoptosis
+            msg *= """
+            - "duration", "transition_rate"
+            """
+        else
+            msg *= """
+            - "duration_0", "transition_rate_0", "duration_1", "transition_rate_1"
+            """
+        end
+        throw(ArgumentError(msg))
+    end
+end
+
+"""
+    domainPath(tag::AbstractString)
+
+Return the XML path to the domain for the given tag.
+
+Possible `tag`s include:
+- `"x_min"`
+- `"x_max"`
+- `"y_min"`
+- `"y_max"`
+- `"z_min"`
+- `"z_max"`
+- `"dx"`
+- `"dy"`
+- `"dz"`
+- `"use_2D"` (value is `"true"`or `"false"`)
+"""
+domainPath(tag::AbstractString) = ["domain"; tag]
+
+"""
+    timePath(tag::AbstractString)
+
+Return the XML path to the time for the given tag.
+
+Possible `tag`s include:
+- `"max_time"`
+- `"dt_intracellular"`
+- `"dt_diffusion"`
+- `"dt_mechanics"`
+- `"dt_phenotype"`
+"""
+timePath(tag::AbstractString) = ["overall"; tag]
+
+"""
+    fullSavePath()
+
+Return the XML path to the interval for full data saves.
+"""
+fullSavePath() = ["save"; "full_data"; "interval"]
+
+"""
+    svgSavePath()
+
+Return the XML path to the interval for SVG data saves.
+"""
+svgSavePath() = ["save"; "SVG"; "interval"]
+
+"""
+    substratePath(substrate_name::AbstractString, path_elements::Vararg{AbstractString})
+
+Return the XML path to the substrate for the given name (or deeper if more path elements are given).
+
+Possible `path_elements` include:
+- `substratePath(<substrate_name>, "physical_parameter_set", <tag>)` with `<tag>` one of
+  - `"diffusion_coefficient"`
+  - `"decay_rate"`
+- `substratePath(<substrate_name>, <tag>)` with `<tag>` one of
+  - `"initial_condition"`
+  - `"Dirichlet_boundary_condition"`
+- `substratePath(<substrate_name>, "Dirichlet_options", "boundary_value:ID:<boundary_id>")` where `<boundary_id>` is one of
+  - `"xmin"`
+  - `"xmax"`
+  - `"ymin"`
+  - `"ymax"`
+  - `"zmin"`
+  - `"zmax"`
+"""
+substratePath(substrate_name::AbstractString, path_elements::Vararg{AbstractString}) = ["microenvironment_setup"; "variable:name:$(substrate_name)"; path_elements...]
+
+"""
     cellDefinitionPath(cell_definition::AbstractString, path_elements::Vararg{AbstractString})
 
 Return the XML path to the cell definition or deeper if more path elements are given.
@@ -485,7 +761,7 @@ cellInteractionsPath(cell_definition::AbstractString, path_elements::Vararg{Abst
 
 Return the XML path to the phagocytosis element for the given cell type.
 If a string is supplied, it is treated as a cell type.
-If a symbol is supplied, it specifies a death model and must be one of `:apoptosis`, `:necrosis`, or `:other`.
+If a symbol is supplied, it specifies a death model and must be one of `:apoptosis`, `:necrosis`, or `:other_dead`.
 
 # Examples
 ```jldoctest
@@ -516,12 +792,12 @@ function phagocytosisPath(cell_definition::AbstractString, death_process::Symbol
             "apoptotic_phagocytosis_rate"
         elseif death_process in [:necrosis, :necrotic]
             "necrotic_phagocytosis_rate"
-        elseif death_process in [:other, :other_dead]
+        elseif death_process == :other_dead
             "other_dead_phagocytosis_rate"
         else
             msg = """
             The `death_process` symbol passed in to `phagocytosisPath` must be one of...
-              :apoptosis, :necrosis, or :other.
+              :apoptosis, :necrosis, or :other_dead.
               
               Got: $(death_process)
             """

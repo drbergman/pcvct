@@ -9,9 +9,9 @@ custom_code_folder = "0_template"
 inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rulesets_collection_folder)
 
 discrete_variations = DiscreteVariation[]
-push!(discrete_variations, DiscreteVariation(["overall","max_time"], 12.0))
-push!(discrete_variations, DiscreteVariation(["save","full_data","interval"], 6.0))
-push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], 6.0))
+push!(discrete_variations, DiscreteVariation(configPath("max_time"), 12.0))
+push!(discrete_variations, DiscreteVariation(configPath("full_data"), 6.0))
+push!(discrete_variations, DiscreteVariation(configPath("svg_save"), 6.0))
 
 simulation = createTrial(inputs, discrete_variations; use_previous=false)
 @test simulation isa Simulation

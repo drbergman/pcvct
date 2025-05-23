@@ -17,9 +17,9 @@ inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rul
 n_replicates = 1
 
 discrete_variations = DiscreteVariation[]
-push!(discrete_variations, DiscreteVariation(["overall","max_time"], 12.0))
-push!(discrete_variations, DiscreteVariation(["save","full_data","interval"], 6.0))
-push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], 6.0))
+push!(discrete_variations, DiscreteVariation(configPath("max_time"), 12.0))
+push!(discrete_variations, DiscreteVariation(configPath("full_data"), 6.0))
+push!(discrete_variations, DiscreteVariation(configPath("svg_save"), 6.0))
 
 simulation = createTrial(inputs, discrete_variations)
 
@@ -42,13 +42,13 @@ df = pcvct.queryToDataFrame(query; is_row=true)
 
 cell_type = "default"
 discrete_variations = DiscreteVariation[]
-xml_path = pcvct.cyclePath(cell_type, "phase_durations", "duration:index:0")
+xml_path = configPath(cell_type, "cycle_duration", 0)
 push!(discrete_variations, DiscreteVariation(xml_path, [1.0, 2.0]))
-xml_path = pcvct.cyclePath(cell_type, "phase_durations", "duration:index:1")
+xml_path = configPath(cell_type, "cycle_duration", 1)
 push!(discrete_variations, DiscreteVariation(xml_path, 3.0))
-xml_path = pcvct.cyclePath(cell_type, "phase_durations", "duration:index:2")
+xml_path = configPath(cell_type, "cycle_duration", 2)
 push!(discrete_variations, DiscreteVariation(xml_path, 4.0))
-xml_path = pcvct.cyclePath(cell_type, "phase_durations", "duration:index:3")
+xml_path = configPath(cell_type, "cycle_duration", 3)
 push!(discrete_variations, DiscreteVariation(xml_path, 5.0))
 
 sampling = createTrial(simulation, discrete_variations; n_replicates=n_replicates)
