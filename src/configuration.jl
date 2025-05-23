@@ -473,7 +473,7 @@ function configPath(tokens::Vararg{Union{AbstractString,Integer}})
             throw(ArgumentError(msg))
         end
     else
-        throw(ArgumentError("Only one token or two tokens is allowed for now..."))
+        throw(ArgumentError("configPath only supports 1, 2, 3, or 4 tokens. Got $(length(tokens)) tokens."))
     end
 end
 

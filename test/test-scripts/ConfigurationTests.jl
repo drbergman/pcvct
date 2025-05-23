@@ -95,6 +95,9 @@ end
 @test_throws ArgumentError configPath(cell_type, "not_a_par")
 @test_throws ArgumentError configPath(cell_type, "not_a_tag", "par")
 @test_throws ArgumentError configPath(cell_type, "apoptosis", "duration", 0)
+@test_throws ArgumentError configPath("too", "many", "args", "for", "configPath")
+@test_throws ArgumentError configPath(cell_type, "apoptosis", "not_a_death_par")
+@test_throws ArgumentError configPath(cell_type, "necrosis", "not_a_death_par")
 
 discrete_variations = DiscreteVariation[]
 for (i, xml_path) in enumerate(element_paths)
@@ -133,7 +136,7 @@ push!(monads, monad)
 sampling_1 = Sampling(monads)
 
 discrete_variations = DiscreteVariation[]
-xml_path = pcvct.motilityPath(cell_type, "speed")
+xml_path = configPath(cell_type, "speed")
 push!(discrete_variations, DiscreteVariation(xml_path, [0.1, 1.0]))
 addCustomDataVariationDimension!(discrete_variations, cell_type, "sample", [0.1, 1.0])
 sampling_2 = createTrial(reference_monad, discrete_variations; n_replicates=n_replicates)
@@ -159,7 +162,7 @@ out = run(reference_monad, discrete_variations; n_replicates=n_replicates)
 hashBorderPrint("SUCCESSFULLY VARIED RULESETS PARAMETERS!")
 
 discrete_variations = DiscreteVariation[]
-xml_path = pcvct.motilityPath(cell_type, "speed")
+xml_path = configPath(cell_type, "speed")
 push!(discrete_variations, DiscreteVariation(xml_path, [0.1, 1.0]))
 xml_path = rulePath("default", "cycle entry", "decreasing_signals", "signal:name:pressure", "half_max")
 push!(discrete_variations, DiscreteVariation(xml_path, [0.3, 0.6]))
