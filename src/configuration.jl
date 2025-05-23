@@ -8,7 +8,7 @@ export configPath, rulePath, icCellsPath, icECMPath
                motilityPath, secretionPath, cellInteractionsPath,
                phagocytosisPath, attackRatePath, fusionPath,
                transformationPath, integrityPath, customDataPath,
-               userParameterPath
+               initialParameterDistributionPath, userParameterPath
 
 ################## XML Functions ##################
 
@@ -855,6 +855,7 @@ end
     attackRatePath(cell_definition::AbstractString, target_cell_definition::AbstractString)
 
 Return the XML path to the attack rate of the first cell type attacking the second cell type.
+[`attackPath`](@ref) and [`attackRatesPath`](@ref) are synonyms for this function.
 
 # Examples
 ```jldoctest
@@ -869,6 +870,20 @@ julia> pcvct.attackRatePath("cd8", "cancer")
 ```
 """
 attackRatePath(cell_definition::AbstractString, target_cell_definition::AbstractString) = cellInteractionsPath(cell_definition, "attack_rates", "attack_rate:name:$(target_cell_definition)")
+
+"""
+    attackPath(cell_definition::AbstractString, target_cell_definition::AbstractString)
+
+Alias for [`attackRatePath`](@ref).
+"""
+attackPath = attackRatePath
+
+"""
+    attackRatesPath(cell_definition::AbstractString, target_cell_definition::AbstractString)
+
+Alias for [`attackRatePath`](@ref).
+"""
+attackRatesPath = attackRatePath
 
 """
     fusionPath(cell_definition::AbstractString, target_cell_definition::AbstractString)
@@ -947,9 +962,16 @@ end
 """
     userParameterPath(tag::AbstractString)
 
-Return the XML path to the user parameter for the given field name.
+Return the XML path to the user parameter for the given field name. [`userParametersPath`](@ref) is a synonym for this function.
 """
 userParameterPath(tag::AbstractString) = ["user_parameters"; tag]
+
+"""
+    userParametersPath(tag::AbstractString)
+
+Alias for [`userParameterPath`](@ref).
+"""
+userParametersPath = userParameterPath
 
 ############# XML Path Helper Functions (non-config) #############
 

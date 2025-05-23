@@ -30,6 +30,7 @@ cell_type_double_tokens = ["total", "fluid_fraction", "nuclear", "fluid_change_r
 append!(element_paths, [configPath(cell_type, token) for token in cell_type_double_tokens])
 
 push!(element_paths, configPath("user_parameters", "number_of_cells"))
+push!(element_paths, pcvct.userParametersPath("number_of_cells"))
 
     #! triple token paths
 append!(element_paths, [configPath(substrate, "Dirichlet_options", token) for token in ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"]])
@@ -53,6 +54,8 @@ append!(element_paths, [configPath(cell_type, substrate, tag) for tag in ["secre
 append!(element_paths, [configPath(cell_type, "phagocytose", tag) for tag in ["apoptotic", "necrotic", "other_dead", cell_type]])
 
 append!(element_paths, [configPath(cell_type, tag, cell_type) for tag in ["fuse to", "attack", "transform to"]])
+push!(element_paths, pcvct.attackPath(cell_type, cell_type))
+push!(element_paths, pcvct.attackRatesPath(cell_type, cell_type))
 
 push!(element_paths, configPath(cell_type, "custom", "sample"))
 
