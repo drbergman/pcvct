@@ -17,28 +17,46 @@ path_to_xml = joinpath("data", "inputs", "configs", config_folder, "PhysiCell_se
 cell_type = "default"
 substrate = "substrate"
 
+#! build all the possible path elements supported by the configPath function
+    #! single token paths
 single_tokens = ["x_min", "x_max", "y_min", "y_max", "z_min", "z_max", "dx", "dy", "dz", "use_2D", "max_time", "dt_intracellular", "dt_diffusion", "dt_mechanics", "dt_phenotype", "full_data_interval", "SVG_save_interval"]
 element_paths = configPath.(single_tokens)
+
+    #! double token paths
 substrate_double_tokens = ["diffusion_coefficient", "decay_rate", "initial_condition", "Dirichlet_boundary_condition"]
 append!(element_paths, [configPath(substrate, token) for token in substrate_double_tokens])
+
 cell_type_double_tokens = ["total", "fluid_fraction", "nuclear", "fluid_change_rate", "cytoplasmic_biomass_change_rate", "nuclear_biomass_change_rate", "calcified_fraction", "calcification_rate", "relative_rupture_volume", "cell_cell_adhesion_strength", "cell_cell_repulsion_strength", "relative_maximum_adhesion_distance", "attachment_elastic_constant", "attachment_rate", "detachment_rate", "maximum_number_of_attachments", "set_relative_equilibrium_distance", "set_absolute_equilibrium_distance", "speed", "persistence_time", "migration_bias", "apoptotic_phagocytosis_rate", "necrotic_phagocytosis_rate", "other_dead_phagocytosis_rate", "attack_damage_rate", "attack_duration", "damage_rate", "damage_repair_rate", "custom:sample"]
 append!(element_paths, [configPath(cell_type, token) for token in cell_type_double_tokens])
+
 push!(element_paths, configPath("user_parameters", "number_of_cells"))
+
+    #! triple token paths
 append!(element_paths, [configPath(substrate, "Dirichlet_options", token) for token in ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"]])
+
 append!(element_paths, [configPath(cell_type, tag, 0) for tag in ["cycle_rate", "cycle_duration"]])
+
 common_death_tags = ["rate", "unlysed_fluid_change_rate", "lysed_fluid_change_rate", "cytoplasmic_biomass_change_rate", "nuclear_biomass_change_rate", "calcification_rate", "relative_rupture_volume"]
 append!(element_paths, [configPath(cell_type, "apoptosis", tag) for tag in common_death_tags])
 append!(element_paths, [configPath(cell_type, "necrosis", tag) for tag in common_death_tags])
+
 append!(element_paths, [configPath(cell_type, "apoptosis", tag) for tag in ["duration", "transition_rate"]])
 append!(element_paths, [configPath(cell_type, "necrosis", tag) for tag in ["duration_0", "transition_rate_0", "duration_1", "transition_rate_1"]])
+
 push!(element_paths, configPath(cell_type, "adhesion", cell_type))
+
 append!(element_paths, [configPath(cell_type, "motility", tag) for tag in ["enabled", "use_2D"]])
 append!(element_paths, [configPath(cell_type, "chemotaxis", tag) for tag in ["enabled", "substrate", "direction"]])
 append!(element_paths, [configPath(cell_type, "advanced_chemotaxis", tag) for tag in ["enabled", "normalize_each_gradient", substrate]])
+
 append!(element_paths, [configPath(cell_type, substrate, tag) for tag in ["secretion_rate", "secretion_target", "uptake_rate", "net_export_rate"]])
 append!(element_paths, [configPath(cell_type, "phagocytose", tag) for tag in ["apoptotic", "necrotic", "other_dead", cell_type]])
+
 append!(element_paths, [configPath(cell_type, tag, cell_type) for tag in ["fuse to", "attack", "transform to"]])
+
 push!(element_paths, configPath(cell_type, "custom", "sample"))
+
+    #! four token paths
 append!(element_paths, [configPath(cell_type, "cycle", tag, 0) for tag in ["duration", "rate"]])
 append!(element_paths, [configPath(cell_type, "necrosis", tag1, tag2) for tag1 in ["duration", "transition_rate"], tag2 in [0, 1]] |> vec)
 
@@ -51,7 +69,7 @@ paths_not_in_template = [
     configPath(cell_type, "necrosis", "transition_rate", 1)
 ]
 
-#! these are paths that have already been accounted for or don't want to try varying (maybe not an number)
+#! these are paths that have already been accounted for or don't want to try varying (maybe not a number)
 paths_to_skip = [
     configPath("use_2D"),
     configPath("full_data_interval"),
@@ -66,24 +84,17 @@ xml_doc = parse_file(path_to_xml)
 indices_to_pop = []
 for (i, ep) in enumerate(element_paths)
     ce = pcvct.retrieveElement(xml_doc, ep; required=false)
+    test_fn = !isnothing #! default test function
     if ep in paths_not_in_template
-        if !isnothing(ce)
-            println("!isnothing: ep = $ep")
-        end
-        @test isnothing(ce) #! make sure the element was not found
+        test_fn = isnothing
         push!(indices_to_pop, i)
     elseif ep in paths_to_skip
-        if isnothing(ce)
-            println("ep = $ep")
-        end
-        @test !isnothing(ce)
         push!(indices_to_pop, i)
     else
-        if isnothing(ce)
-            println("ep = $ep")
-        end
-        @test !isnothing(ce) #! make sure the element was found
-        push!(paths_to_skip, ep)
+        push!(paths_to_skip, ep) #! do not vary this parameter two times!
+    end
+    if (@test test_fn(ce)) isa Test.Fail
+        println("Element $(ep) was not retrieved as expected. Expected to get $(test_fn)")
     end
 end
 free(xml_doc)
