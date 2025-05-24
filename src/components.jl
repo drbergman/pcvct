@@ -115,7 +115,7 @@ function assembleIntracellular!(cell_to_components_dict::Dict{String,Vector{Phys
     end
 
     #! compare against previously-assembled intracellulars
-    path_to_folder = getIntracellularFolder(assembly_manifest)
+    path_to_folder = intracellularFolder(assembly_manifest)
     if !isnothing(path_to_folder)
         updateIntracellularComponentIDs!(cell_to_components_dict, path_to_folder)
         return splitpath(path_to_folder)[end]
@@ -163,7 +163,7 @@ function assembleIntracellular!(cell_to_components_dict::Dict{String,Vector{Phys
         set_attribute(e_intracellular, "ID", string(i))
         set_attribute(e_intracellular, "type", component.type)
 
-        path_to_component_xml = joinpath(data_dir, "components", pathFromComponents(component))
+        path_to_component_xml = joinpath(dataDir(), "components", pathFromComponents(component))
         component_xml_doc = parse_file(path_to_component_xml)
         component_xml_root = root(component_xml_doc)
         add_child(e_intracellular, component_xml_root)
@@ -179,7 +179,7 @@ function assembleIntracellular!(cell_to_components_dict::Dict{String,Vector{Phys
     end
 
     #! make sure the database is updated, variations.db intialized
-    if initialized && !skip_db_insert
+    if pcvct_globals.initialized && !skip_db_insert
         insertFolder(:intracellular, splitpath(folder)[end])
     end
 
@@ -188,13 +188,13 @@ function assembleIntracellular!(cell_to_components_dict::Dict{String,Vector{Phys
 end
 
 """
-    getIntracellularFolder(assembly_manifest::Dict)
+    intracellularFolder(assembly_manifest::Dict)
 
 Get the folder that contains the intracellular assembly manifest that is equivalent to the given assembly manifest, if one exists.
 
 If no such folder exists, return nothing.
 """
-function getIntracellularFolder(assembly_manifest::Dict)
+function intracellularFolder(assembly_manifest::Dict)
     path_to_location_folders = locationPath(:intracellular)
 
     for folder in readdir(path_to_location_folders; join=true, sort=false)

@@ -12,7 +12,7 @@ function prepareSimulationCommand(simulation::Simulation, monad_id::Int, do_full
     mkpath(path_to_simulation_output)
 
     if do_full_setup
-        for loc in project_locations.varied
+        for loc in projectLocations().varied
             prepareVariedInputFolder(loc, simulation)
         end
         success = loadCustomCode(simulation; force_recompile=force_recompile)
@@ -57,7 +57,7 @@ function prepareSimulationCommand(simulation::Simulation, monad_id::Int, do_full
         path_to_intracellular_file = joinpath(locationPath(:intracellular, simulation), "intracellular_variations", "intracellular_variation_$(simulation.variation_id[:intracellular]).xml")
         append!(flags, ["-n", path_to_intracellular_file])
     end
-    return Cmd(`$executable_str $config_str $flags`; env=ENV, dir=physicell_dir)
+    return Cmd(`$executable_str $config_str $flags`; env=ENV, dir=physicellDir())
 end
 
 """
@@ -66,7 +66,7 @@ end
 Set the status code of the simulation to "Failed" and erase the simulation ID from the `simulations.csv` file for the monad it belongs to.
 """
 function simulationFailedToRun(simulation::Simulation, monad_id::Int)
-    DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Failed")) WHERE simulation_id=$(simulation.id);" )
+    DBInterface.execute(centralDB(),"UPDATE simulations SET status_code_id=$(statusCodeID("Failed")) WHERE simulation_id=$(simulation.id);" )
     eraseSimulationIDFromConstituents(simulation.id; monad_id=monad_id)
     return
 end
@@ -98,10 +98,10 @@ struct SimulationProcess
         end
     
         path_to_simulation_folder = trialFolder(simulation)
-        DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Running")) WHERE simulation_id=$(simulation.id);" )
+        DBInterface.execute(centralDB(),"UPDATE simulations SET status_code_id=$(statusCodeID("Running")) WHERE simulation_id=$(simulation.id);" )
         println("\tRunning simulation: $(simulation.id)...")
         flush(stdout)
-        if run_on_hpc
+        if pcvct_globals.run_on_hpc
             cmd = prepareHPCCommand(cmd, simulation.id)
             p = run(pipeline(ignorestatus(cmd); stdout=joinpath(path_to_simulation_folder, "hpc.out"), stderr=joinpath(path_to_simulation_folder, "hpc.err")); wait=true)
         else
@@ -134,9 +134,9 @@ function prepareHPCCommand(cmd::Cmd, simulation_id::Int)
              "--wait",
              "--output=$(joinpath(path_to_simulation_folder, "output.log"))",
              "--error=$(joinpath(path_to_simulation_folder, "output.err"))",
-             "--chdir=$(physicell_dir)"
+             "--chdir=$(physicellDir())"
             ]
-    for (k, v) in sbatch_options
+    for (k, v) in pcvct_globals.sbatch_options
         if k in ["wrap", "output", "error", "wait", "chdir"]
             println("WARNING: The key $k is reserved for pcvct to set in the sbatch command. Skipping this key.")
             continue
@@ -168,7 +168,7 @@ function resolveSimulation(simulation_process::SimulationProcess, prune_options:
     if success
         rm(path_to_err; force=true)
         rm(joinpath(path_to_simulation_folder, "hpc.err"); force=true)
-        DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Completed")) WHERE simulation_id=$(simulation.id);" )
+        DBInterface.execute(centralDB(),"UPDATE simulations SET status_code_id=$(statusCodeID("Completed")) WHERE simulation_id=$(simulation.id);" )
     else
         println("\nWARNING: Simulation $(simulation.id) failed. Please check $(path_to_err) for more information.\n")
         #! write the execution command to output.err
@@ -181,7 +181,7 @@ function resolveSimulation(simulation_process::SimulationProcess, prune_options:
                 println(io, line)
             end
         end
-        DBInterface.execute(db,"UPDATE simulations SET status_code_id=$(getStatusCodeID("Failed")) WHERE simulation_id=$(simulation.id);" )
+        DBInterface.execute(centralDB(),"UPDATE simulations SET status_code_id=$(statusCodeID("Failed")) WHERE simulation_id=$(simulation.id);" )
         eraseSimulationIDFromConstituents(simulation.id; monad_id=monad_id)
     end
 
@@ -214,12 +214,12 @@ function collectSimulationTasks(monad::Monad; do_full_setup::Bool=true, force_re
         end
     end
 
-    for loc in project_locations.varied
+    for loc in projectLocations().varied
         prepareVariedInputFolder(loc, monad)
     end
 
     simulation_tasks = Task[]
-    for simulation_id in getSimulationIDs(monad)
+    for simulation_id in simulationIDs(monad)
         if isStarted(simulation_id; new_status_code="Queued")
             continue #! if the simulation has already been started (or even completed), then don't run it again
         end
@@ -259,19 +259,23 @@ function collectSimulationTasks(trial::Trial; force_recompile::Bool=false)
 end
 
 """
-    PCVCTOutput
+    PCVCTOutput{T<:AbstractTrial}
 
 A struct to hold the output of the PCVCT run, including the [`AbstractTrial`](@ref) object, the number of scheduled simulations, and the number of successful simulations.
 
 # Fields
-- `trial::AbstractTrial`: The trial, sampling, monad, or simulation that was run.
+- `trial::T`: The trial, sampling, monad, or simulation that was run.
 - `n_scheduled::Int`: The number of simulations that were scheduled to run.
 - `n_success::Int`: The number of simulations that were successfully completed.
 """
-struct PCVCTOutput
-    trial::AbstractTrial
+struct PCVCTOutput{T<:AbstractTrial}
+    trial::T
     n_scheduled::Int
     n_success::Int
+
+    function PCVCTOutput(trial::T, n_scheduled::Int, n_success::Int) where T<:AbstractTrial
+        new{T}(trial, n_scheduled, n_success)
+    end
 end
 
 function Base.show(io::IO, ::MIME"text/plain", output::PCVCTOutput)
@@ -285,11 +289,11 @@ function Base.show(io::IO, ::MIME"text/plain", output::PCVCTOutput)
 end
 
 """
-    getSimulationIDs(output::PCVCTOutput)
+    simulationIDs(output::PCVCTOutput)
 
 Get the simulation IDs from the output of the PCVCT run.
 """
-getSimulationIDs(output::PCVCTOutput) = getSimulationIDs(output.trial)
+simulationIDs(output::PCVCTOutput) = simulationIDs(output.trial)
 
 """
     run(T::AbstractTrial[; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions()])`
@@ -311,7 +315,7 @@ function run(T::AbstractTrial; force_recompile::Bool=false, prune_options::Prune
 
     println("Running $(typeof(T)) $(T.id) requiring $(n_simulation_tasks) simulations...")
 
-    num_parallel_sims = run_on_hpc ? n_simulation_tasks : max_number_of_parallel_simulations
+    num_parallel_sims = pcvct_globals.run_on_hpc ? n_simulation_tasks : pcvct_globals.max_number_of_parallel_simulations
     queue_channel = Channel{Task}(n_simulation_tasks)
     result_channel = Channel{Bool}(n_simulation_tasks)
     @async for simulation_task in simulation_tasks

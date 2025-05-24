@@ -30,7 +30,7 @@ Store the information that comes out of a global sensitivity analysis method.
 
 # Methods
 [`calculateGSA!`](@ref), [`evaluateFunctionOnSampling`](@ref),
-[`getMonadIDDataFrame`](@ref), [`getSimulationIDs`](@ref), [`methodString`](@ref),
+[`getMonadIDDataFrame`](@ref), [`simulationIDs`](@ref), [`methodString`](@ref),
 [`sensitivityResults!`](@ref), [`recordSensitivityScheme`](@ref)
 """
 abstract type GSASampling end
@@ -43,11 +43,11 @@ Get the DataFrame of monad IDs that define the scheme of the sensitivity analysi
 getMonadIDDataFrame(gsa_sampling::GSASampling) = gsa_sampling.monad_ids_df
 
 """
-    getSimulationIDs(gsa_sampling::GSASampling)
+    simulationIDs(gsa_sampling::GSASampling)
 
 Get the simulation IDs that were run in the sensitivity analysis.
 """
-getSimulationIDs(gsa_sampling::GSASampling) = getSimulationIDs(gsa_sampling.sampling)
+simulationIDs(gsa_sampling::GSASampling) = simulationIDs(gsa_sampling.sampling)
 
 """
     methodString(gsa_sampling::GSASampling)
@@ -212,22 +212,24 @@ function runSensitivitySampling(method::MOAT, n_replicates::Int, inputs::InputFo
     variation_ids = add_variations_result.all_variation_ids
     base_variation_ids = Dict{Symbol, Vector{Int}}()
     perturbed_variation_ids = Dict{Symbol, Matrix{Int}}()
-    for location in project_locations.varied
+
+    proj_locs = projectLocations()
+    for location in proj_locs.varied
         base_variation_ids[location] = [variation_id[location] for variation_id in variation_ids]
         perturbed_variation_ids[location] = repeat(base_variation_ids[location], 1, length(pv.sz))
     end
     for (base_point_ind, variation_id) in enumerate(variation_ids) #! for each base point in the LHS
         for d in eachindex(pv.sz) #! perturb each feature one time
-            for location in project_locations.varied
+            for location in proj_locs.varied
                 perturbed_variation_ids[location][base_point_ind, d] = perturbVariation(location, pv, inputs[location].folder, variation_id[location], d)
             end
         end
     end
     all_variation_ids = Dict{Symbol, Matrix{Int}}()
-    for location in project_locations.varied
+    for location in proj_locs.varied
         all_variation_ids[location] = hcat(base_variation_ids[location], perturbed_variation_ids[location])
     end
-    location_variation_dict = (loc => all_variation_ids[loc] for loc in project_locations.varied) |> Dict
+    location_variation_dict = (loc => all_variation_ids[loc] for loc in proj_locs.varied) |> Dict
     monad_dict, monad_ids = variationsToMonads(inputs, location_variation_dict)
     header_line = ["base"; columnName.(pv.variations)]
     monad_ids_df = DataFrame(monad_ids, header_line)
@@ -278,8 +280,8 @@ function calculateGSA!(moat_sampling::MOATSampling, f::Function)
     if f in keys(moat_sampling.results)
         return
     end
-    values = evaluateFunctionOnSampling(moat_sampling, f)
-    effects = 2 * (values[:,2:end] .- values[:,1]) #! all diffs in the design matrix are 0.5
+    vals = evaluateFunctionOnSampling(moat_sampling, f)
+    effects = 2 * (vals[:,2:end] .- vals[:,1]) #! all diffs in the design matrix are 0.5
     means = mean(effects, dims=1)
     means_star = mean(abs.(effects), dims=1)
     variances = var(effects, dims=1)
@@ -363,21 +365,23 @@ function runSensitivitySampling(method::Sobolʼ, n_replicates::Int, inputs::Inpu
     cdfs = add_variations_result.cdfs
     d = length(pv.sz)
     focus_indices = [i for i in 1:d if !(i in ignore_indices)]
-    location_variation_ids_A = [loc => [variation_id[loc] for variation_id in all_variation_ids[:,1]] for loc in project_locations.varied] |> Dict
+
+    proj_locs = projectLocations()
+    location_variation_ids_A = [loc => [variation_id[loc] for variation_id in all_variation_ids[:,1]] for loc in proj_locs.varied] |> Dict
     A = cdfs[:,1,:] #! cdfs is of size (d, 2, n), i.e., d = # parameters, 2 design matrices, and n = # samples
-    location_variation_ids_B = [loc => [variation_id[loc] for variation_id in all_variation_ids[:,2]] for loc in project_locations.varied] |> Dict
+    location_variation_ids_B = [loc => [variation_id[loc] for variation_id in all_variation_ids[:,2]] for loc in proj_locs.varied] |> Dict
     B = cdfs[:,2,:]
     Aᵦ = [i => copy(A) for i in focus_indices] |> Dict
-    location_variation_ids_Aᵦ = [loc => [i => copy(location_variation_ids_A[loc]) for i in focus_indices] |> Dict for loc in project_locations.varied] |> Dict
+    location_variation_ids_Aᵦ = [loc => [i => copy(location_variation_ids_A[loc]) for i in focus_indices] |> Dict for loc in proj_locs.varied] |> Dict
     for i in focus_indices
         Aᵦ[i][i,:] .= B[i,:]
-        for loc in project_locations.varied
+        for loc in proj_locs.varied
             if i in pv[loc].indices
                 location_variation_ids_Aᵦ[loc][i][:] .= cdfsToVariations(loc, pv, inputs[loc].id, reference_variation_id[loc], Aᵦ[i]')
             end
         end
     end
-    location_variation_ids_dict = [loc => hcat(location_variation_ids_A[loc], location_variation_ids_B[loc], [location_variation_ids_Aᵦ[loc][i] for i in focus_indices]...) for loc in project_locations.varied] |> Dict{Symbol,Matrix{Int}}
+    location_variation_ids_dict = [loc => hcat(location_variation_ids_A[loc], location_variation_ids_B[loc], [location_variation_ids_Aᵦ[loc][i] for i in focus_indices]...) for loc in proj_locs.varied] |> Dict{Symbol,Matrix{Int}}
     monad_dict, monad_ids = variationsToMonads(inputs, location_variation_ids_dict)
     monads = monad_dict |> values |> collect
     header_line = ["A"; "B"; columnName.(pv.variations[focus_indices])]
@@ -391,11 +395,11 @@ function calculateGSA!(sobol_sampling::SobolSampling, f::Function)
     if f in keys(sobol_sampling.results)
         return
     end
-    values = evaluateFunctionOnSampling(sobol_sampling, f)
-    d = size(values, 2) - 2
-    A_values = @view values[:, 1]
-    B_values = @view values[:, 2]
-    Aᵦ_values = [values[:, 2+i] for i in 1:d]
+    vals = evaluateFunctionOnSampling(sobol_sampling, f)
+    d = size(vals, 2) - 2
+    A_values = @view vals[:, 1]
+    B_values = @view vals[:, 2]
+    Aᵦ_values = [vals[:, 2+i] for i in 1:d]
     expected_value² = mean(A_values .* B_values) #! see Saltelli, 2002 Eq 21
     total_variance = var([A_values; B_values])
     first_order_variances = zeros(Float64, d)
@@ -514,12 +518,12 @@ function calculateGSA!(rbd_sampling::RBDSampling, f::Function)
     if f in keys(rbd_sampling.results)
         return
     end
-    values = evaluateFunctionOnSampling(rbd_sampling, f)
+    vals = evaluateFunctionOnSampling(rbd_sampling, f)
     if rbd_sampling.num_cycles == 1 // 2
-        values = vcat(values, values[end-1:-1:2, :])
+        vals = vcat(vals, vals[end-1:-1:2, :])
     end
-    ys = fft(values, 1) .|> abs2
-    ys ./= size(values, 1)
+    ys = fft(vals, 1) .|> abs2
+    ys ./= size(vals, 1)
     V = sum(ys[2:end, :], dims=1)
     Vi = 2 * sum(ys[2:(min(size(ys, 1), rbd_sampling.num_harmonics + 1)), :], dims=1)
     rbd_sampling.results[f] = (Vi ./ V) |> vec
@@ -547,7 +551,7 @@ Evaluate the given function on the sampling scheme of the global sensitivity ana
 function evaluateFunctionOnSampling(gsa_sampling::GSASampling, f::Function)
     monad_id_df = getMonadIDDataFrame(gsa_sampling)
     value_dict = Dict{Int, Float64}()
-    values = zeros(Float64, size(monad_id_df))
+    vals = zeros(Float64, size(monad_id_df))
     for (ind, monad_id) in enumerate(monad_id_df |> Matrix)
         if !haskey(value_dict, monad_id)
             simulation_ids = readConstituentIDs(Monad, monad_id)
@@ -555,9 +559,9 @@ function evaluateFunctionOnSampling(gsa_sampling::GSASampling, f::Function)
             value = sim_values |> mean
             value_dict[monad_id] = value
         end
-        values[ind] = value_dict[monad_id]
+        vals[ind] = value_dict[monad_id]
     end
-    return values
+    return vals
 end
 
 """
@@ -577,7 +581,7 @@ function variationsToMonads(inputs::InputFolders, location_variation_ids_dict::D
     monad_dict = Dict{VariationID, Monad}()
     monad_ids = zeros(Int, size(location_variation_ids_dict |> values |> first))
     for i in eachindex(monad_ids)
-        monad_variation_id = [loc => location_variation_ids_dict[loc][i] for loc in project_locations.varied] |> VariationID
+        monad_variation_id = [loc => location_variation_ids_dict[loc][i] for loc in projectLocations().varied] |> VariationID
         if haskey(monad_dict, monad_variation_id)
             monad_ids[i] = monad_dict[monad_variation_id].id
             continue

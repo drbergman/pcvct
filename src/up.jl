@@ -12,7 +12,7 @@ Otherwise, it will prompt the user for confirmation before large upgrades.
 """
 function upgradePCVCT(from_version::VersionNumber, to_version::VersionNumber, auto_upgrade::Bool)
     println("Upgrading pcvct from version $(from_version) to $(to_version)...")
-    milestone_versions = [v"0.0.1", v"0.0.3", v"0.0.10", v"0.0.11", v"0.0.13", v"0.0.15"]
+    milestone_versions = [v"0.0.1", v"0.0.3", v"0.0.10", v"0.0.11", v"0.0.13", v"0.0.15", v"0.0.16", v"0.0.24"]
     next_milestone_inds = findall(x -> from_version < x, milestone_versions) #! this could be simplified to take advantage of this list being sorted, but who cares? It's already so fast
     next_milestones = milestone_versions[next_milestone_inds]
     success = true
@@ -21,17 +21,16 @@ function upgradePCVCT(from_version::VersionNumber, to_version::VersionNumber, au
         if !isdefined(pcvct, up_fn_symbol)
             throw(ArgumentError("Upgrade from version $(from_version) to $(next_milestone) not supported."))
         end
-        from_version = eval(up_fn_symbol)(auto_upgrade)
-        if from_version == false
-            success = false
+        success = eval(up_fn_symbol)(auto_upgrade)
+        if !success
             break
         else
-            DBInterface.execute(db, "UPDATE pcvct_version SET version='$(next_milestone)';")
+            DBInterface.execute(centralDB(), "UPDATE pcvct_version SET version='$(next_milestone)';")
         end
     end
     if success && to_version > milestone_versions[end]
         println("\t- Upgrading to version $(to_version)...")
-        DBInterface.execute(db, "UPDATE pcvct_version SET version='$(to_version)';")
+        DBInterface.execute(centralDB(), "UPDATE pcvct_version SET version='$(to_version)';")
     end
     return success
 end
@@ -59,7 +58,7 @@ function upgradeToVX_Y_Z end
 
 function upgradeToV0_0_1(::Bool)
     println("\t- Upgrading to version 0.0.1...")
-    data_dir_contents = readdir(joinpath(data_dir, "inputs"); sort=false)
+    data_dir_contents = readdir(joinpath(dataDir(), "inputs"); sort=false)
     if "rulesets_collections" in data_dir_contents
         rulesets_collection_folders = readdir(locationPath(:rulesets_collection); sort=false) |> filter(x -> isdir(locationPath(:rulesets_collection, x)))
         for rulesets_collection_folder in rulesets_collection_folders
@@ -110,26 +109,26 @@ function upgradeToV0_0_3(auto_upgrade::Bool)
     end
     println("\t- Upgrading to version 0.0.3...")
     #! first get vct.db right changing simulations and monads tables
-    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('simulations') WHERE name='config_variation_id';") |> DataFrame |> isempty
-        DBInterface.execute(db, "ALTER TABLE simulations RENAME COLUMN variation_id TO config_variation_id;")
+    if DBInterface.execute(centralDB(), "SELECT 1 FROM pragma_table_info('simulations') WHERE name='config_variation_id';") |> DataFrame |> isempty
+        DBInterface.execute(centralDB(), "ALTER TABLE simulations RENAME COLUMN variation_id TO config_variation_id;")
     end
-    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('monads') WHERE name='config_variation_id';") |> DataFrame |> isempty
-        DBInterface.execute(db, "ALTER TABLE monads RENAME COLUMN variation_id TO config_variation_id;")
+    if DBInterface.execute(centralDB(), "SELECT 1 FROM pragma_table_info('monads') WHERE name='config_variation_id';") |> DataFrame |> isempty
+        DBInterface.execute(centralDB(), "ALTER TABLE monads RENAME COLUMN variation_id TO config_variation_id;")
     end
-    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('simulations') WHERE name='ic_cell_variation_id';") |> DataFrame |> isempty
-        DBInterface.execute(db, "ALTER TABLE simulations ADD COLUMN ic_cell_variation_id INTEGER;")
-        DBInterface.execute(db, "UPDATE simulations SET ic_cell_variation_id=CASE WHEN ic_cell_id=-1 THEN -1 ELSE 0 END;")
+    if DBInterface.execute(centralDB(), "SELECT 1 FROM pragma_table_info('simulations') WHERE name='ic_cell_variation_id';") |> DataFrame |> isempty
+        DBInterface.execute(centralDB(), "ALTER TABLE simulations ADD COLUMN ic_cell_variation_id INTEGER;")
+        DBInterface.execute(centralDB(), "UPDATE simulations SET ic_cell_variation_id=CASE WHEN ic_cell_id=-1 THEN -1 ELSE 0 END;")
     end
-    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('monads') WHERE name='ic_cell_variation_id';") |> DataFrame |> isempty
-        DBInterface.execute(db, "ALTER TABLE monads ADD COLUMN ic_cell_variation_id INTEGER;")
-        DBInterface.execute(db, "CREATE TABLE monads_temp AS SELECT * FROM monads;")
-        DBInterface.execute(db, "UPDATE monads_temp SET ic_cell_variation_id=CASE WHEN ic_cell_id=-1 THEN -1 ELSE 0 END;")
-        DBInterface.execute(db, "DROP TABLE monads;")
+    if DBInterface.execute(centralDB(), "SELECT 1 FROM pragma_table_info('monads') WHERE name='ic_cell_variation_id';") |> DataFrame |> isempty
+        DBInterface.execute(centralDB(), "ALTER TABLE monads ADD COLUMN ic_cell_variation_id INTEGER;")
+        DBInterface.execute(centralDB(), "CREATE TABLE monads_temp AS SELECT * FROM monads;")
+        DBInterface.execute(centralDB(), "UPDATE monads_temp SET ic_cell_variation_id=CASE WHEN ic_cell_id=-1 THEN -1 ELSE 0 END;")
+        DBInterface.execute(centralDB(), "DROP TABLE monads;")
         createPCVCTTable("monads", monadsSchema())
         #! drop the previous unique constraint on monads
         #! insert from monads_temp all values except ic_cell_variation_id (set that to -1 if ic_cell_id is -1 and to 0 if ic_cell_id is not -1)
-        populateTableOnFeatureSubset(db, "monads_temp", "monads")
-        DBInterface.execute(db, "DROP TABLE monads_temp;")
+        populateTableOnFeatureSubset(centralDB(), "monads_temp", "monads")
+        DBInterface.execute(centralDB(), "DROP TABLE monads_temp;")
     end
 
     #! now get the config_variations.db's right
@@ -194,29 +193,29 @@ function upgradeToV0_0_10(auto_upgrade::Bool)
     println("\t- Upgrading to version 0.0.10...")
 
     createPCVCTTable("physicell_versions", physicellVersionsSchema())
-    global current_physicell_version_id = resolvePhysiCellVersionID()
+    pcvct_globals.current_physicell_version_id = resolvePhysiCellVersionID()
 
     println("\t\tPhysiCell version: $(physicellInfo())")
     println("\n\t\tAssuming all output has been generated with this version...")
 
-    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('simulations') WHERE name='physicell_version_id';") |> DataFrame |> isempty
-        DBInterface.execute(db, "ALTER TABLE simulations ADD COLUMN physicell_version_id INTEGER;")
-        DBInterface.execute(db, "UPDATE simulations SET physicell_version_id=$(currentPhysiCellVersionID());")
+    if DBInterface.execute(centralDB(), "SELECT 1 FROM pragma_table_info('simulations') WHERE name='physicell_version_id';") |> DataFrame |> isempty
+        DBInterface.execute(centralDB(), "ALTER TABLE simulations ADD COLUMN physicell_version_id INTEGER;")
+        DBInterface.execute(centralDB(), "UPDATE simulations SET physicell_version_id=$(currentPhysiCellVersionID());")
     end
 
-    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('monads') WHERE name='physicell_version_id';") |> DataFrame |> isempty
-        DBInterface.execute(db, "ALTER TABLE monads ADD COLUMN physicell_version_id INTEGER;")
-        DBInterface.execute(db, "CREATE TABLE monads_temp AS SELECT * FROM monads;")
-        DBInterface.execute(db, "UPDATE monads_temp SET physicell_version_id=$(currentPhysiCellVersionID());")
-        DBInterface.execute(db, "DROP TABLE monads;")
+    if DBInterface.execute(centralDB(), "SELECT 1 FROM pragma_table_info('monads') WHERE name='physicell_version_id';") |> DataFrame |> isempty
+        DBInterface.execute(centralDB(), "ALTER TABLE monads ADD COLUMN physicell_version_id INTEGER;")
+        DBInterface.execute(centralDB(), "CREATE TABLE monads_temp AS SELECT * FROM monads;")
+        DBInterface.execute(centralDB(), "UPDATE monads_temp SET physicell_version_id=$(currentPhysiCellVersionID());")
+        DBInterface.execute(centralDB(), "DROP TABLE monads;")
         createPCVCTTable("monads", monadsSchema())
-        populateTableOnFeatureSubset(db, "monads_temp", "monads")
-        DBInterface.execute(db, "DROP TABLE monads_temp;")
+        populateTableOnFeatureSubset(centralDB(), "monads_temp", "monads")
+        DBInterface.execute(centralDB(), "DROP TABLE monads_temp;")
     end
 
-    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('samplings') WHERE name='physicell_version_id';") |> DataFrame |> isempty
-        DBInterface.execute(db, "ALTER TABLE samplings ADD COLUMN physicell_version_id INTEGER;")
-        DBInterface.execute(db, "UPDATE samplings SET physicell_version_id=$(currentPhysiCellVersionID());")
+    if DBInterface.execute(centralDB(), "SELECT 1 FROM pragma_table_info('samplings') WHERE name='physicell_version_id';") |> DataFrame |> isempty
+        DBInterface.execute(centralDB(), "ALTER TABLE samplings ADD COLUMN physicell_version_id INTEGER;")
+        DBInterface.execute(centralDB(), "UPDATE samplings SET physicell_version_id=$(currentPhysiCellVersionID());")
     end
     return true
 end
@@ -234,7 +233,7 @@ function upgradeToV0_0_11(::Bool)
         monads_df = queryToDataFrame(query)
         monad_physicell_versions = monads_df.physicell_version_id |> unique
         if length(monad_physicell_versions) == 1
-            DBInterface.execute(db, "UPDATE samplings SET physicell_version_id=$(monad_physicell_versions[1]) WHERE sampling_id=$(row.sampling_id);")
+            DBInterface.execute(centralDB(), "UPDATE samplings SET physicell_version_id=$(monad_physicell_versions[1]) WHERE sampling_id=$(row.sampling_id);")
         else
             println("WARNING: Multiple PhysiCell versions found for monads in sampling $(row.sampling_id). Not setting the sampling PhysiCell version.")
         end
@@ -243,11 +242,11 @@ end
 
 function upgradeToV0_0_13(::Bool)
     println("\t- Upgrading to version 0.0.13...")
-    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('simulations') WHERE name='rulesets_variation_id';") |> DataFrame |> isempty
-        DBInterface.execute(db, "ALTER TABLE simulations RENAME COLUMN rulesets_variation_id TO rulesets_collection_variation_id;")
+    if DBInterface.execute(centralDB(), "SELECT 1 FROM pragma_table_info('simulations') WHERE name='rulesets_variation_id';") |> DataFrame |> isempty
+        DBInterface.execute(centralDB(), "ALTER TABLE simulations RENAME COLUMN rulesets_variation_id TO rulesets_collection_variation_id;")
     end
-    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('monads') WHERE name='rulesets_variation_id';") |> DataFrame |> isempty
-        DBInterface.execute(db, "ALTER TABLE monads RENAME COLUMN rulesets_variation_id TO rulesets_collection_variation_id;")
+    if DBInterface.execute(centralDB(), "SELECT 1 FROM pragma_table_info('monads') WHERE name='rulesets_variation_id';") |> DataFrame |> isempty
+        DBInterface.execute(centralDB(), "ALTER TABLE monads RENAME COLUMN rulesets_variation_id TO rulesets_collection_variation_id;")
     end
     rulesets_collection_folders = queryToDataFrame(constructSelectQuery("rulesets_collections"; selection="folder_name")) |> x -> x.folder_name
     for rulesets_collection_folder in rulesets_collection_folders
@@ -290,33 +289,33 @@ function upgradeToV0_0_15(auto_upgrade::Bool)
     println("\t- Upgrading to version 0.0.15...")
 
     #! first include ic_ecm_variation_id in simulations and monads tables
-    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('simulations') WHERE name='ic_ecm_variation_id';") |> DataFrame |> isempty
-        DBInterface.execute(db, "ALTER TABLE simulations ADD COLUMN ic_ecm_variation_id INTEGER;")
-        DBInterface.execute(db, "UPDATE simulations SET ic_ecm_variation_id=CASE WHEN ic_ecm_id=-1 THEN -1 ELSE 0 END;")
+    if DBInterface.execute(centralDB(), "SELECT 1 FROM pragma_table_info('simulations') WHERE name='ic_ecm_variation_id';") |> DataFrame |> isempty
+        DBInterface.execute(centralDB(), "ALTER TABLE simulations ADD COLUMN ic_ecm_variation_id INTEGER;")
+        DBInterface.execute(centralDB(), "UPDATE simulations SET ic_ecm_variation_id=CASE WHEN ic_ecm_id=-1 THEN -1 ELSE 0 END;")
     end
-    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('monads') WHERE name='ic_ecm_variation_id';") |> DataFrame |> isempty
-        DBInterface.execute(db, "ALTER TABLE monads ADD COLUMN ic_ecm_variation_id INTEGER;")
-        DBInterface.execute(db, "CREATE TABLE monads_temp AS SELECT * FROM monads;")
-        DBInterface.execute(db, "UPDATE monads_temp SET ic_ecm_variation_id=CASE WHEN ic_ecm_id=-1 THEN -1 ELSE 0 END;")
-        DBInterface.execute(db, "DROP TABLE monads;")
+    if DBInterface.execute(centralDB(), "SELECT 1 FROM pragma_table_info('monads') WHERE name='ic_ecm_variation_id';") |> DataFrame |> isempty
+        DBInterface.execute(centralDB(), "ALTER TABLE monads ADD COLUMN ic_ecm_variation_id INTEGER;")
+        DBInterface.execute(centralDB(), "CREATE TABLE monads_temp AS SELECT * FROM monads;")
+        DBInterface.execute(centralDB(), "UPDATE monads_temp SET ic_ecm_variation_id=CASE WHEN ic_ecm_id=-1 THEN -1 ELSE 0 END;")
+        DBInterface.execute(centralDB(), "DROP TABLE monads;")
         createPCVCTTable("monads", monadsSchema())
-        populateTableOnFeatureSubset(db, "monads_temp", "monads")
-        DBInterface.execute(db, "DROP TABLE monads_temp;")
+        populateTableOnFeatureSubset(centralDB(), "monads_temp", "monads")
+        DBInterface.execute(centralDB(), "DROP TABLE monads_temp;")
     end
 
     #! now add ic_dc_id to simulations and monads tables
-    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('simulations') WHERE name='ic_dc_id';") |> DataFrame |> isempty
-        DBInterface.execute(db, "ALTER TABLE simulations ADD COLUMN ic_dc_id INTEGER;")
-        DBInterface.execute(db, "UPDATE simulations SET ic_dc_id=-1;")
+    if DBInterface.execute(centralDB(), "SELECT 1 FROM pragma_table_info('simulations') WHERE name='ic_dc_id';") |> DataFrame |> isempty
+        DBInterface.execute(centralDB(), "ALTER TABLE simulations ADD COLUMN ic_dc_id INTEGER;")
+        DBInterface.execute(centralDB(), "UPDATE simulations SET ic_dc_id=-1;")
     end
-    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('monads') WHERE name='ic_dc_id';") |> DataFrame |> isempty
-        DBInterface.execute(db, "ALTER TABLE monads ADD COLUMN ic_dc_id INTEGER;")
-        DBInterface.execute(db, "CREATE TABLE monads_temp AS SELECT * FROM monads;")
-        DBInterface.execute(db, "UPDATE monads_temp SET ic_dc_id=-1;")
-        DBInterface.execute(db, "DROP TABLE monads;")
+    if DBInterface.execute(centralDB(), "SELECT 1 FROM pragma_table_info('monads') WHERE name='ic_dc_id';") |> DataFrame |> isempty
+        DBInterface.execute(centralDB(), "ALTER TABLE monads ADD COLUMN ic_dc_id INTEGER;")
+        DBInterface.execute(centralDB(), "CREATE TABLE monads_temp AS SELECT * FROM monads;")
+        DBInterface.execute(centralDB(), "UPDATE monads_temp SET ic_dc_id=-1;")
+        DBInterface.execute(centralDB(), "DROP TABLE monads;")
         createPCVCTTable("monads", monadsSchema())
-        populateTableOnFeatureSubset(db, "monads_temp", "monads")
-        DBInterface.execute(db, "DROP TABLE monads_temp;")
+        populateTableOnFeatureSubset(centralDB(), "monads_temp", "monads")
+        DBInterface.execute(centralDB(), "DROP TABLE monads_temp;")
     end
     return true
 end
@@ -340,24 +339,59 @@ function upgradeToV0_0_16(auto_upgrade::Bool)
     println("\t- Upgrading to version 0.0.16...")
 
     #! add intracellular_id and intracellular_variation_id to simulations and monads tables
-    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('simulations') WHERE name='intracellular_id';") |> DataFrame |> isempty
-        DBInterface.execute(db, "ALTER TABLE simulations ADD COLUMN intracellular_id INTEGER;")
-        DBInterface.execute(db, "UPDATE simulations SET intracellular_id=-1;")
-        DBInterface.execute(db, "ALTER TABLE simulations ADD COLUMN intracellular_variation_id INTEGER;")
-        DBInterface.execute(db, "UPDATE simulations SET intracellular_variation_id=-1;")
+    if DBInterface.execute(centralDB(), "SELECT 1 FROM pragma_table_info('simulations') WHERE name='intracellular_id';") |> DataFrame |> isempty
+        DBInterface.execute(centralDB(), "ALTER TABLE simulations ADD COLUMN intracellular_id INTEGER;")
+        DBInterface.execute(centralDB(), "UPDATE simulations SET intracellular_id=-1;")
+        DBInterface.execute(centralDB(), "ALTER TABLE simulations ADD COLUMN intracellular_variation_id INTEGER;")
+        DBInterface.execute(centralDB(), "UPDATE simulations SET intracellular_variation_id=-1;")
     end
-    if DBInterface.execute(db, "SELECT 1 FROM pragma_table_info('monads') WHERE name='intracellular_id';") |> DataFrame |> isempty
-        DBInterface.execute(db, "ALTER TABLE monads ADD COLUMN intracellular_id INTEGER;")
-        DBInterface.execute(db, "UPDATE monads SET intracellular_id=-1;")
-        DBInterface.execute(db, "ALTER TABLE monads ADD COLUMN intracellular_variation_id INTEGER;")
-        DBInterface.execute(db, "UPDATE monads SET intracellular_variation_id=-1;")
-        DBInterface.execute(db, "CREATE TABLE monads_temp AS SELECT * FROM monads;")
-        DBInterface.execute(db, "UPDATE monads_temp SET intracellular_id=-1;")
-        DBInterface.execute(db, "UPDATE monads_temp SET intracellular_variation_id=-1;")
-        DBInterface.execute(db, "DROP TABLE monads;")
+    if DBInterface.execute(centralDB(), "SELECT 1 FROM pragma_table_info('monads') WHERE name='intracellular_id';") |> DataFrame |> isempty
+        DBInterface.execute(centralDB(), "ALTER TABLE monads ADD COLUMN intracellular_id INTEGER;")
+        DBInterface.execute(centralDB(), "UPDATE monads SET intracellular_id=-1;")
+        DBInterface.execute(centralDB(), "ALTER TABLE monads ADD COLUMN intracellular_variation_id INTEGER;")
+        DBInterface.execute(centralDB(), "UPDATE monads SET intracellular_variation_id=-1;")
+        DBInterface.execute(centralDB(), "CREATE TABLE monads_temp AS SELECT * FROM monads;")
+        DBInterface.execute(centralDB(), "UPDATE monads_temp SET intracellular_id=-1;")
+        DBInterface.execute(centralDB(), "UPDATE monads_temp SET intracellular_variation_id=-1;")
+        DBInterface.execute(centralDB(), "DROP TABLE monads;")
         createPCVCTTable("monads", monadsSchema())
-        populateTableOnFeatureSubset(db, "monads_temp", "monads")
-        DBInterface.execute(db, "DROP TABLE monads_temp;")
+        populateTableOnFeatureSubset(centralDB(), "monads_temp", "monads")
+        DBInterface.execute(centralDB(), "DROP TABLE monads_temp;")
     end
     return true
+end
+
+function upgradeToV0_0_24(::Bool)
+    println("\t- Upgrading to version 0.0.24...")
+    
+    #! v0.0.23 accidentally used the capitalized version of these CSV file names
+    monads_folder = joinpath(dataDir(), "outputs", "monads")
+    folders = readdir(monads_folder; sort=false) |> filter(x -> isdir(joinpath(monads_folder, x)))
+    for folder in folders
+        if isfile(joinpath(monads_folder, folder, "Simulations.csv"))
+            dst = joinpath(monads_folder, folder, "simulations.csv")
+            @assert !isfile(dst) "$(dst) exists alongside Simulations.csv. Please manually select which one to keep.\nUpgrade to version 0.0.24 aborted."
+            mv(joinpath(monads_folder, folder, "Simulations.csv"), dst)
+        end
+    end
+
+    samplings_folder = joinpath(dataDir(), "outputs", "samplings")
+    folders = readdir(samplings_folder; sort=false) |> filter(x -> isdir(joinpath(samplings_folder, x)))
+    for folder in folders
+        if isfile(joinpath(samplings_folder, folder, "Monads.csv"))
+            dst = joinpath(samplings_folder, folder, "monads.csv")
+            @assert !isfile(dst) "$(dst) exists alongside Monads.csv. Please manually select which one to keep.\nUpgrade to version 0.0.24 aborted."
+            mv(joinpath(samplings_folder, folder, "Monads.csv"), dst)
+        end
+    end
+
+    trials_folder = joinpath(dataDir(), "outputs", "trials")
+    folders = readdir(trials_folder; sort=false) |> filter(x -> isdir(joinpath(trials_folder, x)))
+    for folder in folders
+        if isfile(joinpath(trials_folder, folder, "Samplings.csv"))
+            dst = joinpath(trials_folder, folder, "samplings.csv")
+            @assert !isfile(dst) "$(dst) exists alongside Samplings.csv. Please manually select which one to keep.\nUpgrade to version 0.0.24 aborted."
+            mv(joinpath(trials_folder, folder, "Samplings.csv"), dst)
+        end
+    end
 end

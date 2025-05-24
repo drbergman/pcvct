@@ -37,11 +37,11 @@ function createProject(project_dir::String="."; clone_physicell::Bool=true, temp
 end
 
 """
-    getLatestReleaseTag(repo_url::String)
+    latestReleaseTag(repo_url::String)
 
 Get the latest release tag from a GitHub repository.
 """
-function getLatestReleaseTag(repo_url::String)
+function latestReleaseTag(repo_url::String)
     api_url = replace(repo_url, "github.com" => "api.github.com/repos") * "/releases/latest"
     #! include this header for CI testing to not exceed request limit (I think?): macos for some reason raised a `RequestError: HTTP/2 403`; users should not need to set this ENV variable
     headers = haskey(ENV, "PCVCT_PUBLIC_REPO_AUTH") ? Dict("Authorization" => "token $(ENV["PCVCT_PUBLIC_REPO_AUTH"])") : Pair{String,String}[]
@@ -66,7 +66,7 @@ function setUpPhysiCell(project_dir::String, clone_physicell::Bool)
     end
     is_git_repo = isdir(joinpath(project_dir, ".git"))
     if clone_physicell
-        latest_tag = getLatestReleaseTag("https://github.com/drbergman/PhysiCell")
+        latest_tag = latestReleaseTag("https://github.com/drbergman/PhysiCell")
         if is_git_repo
             println("Cloning PhysiCell repository as submodule")
             run(`git submodule add https://github.com/drbergman/PhysiCell $(physicell_dir)`)

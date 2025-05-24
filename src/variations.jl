@@ -24,8 +24,20 @@ struct XMLPath
     xml_path::Vector{String}
 
     function XMLPath(xml_path::Vector{<:AbstractString})
-        custom_fields = startswith.(xml_path, "custom:")
-        xml_path[custom_fields] = "custom " .* [lstrip(p[8:end]) for p in xml_path[custom_fields]]
+        for path_element in xml_path
+            tokens = split(path_element, ":")
+            if length(tokens) < 4
+                continue
+            end
+            msg = """
+            Invalid XML path: $(path_element)
+            It has $(length(tokens)) tokens (':' is the delimiter) but the only valid path element with >3 tokens if one of:
+            - <tag>::<child_tag>:<child_tag_content>
+            - <tag>:<attribute>:custom:<custom_data_name> (where the final ':' is part of how PhysiCell denotes custom data)
+            - <tag>:<attribute>:custom: <custom_data_name> (where the final ':' is part of how PhysiCell denotes custom data)
+            """
+            @assert (isempty(tokens[2]) || tokens[3] == "custom") msg
+        end
         return new(xml_path)
     end
 end
@@ -483,7 +495,7 @@ addAttackRateVariationDimension!(evs, "immune", "cancer", [0.1, 0.2, 0.3])
 ```
 """
 function addAttackRateVariationDimension!(evs::Vector{<:ElementaryVariation}, cell_definition::String, target_name::String, values::Vector{T} where T)
-    xml_path = attackRatesPath(cell_definition, target_name)
+    xml_path = attackRatePath(cell_definition, target_name)
     push!(evs, DiscreteVariation(xml_path, values))
 end
 
@@ -513,9 +525,9 @@ function addColumns(location::Symbol, folder_id::Int, evs::Vector{<:ElementaryVa
     @assert all(variationLocation.(evs) .== location) "All variations must be in the same location to do addColumns. Somehow found $(unique(variationLocation.(evs))) here."
     folder = inputFolderName(location, folder_id)
     db_columns = variationsDatabase(location, folder)
-    basenames = inputs_dict[location]["basename"]
+    basenames = inputsDict()[location]["basename"]
     basenames = basenames isa Vector ? basenames : [basenames] #! force basenames to be a vector to handle all the same way
-    basename_is_varied = inputs_dict[location]["varied"] .&& ([splitext(bn)[2] .== ".xml" for bn in basenames]) #! the varied entry is either a singleton Boolean or a vector of the same length as basenames
+    basename_is_varied = inputsDict()[location]["varied"] .&& ([splitext(bn)[2] .== ".xml" for bn in basenames]) #! the varied entry is either a singleton Boolean or a vector of the same length as basenames
     basename_ind = findall(basename_is_varied .&& isfile.([joinpath(locationPath(location, folder), bn) for bn in basenames]))
     @assert !isnothing(basename_ind) "Folder $(folder) does not contain a valid $(location) file to support variations. The options are $(basenames[basename_is_varied])."
     @assert length(basename_ind) == 1 "Folder $(folder) contains multiple valid $(location) files to support variations. The options are $(basenames[basename_is_varied])."
@@ -826,7 +838,7 @@ struct ParsedVariations
         sz = length.(avs)
 
         location_variations_dict = Dict{Symbol, Any}()
-        for location in project_locations.varied
+        for location in projectLocations().varied
             location_variations_dict[location] = (ElementaryVariation[], Int[])
         end
 
@@ -866,8 +878,8 @@ end
 
 function addVariations(::GridVariation, inputs::InputFolders, pv::ParsedVariations, reference_variation_id::VariationID)
     @assert all(pv.sz .!= -1) "GridVariation only works with DiscreteVariations"
-    all_location_variation_ids = [addLocationGridVariations(location, inputs, pv, reference_variation_id) for location in project_locations.varied]
-    return [([location => loc_var_ids[i] for (location, loc_var_ids) in zip(project_locations.varied, all_location_variation_ids)] |> VariationID) for i in eachindex(all_location_variation_ids[1])] |> AddGridVariationsResult
+    all_location_variation_ids = [addLocationGridVariations(location, inputs, pv, reference_variation_id) for location in projectLocations().varied]
+    return [([location => loc_var_ids[i] for (location, loc_var_ids) in zip(projectLocations().varied, all_location_variation_ids)] |> VariationID) for i in eachindex(all_location_variation_ids[1])] |> AddGridVariationsResult
 end
 
 """
@@ -1001,8 +1013,8 @@ end
 function addVariations(lhs_variation::LHSVariation, inputs::InputFolders, pv::ParsedVariations, reference_variation_id::VariationID)
     d = length(pv.sz)
     cdfs = generateLHSCDFs(lhs_variation.n, d; add_noise=lhs_variation.add_noise, rng=lhs_variation.rng, orthogonalize=lhs_variation.orthogonalize)
-    all_location_variation_ids = [addLocationCDFVariations(location, inputs, pv, reference_variation_id, cdfs) for location in project_locations.varied]
-    return [([location => loc_var_ids[i] for (location, loc_var_ids) in zip(project_locations.varied, all_location_variation_ids)] |> VariationID) for i in eachindex(all_location_variation_ids[1])] |> AddLHSVariationsResult
+    all_location_variation_ids = [addLocationCDFVariations(location, inputs, pv, reference_variation_id, cdfs) for location in projectLocations().varied]
+    return [([location => loc_var_ids[i] for (location, loc_var_ids) in zip(projectLocations().varied, all_location_variation_ids)] |> VariationID) for i in eachindex(all_location_variation_ids[1])] |> AddLHSVariationsResult
 end
 
 """
@@ -1121,8 +1133,8 @@ function addVariations(sobol_variation::SobolVariation, inputs::InputFolders, pv
     cdfs = generateSobolCDFs(sobol_variation, d) #! cdfs is (d, sobol_variation.n_matrices, sobol_variation.n)
     cdfs_reshaped = reshape(cdfs, (d, sobol_variation.n_matrices * sobol_variation.n)) #! reshape to (d, sobol_variation.n_matrices * sobol_variation.n) so that each column is a sobol sample
     cdfs_reshaped = cdfs_reshaped' #! transpose so that each row is a sobol sample
-    all_location_variation_ids = [addLocationCDFVariations(location, inputs, pv, reference_variation_id, cdfs_reshaped) for location in project_locations.varied]
-    all_variation_ids = [([location => loc_var_ids[i] for (location, loc_var_ids) in zip(project_locations.varied, all_location_variation_ids)] |> VariationID) for i in eachindex(all_location_variation_ids[1])]
+    all_location_variation_ids = [addLocationCDFVariations(location, inputs, pv, reference_variation_id, cdfs_reshaped) for location in projectLocations().varied]
+    all_variation_ids = [([location => loc_var_ids[i] for (location, loc_var_ids) in zip(projectLocations().varied, all_location_variation_ids)] |> VariationID) for i in eachindex(all_location_variation_ids[1])]
     all_variation_ids = reshape(all_variation_ids, (sobol_variation.n_matrices, sobol_variation.n)) |> permutedims
     return AddSobolVariationsResult(all_variation_ids, cdfs)
 end
@@ -1182,10 +1194,10 @@ end
 function addVariations(rbd_variation::RBDVariation, inputs::InputFolders, pv::ParsedVariations, reference_variation_id::VariationID)
     d = length(pv.sz)
     cdfs, rbd_sorting_inds = generateRBDCDFs(rbd_variation, d)
-    all_location_variation_ids = [addLocationCDFVariations(location, inputs, pv, reference_variation_id, cdfs) for location in project_locations.varied]
+    all_location_variation_ids = [addLocationCDFVariations(location, inputs, pv, reference_variation_id, cdfs) for location in projectLocations().varied]
     variation_matrices = [createSortedRBDMatrix(vids, rbd_sorting_inds) for vids in all_location_variation_ids]
-    all_variation_ids = [([location => loc_var_ids[i] for (location, loc_var_ids) in zip(project_locations.varied, all_location_variation_ids)] |> VariationID) for i in eachindex(all_location_variation_ids[1])]
-    location_variation_ids_dict = [location => variation_matrices[i] for (i, location) in enumerate(project_locations.varied)] |> Dict
+    all_variation_ids = [([location => loc_var_ids[i] for (location, loc_var_ids) in zip(projectLocations().varied, all_location_variation_ids)] |> VariationID) for i in eachindex(all_location_variation_ids[1])]
+    location_variation_ids_dict = [location => variation_matrices[i] for (i, location) in enumerate(projectLocations().varied)] |> Dict
     return AddRBDVariationsResult(all_variation_ids, location_variation_ids_dict)
 end
 

@@ -50,7 +50,7 @@ julia> plotbycelltype(out)
 ```
 9. Vary parameters:
 ```julia-repl
-julia> xml_path = pcvct.apoptosisPath("some_cell_type", "death_rate") # replace with a cell type in your model
+julia> xml_path = configPath("some_cell_type", "apoptosis", "death_rate") # replace with a cell type in your model
 julia> new_apoptosis_rates = [1e-5, 1e-4, 1e-3]
 julia> dv = DiscreteVariation(xml_path, new_apoptosis_rates)
 julia> out = run(inputs, dv; n_replicates = 3) # 3 replicates per apoptosis rate => 9 simulations total

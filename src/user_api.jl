@@ -44,8 +44,8 @@ function createTrial(method::AddVariationMethod, inputs::InputFolders, avs::Vect
     return _createTrial(method, inputs, VariationID(inputs), avs, n_replicates, use_previous)
 end
 
-function createTrial(method::AddVariationMethod, inputs::InputFolders, av::AbstractVariation; kwargs...)
-    return createTrial(method, inputs, [av]; kwargs...)
+function createTrial(method::AddVariationMethod, inputs::InputFolders, avs::Vararg{AbstractVariation}; kwargs...)
+    return createTrial(method, inputs, [avs...]; kwargs...)
 end
 
 createTrial(inputs::InputFolders, args...; kwargs...) = createTrial(GridVariation(), inputs, args...; kwargs...)
@@ -55,8 +55,8 @@ function createTrial(method::AddVariationMethod, reference::AbstractMonad, avs::
     return _createTrial(method, reference.inputs, reference.variation_id, avs, n_replicates, use_previous)
 end
 
-function createTrial(method::AddVariationMethod, reference::AbstractMonad, av::AbstractVariation; kwargs...)
-    return createTrial(method, reference, [av]; kwargs...)
+function createTrial(method::AddVariationMethod, reference::AbstractMonad, avs::Vararg{AbstractVariation}; kwargs...)
+    return createTrial(method, reference, [avs...]; kwargs...)
 end
 
 createTrial(reference::AbstractMonad, args...; kwargs...) = createTrial(GridVariation(), reference, args...; kwargs...)
@@ -86,9 +86,9 @@ function _createTrial(method::AddVariationMethod, inputs::InputFolders, referenc
         if n_replicates != 1
             return monad
         end
-        return Simulation(getSimulationIDs(monad)[end])
+        return Simulation(simulationIDs(monad)[end])
     else
-        location_variation_ids = [loc => [variation_id[loc] for variation_id in all_variation_ids] for loc in project_locations.varied] |>
+        location_variation_ids = [loc => [variation_id[loc] for variation_id in all_variation_ids] for loc in projectLocations().varied] |>
             Dict{Symbol,Union{Integer,AbstractArray{<:Integer}}}
 
         return Sampling(inputs, location_variation_ids;
@@ -111,6 +111,10 @@ end
 
 run(inputs::InputFolders, args...; kwargs...) = run(GridVariation(), inputs, args...; kwargs...)
 
-function run(reference::AbstractMonad, avs::Union{AbstractVariation,Vector{<:AbstractVariation}}; kwargs...)
+function run(reference::AbstractMonad, av1::AbstractVariation, avs::Vararg{AbstractVariation}; kwargs...)
+    return run(GridVariation(), reference, [av1; avs...]; kwargs...)
+end
+
+function run(reference::AbstractMonad, avs::Vector{<:AbstractVariation}; kwargs...)
     return run(GridVariation(), reference, avs; kwargs...)
 end

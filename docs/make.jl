@@ -16,6 +16,7 @@ makedocs(;
         "Manual" => Any[
             "Best practices" => "man/best_practices.md",
             "Getting started" => "man/getting_started.md",
+            "Varying parameters" => "man/varying_parameters.md",
             "CoVariations" => "man/covariations.md",
             "Data directory" => "man/data_directory.md",
             "Intracellular inputs" => "man/intracellular_inputs.md",

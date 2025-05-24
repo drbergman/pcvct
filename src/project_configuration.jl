@@ -1,18 +1,11 @@
 using TOML
 
 """
-    project_locations::ProjectLocations
-
-The global [`ProjectLocations`](@ref) object that contains information about the locations of input files in the project.
-"""
-project_locations = NamedTuple()
-
-"""
     ProjectLocations
 
 A struct that contains information about the locations of input files in the project.
 
-The global instance of this struct is [`project_locations`](@ref) and is created by reading the `inputs.toml` file in the `data_dir` directory.
+The global instance of this struct is `project_locations` in `pcvct_globals` (the sole instance of [`PCVCTGlobals`](@ref)) and is created by reading the `inputs.toml` file in the data directory.
 It is instantiated with the [`parseProjectInputsConfigurationFile`](@ref) function.
 
 # Fields
@@ -25,12 +18,14 @@ struct ProjectLocations{L,M,N}
     required::NTuple{M,Symbol}
     varied::NTuple{N,Symbol}
 
-    function ProjectLocations(inputs_dict::Dict{Symbol,Any})
-        all_locations = (location for location in keys(inputs_dict)) |> collect |> sort |> Tuple
-        required = (location for (location, location_dict) in pairs(inputs_dict) if location_dict["required"]) |> collect |> sort |> Tuple
-        varied_locations = (location for (location,location_dict) in pairs(inputs_dict) if any(location_dict["varied"])) |> collect |> sort |> Tuple
+    function ProjectLocations(d::Dict{Symbol,Any})
+        all_locations = (location for location in keys(d)) |> collect |> sort |> Tuple
+        required = (location for (location, location_dict) in pairs(d) if location_dict["required"]) |> collect |> sort |> Tuple
+        varied_locations = (location for (location,location_dict) in pairs(d) if any(location_dict["varied"])) |> collect |> sort |> Tuple
         return new{length(all_locations),length(required),length(varied_locations)}(all_locations, required, varied_locations)
     end
+
+    ProjectLocations() = ProjectLocations(pcvct_globals.inputs_dict)
 end
 
 """
@@ -59,12 +54,12 @@ end
 """
     parseProjectInputsConfigurationFile()
 
-Parse the `inputs.toml` file in the `data_dir` directory and create a global [`ProjectLocations`](@ref) object.
+Parse the `inputs.toml` file in the data directory and create a global [`ProjectLocations`](@ref) object.
 """
 function parseProjectInputsConfigurationFile()
     inputs_dict_temp = Dict{String, Any}()
     try
-        inputs_dict_temp = TOML.parsefile(joinpath(data_dir, "inputs.toml"))
+        inputs_dict_temp = TOML.parsefile(joinpath(dataDir(), "inputs.toml"))
     catch e
         println("Error parsing project configuration file: ", e)
         return false
@@ -84,8 +79,8 @@ function parseProjectInputsConfigurationFile()
             end
         end
     end
-    global inputs_dict = [Symbol(location) => location_dict for (location, location_dict) in pairs(inputs_dict_temp)] |> Dict{Symbol, Any}
-    global project_locations = ProjectLocations(inputs_dict)
+    pcvct_globals.inputs_dict = [Symbol(location) => location_dict for (location, location_dict) in pairs(inputs_dict_temp)] |> Dict{Symbol, Any}
+    pcvct_globals.project_locations = ProjectLocations()
     createSimpleInputFolders()
     return true
 end
@@ -120,14 +115,14 @@ locationVariationIDName(location::Union{String,Symbol}) = "$(location)_variation
 
 Return the names of the ID columns for all locations.
 """
-locationIDNames() = (locationIDName(loc) for loc in project_locations.all)
+locationIDNames() = (locationIDName(loc) for loc in projectLocations().all)
 
 """
     locationVariationIDNames()
 
 Return the names of the variation ID columns for all varied locations.
 """
-locationVariationIDNames() = (locationVariationIDName(loc) for loc in project_locations.varied)
+locationVariationIDNames() = (locationVariationIDName(loc) for loc in projectLocations().varied)
 
 """
     tableName(location)
@@ -156,8 +151,8 @@ Return the path to the location folder in the `inputs` directory.
 If `folder` is not specified, the path to the location folder is returned.
 """
 function locationPath(location::Symbol, folder=missing)
-    location_dict = inputs_dict[Symbol(location)]
-    path_to_locations = joinpath(data_dir, "inputs", location_dict["path_from_inputs"])
+    location_dict = inputsDict()[Symbol(location)]
+    path_to_locations = joinpath(dataDir(), "inputs", location_dict["path_from_inputs"])
     return ismissing(folder) ? path_to_locations : joinpath(path_to_locations, folder)
 end
 
@@ -185,7 +180,7 @@ end
 Return `true` if the location folder allows for varying the input files, `false` otherwise.
 """
 function folderIsVaried(location::Symbol, folder::String)
-    location_dict = inputs_dict[location]
+    location_dict = inputsDict()[location]
     varieds = location_dict["varied"]
     if !any(varieds)
         return false #! if none of the basenames are declared to be varied, then the folder is not varied

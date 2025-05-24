@@ -14,8 +14,8 @@ cell_type = "default"
 force_recompile = false
 
 dv_max_time = DiscreteVariation(["overall", "max_time"], 12.0)
-dv_save_full_data_interval = DiscreteVariation(["save", "full_data", "interval"], 6.0)
-dv_save_svg_data_interval = DiscreteVariation(["save","SVG","interval"], 6.0)
+dv_save_full_data_interval = DiscreteVariation(configPath("full_data"), 6.0)
+dv_save_svg_data_interval = DiscreteVariation(configPath("svg_save"), 6.0)
 discrete_variations = [dv_max_time, dv_save_full_data_interval, dv_save_svg_data_interval]
 
 add_variations_result = pcvct.addVariations(GridVariation(), inputs, discrete_variations)
@@ -63,8 +63,8 @@ ic_ecm_folder = "1_xml"
 inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rulesets_collection_folder, ic_cell=ic_cell_folder, ic_ecm=ic_ecm_folder)
 
 dv_max_time = DiscreteVariation(["overall", "max_time"], 12.0)
-dv_save_full_data_interval = DiscreteVariation(["save", "full_data", "interval"], 6.0)
-dv_save_svg_data_interval = DiscreteVariation(["save","SVG","interval"], 6.0)
+dv_save_full_data_interval = DiscreteVariation(configPath("full_data"), 6.0)
+dv_save_svg_data_interval = DiscreteVariation(configPath("svg_save"), 6.0)
 discrete_variations = [dv_max_time, dv_save_full_data_interval, dv_save_svg_data_interval]
 
 add_variations_result = pcvct.addVariations(GridVariation(), inputs, discrete_variations)
@@ -95,7 +95,7 @@ sobol_sampling = run(Sobolʼ(n_points; sobol_index_methods=sobol_index_methods),
 sobol_index_methods = (first_order=:Saltelli2010, total_order=:Sobol2007)
 sobol_sampling = run(Sobolʼ(n_points; sobol_index_methods=sobol_index_methods), n_replicates, inputs, av; force_recompile=force_recompile, reference_variation_id=reference_variation_id, functions=[gs_fn])
 
-reference = getSimulationIDs(sobol_sampling)[1] |> Simulation
+reference = simulationIDs(sobol_sampling)[1] |> Simulation
 sobol_sampling = run(Sobolʼ(2), n_replicates, reference, av)
 
 # Testing sensitivity with CoVariations
@@ -104,9 +104,9 @@ dv_max_time = DiscreteVariation(["overall", "max_time"], 12.0)
 reference = createTrial(inputs, dv_max_time; n_replicates=0)
 
 flip = true
-dv_apop = UniformDistributedVariation(pcvct.apoptosisPath("default", "death_rate"), 0.0, 1.0)
+dv_apop = UniformDistributedVariation(configPath("default", "apoptosis", "death_rate"), 0.0, 1.0)
 dv_cycle = UniformDistributedVariation(pcvct.cyclePath("default", "phase_durations", "duration:index:0"), 1000.0, 2000.0, flip)
-dv_necr = NormalDistributedVariation(pcvct.necrosisPath("default", "death_rate"), 1e-4, 1e-5; lb=0.0, ub=1.0)
+dv_necr = NormalDistributedVariation(configPath("default", "necrosis", "death_rate"), 1e-4, 1e-5; lb=0.0, ub=1.0)
 dv_pressure_hfm = UniformDistributedVariation(rulePath("default", "cycle entry", "decreasing_signals", "signal:name:pressure", "half_max"), 0.1, 0.25)
 dv_x0 = UniformDistributedVariation(icCellsPath("default", "disc", 1, "x0"), -100.0, 0.0, flip)
 dv_anisotropy = UniformDistributedVariation(icECMPath(2, "elliptical_disc", 1, "anisotropy"), 0.0, 1.0)

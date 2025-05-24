@@ -1,7 +1,7 @@
 export makeMovie
 
 """
-    makeMovie(simulation_id::Int; magick_path::Union{Missing,String}=path_to_magick, ffmpeg_path::Union{Missing,String}=path_to_ffmpeg)
+    makeMovie(simulation_id::Int; magick_path::Union{Missing,String}=pcvct_globals.path_to_magick, ffmpeg_path::Union{Missing,String}=pcvct_globals.path_to_ffmpeg)
 
 Make a movie for the simulation with ID `simulation_id`.
 
@@ -15,7 +15,7 @@ There are three ways to allow this function to find these dependencies:
   2. Set the `PATH` environment variable to include the directories containing the dependencies.
   3. Set environment variables `PCVCT_IMAGEMAGICK_PATH` and `PCVCT_FFMPEG_PATH` before `using pcvct`.
 """
-function makeMovie(simulation_id::Int; magick_path::Union{Missing,String}=path_to_magick, ffmpeg_path::Union{Missing,String}=path_to_ffmpeg)
+function makeMovie(simulation_id::Int; magick_path::Union{Missing,String}=pcvct_globals.path_to_magick, ffmpeg_path::Union{Missing,String}=pcvct_globals.path_to_ffmpeg)
     path_to_output_folder = joinpath(trialFolder(Simulation, simulation_id), "output")
     if isfile("$(path_to_output_folder)/out.mp4")
         movie_generated = false
@@ -36,9 +36,9 @@ function makeMovie(simulation_id::Int; magick_path::Union{Missing,String}=path_t
     elseif !shellCommandExists("ffmpeg")
         throw(ErrorException("FFmpeg is not installed. Please install it to generate movies."))
     end
-    cmd = Cmd(`make jpeg OUTPUT=$(path_to_output_folder)`; env=env, dir=physicell_dir)
+    cmd = Cmd(`make jpeg OUTPUT=$(path_to_output_folder)`; env=env, dir=physicellDir())
     run(pipeline(cmd; stdout=devnull, stderr=devnull))
-    cmd = Cmd(`make movie OUTPUT=$(path_to_output_folder)`; env=env, dir=physicell_dir)
+    cmd = Cmd(`make movie OUTPUT=$(path_to_output_folder)`; env=env, dir=physicellDir())
     run(pipeline(cmd; stdout=devnull, stderr=devnull))
     movie_generated = true
     jpgs = readdir(joinpath(trialFolder(Simulation, simulation_id), "output"), sort=false)
@@ -56,15 +56,15 @@ Set the global variables `path_to_magick` and `path_to_ffmpeg` to the provided p
 """
 function resolveMovieGlobals(magick_path::Union{Missing,String}, ffmpeg_path::Union{Missing,String})
     if !ismissing(magick_path)
-        global path_to_magick = magick_path
+        pcvct_globals.path_to_magick = magick_path
     end
     if !ismissing(ffmpeg_path)
-        global path_to_ffmpeg = ffmpeg_path
+        pcvct_globals.path_to_ffmpeg = ffmpeg_path
     end
 end
 
 """
-    makeMovie(T::Union{AbstractTrial,PCVCTOutput}; magick_path::Union{Missing,String}=path_to_magick, ffmpeg_path::Union{Missing,String}=path_to_ffmpeg)
+    makeMovie(T::Union{AbstractTrial,PCVCTOutput}; magick_path::Union{Missing,String}=pcvct_globals.path_to_magick, ffmpeg_path::Union{Missing,String}=pcvct_globals.path_to_ffmpeg)
 
 Make movies for all simulations in `T`, a simulation, monad, sampling, or trial.
 
@@ -77,7 +77,7 @@ makeMovie(sampling) # make movies for all simulations in sampling
 ```
 """
 function makeMovie(T::Union{AbstractTrial,PCVCTOutput}; kwargs...)
-    simulation_ids = getSimulationIDs(T)
+    simulation_ids = simulationIDs(T)
     println("Making movies for $(typeof(T)) $(T.id) with $(length(simulation_ids)) simulations...")
     for simulation_id in simulation_ids
         print("  Making movie for simulation $simulation_id...")

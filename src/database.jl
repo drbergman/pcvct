@@ -1,7 +1,5 @@
 export printSimulationsTable, simulationsTable
 
-db::SQLite.DB = SQLite.DB()
-
 ################## Database Initialization Functions ##################
 
 """
@@ -13,17 +11,18 @@ Also, check the version of pcvct used to create the database and upgrade it if n
 """
 function initializeDatabase(path_to_database::String; auto_upgrade::Bool=false)
     is_new_db = !isfile(path_to_database)
-    global db = SQLite.DB(path_to_database)
-    SQLite.transaction(db, "EXCLUSIVE")
+    close(pcvct_globals.db) #! close the old database connection if it exists
+    pcvct_globals.db = SQLite.DB(path_to_database)
+    SQLite.transaction(centralDB(), "EXCLUSIVE")
     try
         createSchema(is_new_db; auto_upgrade=auto_upgrade)
     catch e
-        SQLite.rollback(db)
+        SQLite.rollback(centralDB())
         println("Error initializing database: $e")
         return false
     else
-        SQLite.commit(db)
-        global initialized = true
+        SQLite.commit(centralDB())
+        pcvct_globals.initialized = true
         return true
     end
 end
@@ -34,12 +33,12 @@ end
 Reinitialize the database by searching through the `data/inputs` directory to make sure all are present in the database.
 """
 function reinitializeDatabase()
-    if !initialized
+    if !pcvct_globals.initialized
         println("Database not initialized. Initialize the database first before re-initializing. `initializeModelManager()` will do this.")
         return
     end
-    global initialized = false
-    return initializeDatabase(db.file; auto_upgrade=true)
+    pcvct_globals.initialized = false
+    return initializeDatabase(centralDB().file; auto_upgrade=true)
 end
 
 """
@@ -61,10 +60,10 @@ function createSchema(is_new_db::Bool; auto_upgrade::Bool=false)
 
     #! initialize and populate physicell_versions table
     createPCVCTTable("physicell_versions", physicellVersionsSchema())
-    global current_physicell_version_id = resolvePhysiCellVersionID()
+    pcvct_globals.current_physicell_version_id = resolvePhysiCellVersionID()
 
     #! initialize tables for all inputs
-    for (location, location_dict) in pairs(inputs_dict)
+    for (location, location_dict) in pairs(inputsDict())
         table_name = tableName(location)
         table_schema = """
             $(locationIDName(location)) INTEGER PRIMARY KEY,
@@ -121,7 +120,7 @@ Check if all necessary input folders are present in the database.
 """
 function necessaryInputsPresent()
     success = true
-    for (location, location_dict) in pairs(inputs_dict)
+    for (location, location_dict) in pairs(inputsDict())
         if !location_dict["required"]
             continue
         end
@@ -162,8 +161,8 @@ function monadsSchema()
     $(inputVariationIDsSubSchema()),
     $(abstractSamplingForeignReferenceSubSchema()),
     UNIQUE (physicell_version_id,
-            $(join([locationIDName(k) for k in keys(inputs_dict)], ",\n")),
-            $(join([locationVariationIDName(k) for (k, d) in pairs(inputs_dict) if any(d["varied"])], ",\n"))
+            $(join([locationIDName(k) for k in keys(inputsDict())], ",\n")),
+            $(join([locationVariationIDName(k) for (k, d) in pairs(inputsDict()) if any(d["varied"])], ",\n"))
             )
    """
 end
@@ -174,7 +173,7 @@ end
 Create the part of the schema corresponding to the input IDs.
 """
 function inputIDsSubSchema()
-    return join(["$(locationIDName(k)) INTEGER" for k in keys(inputs_dict)], ",\n")
+    return join(["$(locationIDName(k)) INTEGER" for k in keys(inputsDict())], ",\n")
 end
 
 """
@@ -183,7 +182,7 @@ end
 Create the part of the schema corresponding to the varied inputs and their IDs.
 """
 function inputVariationIDsSubSchema()
-    return join(["$(locationVariationIDName(k)) INTEGER" for (k, d) in pairs(inputs_dict) if any(d["varied"])], ",\n")
+    return join(["$(locationVariationIDName(k)) INTEGER" for (k, d) in pairs(inputsDict()) if any(d["varied"])], ",\n")
 end
 
 """
@@ -198,7 +197,7 @@ function abstractSamplingForeignReferenceSubSchema()
     $(join(["""
     FOREIGN KEY ($(locationIDName(k)))
         REFERENCES $(tableName(k)) ($(locationIDName(k)))\
-    """ for k in keys(inputs_dict)], ",\n"))
+    """ for k in keys(inputsDict())], ",\n"))
     """
 end
 
@@ -237,14 +236,14 @@ function metadataDescription(path_to_folder::AbstractString)
 end
 
 """
-    createPCVCTTable(table_name::String, schema::String; db::SQLite.DB=db)
+    createPCVCTTable(table_name::String, schema::String; db::SQLite.DB=centralDB())
 
 Create a table in the database with the given name and schema. The table will be created if it does not already exist.
 
 The table name must end in "s" to help normalize the ID names for these entries.
 The schema must have a PRIMARY KEY named as the table name without the "s" followed by "_id."
 """
-function createPCVCTTable(table_name::String, schema::String; db::SQLite.DB=db)
+function createPCVCTTable(table_name::String, schema::String; db::SQLite.DB=centralDB())
     #! check that table_name ends in "s"
     if last(table_name) != 's'
         s = "Table name must end in 's'."
@@ -310,16 +309,16 @@ function createDefaultStatusCodesTable()
     createPCVCTTable("status_codes", status_codes_schema)
     status_codes = recognizedStatusCodes()
     for status_code in status_codes
-        DBInterface.execute(db, "INSERT OR IGNORE INTO status_codes (status_code) VALUES ('$status_code');")
+        DBInterface.execute(centralDB(), "INSERT OR IGNORE INTO status_codes (status_code) VALUES ('$status_code');")
     end
 end
 
 """
-    getStatusCodeID(status_code::String)
+    statusCodeID(status_code::String)
 
 Get the ID of a status code from the database.
 """
-function getStatusCodeID(status_code::String)
+function statusCodeID(status_code::String)
     @assert status_code in recognizedStatusCodes() "Status code $(status_code) is not recognized. Must be one of $(recognizedStatusCodes())."
     query = constructSelectQuery("status_codes", "WHERE status_code='$status_code';"; selection="status_code_id")
     return queryToDataFrame(query; is_row=true) |> x -> x[1,:status_code_id]
@@ -336,14 +335,14 @@ The check and status update are done in a transaction to ensure that the status 
 function isStarted(simulation_id::Int; new_status_code::Union{Missing,String}=missing)
     query = constructSelectQuery("simulations", "WHERE simulation_id=$(simulation_id)"; selection="status_code_id")
     mode = ismissing(new_status_code) ? "DEFERRED" : "EXCLUSIVE" #! if we are possibly going to update, then set to exclusive mode
-    SQLite.transaction(db, mode)
+    SQLite.transaction(centralDB(), mode)
     status_code = queryToDataFrame(query; is_row=true) |> x -> x[1,:status_code_id]
-    is_started = status_code != getStatusCodeID("Not Started")
+    is_started = status_code != statusCodeID("Not Started")
     if !ismissing(new_status_code) && !is_started
-        query = "UPDATE simulations SET status_code_id=$(getStatusCodeID(new_status_code)) WHERE simulation_id=$(simulation_id);"
-        DBInterface.execute(db, query)
+        query = "UPDATE simulations SET status_code_id=$(statusCodeID(new_status_code)) WHERE simulation_id=$(simulation_id);"
+        DBInterface.execute(centralDB(), query)
     end
-    SQLite.commit(db)
+    SQLite.commit(centralDB())
 
     return is_started
 end
@@ -383,20 +382,20 @@ end
 ########### Retrieving Database Information Functions ###########
 
 """
-    vctDBQuery(query::String; db::SQLite.DB=db)
+    vctDBQuery(query::String; db::SQLite.DB=centralDB())
     
 Execute a query against the database and return the result.
 """
-vctDBQuery(query::String; db::SQLite.DB=db) = DBInterface.execute(db, query)
+vctDBQuery(query::String; db::SQLite.DB=centralDB()) = DBInterface.execute(db, query)
 
 """
-    queryToDataFrame(query::String; db::SQLite.DB=db, is_row::Bool=false)
+    queryToDataFrame(query::String; db::SQLite.DB=centralDB(), is_row::Bool=false)
 
 Execute a query against the database and return the result as a DataFrame.
 
 If `is_row` is true, the function will assert that the result has exactly one row, i.e., a unique result.
 """
-function queryToDataFrame(query::String; db::SQLite.DB=db, is_row::Bool=false)
+function queryToDataFrame(query::String; db::SQLite.DB=centralDB(), is_row::Bool=false)
     df = vctDBQuery(query; db=db) |> DataFrame
     if is_row
         @assert size(df,1)==1 "Did not find exactly one row matching the query:\n\tDatabase file: $(db)\n\tQuery: $(query)\nResult: $(df)"
@@ -426,11 +425,11 @@ function inputFolderName(location::Symbol, id::Int)
 end
 
 """
-    inputFolderID(location::Symbol, folder_name::String; db::SQLite.DB=db)
+    inputFolderID(location::Symbol, folder_name::String; db::SQLite.DB=centralDB())
 
 Retrieve the ID of the folder associated with the given location and folder name.
 """
-function inputFolderID(location::Symbol, folder_name::String; db::SQLite.DB=db)
+function inputFolderID(location::Symbol, folder_name::String; db::SQLite.DB=centralDB())
     if folder_name == ""
         return -1
     end
@@ -515,7 +514,7 @@ end
 Add the folder names to the DataFrame for each location in the DataFrame.
 """
 function addFolderNameColumns!(df::DataFrame)
-    for (location, location_dict) in pairs(inputs_dict)
+    for (location, location_dict) in pairs(inputsDict())
         if !(locationIDName(location) in names(df))
             continue
         end
@@ -530,7 +529,7 @@ function addFolderNameColumns!(df::DataFrame)
 end
 
 """
-    simulationsTableFromQuery(query::String; remove_constants::Bool=true, sort_by=String[], sort_ignore=[:SimID; shortLocationVariationID.(project_locations.varied)])
+    simulationsTableFromQuery(query::String; remove_constants::Bool=true, sort_by=String[], sort_ignore=[:SimID; shortLocationVariationID.(projectLocations().varied)])
 
 Return a DataFrame containing the simulations table for the given query.
 
@@ -551,7 +550,7 @@ Set `remove_constants` to false to keep these columns.
 function simulationsTableFromQuery(query::String;
                                    remove_constants::Bool=true,
                                    sort_by=String[],
-                                   sort_ignore=[:SimID; shortLocationVariationID.(project_locations.varied)])
+                                   sort_ignore=[:SimID; shortLocationVariationID.(projectLocations().varied)])
     #! preprocess sort kwargs
     sort_by = (sort_by isa Vector ? sort_by : [sort_by]) .|> Symbol
     sort_ignore = (sort_ignore isa Vector ? sort_ignore : [sort_ignore]) .|> Symbol
@@ -563,7 +562,7 @@ function simulationsTableFromQuery(query::String;
     addFolderNameColumns!(df) #! add the folder columns
 
     #! handle each of the varying inputs
-    for loc in project_locations.varied
+    for loc in projectLocations().varied
         df = appendVariations(loc, df)
     end
 
@@ -613,7 +612,7 @@ There are three options for `T`:
 - If omitted, creates a DataFrame for all the simulations.
 """
 function simulationsTable(T::Union{AbstractTrial,AbstractArray{<:AbstractTrial}}; kwargs...)
-    query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(getSimulationIDs(T),",")));")
+    query = constructSelectQuery("simulations", "WHERE simulation_id IN ($(join(simulationIDs(T),",")));")
     return simulationsTableFromQuery(query; kwargs...)
 end
 

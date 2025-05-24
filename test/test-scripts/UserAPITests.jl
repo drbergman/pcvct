@@ -10,13 +10,13 @@ inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rul
 
 method = GridVariation()
 
-dv = DiscreteVariation(["overall","max_time"], [12.0, 13.0])
+dv = DiscreteVariation(configPath("max_time"), [12.0, 13.0])
 
 out = run(method, inputs, dv)
 
 method = LHSVariation(3)
-dv = UniformDistributedVariation(["overall","max_time"], 12.0, 20.0)
-reference = getSimulationIDs(out)[1] |> Simulation
+dv = UniformDistributedVariation(configPath("max_time"), 12.0, 20.0)
+reference = simulationIDs(out)[1] |> Simulation
 out = run(method, reference, dv)
 
 method = SobolVariation(4)

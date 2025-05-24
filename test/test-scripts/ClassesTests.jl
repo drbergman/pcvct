@@ -57,12 +57,12 @@ getMonadIDs(samplings)
 @test pcvct.lowerClassString(samplings[1]) == "sampling"
 @test pcvct.lowerClassString(trial) == "trial"
 
-old_march_flag = pcvct.march_flag
+old_march_flag = pcvct.pcvct_globals.march_flag
 new_march_flag = "new_march_flag"
 pcvct.setMarchFlag(new_march_flag)
-@test pcvct.march_flag == new_march_flag
+@test pcvct.pcvct_globals.march_flag == new_march_flag
 pcvct.setMarchFlag(old_march_flag)
-@test pcvct.march_flag == old_march_flag #! make sure it is reset
+@test pcvct.pcvct_globals.march_flag == old_march_flag #! make sure it is reset
 
 
 #! you probably do not want to use integer variation IDs to initialize a Sampling object. this is just to test edge cases in the constructor
@@ -71,7 +71,7 @@ sampling = Sampling(inputs, location_variation_ids)
 location_variation_ids = Dict{Symbol,Union{Integer,AbstractArray{<:Integer}}}(:config => [0], :rulesets_collection => -1, :ic_cell => -1)
 sampling = Sampling(inputs, location_variation_ids)
 sampling = Sampling(Monad(1))
-all_monads = getSimulationIDs() .|> Simulation .|> Monad
+all_monads = simulationIDs() .|> Simulation .|> Monad
 all_monad_ids = [monad.id for monad in all_monads] |> unique
 trial = Trial(Monad.(all_monad_ids))
 

@@ -13,7 +13,7 @@ inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rul
 
 cell_type = "default"
 
-xml_path = pcvct.apoptosisPath(cell_type, "death_rate")
+xml_path = configPath(cell_type, "apoptosis", "death_rate")
 dv = UniformDistributedVariation(xml_path, 0.0, 1.0)
 @test_throws ErrorException pcvct.variationValues(dv)
 
@@ -87,7 +87,7 @@ ic_cell_folder = "1_xml"
 inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rulesets_collection_folder, ic_cell=ic_cell_folder)
 
 dv_max_time = DiscreteVariation(["overall", "max_time"], 12.0)
-apoptosis_rate_path = pcvct.apoptosisPath(cell_type, "death_rate")
+apoptosis_rate_path = configPath(cell_type, "apoptosis", "death_rate")
 cycle_rate_path = pcvct.cyclePath(cell_type, "phase_durations", "duration:index:0")
 val_1 = [0.0, 1.0]
 val_2 = [1000.0, 2000.0]

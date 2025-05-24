@@ -63,7 +63,7 @@ export_folder = exportSimulation(out.trial.id)
 export_test(export_folder)
 
 # export with intracellulars
-simulation_id = pcvct_output_intracellular |> getSimulationIDs |> first
+simulation_id = pcvct_output_intracellular |> simulationIDs |> first
 path_to_exported_folder = exportSimulation(simulation_id, "IntracellularTestExport")
 path_to_xml = joinpath(path_to_exported_folder, "config", "PhysiCell_settings.xml")
 @test isfile(path_to_xml)
