@@ -7,7 +7,7 @@ n_sims = length(Monad(1))
 monad = Monad(1; n_replicates=1, use_previous=false)
 run(monad)
 @test length(monad) == n_sims + 1 #! how many simulations were attached to this monad when run
-@test length(getSimulationIDs(monad)) == n_sims+1 #! how many simulations are stored in simulations.csv
+@test length(simulationIDs(monad)) == n_sims+1 #! how many simulations are stored in simulations.csv
 
 config_folder = "0_template"
 rulesets_collection_folder = "0_template"
@@ -17,9 +17,9 @@ inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rul
 n_replicates = 1
 
 discrete_variations = DiscreteVariation[]
-push!(discrete_variations, DiscreteVariation(["overall","max_time"], 12.0))
-push!(discrete_variations, DiscreteVariation(["save","full_data","interval"], 6.0))
-push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], 6.0))
+push!(discrete_variations, DiscreteVariation(configPath("max_time"), 12.0))
+push!(discrete_variations, DiscreteVariation(configPath("full_data"), 6.0))
+push!(discrete_variations, DiscreteVariation(configPath("svg_save"), 6.0))
 
 simulation = createTrial(inputs, discrete_variations)
 
@@ -42,13 +42,13 @@ df = pcvct.queryToDataFrame(query; is_row=true)
 
 cell_type = "default"
 discrete_variations = DiscreteVariation[]
-xml_path = pcvct.cyclePath(cell_type, "phase_durations", "duration:index:0")
+xml_path = configPath(cell_type, "cycle_duration", 0)
 push!(discrete_variations, DiscreteVariation(xml_path, [1.0, 2.0]))
-xml_path = pcvct.cyclePath(cell_type, "phase_durations", "duration:index:1")
+xml_path = configPath(cell_type, "cycle_duration", 1)
 push!(discrete_variations, DiscreteVariation(xml_path, 3.0))
-xml_path = pcvct.cyclePath(cell_type, "phase_durations", "duration:index:2")
+xml_path = configPath(cell_type, "cycle_duration", 2)
 push!(discrete_variations, DiscreteVariation(xml_path, 4.0))
-xml_path = pcvct.cyclePath(cell_type, "phase_durations", "duration:index:3")
+xml_path = configPath(cell_type, "cycle_duration", 3)
 push!(discrete_variations, DiscreteVariation(xml_path, 5.0))
 
 sampling = createTrial(simulation, discrete_variations; n_replicates=n_replicates)
@@ -61,15 +61,12 @@ out2 = run(simulation, discrete_variations; n_replicates=n_replicates, force_rec
 @test out2.trial.id == sampling.id
 @test out2.trial.inputs == sampling.inputs
 @test Set(pcvct.readConstituentIDs(out2.trial)) == Set(pcvct.readConstituentIDs(sampling))
-@test Set(pcvct.getSimulationIDs(out2.trial)) == Set(pcvct.getSimulationIDs(sampling))
+@test Set(pcvct.simulationIDs(out2.trial)) == Set(pcvct.simulationIDs(sampling))
 @test out2.n_scheduled == 0
 @test out2.n_success == 0
 
 n_simulations = length(sampling) #! number of simulations recorded (in .csvs) for this sampling
-n_expected_sims = n_replicates
-for discrete_variation in discrete_variations
-    global n_expected_sims *= length(discrete_variation)
-end
+n_expected_sims = n_replicates * (discrete_variations .|> length |> prod)
 n_variations = length(sampling.monads)
 
 # make sure the number of simulations in this sampling is what we expected based on...

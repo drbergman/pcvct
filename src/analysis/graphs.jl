@@ -3,7 +3,7 @@ using Graphs, MetaGraphsNext
 export connectedComponents
 
 """
-    connectedComponents(snapshot::PhysiCellSnapshot, graph=:neighbors; include_cell_types=:all_in_one, exclude_cell_types::String[], include_dead::Bool=false)
+    connectedComponents(snapshot::PhysiCellSnapshot, graph=:neighbors; include_cell_type_names=:all_in_one, exclude_cell_type_names::String[], include_dead::Bool=false)
 
 Find the connected components of a graph in a PhysiCell snapshot.
 
@@ -12,14 +12,16 @@ The computation can be done on subsets of cells based on their cell types.
 # Arguments
 - `snapshot::PhysiCellSnapshot`: the snapshot to analyze
 - `graph`: the graph data to use (default is `:neighbors`); must be one of `:neighbors`, `:attachments`, or `:spring_attachments`; can also be a string
-- `include_cell_types`: the cell types to include in the analysis (default is `:all_in_one`). Full list of options:
+
+# Keyword Arguments
+- `include_cell_type_names`: the cell types to include in the analysis (default is `:all_in_one`). Full list of options:
     - `:all` - compute connected components for all cell types individually
     - `:all_in_one` - compute connected components for all cell types together
     - `"cell_type_1"` - compute connected components only for the cells of type `cell_type_1`
     - `["cell_type_1", "cell_type_2"]` - compute connected components for the cells of type `cell_type_1` and `cell_type_2` separately
     - `[["cell_type_1", "cell_type_2"]]` - compute connected components for the cells of type `cell_type_1` and `cell_type_2` together
     - `[["cell_type_1", "cell_type_2"], "cell_type_3"]` - compute connected components for the cells of type `cell_type_1` and `cell_type_2` together, and for the cells of type `cell_type_3` separately
-- `exclude_cell_types`: the cell types to exclude from the analysis (default is `String[]`); can be a single string or a vector of strings
+- `exclude_cell_type_names`: the cell types to exclude from the analysis (default is `String[]`); can be a single string or a vector of strings
 - `include_dead`: whether to include dead cells in the analysis (default is `false`)
 
 # Returns
@@ -32,19 +34,32 @@ For each key, the value is a list of connected components in the graph.
 Each component is represented as a vector of vertex labels.
 As of this writing, the vertex labels are the simple `AgentID` class that wraps the cell ID.
 """
-function connectedComponents(snapshot::PhysiCellSnapshot, graph::Symbol=:neighbors; include_cell_types=:all_in_one, exclude_cell_types=String[], include_dead::Bool=false)
-    is_all_in_one = include_cell_types == :all_in_one
-    cell_type_to_name_dict = getCellTypeToNameDict(snapshot)
+function connectedComponents(snapshot::PhysiCellSnapshot, graph::Symbol=:neighbors; include_cell_type_names=:all_in_one, exclude_cell_type_names=String[], include_dead::Bool=false,
+                             include_cell_types=nothing, exclude_cell_types=nothing)
+    is_all_in_one = include_cell_type_names == :all_in_one
+    cell_type_to_name_dict = cellTypeToNameDict(snapshot)
     cell_type_names = values(cell_type_to_name_dict) |> collect
-    include_cell_types = processIncludeCellTypes(include_cell_types, cell_type_names)
-    exclude_cell_types = processExcludeCellTypes(exclude_cell_types)
+
+    if !isnothing(include_cell_types)
+        @assert include_cell_type_names == :all_in_one "Do not use both `include_cell_types` and `include_cell_type_names` as keyword arguments. Use `include_cell_type_names` instead."
+        Base.depwarn("`include_cell_types` is deprecated as a keyword. Use `include_cell_type_names` instead.", :connectedComponents, force=true)
+        include_cell_type_names = include_cell_types
+    end
+    include_cell_type_names = processIncludeCellTypes(include_cell_type_names, cell_type_names)
+
+    if !isnothing(exclude_cell_types)
+        @assert exclude_cell_type_names == String[] "Do not use both `exclude_cell_types` and `exclude_cell_type_names` as keyword arguments. Use `exclude_cell_type_names` instead."
+        Base.depwarn("`exclude_cell_types` is deprecated as a keyword. Use `exclude_cell_type_names` instead.", :connectedComponents, force=true)
+        exclude_cell_type_names = exclude_cell_types
+    end
+    exclude_cell_type_names = processExcludeCellTypes(exclude_cell_type_names)
     loadGraph!(snapshot, graph)
     if is_all_in_one
         G = getfield(snapshot, graph) |> deepcopy
         if include_dead
-            key = [include_cell_types[1]; :include_dead]
+            key = [include_cell_type_names[1]; :include_dead]
         else
-            key = include_cell_types[1]
+            key = include_cell_type_names[1]
             loadCells!(snapshot)
             dead_cell_ids = snapshot.cells.ID[snapshot.cells.dead] |> Set
             vertices_to_remove = [v for v in vertices(G) if G.vertex_labels[v].id in dead_cell_ids]
@@ -67,14 +82,14 @@ function connectedComponents(snapshot::PhysiCellSnapshot, graph::Symbol=:neighbo
         id_to_name = [row.ID => (row.dead ? :dead : cell_type_to_name_dict[row.cell_type]) for row in eachrow(snapshot.cells)] |> Dict
     end
 
-    for cell_group in include_cell_types
+    for cell_group in include_cell_type_names
         if cell_group isa String
             internal_keys = [cell_group] #! standardize so that all are vectors
         else
             internal_keys = cell_group
-            @assert internal_keys isa Vector{String} "include_cell_types must be a vector of strings"
+            @assert internal_keys isa Vector{String} "include_cell_type_names must be a vector of strings"
         end
-        setdiff!(internal_keys, exclude_cell_types) #! remove any cell types that are to be excluded (also removes duplicates)
+        setdiff!(internal_keys, exclude_cell_type_names) #! remove any cell types that are to be excluded (also removes duplicates)
         if isempty(internal_keys)
             continue
         end
@@ -93,6 +108,8 @@ function connectedComponents(snapshot::PhysiCellSnapshot, graph::Symbol=:neighbo
     end
     return data
 end
+
+connectedComponents(snapshot::PhysiCellSnapshot, graph::String; kwargs...) = connectedComponents(snapshot, Symbol(graph); kwargs...)
 
 """
     _connectedComponents(G::MetaGraph)
@@ -123,5 +140,3 @@ function _connectedComponents(G::MetaGraph)
     end
     return components
 end
-
-connectedComponents(snapshot::PhysiCellSnapshot, graph::String; kwargs...) = connectedComponents(snapshot, Symbol(graph); kwargs...)

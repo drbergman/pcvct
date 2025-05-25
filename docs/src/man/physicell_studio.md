@@ -1,5 +1,11 @@
 # Using PhysiCell Studio
 See [PhysiCell-Studio](https://github.com/PhysiCell-Tools/PhysiCell-Studio).
+Using PhysiCell Studio within pcvct is designed for visualizing output in the `Plot` tab and observing model parameters in the remaining tabs.
+
+**Do not use the `Run` tab in PhysiCell Studio as this may delete simulation data.**
+
+See [below](#editing-in-physicell-studio) for how to edit the configuration and rules files in studio.
+
 ## Setting paths
 ### Environment variables
 You must first inform pcvct where your desired `python` executable is and the PhysiCell Studio folder.

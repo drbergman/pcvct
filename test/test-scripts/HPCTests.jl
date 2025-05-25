@@ -39,21 +39,31 @@ if is_about_to_be_next_day
     #! if it's about to be the next day, wait until it is the next day
     sleep(threshold_seconds + 1)
 end
-path_to_dummy_file = joinpath(pcvct.data_dir, "test.txt")
+path_to_dummy_file = joinpath(pcvct.dataDir(), "test.txt")
 open(path_to_dummy_file, "w") do f
     write(f, "test")
 end
 pcvct.rm_hpc_safe(path_to_dummy_file)
-@test joinpath(pcvct.data_dir, ".trash", "data-$(Dates.format(now(), "yymmdd"))", "test.txt") |> isfile
+@test joinpath(pcvct.dataDir(), ".trash", "data-$(Dates.format(now(), "yymmdd"))", "test.txt") |> isfile
 
 # test hpc removal of file with same name
-path_to_dummy_file = joinpath(pcvct.data_dir, "test.txt")
+path_to_dummy_file = joinpath(pcvct.dataDir(), "test.txt")
 open(path_to_dummy_file, "w") do f
     write(f, "test")
 end
 pcvct.rm_hpc_safe(path_to_dummy_file)
-@test joinpath(pcvct.data_dir, ".trash", "data-$(Dates.format(now(), "yymmdd"))", "test-1.txt") |> isfile
+@test joinpath(pcvct.dataDir(), ".trash", "data-$(Dates.format(now(), "yymmdd"))", "test-1.txt") |> isfile
 
 # revert back to not using HPC for remainder of tests
 pcvct.useHPC(false)
 
+new_hpc_options = Dict("cpus-per-task" => "2",
+                       "job-name" => simulation_id -> "test_$(simulation_id)")
+pcvct.setJobOptions(new_hpc_options)
+@test pcvct.pcvct_globals.sbatch_options["cpus-per-task"] == "2"
+hpc_command = pcvct.prepareHPCCommand(cmd_local, 78)
+
+cmd_string = string(hpc_command)
+cmd_string = strip(cmd_string, '`')
+@assert contains(cmd_string, "--cpus-per-task=2")
+@assert contains(cmd_string, "--job-name=test_78")

@@ -1,6 +1,7 @@
 using DataFrames, MAT, Graphs, MetaGraphsNext
 
-export getCellDataSequence, PhysiCellSnapshot, PhysiCellSequence
+export cellDataSequence, getCellDataSequence, PhysiCellSnapshot, PhysiCellSequence,
+       loadCells!, loadSubstrates!, loadMesh!, loadGraph!
 
 """
     AbstractPhysiCellSequence
@@ -186,6 +187,46 @@ end
 Base.parse(::Type{AgentID}, s::AbstractString) = AgentID(parse(Int, s))
 
 """
+    AgentDict{T} <: AbstractDict{AgentID,T}
+
+A dictionary-like structure that maps `AgentID`s to values of type `T`.
+Integers can be passed as keys and they will be converted to `AgentID`s.
+"""
+struct AgentDict{T} <: AbstractDict{AgentID,T}
+    dict::Dict{AgentID,T}
+
+    function AgentDict(d::Dict{AgentID,T}) where T
+        return new{T}(d)
+    end
+
+    function AgentDict(d::Dict{<:Integer,T}) where T
+        return AgentDict([AgentID(k) => v for (k, v) in d])
+    end
+
+    function AgentDict(ps::Vector{<:Pair{AgentID,T}}) where T
+        return AgentDict(Dict{AgentID,T}(ps))
+    end
+
+    function AgentDict(ps::Vector{<:Pair{<:Integer,T}}) where {T}
+        return AgentDict([AgentID(k) => v for (k, v) in ps])
+    end
+end
+
+#! functions to make AgentDict work like a normal dictionary
+Base.getindex(d::AgentDict, args...) = getindex(d.dict, args...)
+Base.length(d::AgentDict) = length(d.dict)
+Base.iterate(d::AgentDict, args...) = iterate(d.dict, args...)
+Base.haskey(d::AgentDict, k::AgentID) = haskey(d.dict, k)
+Base.setindex!(d::AgentDict, v, k::AgentID) = setindex!(d.dict, v, k)
+Base.delete!(d::AgentDict, k::AgentID) = delete!(d.dict, k)
+
+#! allow users to use integers as keys
+Base.getindex(d::AgentDict, k::Integer) = d.dict[AgentID(k)]
+Base.haskey(d::AgentDict, k::Integer) = haskey(d.dict, AgentID(k))
+Base.setindex!(d::AgentDict, v, k::Integer) = setindex!(d.dict, v, AgentID(k))
+Base.delete!(d::AgentDict, k::Integer) = delete!(d.dict, AgentID(k))
+
+"""
     physicellEmptyGraph()
 
 Create an empty graph for use with PhysiCell.
@@ -263,13 +304,13 @@ function PhysiCellSequence(simulation_id::Integer;
     include_neighbors::Bool=false)
 
     path_to_xml = pathToOutputXML(simulation_id, :initial)
-    cell_type_to_name_dict = getCellTypeToNameDict(path_to_xml)
+    cell_type_to_name_dict = cellTypeToNameDict(path_to_xml)
     if isempty(cell_type_to_name_dict)
         println("Could not find cell type information in $path_to_xml. This means that there is no initial.xml file, possibly due to pruning. Returning missing.")
         return missing
     end
-    labels = getLabels(path_to_xml)
-    substrate_names = include_substrates ? getSubstrateNames(path_to_xml) : String[]
+    labels = cellLabels(path_to_xml)
+    substrate_names = include_substrates ? substrateNames(path_to_xml) : String[]
     index_to_snapshot = index -> PhysiCellSnapshot(simulation_id, index, labels, substrate_names;
                                                    include_cells=include_cells,
                                                    cell_type_to_name_dict=cell_type_to_name_dict,
@@ -338,24 +379,24 @@ Return the path to the XML output file for a snapshot of a PhysiCell simulation.
 pathToOutputXML(snapshot::PhysiCellSnapshot) = pathToOutputXML(snapshot.simulation_id, snapshot.index)
 
 """
-    getLabels(simulation::Simulation)
+    cellLabels(simulation::Simulation)
 
 Return the labels from the XML file for a PhysiCell simulation, i.e., the names of the cell data fields.
 
 # Arguments
 - `simulation`: The simulation object. Can also use the simulation ID, an [`AbstractPhysiCellSequence`](@ref), `XMLDocument`, or the path to the XML file (`String`).
 """
-function getLabels(path_to_file::String)
+function cellLabels(path_to_file::String)
     if !isfile(path_to_file)
         return String[]
     end
     xml_doc = parse_file(path_to_file)
-    labels = getLabels(xml_doc)
+    labels = cellLabels(xml_doc)
     free(xml_doc)
     return labels
 end
 
-function getLabels(xml_doc::XMLDocument)
+function cellLabels(xml_doc::XMLDocument)
     labels = String[]
     xml_path = ["cellular_information", "cell_populations", "cell_population", "custom", "simplified_data", "labels"]
     labels_element = retrieveElement(xml_doc, xml_path; required=true)
@@ -376,30 +417,30 @@ function getLabels(xml_doc::XMLDocument)
     return labels
 end
 
-getLabels(snapshot::PhysiCellSnapshot) = pathToOutputXML(snapshot) |> getLabels
-getLabels(sequence::PhysiCellSequence) = sequence.labels
-getLabels(simulation_id::Integer) = getLabels(pathToOutputXML(simulation_id, :initial))
-getLabels(simulation::Simulation) = getLabels(simulation.id)
+cellLabels(snapshot::PhysiCellSnapshot) = pathToOutputXML(snapshot) |> cellLabels
+cellLabels(sequence::PhysiCellSequence) = sequence.labels
+cellLabels(simulation_id::Integer) = cellLabels(pathToOutputXML(simulation_id, :initial))
+cellLabels(simulation::Simulation) = cellLabels(simulation.id)
 
 """
-    getCellTypeToNameDict(simulation::Simulation)
+    cellTypeToNameDict(simulation::Simulation)
 
 Return a dictionary mapping cell type IDs to cell type names from the simulation.
 
 # Arguments
 - `simulation`: The simulation object. Can also use the simulation ID, an [`AbstractPhysiCellSequence`](@ref), `XMLDocument`, or the path to the XML file (`String`).
 """
-function getCellTypeToNameDict(path_to_file::String)
+function cellTypeToNameDict(path_to_file::String)
     if !isfile(path_to_file)
         return Dict{Int,String}()
     end
     xml_doc = parse_file(path_to_file)
-    cell_type_to_name_dict = getCellTypeToNameDict(xml_doc)
+    cell_type_to_name_dict = cellTypeToNameDict(xml_doc)
     free(xml_doc)
     return cell_type_to_name_dict
 end
 
-function getCellTypeToNameDict(xml_doc::XMLDocument)
+function cellTypeToNameDict(xml_doc::XMLDocument)
     cell_type_to_name_dict = Dict{Int, String}()
     xml_path = ["cellular_information", "cell_populations", "cell_population", "custom", "simplified_data", "cell_types"]
     cell_types_element = retrieveElement(xml_doc, xml_path; required=true)
@@ -412,30 +453,30 @@ function getCellTypeToNameDict(xml_doc::XMLDocument)
     return cell_type_to_name_dict
 end
 
-getCellTypeToNameDict(snapshot::PhysiCellSnapshot) = pathToOutputXML(snapshot) |> getCellTypeToNameDict
-getCellTypeToNameDict(sequence::PhysiCellSequence) = sequence.cell_type_to_name_dict
-getCellTypeToNameDict(simulation_id::Integer) = getCellTypeToNameDict(pathToOutputXML(simulation_id, :initial))
-getCellTypeToNameDict(simulation::Simulation) = getCellTypeToNameDict(simulation.id)
+cellTypeToNameDict(snapshot::PhysiCellSnapshot) = pathToOutputXML(snapshot) |> cellTypeToNameDict
+cellTypeToNameDict(sequence::PhysiCellSequence) = sequence.cell_type_to_name_dict
+cellTypeToNameDict(simulation_id::Integer) = cellTypeToNameDict(pathToOutputXML(simulation_id, :initial))
+cellTypeToNameDict(simulation::Simulation) = cellTypeToNameDict(simulation.id)
 
 """
-    getSubstrateNames(simulation::Simulation)
+    substrateNames(simulation::Simulation)
 
 Return the names of the substrates from the simulation.
 
 # Arguments
 - `simulation`: The simulation object. Can also use the simulation ID, an [`AbstractPhysiCellSequence`](@ref), `XMLDocument`, or the path to the XML file (`String`).
 """
-function getSubstrateNames(path_to_file::String)
+function substrateNames(path_to_file::String)
     if !isfile(path_to_file)
         return String[]
     end
     xml_doc = parse_file(path_to_file)
-    substrate_names = getSubstrateNames(xml_doc)
+    substrate_names = substrateNames(xml_doc)
     free(xml_doc)
     return substrate_names
 end
 
-function getSubstrateNames(xml_doc::XMLDocument)
+function substrateNames(xml_doc::XMLDocument)
     xml_path = ["microenvironment", "domain", "variables"]
     variables_element = retrieveElement(xml_doc, xml_path; required=true)
     substrate_dict = Dict{Int, String}()
@@ -454,10 +495,10 @@ function getSubstrateNames(xml_doc::XMLDocument)
     return substrate_names
 end
 
-getSubstrateNames(snapshot::PhysiCellSnapshot) = pathToOutputXML(snapshot) |> getSubstrateNames
-getSubstrateNames(sequence::PhysiCellSequence) = sequence.substrate_names
-getSubstrateNames(simulation_id::Integer) = getSubstrateNames(pathToOutputXML(simulation_id, :initial))
-getSubstrateNames(simulation::Simulation) = getSubstrateNames(simulation.id)
+substrateNames(snapshot::PhysiCellSnapshot) = pathToOutputXML(snapshot) |> substrateNames
+substrateNames(sequence::PhysiCellSequence) = sequence.substrate_names
+substrateNames(simulation_id::Integer) = substrateNames(pathToOutputXML(simulation_id, :initial))
+substrateNames(simulation::Simulation) = substrateNames(simulation.id)
 
 """
     loadCells!(cells::DataFrame, filepath_base::String, cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}(), labels::Vector{String}=String[])
@@ -472,10 +513,10 @@ function loadCells!(cells::DataFrame, filepath_base::String, cell_type_to_name_d
     if isempty(labels) || isempty(cell_type_to_name_dict)
         xml_doc = parse_file("$(filepath_base).xml")
         if isempty(labels)
-            labels = getLabels(xml_doc)
+            labels = cellLabels(xml_doc)
         end
         if isempty(cell_type_to_name_dict)
-            cell_type_to_name_dict = getCellTypeToNameDict(xml_doc)
+            cell_type_to_name_dict = cellTypeToNameDict(xml_doc)
         end
         free(xml_doc)
 
@@ -526,8 +567,8 @@ function loadCells!(snapshot::PhysiCellSnapshot, cell_type_to_name_dict::Dict{In
 end
 
 function loadCells!(sequence::PhysiCellSequence)
-    cell_type_to_name_dict = getCellTypeToNameDict(sequence)
-    labels = getLabels(sequence)
+    cell_type_to_name_dict = cellTypeToNameDict(sequence)
+    labels = cellLabels(sequence)
     for snapshot in sequence.snapshots
         loadCells!(snapshot, cell_type_to_name_dict, labels)
     end
@@ -544,7 +585,7 @@ function loadSubstrates!(substrates::DataFrame, filepath_base::String, substrate
     end
 
     if isempty(substrate_names)
-        substrate_names = "$(filepath_base).xml" |> getSubstrateNames
+        substrate_names = "$(filepath_base).xml" |> substrateNames
         @assert !isempty(substrate_names) "Could not find substrate names in $(filepath_base).xml"
     end
 
@@ -640,10 +681,9 @@ meshInfo(sequence::PhysiCellSequence) = meshInfo(sequence.snapshots[1])
 """
     loadGraph!(G::MetaGraph, path_to_txt_file::String)
 
-Load a graph from a text file into a MetaGraph.
+Load a graph from a text file into a `MetaGraph`.
 
-This is a helper function for loading graphs from PhysiCell simulation output files.
-Users should use [`loadGraph!`](@ref) instead of this function directly.
+Users should use `loadGraph!` with an [`AbstractPhysiCellSequence`](@ref) object instead of this function directly.`
 """
 function loadGraph!(G::MetaGraph, path_to_txt_file::String)
     if nv(G) > 0 #! If the graph is already loaded, do nothing
@@ -657,12 +697,12 @@ function loadGraph!(G::MetaGraph, path_to_txt_file::String)
 end
 
 """
-    loadGraph!(S, graph)
+    loadGraph!(S::AbstractPhysiCellSequence, graph::Symbol)
 
 Load a graph for a snapshot or sequence into a MetaGraph(s).
 
 # Arguments
-- `S`: The snapshot or sequence to load the graph into.
+- `S::AbstractPhysiCellSequence`: The [`AbstractPhysiCellSequence`](@ref) object to load the graph into.
 - `graph`: The type of graph to load (must be one of `:attachments`, `:spring_attachments`, or `:neighbors`). Can also be a string.
 """
 function loadGraph!(snapshot::PhysiCellSnapshot, graph::Symbol)
@@ -697,9 +737,9 @@ function graphInfo(g::MetaGraph)
 end
 
 """
-    getCellDataSequence(simulation_id::Integer, labels::Vector{String}; include_dead::Bool=false, include_cell_type::Bool=false)
+    cellDataSequence(simulation_id::Integer, labels::Vector{String}; include_dead::Bool=false, include_cell_type_name::Bool=false)
 
-Return a dictionary where the keys are cell IDs from the PhysiCell simulation and the values are NamedTuples containing the time and the values of the specified labels for that cell.
+Return an [`AgentDict`](@ref) where the keys are cell IDs from the PhysiCell simulation and the values are NamedTuples containing the time and the values of the specified labels for that cell.
 
 For scalar values, such as `volume`, the values are in a length `N` vector, where `N` is the number of snapshots in the simulation.
 In the case of a label that has multiple columns, such as `position`, the values are concatenated into a length(snapshots) x number of columns array.
@@ -709,42 +749,42 @@ Note: If doing multiple calls to this function, it is recommended to use the `Ph
 - `simulation_id::Integer`: The ID of the PhysiCell simulation. Alternatively, can be a `Simulation` object or a `PhysiCellSequence` object.
 - `labels::Vector{String}`: The labels to extract from the cell data. If a label has multiple columns, such as `position`, the columns are concatenated into a single array. Alternatively, a single label string can be passed.
 - `include_dead::Bool=false`: Whether to include dead cells in the data.
-- `include_cell_type::Bool=false`: Whether to include the cell type name in the data. Equivalent to including `\"cell_type_name\"` in `labels`.
+- `include_cell_type_name::Bool=false`: Whether to include the cell type name in the data. Equivalent to including `\"cell_type_name\"` in `labels`.
 
 # Examples
 ```
-data = getCellDataSequence(sequence, ["position", "elapsed_time_in_phase"]; include_dead=true, include_cell_type=true)
-data[1] # the first cell's data
+data = cellDataSequence(sequence, ["position", "elapsed_time_in_phase"]; include_dead=true, include_cell_type_name=true)
+data[1] # the data for cell with ID 1
 data[1].position # an Nx3 array of the cell's position over time
 data[1].elapsed_time_in_phase # an Nx1 array of the cell's elapsed time in phase over time
 data[1].cell_type_name # an Nx1 array of the cell type name of the first cell over time
 ```
 """
-function getCellDataSequence(simulation_id::Integer, labels::Vector{String}; kwargs...)
+function cellDataSequence(simulation_id::Integer, labels::Vector{String}; kwargs...)
     sequence = PhysiCellSequence(simulation_id)
-    return getCellDataSequence(sequence, labels; kwargs...)
+    return cellDataSequence(sequence, labels; kwargs...)
 end
 
-function getCellDataSequence(simulation_id::Integer, label::String; kwargs...)
-    return getCellDataSequence(simulation_id, [label]; kwargs...)
+function cellDataSequence(simulation_id::Integer, label::String; kwargs...)
+    return cellDataSequence(simulation_id, [label]; kwargs...)
 end
 
-function getCellDataSequence(simulation::Simulation, labels::Vector{String}; kwargs...)
+function cellDataSequence(simulation::Simulation, labels::Vector{String}; kwargs...)
     sequence = PhysiCellSequence(simulation)
-    return getCellDataSequence(sequence, labels; kwargs...)
+    return cellDataSequence(sequence, labels; kwargs...)
 end
 
-function getCellDataSequence(simulation::Simulation, label::String; kwargs...)
-    return getCellDataSequence(simulation, [label]; kwargs...)
+function cellDataSequence(simulation::Simulation, label::String; kwargs...)
+    return cellDataSequence(simulation, [label]; kwargs...)
 end
 
-function getCellDataSequence(sequence::PhysiCellSequence, label::String; kwargs...)
-    return getCellDataSequence(sequence, [label]; kwargs...)
+function cellDataSequence(sequence::PhysiCellSequence, label::String; kwargs...)
+    return cellDataSequence(sequence, [label]; kwargs...)
 end
 
-function getCellDataSequence(sequence::PhysiCellSequence, labels::Vector{String}; include_dead::Bool=false, include_cell_type::Bool=false)
+function cellDataSequence(sequence::PhysiCellSequence, labels::Vector{String}; include_dead::Bool=false, include_cell_type_name::Bool=false)
     loadCells!(sequence)
-    cell_features = getLabels(sequence)
+    cell_features = cellLabels(sequence)
     label_features = Symbol[]
     temp_dict = Dict{Symbol, Vector{Symbol}}()
     for label in labels
@@ -764,7 +804,7 @@ function getCellDataSequence(sequence::PhysiCellSequence, labels::Vector{String}
         end
     end
     labels = Symbol.(labels)
-    if include_cell_type && !(:cell_type_name in labels)
+    if include_cell_type_name && !(:cell_type_name in labels)
         push!(labels, :cell_type_name)
         push!(label_features, :cell_type_name)
         temp_dict[:cell_type_name] = [:cell_type_name]
@@ -788,7 +828,7 @@ function getCellDataSequence(sequence::PhysiCellSequence, labels::Vector{String}
     end
 
     if all(length.(values(temp_dict)) .== 1)
-        return data
+        return AgentDict(data)
     end
     C(v, label) = begin #! Concatenation of columns that belong together
         if length(temp_dict[label]) == 1
@@ -796,5 +836,15 @@ function getCellDataSequence(sequence::PhysiCellSequence, labels::Vector{String}
         end
         return hcat(v[temp_dict[label]]...)
     end
-    return [ID => NamedTuple{(:time, labels...)}([[v.time]; [C(v,label) for label in labels]]) for (ID, v) in data] |> Dict
+    return [ID => NamedTuple{(:time, labels...)}([[v.time]; [C(v,label) for label in labels]]) for (ID, v) in data] |> AgentDict
+end
+
+"""
+    getCellDataSequence(args...; kwargs...)
+
+Deprecated alias for [`cellDataSequence`](@ref). Use `cellDataSequence` instead.
+"""
+function getCellDataSequence(args...; kwargs...)
+    Base.depwarn("`getCellDataSequence` is deprecated. Use `cellDataSequence` instead.", :getCellDataSequence; force=true)
+    return cellDataSequence(args...; kwargs...)
 end

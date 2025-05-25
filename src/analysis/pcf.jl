@@ -149,8 +149,8 @@ function preparePCF!(S::AbstractPhysiCellSequence, center_cell_types, target_cel
     loadCells!(S)
     loadMesh!(S)
     center_cell_types, target_cell_types = processPCFCellTypes.([center_cell_types, target_cell_types])
-    temp = getCellTypeToNameDict(S)
-    cell_name_to_type_dict = [v => k for (k, v) in temp] |> Dict{String,Int}
+    temp = cellTypeToNameDict(S)
+    cell_name_to_type_dict = [type_name => type_id for (type_id, type_name) in temp] |> Dict{String,Int}
     is_cross_pcf = isCrossPCF(center_cell_types, target_cell_types)
     if include_dead isa Bool
         include_dead = (include_dead, include_dead)
@@ -192,9 +192,9 @@ Calculate the pair correlation function (PCF) for a given snapshot.
 function pcfSnapshotCalculation(snapshot::PhysiCellSnapshot, center_cell_types::Vector{String}, target_cell_types::Vector{String}, cell_name_to_type_dict::Dict{String,Int}, include_dead::Union{Bool,Tuple{Bool,Bool}}, is_cross_pcf::Bool, constants::Constants)
     is_3d = ndims(constants) == 3
     cells = snapshot.cells
-    centers = getCellPositionsForPCF(cells, center_cell_types, cell_name_to_type_dict, include_dead[1], is_3d)
+    centers = cellPositionsForPCF(cells, center_cell_types, cell_name_to_type_dict, include_dead[1], is_3d)
     if is_cross_pcf
-        targets = getCellPositionsForPCF(cells, target_cell_types, cell_name_to_type_dict, include_dead[2], is_3d)
+        targets = cellPositionsForPCF(cells, target_cell_types, cell_name_to_type_dict, include_dead[2], is_3d)
         pcf_result = pcf(centers, targets, constants)
     else
         pcf_result = pcf(centers, constants)
@@ -234,15 +234,15 @@ function isCrossPCF(center_cell_types::Vector{String}, target_cell_types::Vector
 end
 
 """
-    getCellPositionsForPCF(cells::DataFrame, cell_types::Vector{String}, cell_name_to_type_dict::Dict{String,Int}, include_dead::Bool, is_3d::Bool)
+    cellPositionsForPCF(cells::DataFrame, cell_types::Vector{String}, cell_name_to_type_dict::Dict{String,Int}, include_dead::Bool, is_3d::Bool)
 
 Get the positions of the cells for the PCF calculation.
 """
-function getCellPositionsForPCF(cells::DataFrame, cell_types::Vector{String}, cell_name_to_type_dict::Dict{String,Int}, include_dead::Bool, is_3d::Bool)
+function cellPositionsForPCF(cells::DataFrame, cell_types::Vector{String}, cell_name_to_type_dict::Dict{String,Int}, include_dead::Bool, is_3d::Bool)
     cell_type_id_set = [cell_name_to_type_dict[cell_type] for cell_type in cell_types] |> Set
     cell_type_df = cells[[ct in cell_type_id_set for ct in cells.cell_type], :]
     if !include_dead
-        center_type_df = cell_type_df[.!cell_type_df.dead, :]
+        cell_type_df = cell_type_df[.!cell_type_df.dead, :]
     end
     position_labels = [:position_1, :position_2]
     if is_3d

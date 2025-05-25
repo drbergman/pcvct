@@ -10,12 +10,12 @@ simulation_ids = 1:5
 printSimulationsTable(simulation_ids)
 
 # test required folders
-config_src_folder =  joinpath(pcvct.data_dir, "inputs", "configs")
-config_dest_folder = joinpath(pcvct.data_dir, "inputs", "configs_")
+config_src_folder =  joinpath(pcvct.dataDir(), "inputs", "configs")
+config_dest_folder = joinpath(pcvct.dataDir(), "inputs", "configs_")
 mv(config_src_folder, config_dest_folder)
 
-custom_code_src_folder =  joinpath(pcvct.data_dir, "inputs", "custom_codes")
-custom_code_dest_folder = joinpath(pcvct.data_dir, "inputs", "custom_codes_")
+custom_code_src_folder =  joinpath(pcvct.dataDir(), "inputs", "custom_codes")
+custom_code_dest_folder = joinpath(pcvct.dataDir(), "inputs", "custom_codes_")
 mv(custom_code_src_folder, custom_code_dest_folder)
 
 @test pcvct.createSchema(false) == false
@@ -56,10 +56,10 @@ pcvct.variationsTable(:ic_cell, Sampling(1); remove_constants=true)
 pcvct.variationsTable(:ic_ecm, Sampling(1); remove_constants=true)
 
 # test bad folder
-path_to_bad_folder = joinpath(pcvct.data_dir, "inputs", "configs", "bad_folder")
+path_to_bad_folder = joinpath(pcvct.dataDir(), "inputs", "configs", "bad_folder")
 mkdir(path_to_bad_folder)
 
 @test pcvct.reinitializeDatabase() == false
 
 rm(path_to_bad_folder; force=true, recursive=true)
-@test pcvct.initializeDatabase(pcvct.db.file) == true
+@test pcvct.initializeDatabase(pcvct.centralDB().file) == true

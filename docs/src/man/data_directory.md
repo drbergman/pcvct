@@ -69,10 +69,10 @@ Proceed similarly for `dcs/`, `ecms/`, and `substrates/`, renaming those files t
 
 pcvct uses [PhysiCellCellCreator.jl](https://github.com/drbergman/PhysiCellCellCreator.jl) to allow for creation of `cells.csv` files based on geometries defined in a `cells.xml` file.
 To use this, first create such an XML document (see [PhysiCellCellCreator.jl](https://github.com/drbergman/PhysiCellCellCreator.jl) for details) and place this in place of the `cells.csv` file.
-You may make variations on this in the same was as for `config` and `rulesets_collection`.
+You may make variations on this in the same way as for `config` and `rulesets_collection`.
 
 ### IC ecm
 
 pcvct uses [PhysiCellECMCreator.jl](https://github.com/drbergman/PhysiCellECMCreator.jl) to allow for creation of `ecm.csv` files based on the structure defined in a `ecm.xml` file.
 To use this, first create such an XML document (see [PhysiCellECMCreator.jl](https://github.com/drbergman/PhysiCellECMCreator.jl) for details) and place this in place of the `ecm.csv` file.
-You may make variations on this in the same was as for `config` and `rulesets_collection`.
+You may make variations on this in the same way as for `config` and `rulesets_collection`.

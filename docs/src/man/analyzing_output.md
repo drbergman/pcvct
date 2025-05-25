@@ -19,14 +19,14 @@ A `PhysiCellSequence` is the full sequence of snapshots corresponding to a singl
 As with `PhysiCellSnapshot`'s, these are currently considered internals and their API may change.
 In addition to the path to the PhysiCell output folder and the vector of `PhysiCellSnapshot`'s, it holds metadata for the simulation.
 
-### `getCellDataSequence`
-The main function to get sequences of cell data is `getCellDataSequence`.
+### `cellDataSequence`
+The main function to get sequences of cell data is `cellDataSequence`.
 It accepts any of a simulation ID (`<:Integer`), a simulation (`::Simulation`), or a sequence (`::PhysiCellSequence`) and either a single label (`::String`) or a vector of labels (`::Vector{String}`).
 For each cell in the simulation (as determined by the cell ID), the output creates a dictionary entry (the key is the integer cell ID) whose value is a named tuple with the input labels as keys as well as `:time`.
 This means that if one sets
 
 ```julia
-data = getCellDataSequence(1, "position")
+data = cellDataSequence(1, "position")
 ```
 Then one can access the positions of the cell with ID 78 by
 ```julia
@@ -40,7 +40,7 @@ using Plots
 plot(cell_78_times, cell_78_positions[:,1])
 ```
 
-**Note**: Each call to `getCellDataSequence` will load *all* the data unless a `PhysiCellSequence` is passed in.
+**Note**: Each call to `cellDataSequence` will load *all* the data unless a `PhysiCellSequence` is passed in.
 Plan your analyses accordingly as loading simulation data is not fast.
 
 ## Population plots
@@ -53,22 +53,23 @@ Each panel will correspond to a `Monad` (replicates using the same parameter val
 
 Finer-grained control of the output is possible, too!
 - to include dead cells in your counts: `plot(...; ..., include_dead=true, ...)`
-- select a subset of cell types to include: `plot(...; ..., include_cell_types="cancer", ...)`
-- select a subset of cell types to exclude: `plot(...; ..., exclude_cell_types="cancer", ...)`
+- select a subset of cell types to include: `plot(...; ..., include_cell_type_names="cancer", ...)`
+- select a subset of cell types to exclude: `plot(...; ..., exclude_cell_type_names="cancer", ...)`
+- choose time units for the x-axis: `plot(...; ..., time_unit=:h, ...)`
 
-The `include_cell_types` and `exclude_cell_types` can also accept a `Vector{String}` to include or exclude certain cell types, respectively.
-Furthermore, if the value of `include_cell_types` is a `Vector` and one of its entries is a `Vector{String}`, pcvct will interpret this to sum up those cell types.
+The `include_cell_type_names` and `exclude_cell_type_names` can also accept a `Vector{String}` to include or exclude certain cell types, respectively.
+Furthermore, if the value of `include_cell_type_names` is a `Vector` and one of its entries is a `Vector{String}`, pcvct will interpret this to sum up those cell types.
 In other words, to get the total tumor cell count in addition to the epithelial (`"epi"`) and mesenchymal (`"mes"`) components, you could use
 ```julia
 using Plots
-plot(Monad(1); include_cell_types=["epi", "mes", ["epi", "mes"]])
+plot(Monad(1); include_cell_type_names=["epi", "mes", ["epi", "mes"]])
 ``` 
 
 Finally, this makes use of Julia's Plot Recipes (see [RecipesBase.jl](https://docs.juliaplots.org/stable/RecipesBase/)) so any standard plotting keywords can be passed in:
 ```julia
 using Plots
 colors = [:blue :red] # Note the absence of a `,` or `;`. This is how Julia requires different series parameters to be passed in 
-plot(Simulation(1); color=colors, include_cell_types=["cd8", "cancer"]) # will plot cd8s in blue and cancer in red.
+plot(Simulation(1); color=colors, include_cell_type_names=["cd8", "cancer"]) # will plot cd8s in blue and cancer in red.
 ```
 
 ### Group by cell type
@@ -78,7 +79,7 @@ Everything above for `plot` applies here.
 
 ```julia
 using Plots
-plotbycelltype(Sampling(1); include_cell_types=["epi", "mes", ["epi", "mes"]], color=[:blue :red :purple], labels=["epi" "mes" "both"], legend=true)
+plotbycelltype(Sampling(1); include_cell_type_names=["epi", "mes", ["epi", "mes"]], color=[:blue :red :purple], labels=["epi" "mes" "both"], legend=true)
 ```
 
 ## Substrate analysis
@@ -172,20 +173,76 @@ pcvct overrides the default from `PairCorrelationFunction` (`:tofino`) with `:co
 
 ### Examples
 ```julia
-using pcvct
 simulation_id = 1
-result = pcvct.pcf(simulation_id, "cancer", "cd8") #! using PairCorrelationFunction will obviate the need to prefix with `pcvct`
-plot(result) #! heatmap of proximity of (living) cd8s to (living) cancer cells throughout simulation 1
+result = pcvct.pcf(simulation_id, "cancer", "cd8") # using PairCorrelationFunction will obviate the need to prefix with `pcvct`
+plot(result) # heatmap of proximity of (living) cd8s to (living) cancer cells throughout simulation 1
 ```
 ```julia
-using pcvct
-monad = Monad(1) #! let's assume that there are >1 simulations in this monad
-results = [pcvct.pcf(simulation_id, :final, "cancer", "cd8") for simulation_id in getSimulationIDs(monad)] #! one vector of PCF values for each simulation at the final snapshot
-plot(results) #! line plot of average PCF values against radius across the monad +/- 1 SD
+monad = Monad(1) # let's assume that there are >1 simulations in this monad
+results = [pcvct.pcf(simulation_id, :final, "cancer", "cd8") for simulation_id in simulationIDs(monad)] # one vector of PCF values for each simulation at the final snapshot
+plot(results) # line plot of average PCF values against radius across the monad +/- 1 SD
 ```
 ```julia
-using pcvct
-monad = Monad(1) #! let's assume that there are >1 simulations in this monad
-results = [pcvct.pcf(simulation_id, "cancer", "cd8") for simulation_id in getSimulationIDs(monad)] #! one matrix of PCF values for each simulation across all time points
-plot(results) #! heatmap of average PCF values with time on the x-axis and radius on the y-axis; averages omit NaN values that can occur at higher radii
+monad = Monad(1) # let's assume that there are >1 simulations in this monad
+results = [pcvct.pcf(simulation_id, "cancer", "cd8") for simulation_id in simulationIDs(monad)] # one matrix of PCF values for each simulation across all time points
+plot(results) # heatmap of average PCF values with time on the x-axis and radius on the y-axis; averages omit NaN values that can occur at higher radii
+```
+
+## Graph analysis
+Every PhysiCell simulation produces three different directed graphs at each save time point.
+For each graph, the vertices are the cell agents and the edges are as follows:
+- `:neighbors`: the cells overlap based on their positions and radii
+- `:attachments`: manually-defined attachments between cells
+- `:spring_attachments`: spring attachments formed automatically using attachment rates
+Each of these graphs is expected to be symmetric, i.e., if cell A is attached to cell B, then cell B is attached to cell A.
+Nonetheless, pcvct holds the data in a directed graph.
+
+Currently, pcvct supports computing connected components for any of these graphs using the [`connectedComponents`](@ref) function.
+For an [`pcvct.AbstractPhysiCellSequence`](@ref) object, the graphs can be loaded using the [`loadGraph!`](@ref) function for any other analysis.
+
+### Examples
+For all examples that follow, we will assume a [`PhysiCellSnapshot`](@ref) object called `snapshot` has been created, e.g., as follows:
+```julia
+simulation_id = 1
+index = :final
+snapshot = PhysiCellSnapshot(simulation_id, index)
+```
+
+To get a list of the connected components for the `:neighbors` graph for all living cells in a simulation at the final timepoint, use
+```julia
+connected_components = connectedComponents(snapshot) # defaults to the :neighbors graph, all cells, and exclude dead cells
+```
+The `connected_components` object is a `Dict` with the cell type names in a single vector as the only key with value a vector of vectors.
+Each element is a vector of the cell IDs belonging to that connected component in the wrapper type [`pcvct.AgentID`](@ref).
+
+If you want to compute connected components for subsets of cells, pass in a vector of vectors of cell type names (`String`s) such that each vector corresponds to a subset of cell types.
+```julia
+subset_1 = ["cd8_active", "cd8_inactive"]
+subset_2 = ["cancer_epi", "cancer_mes"]
+connected_components = connectedComponents(snapshot; include_cell_type_names=[subset_1, subset_2])
+```
+In this case, the `connected_components` object is a `Dict` with `subset_1` and `subset_2` as the keys (the values stored in them, not the strings `"subset_1"` and `"subset_2"`).
+The value `connected_components[subset_1]` is a vector of vectors of the cell IDs belonging to each connected component just considering the cells in `subset_1`.
+Similarly for `subset_2`.
+
+Including dead cells is possible though not recommended.
+This is because dead cells automatically clear their neighbors and attachments.
+The optional keyword argument `include_dead` can be set to `true` to include dead cells in the graph.
+```julia
+connected_components = connectedComponents(snapshot; include_dead=true)
+```
+
+Finally, to combine a single connected component with the dataframe of cell data, the following can be used:
+```julia
+connected_components = connectedComponents(snapshot)
+connected_components_1 = connected_components |> # julia's pipe operator
+                         values |>  # get the value for each key
+                         first |> # get the connected components for the first subset of cells (in this case there's only one subset consisting of all cells)
+                         first # get the first connected component for this subset
+
+loadCells!(snapshot) # make sure the cell data is loaded
+cells_df = snapshot.cells # this is the cell data
+
+agent_ids = DataFrame(ID=[a.id for a in connected_components_1]) # get the IDs for the agents in the connected component
+component_df = rightjoin(cells_df, agent_ids, on=:ID) # join on the agent IDs, keeping only the rows in the connected component
 ```

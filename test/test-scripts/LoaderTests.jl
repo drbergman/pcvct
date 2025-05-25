@@ -9,15 +9,26 @@ custom_code_folder = "0_template"
 inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rulesets_collection_folder)
 
 discrete_variations = DiscreteVariation[]
-push!(discrete_variations, DiscreteVariation(["overall","max_time"], 12.0))
-push!(discrete_variations, DiscreteVariation(["save","full_data","interval"], 6.0))
-push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], 6.0))
+push!(discrete_variations, DiscreteVariation(configPath("max_time"), 12.0))
+push!(discrete_variations, DiscreteVariation(configPath("full_data"), 6.0))
+push!(discrete_variations, DiscreteVariation(configPath("svg_save"), 6.0))
 
 out = run(inputs, discrete_variations; use_previous=false)
 @test out.trial isa Simulation
+cell_labels = pcvct.cellLabels(out.trial)
+substrate_names = pcvct.substrateNames(out.trial)
 sequence = PhysiCellSequence(out.trial.id; include_cells=true, include_substrates=true)
 
-seq_dict = getCellDataSequence(sequence, "elapsed_time_in_phase"; include_dead=true)
+seq_dict = cellDataSequence(sequence, "elapsed_time_in_phase"; include_dead=true)
+@test length(seq_dict) == length(seq_dict.dict)
+@test seq_dict[pcvct.AgentID(0)] == seq_dict[0]
+@test haskey(seq_dict, pcvct.AgentID(0))
+@test haskey(seq_dict, 0)
+@test_nowarn setindex!(seq_dict, seq_dict[0], pcvct.AgentID(78787878))
+@test_nowarn delete!(seq_dict, pcvct.AgentID(78787878))
+@test_nowarn setindex!(seq_dict, seq_dict[0], 78787878)
+@test_nowarn delete!(seq_dict, 78787878)
+@test_warn "`getCellDataSequence` is deprecated. Use `cellDataSequence` instead." getCellDataSequence(sequence, "elapsed_time_in_phase"; include_dead=true)
 
 simulation_population_time_series = pcvct.populationTimeSeries(out.trial; include_dead=true)
 simulation_population_time_series["time"]
@@ -34,8 +45,8 @@ end
 
 @test ismissing(PhysiCellSequence(pruned_simulation_id))
 pruned_simulation = Simulation(pruned_simulation_id)
-@test pcvct.pathToOutputXML(pruned_simulation) |> pcvct.getLabels |> isempty
-@test pcvct.pathToOutputXML(pruned_simulation) |> pcvct.getSubstrateNames |> isempty
+@test pcvct.pathToOutputXML(pruned_simulation) |> pcvct.cellLabels |> isempty
+@test pcvct.pathToOutputXML(pruned_simulation) |> pcvct.substrateNames |> isempty
 
 monad = createTrial(out.trial; n_replicates=0)
 @test monad isa Monad
@@ -49,14 +60,14 @@ monad_population_time_series["time"]
 
 # misc testing
 snapshot = sequence.snapshots[1]
-pcvct.getLabels(snapshot)
-pcvct.getSubstrateNames(snapshot)
+pcvct.cellLabels(snapshot)
+pcvct.substrateNames(snapshot)
 pcvct.loadSubstrates!(sequence)
 pcvct.loadMesh!(sequence)
 snapshot = PhysiCellSnapshot(1, 0)
 sequence = PhysiCellSequence(Simulation(1))
-getCellDataSequence(1, "position")
-getCellDataSequence(Simulation(1), "position")
+cellDataSequence(1, "position")
+cellDataSequence(Simulation(1), "position")
 
 simulation = Simulation(monad)
 out = run(simulation; prune_options=PruneOptions(prune_mat=true))
