@@ -12,7 +12,7 @@ Otherwise, it will prompt the user for confirmation before large upgrades.
 """
 function upgradePCVCT(from_version::VersionNumber, to_version::VersionNumber, auto_upgrade::Bool)
     println("Upgrading pcvct from version $(from_version) to $(to_version)...")
-    milestone_versions = [v"0.0.1", v"0.0.3", v"0.0.10", v"0.0.11", v"0.0.13", v"0.0.15", v"0.0.16", v"0.0.24"]
+    milestone_versions = [v"0.0.1", v"0.0.3", v"0.0.10", v"0.0.11", v"0.0.13", v"0.0.15", v"0.0.16", v"0.0.25"]
     next_milestone_inds = findall(x -> from_version < x, milestone_versions) #! this could be simplified to take advantage of this list being sorted, but who cares? It's already so fast
     next_milestones = milestone_versions[next_milestone_inds]
     success = true
@@ -361,37 +361,47 @@ function upgradeToV0_0_16(auto_upgrade::Bool)
     return true
 end
 
-function upgradeToV0_0_24(::Bool)
-    println("\t- Upgrading to version 0.0.24...")
-    
+function upgradeToV0_0_25(::Bool)
+    println("\t- Upgrading to version 0.0.25...")
+
     #! v0.0.23 accidentally used the capitalized version of these CSV file names
     monads_folder = joinpath(dataDir(), "outputs", "monads")
-    folders = readdir(monads_folder; sort=false) |> filter(x -> isdir(joinpath(monads_folder, x)))
-    for folder in folders
-        if isfile(joinpath(monads_folder, folder, "Simulations.csv"))
-            dst = joinpath(monads_folder, folder, "simulations.csv")
-            @assert !isfile(dst) "$(dst) exists alongside Simulations.csv. Please manually select which one to keep.\nUpgrade to version 0.0.24 aborted."
-            mv(joinpath(monads_folder, folder, "Simulations.csv"), dst)
+    if isdir(monads_folder)
+        folders = readdir(monads_folder; sort=false) |> filter(x -> isdir(joinpath(monads_folder, x)))
+        for folder in folders
+            if isfile(joinpath(monads_folder, folder, "Simulations.csv"))
+                temp_dst = joinpath(monads_folder, folder, "__temp_simulations__.csv")
+                mv(joinpath(monads_folder, folder, "Simulations.csv"), temp_dst)
+                dst = joinpath(monads_folder, folder, "simulations.csv")
+                mv(temp_dst, dst)
+            end
         end
     end
 
     samplings_folder = joinpath(dataDir(), "outputs", "samplings")
-    folders = readdir(samplings_folder; sort=false) |> filter(x -> isdir(joinpath(samplings_folder, x)))
-    for folder in folders
-        if isfile(joinpath(samplings_folder, folder, "Monads.csv"))
-            dst = joinpath(samplings_folder, folder, "monads.csv")
-            @assert !isfile(dst) "$(dst) exists alongside Monads.csv. Please manually select which one to keep.\nUpgrade to version 0.0.24 aborted."
-            mv(joinpath(samplings_folder, folder, "Monads.csv"), dst)
+    if isdir(samplings_folder)
+        folders = readdir(samplings_folder; sort=false) |> filter(x -> isdir(joinpath(samplings_folder, x)))
+        for folder in folders
+            if isfile(joinpath(samplings_folder, folder, "Monads.csv"))
+                temp_dst = joinpath(samplings_folder, folder, "__temp_monads__.csv")
+                mv(joinpath(samplings_folder, folder, "Monads.csv"), temp_dst)
+                dst = joinpath(samplings_folder, folder, "monads.csv")
+                mv(temp_dst, dst)
+            end
         end
     end
 
     trials_folder = joinpath(dataDir(), "outputs", "trials")
-    folders = readdir(trials_folder; sort=false) |> filter(x -> isdir(joinpath(trials_folder, x)))
-    for folder in folders
-        if isfile(joinpath(trials_folder, folder, "Samplings.csv"))
-            dst = joinpath(trials_folder, folder, "samplings.csv")
-            @assert !isfile(dst) "$(dst) exists alongside Samplings.csv. Please manually select which one to keep.\nUpgrade to version 0.0.24 aborted."
-            mv(joinpath(trials_folder, folder, "Samplings.csv"), dst)
+    if isdir(trials_folder)
+        folders = readdir(trials_folder; sort=false) |> filter(x -> isdir(joinpath(trials_folder, x)))
+        for folder in folders
+            if isfile(joinpath(trials_folder, folder, "Samplings.csv"))
+                temp_dst = joinpath(trials_folder, folder, "__temp_samplings__.csv")
+                mv(joinpath(trials_folder, folder, "Samplings.csv"), temp_dst)
+                dst = joinpath(trials_folder, folder, "samplings.csv")
+                mv(temp_dst, dst)
+            end
         end
     end
+    return true
 end
