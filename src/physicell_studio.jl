@@ -3,7 +3,7 @@ using CSV, DataFrames
 export runStudio
 
 """
-    runStudio(simulation_id::Int; python_path::Union{Missing,String}=path_to_python, studio_path::Union{Missing,String}=path_to_studio)
+    runStudio(simulation_id::Int; python_path::Union{Missing,String}=pcvct_globals.path_to_python, studio_path::Union{Missing,String}=pcvct_globals.path_to_studio)
 
 Launch PhysiCell Studio for a given simulation.
 
@@ -17,7 +17,7 @@ When calling `using pcvct`, shell environment variables `PCVCT_PYTHON_PATH` and 
 If the paths are not set in the environment, they can be passed as the keyword arguments `python_path` and `studio_path` to this function.
 In this case, the paths will be set as global variables for the duration of the Julia session and do not need to be passed again.
 """
-function runStudio(simulation_id::Int; python_path::Union{Missing,String}=path_to_python, studio_path::Union{Missing,String}=path_to_studio)
+function runStudio(simulation_id::Int; python_path::Union{Missing,String}=pcvct_globals.path_to_python, studio_path::Union{Missing,String}=pcvct_globals.path_to_studio)
     resolveStudioGlobals(python_path, studio_path)
     path_to_temp_xml, path_to_input_rules = setUpStudioInputs(simulation_id)
     out = executeStudio(path_to_temp_xml)
@@ -38,12 +38,12 @@ function resolveStudioGlobals(python_path::Union{Missing,String}, studio_path::U
     if ismissing(python_path)
         throw(ArgumentError("Path to python not set. Please set the PCVCT_PYTHON_PATH environment variable or pass the path as an argument."))
     else
-        global path_to_python = python_path
+        pcvct_globals.path_to_python = python_path
     end
     if ismissing(studio_path)
         throw(ArgumentError("Path to studio not set. Please set the PCVCT_STUDIO_PATH environment variable or pass the path as an argument."))
     else
-        global path_to_studio = studio_path
+        pcvct_globals.path_to_studio = studio_path
     end
 end
 
@@ -105,17 +105,17 @@ end
 Run PhysiCell Studio with the given temporary XML file.
 """
 function executeStudio(path_to_temp_xml::String)
-    cmd = `$path_to_python $(joinpath(path_to_studio, "bin", "studio.py")) -c $(path_to_temp_xml)`
+    cmd = `$(pcvct_globals.path_to_python) $(joinpath(pcvct_globals.path_to_studio, "bin", "studio.py")) -c $(path_to_temp_xml)`
     try
         run(pipeline(cmd; stdout=devnull, stderr=devnull))
     catch e
         msg = """
         Error running PhysiCell Studio. Please check the paths and ensure that PhysiCell Studio is installed correctly.
         The command that was run was:
-        \t$(cmd)
+            $(cmd)
 
         The error message was:
-        \t$(e.msg)
+            $(sprint(showerror, e))
         """
 
         return Base.IOError(msg, e.code)

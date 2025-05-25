@@ -25,7 +25,7 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
     rand_suffix = randstring(10) #! just to ensure that no two nodes try to compile at the same place at the same time
     temp_physicell_dir = joinpath(trialFolder(S), "temp_physicell_$(rand_suffix)")
     #! copy the entire PhysiCell directory to a temporary directory to avoid conflicts with concurrent compilation
-    cp(physicell_dir, temp_physicell_dir; force=true)
+    cp(physicellDir(), temp_physicell_dir; force=true)
 
     temp_custom_modules_dir = joinpath(temp_physicell_dir, "custom_modules")
     if isdir(temp_custom_modules_dir)
@@ -42,7 +42,7 @@ function loadCustomCode(S::AbstractSampling; force_recompile::Bool=false)
     end
 
     executable_name = baseToExecutable("project_ccid_$(S.inputs[:custom_code].id)")
-    cmd = Cmd(`make -j 8 CC=$(PHYSICELL_CPP) PROGRAM_NAME=$(executable_name) CFLAGS=$(cflags)`; env=ENV, dir=temp_physicell_dir) #! compile the custom code in the PhysiCell directory and return to the original directory
+    cmd = Cmd(`make -j 8 CC=$(pcvct_globals.physicell_compiler) PROGRAM_NAME=$(executable_name) CFLAGS=$(cflags)`; env=ENV, dir=temp_physicell_dir) #! compile the custom code in the PhysiCell directory and return to the original directory
 
     println("Compiling custom code for $(S.inputs[:custom_code].folder). See $(joinpath(path_to_input_custom_codes, "compilation.log")) for more information.")
 
@@ -92,10 +92,10 @@ If the required macros differ from a previous compilation (as stored in macros.t
 function compilerFlags(S::AbstractSampling)
     recompile = false #! only recompile if need is found
     clean = false #! only clean if need is found
-    cflags = "-march=$(march_flag) -O3 -fomit-frame-pointer -fopenmp -m64 -std=c++11"
+    cflags = "-march=$(pcvct_globals.march_flag) -O3 -fomit-frame-pointer -fopenmp -m64 -std=c++11"
     if Sys.isapple()
         if strip(read(`uname -s`, String)) == "Darwin"
-            cc_path = strip(read(`which $(PHYSICELL_CPP)`, String))
+            cc_path = strip(read(`which $(pcvct_globals.physicell_compiler)`, String))
             var = strip(read(`file $cc_path`, String))
             add_mfpmath = split(var)[end] != "arm64"
         end
@@ -119,12 +119,12 @@ function compilerFlags(S::AbstractSampling)
     end
 
     if "ADDON_ROADRUNNER" in updated_macros
-        librr_dir = joinpath(physicell_dir, "addons", "libRoadrunner", "roadrunner")
+        librr_dir = joinpath(physicellDir(), "addons", "libRoadrunner", "roadrunner")
         cflags *= " -I $(joinpath(librr_dir, "include", "rr", "C"))"
         cflags *= " -L $(joinpath(librr_dir, "lib"))"
         cflags *= " -l roadrunner_c_api"
 
-        prepareLibRoadRunner(physicell_dir)
+        prepareLibRoadRunner()
     end
 
     recompile = recompile || !executableExists(S.inputs[:custom_code].folder) #! last chance to recompile: do so if the executable does not exist
@@ -315,20 +315,22 @@ function isRoadRunnerInConfig(S::AbstractSampling)
 end
 
 """
-    prepareLibRoadRunner(physicell_dir::String)
+    prepareLibRoadRunner()
 
 Prepare the libRoadRunner library for use with PhysiCell.
 """
-function prepareLibRoadRunner(physicell_dir::String)
+function prepareLibRoadRunner()
     #! this is how PhysiCell handles downloading libRoadrunner
-    librr_file = joinpath(physicell_dir, "addons", "libRoadrunner", "roadrunner", "include", "rr", "C", "rrc_api.h")
+    librr_base_dir = joinpath(physicellDir(), "addons", "libRoadrunner")
+    librr_dir = joinpath(librr_base_dir, "roadrunner")
+    librr_file = joinpath(librr_dir, "include", "rr", "C", "rrc_api.h")
     if !isfile(librr_file)
         python = Sys.iswindows() ? "python" : "python3"
-        cd(() -> run(pipeline(`$(python) $(joinpath(".", "beta", "setup_libroadrunner.py"))`; stdout=devnull, stderr=devnull)), physicell_dir)
+        cd(() -> run(pipeline(`$(python) $(joinpath(".", "beta", "setup_libroadrunner.py"))`; stdout=devnull, stderr=devnull)), physicellDir())
         @assert isfile(librr_file) "libRoadrunner was not downloaded properly."
 
         #! remove the downloaded binary (I would think the script would handle this, but it does not)
-        files = readdir(joinpath(physicell_dir, "addons", "libRoadrunner"); join=true, sort=false)
+        files = readdir(librr_base_dir; join=true, sort=false)
         for path_to_file in files
             if isfile(path_to_file) &&
                 (
@@ -350,7 +352,7 @@ function prepareLibRoadRunner(physicell_dir::String)
     env_var = Sys.isapple() ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH"
     env_file = (haskey(ENV, "SHELL") && contains(ENV["SHELL"], "zsh")) ? ".zshenv" : ".bashrc"
     path_to_env_file = "~/$(env_file)"
-    path_to_add = joinpath(physicell_dir, "addons", "libRoadrunner", "roadrunner", "lib")
+    path_to_add = joinpath(librr_dir, "lib")
 
     if !haskey(ENV, env_var) || !contains(ENV[env_var], path_to_add)
         println("""

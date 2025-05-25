@@ -15,9 +15,9 @@ No restrictions are imposed on how the values of the various variations are link
 pcvct will use values that share an index their respective vectors together.
 
 ```julia
-base_xml_path = pcvct.customDataPath("default", "sample")
+base_xml_path = configPath("default", "custom:sample")
 ev1 = DiscreteVariation(base_xml_path, [1, 2, 3]) # vary the `sample` custom data for cell type default
-max_xml_path = ["behavior_ruleset:name:default", "behavior:name:custom sample", "increasing_signals", "max_response"] # the max response of the rule increasing sample (must be bigger than the base response above)
+max_xml_path = rulePath("default", "custom:sample", "increasing_signals", "max_response") # the max response of the rule increasing sample (must be bigger than the base response above)
 ev2 = DiscreteVariation(rule_xml_path, [2, 3, 4])
 covariation = CoVariation(ev1, ev2) # CoVariation([ev1, ev2]) also works
 ```
@@ -25,8 +25,8 @@ covariation = CoVariation(ev1, ev2) # CoVariation([ev1, ev2]) also works
 It is also not necessary to create the `ElementaryVariation`'s separately and then pass them to the `CoVariation` constructor.
 ```julia
 # have the phase durations vary by and compensate for each other
-phase_0_xml_path = pcvct.cyclePath("default", "phase_durations", "duration:index:0")
-phase_1_xml_path = pcvct.cyclePath("default", "phase_durations", "duration:index:1")
+phase_0_xml_path = configPath("default", "cycle", "duration", 0)
+phase_0_xml_path = configPath("default", "cycle", "duration", 1)
 phase_0_durations = [300.0, 400.0] 
 phase_1_durations = [200.0, 100.0] # the (mean) duration through these two phases is 500 min
 # input any number of tuples (xml_path, values)
@@ -41,8 +41,8 @@ For a distribution `dv` with `dv.flip=true`, when a value is requested with a CD
 
 ```jldoctest
 using pcvct
-timing_1_path = pcvct.userParameterPath("event_1_time")
-timing_2_path = pcvct.userParameterPath("event_2_time")
+timing_1_path = configPath("user_parameters", "event_1_time")
+timing_2_path = configPath("user_parameters", "event_2_time")
 dv1 = UniformDistributedVariation(timing_1_path, 100.0, 200.0)
 flip = true
 dv2 = UniformDistributedVariation(timing_2_path, 100.0, 200.0, flip)
@@ -58,9 +58,9 @@ pcvct.variationValues.(covariation.variations, cdf) # pcvct internal for getting
 As with `CoVariation{DiscreteVariation}`, it is not necessary to create the `ElementaryVariation`'s separately and then pass them to the `CoVariation` constructor. It is not possible to `flip` a `DistributedVariation` with this syntax, however.
 
 ```julia
-apop_xml_path = pcvct.apoptosisPath("default", "death_rate")
+apop_xml_path = configPath("default", "apoptosis", "death_rate")
 apop_dist = Uniform(0, 0.001)
-cycle_entry_path = pcvct.cyclePath("default", "phase_transition_rates", "rate:start_index:0")
+cycle_entry_path = configPath("default", "cycle", "rate", 0)
 cycle_dist = Uniform(0.00001, 0.0001)
 covariation = CoVariation((apop_xml_path, apop_dist), (cycle_entry_path, cycle_dist))
 ```

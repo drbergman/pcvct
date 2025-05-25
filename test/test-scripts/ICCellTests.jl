@@ -14,12 +14,16 @@ inputs = InputFolders(config_folder, custom_code_folder; rulesets_collection=rul
 n_replicates = 1
 
 discrete_variations = DiscreteVariation[]
-push!(discrete_variations, DiscreteVariation(["overall","max_time"], 12.0))
-push!(discrete_variations, DiscreteVariation(["save","full_data","interval"], 6.0))
-push!(discrete_variations, DiscreteVariation(["save","SVG","interval"], 6.0))
+push!(discrete_variations, DiscreteVariation(configPath("max_time"), 12.0))
+push!(discrete_variations, DiscreteVariation(configPath("full_data"), 6.0))
+push!(discrete_variations, DiscreteVariation(configPath("svg_save"), 6.0))
 
 xml_path = icCellsPath("default", "disc", 1, "x0")
 vals = [0.0, -100.0]
+push!(discrete_variations, DiscreteVariation(xml_path, vals))
+
+xml_path = icCellsPath("default", "disc", 1, "rectangle", 1, "x0")
+vals = [0.0, 1.0]
 push!(discrete_variations, DiscreteVariation(xml_path, vals))
 
 out = run(inputs, discrete_variations; n_replicates=n_replicates)
@@ -32,7 +36,7 @@ hashBorderPrint("SUCCESSFULLY CREATED SAMPLING WITH IC CELL VARIATION!")
 
 @test out.n_success == length(out.trial)
 
-simulation_with_ic_cell_xml_id = getSimulationIDs(out.trial)[1] #! used in ExportTests.jl
+simulation_with_ic_cell_xml_id = simulationIDs(out.trial)[1] #! used in ExportTests.jl
 
 hashBorderPrint("SUCCESSFULLY RAN SAMPLING WITH IC CELL VARIATION!")
 

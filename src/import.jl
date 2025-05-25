@@ -124,9 +124,7 @@ function prepareIntracellularImport(src::Dict, config::ImportSource, path_to_pro
     cell_definitions_element = retrieveElement(xml_doc, ["cell_definitions"])
     cell_type_to_components_dict = Dict{String,PhysiCellComponent}()
     for cell_definition_element in child_elements(cell_definitions_element)
-        if name(cell_definition_element) != "cell_definition"
-            continue
-        end
+        @assert name(cell_definition_element) == "cell_definition" "The child elements of <cell_definitions> should all be <cell_definition> elements."
         cell_type = attribute(cell_definition_element, "name")
         phenotype_element = find_element(cell_definition_element, "phenotype")
         intracellular_element = find_element(phenotype_element, "intracellular")
@@ -134,9 +132,7 @@ function prepareIntracellularImport(src::Dict, config::ImportSource, path_to_pro
             continue
         end
         type = attribute(intracellular_element, "type")
-        if type ∉ ["roadrunner", "dfba"]
-            throw(ErrorException("pcvct does not yet support intracellular type $type."))
-        end
+        @assert type ∈ ["roadrunner", "dfba"] "pcvct does not yet support intracellular type $type. It only supports roadrunner and dfba."
         path_to_file = find_element(intracellular_element, "sbml_filename") |> content
         temp_component = PhysiCellComponent(type, basename(path_to_file))
         #! now we have to rely on the path to the file is correct relative to the parent directory of the config file (that should usually be the case)
@@ -166,10 +162,12 @@ end
     createComponentDestFilename(src_lines::Vector{String}, component::PhysiCellComponent)
 
 Create a file name for the component file to be copied to.
+If a file exists with the same name and content, it will not be copied again.
+If a file exists with the same name but different content, a new file name will be created by appending a number to the base name.
 """
 function createComponentDestFilename(path_to_file::String, component::PhysiCellComponent)
     src_lines = readlines(path_to_file)
-    base_path = joinpath(data_dir, "components", pathFromComponents(component))
+    base_path = joinpath(dataDir(), "components", pathFromComponents(component))
     folder = dirname(base_path)
     mkpath(folder)
     base_filename, file_ext = basename(base_path) |> splitext
@@ -253,7 +251,7 @@ end
 
 
 """
-    importProject(path_to_project::AbstractString[, src=Dict(), dest=Dict(); extreme_caution::Bool=false])
+    importProject(path_to_project::AbstractString[, src=Dict(), dest=Dict()])
 
 Import a project from the structured in the format of PhysiCell sample projects and user projects into the pcvct structure.
 
@@ -263,9 +261,8 @@ Import a project from the structured in the format of PhysiCell sample projects 
 The following keys are recognized: $(join(["`$fn`" for fn in fieldnames(ImportSources)], ", ", ", and ")).
 - `dest::Dict`: Dictionary of the inputs folders to create in the pcvct structure. If absent, taken from the project name.
 The following keys are recognized: $(join(["`$fn`" for fn in fieldnames(ImportDestFolders)], ", ", ", and ")).
-- `extreme_caution::Bool`: If true, will ask for confirmation before deleting any folders created during the import process. Care has been taken to ensure this is unnecessary. Provided for users who want to be extra cautious.
 """
-function importProject(path_to_project::AbstractString, src=Dict(), dest=Dict(); extreme_caution::Bool=false)
+function importProject(path_to_project::AbstractString, src=Dict(), dest=Dict())
     project_sources = ImportSources(src, path_to_project)
     import_dest_folders = ImportDestFolders(path_to_project, dest)
     success = resolveProjectSources!(project_sources, path_to_project)
@@ -276,7 +273,7 @@ function importProject(path_to_project::AbstractString, src=Dict(), dest=Dict();
     end
     if success
         msg = """
-        Imported project from $(path_to_project) into $(joinpath(data_dir, "inputs")):
+        Imported project from $(path_to_project) into $(joinpath(dataDir(), "inputs")):
             - $(import_dest_folders.config.path_from_inputs)
             - $(import_dest_folders.custom_code.path_from_inputs)\
         """
@@ -302,34 +299,16 @@ function importProject(path_to_project::AbstractString, src=Dict(), dest=Dict();
         reinitializeDatabase()
     else
         msg = """
-        Failed to import user_project from $(path_to_project) into $(joinpath(data_dir, "inputs")).
+        Failed to import user_project from $(path_to_project) into $(joinpath(dataDir(), "inputs")).
         See the error messages above for more information.
-        Cleaning up what was created in $(joinpath(data_dir, "inputs")).
+        Cleaning up what was created in $(joinpath(dataDir(), "inputs")).
         """
         println(msg)
-        if extreme_caution
-            println("You wanted to show extreme caution, so we will ask about each folder before deleting.")
-        else
-            println(
-            """
-            Only folders created in this process are being deleted (you can set the optional keyword argument `extreme_caution` to check each folder)
-                importProject(...; extreme_caution=true)
-            """
-            )
-        end
-        path_to_inputs = joinpath(data_dir, "inputs")
+        path_to_inputs = joinpath(dataDir(), "inputs")
         for fieldname in fieldnames(ImportDestFolders)
             import_dest_folder = getfield(import_dest_folders, fieldname)
             if import_dest_folder.created
                 path_to_folder = joinpath(path_to_inputs, import_dest_folder.path_from_inputs)
-                if extreme_caution
-                    println("Deleting the newly created $(fieldname) folder at $(path_to_folder). Proceed with deletion? (y/n)")
-                    response = readline()
-                    if response != "y"
-                        println("\tYou entered '$response'. Not deleting.")
-                        continue
-                    end
-                end
                 rm(path_to_folder; force=true, recursive=true)
             end
         end
@@ -402,7 +381,7 @@ end
 Create an input folder based on the provided destination folder.
 """
 function createInputFolder!(import_dest_folder::ImportDestFolder)
-    path_to_inputs = joinpath(data_dir, "inputs")
+    path_to_inputs = joinpath(dataDir(), "inputs")
     path_from_inputs_vec = splitpath(import_dest_folder.path_from_inputs)
     path_from_inputs_to_collection = joinpath(path_from_inputs_vec[1:end-1]...)
     folder_base = path_from_inputs_vec[end]
@@ -452,17 +431,8 @@ function copyFilesToFolders(path_to_project::AbstractString, project_sources::Im
         end
         src = joinpath(path_to_project, project_source.path_from_project)
         import_dest_folder = getfield(import_dest_folders, project_source.input_folder_key)
-        dest = joinpath(data_dir, "inputs", import_dest_folder.path_from_inputs, project_source.pcvct_name)
-        if dest |> (project_source.type == "file" ? isfile : isdir)
-            msg = """
-            In copying $(src) to $(dest), found a $(project_source.type) with the same name.
-            This should be avoided by pcvct.
-            Please open an Issue on GitHub and document your setup and steps.
-            """
-            println(msg)
-            success = false
-            continue
-        end
+        dest = joinpath(dataDir(), "inputs", import_dest_folder.path_from_inputs, project_source.pcvct_name)
+        @assert (dest |> (project_source.type == "file" ? isfile : isdir)) == false "In copying $(src) to $(dest), found a $(project_source.type) with the same name. This should be avoided by pcvct. Please open an Issue on GitHub and document your setup and steps."
         cp(src, dest)
     end
     return success
@@ -506,7 +476,7 @@ end
 Adapt the main.cpp file to be used in the pcvct structure.
 """
 function adaptMain(path_from_inputs::AbstractString)
-    path_to_main = joinpath(data_dir, "inputs", path_from_inputs, "main.cpp")
+    path_to_main = joinpath(dataDir(), "inputs", path_from_inputs, "main.cpp")
     lines = readlines(path_to_main)
 
     filter!(x->!contains(x, "copy_command"), lines) #! remove any lines carrying out the copy command, which could be a little risky if the user uses for something other than copying over the config file
@@ -586,7 +556,7 @@ end
 Adapt the custom cpp file to be used in the pcvct structure.
 """
 function adaptCustomCPP(path_from_inputs::AbstractString)
-    path_to_custom_cpp = joinpath(data_dir, "inputs", path_from_inputs, "custom.cpp")
+    path_to_custom_cpp = joinpath(dataDir(), "inputs", path_from_inputs, "custom.cpp")
     lines = readlines(path_to_custom_cpp)
     idx = findfirst(x->contains(x, "load_cells_from_pugixml"), lines)
 
