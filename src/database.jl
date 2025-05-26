@@ -19,7 +19,6 @@ function initializeDatabase(path_to_database::String; auto_upgrade::Bool=false)
     catch e
         SQLite.rollback(centralDB())
         println("Error initializing database: $e")
-        rethrow(e)
         return false
     else
         SQLite.commit(centralDB())

@@ -37,7 +37,7 @@ inputs = InputFolders(config, custom_code; ic_substrate=ic_substrate)
 dv = DiscreteVariation(["overall", "max_time"], 12)
 out = run(inputs, dv)
 @test out.trial isa Simulation
-export_folder = exportSimulation(out.trial.id)
+export_folder = exportSimulation(pcvct.trialID(out))
 export_test(export_folder)
 
 # make sim with ic ecm
@@ -48,7 +48,7 @@ inputs = InputFolders(config, custom_code; ic_ecm=ic_ecm)
 dv = DiscreteVariation(["overall", "max_time"], 12)
 out = run(inputs, dv)
 @test out.trial isa Simulation
-export_folder = exportSimulation(out.trial.id)
+export_folder = exportSimulation(pcvct.trialID(out))
 export_test(export_folder)
 
 # make sim with id dc
@@ -59,7 +59,7 @@ inputs = InputFolders(config, custom_code; ic_dc=ic_dc)
 dv = DiscreteVariation(["overall", "max_time"], 12)
 out = run(inputs, dv)
 @test out.trial isa Simulation
-export_folder = exportSimulation(out.trial.id)
+export_folder = exportSimulation(pcvct.trialID(out))
 export_test(export_folder)
 
 # export with intracellulars
