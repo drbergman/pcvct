@@ -447,11 +447,14 @@ end
 """
     addDomainVariationDimension!(evs::Vector{<:ElementaryVariation}, domain::NamedTuple)
 
-Pushes variations onto `evs` for each domain boundary named in `domain`.
+Deprecated function that pushes variations onto `evs` for each domain boundary named in `domain`.
 
 The names in `domain` can be flexibly named as long as they contain either `min` or `max` and one of `x`, `y`, or `z` (other than the the `x` in `max`).
 It is not required to include all three dimensions and their boundaries.
 The values for each boundary can be a single value or a vector of values.
+
+Instead of using this function, use `configPath("x_min")`, `configPath("x_max")`, etc. to create the XML paths and then use `DiscreteVariation` to create the variations.
+Use a [`CoVariation`](@ref) if you want to vary any of these together.
 
 # Examples:
 ```
@@ -488,7 +491,9 @@ end
 """
     addAttackRateVariationDimension!(evs::Vector{<:ElementaryVariation}, cell_definition::String, target_name::String, values::Vector{T} where T)
 
-Pushes a variation onto `evs` for the attack rate of a cell type against a target cell type.
+Deprecated function that pushes a variation onto `evs` for the attack rate of a cell type against a target cell type.
+
+Instead of using this function, use `configPath(<attacker_cell_type>, "attack", <target_cell_type>)` to create the XML path and then use `DiscreteVariation` to create the variation.
 
 # Examples:
 ```
@@ -504,7 +509,9 @@ end
 """
     addCustomDataVariationDimension!(evs::Vector{<:ElementaryVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
 
-Pushes a variation onto `evs` for a custom data field of a cell type.
+Deprecated function that pushes a variation onto `evs` for a custom data field of a cell type.
+
+Instead of using this function, use `configPath(<cell_definition>, "custom", <tag>)` to create the XML path and then use `DiscreteVariation` to create the variation.
 
 # Examples:
 ```

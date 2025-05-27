@@ -1,6 +1,6 @@
 import Base.run
 
-export runAbstractTrial
+export runAbstractTrial, run
 
 """
     prepareSimulationCommand(simulation::Simulation, monad_id::Int, do_full_setup::Bool, force_recompile::Bool)
