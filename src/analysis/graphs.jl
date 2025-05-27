@@ -34,7 +34,7 @@ For each key, the value is a list of connected components in the graph.
 Each component is represented as a vector of vertex labels.
 As of this writing, the vertex labels are the simple `AgentID` class that wraps the cell ID.
 """
-@depkws force_depwarn=true function connectedComponents(snapshot::PhysiCellSnapshot, graph::Symbol=:neighbors; include_cell_type_names=:all_in_one, exclude_cell_type_names=String[], include_dead::Bool=false,
+@depkws force=true function connectedComponents(snapshot::PhysiCellSnapshot, graph::Symbol=:neighbors; include_cell_type_names=:all_in_one, exclude_cell_type_names=String[], include_dead::Bool=false,
     @deprecate(include_cell_types, include_cell_type_names), @deprecate(exclude_cell_types, exclude_cell_type_names))
     is_all_in_one = include_cell_type_names == :all_in_one
     cell_type_to_name_dict = cellTypeToNameDict(snapshot)
