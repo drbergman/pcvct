@@ -14,6 +14,11 @@ There are three ways to allow this function to find these dependencies:
   1. Pass the path to the dependencies using the `magick_path` and `ffmpeg_path` keyword arguments.
   2. Set the `PATH` environment variable to include the directories containing the dependencies.
   3. Set environment variables `PCVCT_IMAGEMAGICK_PATH` and `PCVCT_FFMPEG_PATH` before `using pcvct`.
+
+# Example
+```julia
+makeMovie(123) # make a movie for simulation 123
+```
 """
 function makeMovie(simulation_id::Int; magick_path::Union{Missing,String}=pcvct_globals.path_to_magick, ffmpeg_path::Union{Missing,String}=pcvct_globals.path_to_ffmpeg)
     path_to_output_folder = joinpath(trialFolder(Simulation, simulation_id), "output")
@@ -66,19 +71,18 @@ end
 """
     makeMovie(T::Union{AbstractTrial,PCVCTOutput}; magick_path::Union{Missing,String}=pcvct_globals.path_to_magick, ffmpeg_path::Union{Missing,String}=pcvct_globals.path_to_ffmpeg)
 
-Make movies for all simulations in `T`, a simulation, monad, sampling, or trial.
+Make movies for all simulations in `T`, a simulation, monad, sampling, trial, or PCVCTOutput object.
 
 Uses the PhysiCell Makefile to generate the movies.
 
 # Examples
 ```julia
-makeMovie(123) # make a movie for simulation 123
 makeMovie(sampling) # make movies for all simulations in sampling
 ```
 """
 function makeMovie(T::Union{AbstractTrial,PCVCTOutput}; kwargs...)
     simulation_ids = simulationIDs(T)
-    println("Making movies for $(typeof(T)) $(T.id) with $(length(simulation_ids)) simulations...")
+    println("Making movies for $(trialType(T)) $(trialID(T)) with $(length(simulation_ids)) simulations...")
     for simulation_id in simulation_ids
         print("  Making movie for simulation $simulation_id...")
         makeMovie(simulation_id; kwargs...)
