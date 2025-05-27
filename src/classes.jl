@@ -21,6 +21,20 @@ All the inputs must be the same for all associated simulations. Variations can d
 abstract type AbstractSampling <: AbstractTrial end
 
 """
+    trialType(T::AbstractTrial)
+
+Returns the type of the trial, which can be `Simulation`, `Monad`, `Sampling`, or `Trial`.
+"""
+trialType(T::AbstractTrial) = typeof(T)
+
+"""
+    trialID(T::AbstractTrial)
+
+Returns the ID of the [`AbstractTrial`](@ref) object, which is the ID of the simulation, monad, sampling, or trial.
+"""
+trialID(T::AbstractTrial) = T.id
+
+"""
     AbstractMonad <: AbstractSampling
 
 Abstract type for the [`Simulation`](@ref) and [`Monad`](@ref) types.
@@ -266,6 +280,12 @@ If there is a previously created simulation that you wish to access, you can use
 simulation = Simulation(simulation_id)
 ```
 
+Finally, a new `Simulation` object can be created from an existing `Monad` object.
+This will not use a simulation already in the database, but will create a new one with the same inputs and variations:
+```julia
+simulation = Simulation(monad)
+```
+
 # Fields
 - `id::Int`: integer uniquely identifying this simulation. Matches with the folder in `data/outputs/simulations/`
 - `inputs::InputFolders`: contains the folder info for this simulation.
@@ -467,11 +487,6 @@ function addSimulationID(monad::Monad, simulation_id::Int)
     return
 end
 
-"""
-    Simulation(monad::Monad)
-
-Creates a new `Simulation` object belonging to the monad, i.e., will not use a simulation already in the database.
-"""
 function Simulation(monad::Monad)
     return Simulation(monad.inputs, monad.variation_id)
 end
@@ -515,6 +530,12 @@ sampling = Sampling(sampling_id)
 sampling = Sampling(sampling_id; n_replicates=5) # ensures at least 5 simulations in each monad (using previous sims)
 sampling = Sampling(sampling_id; n_replicates=5, use_previous=false) # creates 5 new simulations in each monad
 ```
+
+If you have a vector of `Monad` objects that you wish to group into a sampling, you can use the constructor:
+```julia
+sampling = Sampling(monads; n_replicates=0, use_previous=true)
+```
+which will create a new `Sampling` object with the provided monads, ensuring each has at least `n_replicates` simulations per monad, using previous simulations if requested and available.
 
 # Fields
 - `id::Int`: integer uniquely identifying this sampling. Matches with the folder in `data/outputs/samplings/`
@@ -617,18 +638,6 @@ function Sampling(inputs::InputFolders,
     return Sampling(inputs, variation_ids; n_replicates=n_replicates, use_previous=use_previous)
 end
 
-"""
-    Sampling(Ms::AbstractArray{<:AbstractMonad}; n_replicates::Integer=0, use_previous::Bool=true)
-
-Creates a new `Sampling` object from a vector of `Monad` objects.
-
-The monads must all have the same `InputFolders` object so that they can actually be grouped into a sampling.
-
-# Arguments
-- `Ms::AbstractArray{<:AbstractMonad}`: A vector of `Monad` objects. A single `Monad` object can also be passed in.
-- `n_replicates::Integer=0`: The number of replicates to create for each monad. New simulations will be created as needed for each monad.
-- `use_previous::Bool=true`: Whether to use previous simulations for each monad. If `false`, new simulations will be created for each monad.
-"""
 function Sampling(Ms::AbstractArray{<:AbstractMonad}; n_replicates::Integer=0, use_previous::Bool=true)
     @assert !isempty(Ms) "At least one monad must be provided"
     inputs = Ms[1].inputs

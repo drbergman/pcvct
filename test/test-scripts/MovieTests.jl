@@ -7,6 +7,7 @@ if Sys.isapple()
     makeMovie(Simulation(1))
     @test isfile(joinpath(pcvct.dataDir(), "outputs", "simulations", "1", "output", "out.mp4"))
     @test makeMovie(1) === false
+    @test makeMovie(run(Simulation(1))) |> isnothing #! makeMovie on the PCVCTOutput object
 else
     @test_throws ErrorException makeMovie(Simulation(1))
 end

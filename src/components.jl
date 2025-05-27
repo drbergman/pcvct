@@ -46,11 +46,6 @@ end
 
 pathFromComponents(component::PhysiCellComponent) = joinpath(component.type, component.name)
 
-"""
-    assembleIntracellular!(cell_to_components_dict::Dict{String,<:Union{PhysiCellComponent,Vector{PhysiCellComponent}}}; kwargs...)
-
-Helper function to ensure the values of each entry is a vector of `PhysiCellComponent`s.
-"""
 function assembleIntracellular!(cell_to_components_dict::Dict{String,<:Union{PhysiCellComponent,Vector{PhysiCellComponent}}}; kwargs...)
     cell_to_vec_components_dict = Dict{String,Vector{PhysiCellComponent}}()
     for (cell_type, components) in cell_to_components_dict
@@ -74,6 +69,8 @@ If not, create a new folder and save the components there as a single file along
 
 # Arguments
 - `cell_to_components_dict::Dict{String,Vector{PhysiCellComponent}}`: A dictionary mapping cell types to their components.
+  - The keys are the cell type names (e.g., "T_cell", "B_cell").
+  - The values can be either a single [`PhysiCellComponent`](@ref) or a vector of `PhysiCellComponent`s.
 - `name::String`: The name of the folder to create (default is "assembled").
 - `skip_db_insert::Bool`: If true, skip the database insert (default is false). Skipped when importing a project. Users should not need to set this.
 

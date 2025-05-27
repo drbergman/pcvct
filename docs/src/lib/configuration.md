@@ -12,14 +12,14 @@ Provide functionality for accessing and modifying elements in any XML, including
 The [`configPath`](@ref) is the most user-friendly way to create the XML path to (most) any parameter in the configuration file.
 The following functions are called by `configPath` and are more foolproof but less robust:
 
-| | | | |
-| -- | -- | -- | -- |
-| [`pcvct.domainPath`](@ref) | [`pcvct.timePath`](@ref) | [`pcvct.fullSavePath`](@ref) | [`pcvct.svgSavePath`](@ref) |
-| [`pcvct.substratePath`](@ref) | [`pcvct.cyclePath`](@ref) | [`pcvct.apoptosisPath`](@ref) | [`pcvct.necrosisPath`](@ref) |
-| [`pcvct.volumePath`](@ref) | [`pcvct.mechanicsPath`](@ref) | [`pcvct.motilityPath`](@ref) | [`pcvct.secretionPath`](@ref) |
-| [`pcvct.cellInteractionsPath`](@ref) | [`pcvct.phagocytosisPath`](@ref) | [`pcvct.attackRatePath`](@ref) | [`pcvct.fusionPath`](@ref) |
-| [`pcvct.integrityPath`](@ref) | [`pcvct.customDataPath`](@ref) | [`pcvct.initialParameterDistributionPath`](@ref) | [`pcvct.userParameterPath`](@ref) |
-
+|                                      |                                  |                                                  |                                   |
+|--------------------------------------|----------------------------------|--------------------------------------------------|-----------------------------------|
+| [`pcvct.domainPath`](@ref)           | [`pcvct.timePath`](@ref)         | [`pcvct.fullSavePath`](@ref)                     | [`pcvct.svgSavePath`](@ref)       |
+| [`pcvct.domainPath`](@ref)           | [`pcvct.timePath`](@ref)         | [`pcvct.fullSavePath`](@ref)                     | [`pcvct.svgSavePath`](@ref)       |
+| [`pcvct.substratePath`](@ref)        | [`pcvct.cyclePath`](@ref)        | [`pcvct.apoptosisPath`](@ref)                    | [`pcvct.necrosisPath`](@ref)      |
+| [`pcvct.volumePath`](@ref)           | [`pcvct.mechanicsPath`](@ref)    | [`pcvct.motilityPath`](@ref)                     | [`pcvct.secretionPath`](@ref)     |
+| [`pcvct.cellInteractionsPath`](@ref) | [`pcvct.phagocytosisPath`](@ref) | [`pcvct.attackRatePath`](@ref)                   | [`pcvct.fusionPath`](@ref)        |
+| [`pcvct.integrityPath`](@ref)        | [`pcvct.customDataPath`](@ref)   | [`pcvct.initialParameterDistributionPath`](@ref) | [`pcvct.userParameterPath`](@ref) |
 
 Here is a near-exhaustive list of the available tokens (the flexibiilty of `configPath` allows for some of these XML paths to be created in multiple ways):
 
@@ -89,7 +89,48 @@ The following tokens work with a `cell_type` from your model:
 - `configPath(<cell_type>, "initial_parameter_distribution", <behavior>, <parameter>)` (`initialParameterDistributionPath`)
 ```
 
+## Main XML path functions
+```@docs; canonical=false
+configPath
+rulePath
+icCellsPath
+icECMPath
+```
+
+## Config file specific functions
+```@docs; canonical=false
+pcvct.domainPath
+pcvct.timePath
+pcvct.fullSavePath
+pcvct.svgSavePath
+pcvct.substratePath
+pcvct.cyclePath
+pcvct.apoptosisPath
+pcvct.necrosisPath
+pcvct.volumePath
+pcvct.mechanicsPath
+pcvct.motilityPath
+pcvct.secretionPath
+pcvct.cellInteractionsPath
+pcvct.phagocytosisPath
+pcvct.attackRatePath
+pcvct.fusionPath
+pcvct.integrityPath
+pcvct.customDataPath
+pcvct.initialParameterDistributionPath
+pcvct.userParameterPath
+```
+
+## Public API
 ```@autodocs
 Modules = [pcvct]
 Pages = ["configuration.jl"]
+Private = false
+```
+
+## Private API
+```@autodocs
+Modules = [pcvct]
+Pages = ["configuration.jl"]
+Public = false
 ```

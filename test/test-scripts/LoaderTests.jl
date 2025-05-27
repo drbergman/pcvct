@@ -17,7 +17,7 @@ out = run(inputs, discrete_variations; use_previous=false)
 @test out.trial isa Simulation
 cell_labels = pcvct.cellLabels(out.trial)
 substrate_names = pcvct.substrateNames(out.trial)
-sequence = PhysiCellSequence(out.trial.id; include_cells=true, include_substrates=true)
+sequence = PhysiCellSequence(pcvct.trialID(out); include_cells=true, include_substrates=true)
 
 seq_dict = cellDataSequence(sequence, "elapsed_time_in_phase"; include_dead=true)
 @test length(seq_dict) == length(seq_dict.dict)
@@ -39,7 +39,7 @@ simulation_population_time_series = pcvct.populationTimeSeries(out.trial; includ
 
 # brief pause for motility testing
 for direction in [:x, :y, :z, :any]
-    local mean_speed_dicts = motilityStatistics(Simulation(out.trial.id); direction=direction)
+    local mean_speed_dicts = motilityStatistics(Simulation(pcvct.trialID(out)); direction=direction)
 end
 @test ismissing(motilityStatistics(pruned_simulation_id))
 
@@ -72,7 +72,7 @@ cellDataSequence(Simulation(1), "position")
 simulation = Simulation(monad)
 out = run(simulation; prune_options=PruneOptions(prune_mat=true))
 @test out.n_success == 1 #! confirm that creating a simulation using simulation = Simulation(monad) creates a new simulation (not one already in the db)
-mat_pruned_simulation_id = out.trial.id
+mat_pruned_simulation_id = pcvct.trialID(out)
 PhysiCellSnapshot(mat_pruned_simulation_id, 0; include_cells=true)
 PhysiCellSnapshot(mat_pruned_simulation_id, 0; include_substrates=true)
 snapshot = PhysiCellSnapshot(mat_pruned_simulation_id, 0)
@@ -89,7 +89,7 @@ Base.show(stdout, MIME"text/plain"(), sequence.snapshots[1])
 
 simulation = Simulation(monad)
 out = run(simulation; prune_options=PruneOptions(prune_txt=true))
-txt_pruned_simulation_id = out.trial.id
+txt_pruned_simulation_id = pcvct.trialID(out)
 @test ismissing(PhysiCellSnapshot(txt_pruned_simulation_id, 0; include_attachments=true))
 @test ismissing(PhysiCellSnapshot(txt_pruned_simulation_id, 0; include_spring_attachments=true))
 @test ismissing(PhysiCellSnapshot(txt_pruned_simulation_id, 0; include_neighbors=true))

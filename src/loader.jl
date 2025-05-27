@@ -15,7 +15,7 @@ abstract type AbstractPhysiCellSequence end
 
 A single snapshot of a PhysiCell simulation.
 
-The `cells`, `substrates`, and `mesh` fields may remain empty until they are needed for analysis.
+The `cells`, `substrates`, `mesh`, and graphs (`attachments`, `spring_attachments`, `neighbors`) fields may remain empty until they are needed for analysis.
 
 # Fields
 - `simulation_id::Int`: The ID of the simulation.
@@ -59,6 +59,8 @@ Creates a snapshot of the PhysiCell simulation with optional parameters to inclu
 # Arguments
 - `simulation_id::Int`: The ID of the simulation. Can also be a `Simulation` object.
 - `index::Union{Integer, Symbol}`: The index of the snapshot. Can be an integer or a symbol (`:initial` or `:final`).
+
+# Optional Arguments
 - `labels::Vector{String}=String[]`: A vector of cell data labels.
 - `substrate_names::Vector{String}=String[]`: A vector of substrate names.
 
@@ -92,26 +94,26 @@ function PhysiCellSnapshot(simulation_id::Int, index::Union{Integer, Symbol},
     time = getContent(xml_doc, ["metadata","current_time"]) |> x->parse(Float64, x)
     cells = DataFrame()
     if include_cells
-        if loadCells!(cells, filepath_base, cell_type_to_name_dict, labels) |> ismissing
+        if _loadCells!(cells, filepath_base, cell_type_to_name_dict, labels) |> ismissing
             println("Could not load cell data for snapshot $(index) of simulation $simulation_id. Returning missing.")
             return missing
         end
     end
     substrates = DataFrame()
     if include_substrates
-        if loadSubstrates!(substrates, filepath_base, substrate_names) |> ismissing
+        if _loadSubstrates!(substrates, filepath_base, substrate_names) |> ismissing
             println("Could not load substrate data for snapshot $(index) of simulation $simulation_id. Returning missing.")
             return missing
         end
     end
     mesh = Dict{String, Vector{Float64}}()
     if include_mesh
-        loadMesh!(mesh, xml_doc)
+        _loadMesh!(mesh, xml_doc)
     end
 
     attachments = physicellEmptyGraph()
     if include_attachments
-        if loadGraph!(attachments, "$(filepath_base)_attached_cells_graph.txt") |> ismissing
+        if _loadGraph!(attachments, "$(filepath_base)_attached_cells_graph.txt") |> ismissing
             println("Could not load attachments for snapshot $(index) of simulation $simulation_id. Returning missing.")
             return missing
         end
@@ -119,7 +121,7 @@ function PhysiCellSnapshot(simulation_id::Int, index::Union{Integer, Symbol},
 
     spring_attachments = physicellEmptyGraph()
     if include_spring_attachments
-        if loadGraph!(spring_attachments, "$(filepath_base)_spring_attached_cells_graph.txt") |> ismissing
+        if _loadGraph!(spring_attachments, "$(filepath_base)_spring_attached_cells_graph.txt") |> ismissing
             println("Could not load spring attachments for snapshot $(index) of simulation $simulation_id. Returning missing.")
             return missing
         end
@@ -127,7 +129,7 @@ function PhysiCellSnapshot(simulation_id::Int, index::Union{Integer, Symbol},
 
     neighbors = physicellEmptyGraph()
     if include_neighbors
-        if loadGraph!(neighbors, "$(filepath_base)_cell_neighbor_graph.txt") |> ismissing
+        if _loadGraph!(neighbors, "$(filepath_base)_cell_neighbor_graph.txt") |> ismissing
             println("Could not load neighbors for snapshot $(index) of simulation $simulation_id. Returning missing.")
             return missing
         end
@@ -501,11 +503,11 @@ substrateNames(simulation_id::Integer) = substrateNames(pathToOutputXML(simulati
 substrateNames(simulation::Simulation) = substrateNames(simulation.id)
 
 """
-    loadCells!(cells::DataFrame, filepath_base::String, cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}(), labels::Vector{String}=String[])
+    _loadCells!(cells::DataFrame, filepath_base::String, cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}(), labels::Vector{String}=String[])
 
 Internal function to load cell data into a DataFrame associated with an [`AbstractPhysiCellSequence`](@ref) object.
 """
-function loadCells!(cells::DataFrame, filepath_base::String, cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}(), labels::Vector{String}=String[])
+function _loadCells!(cells::DataFrame, filepath_base::String, cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}(), labels::Vector{String}=String[])
     if !isempty(cells)
         return
     end
@@ -563,7 +565,7 @@ loadCells!(sequence)
 ```
 """
 function loadCells!(snapshot::PhysiCellSnapshot, cell_type_to_name_dict::Dict{Int, String}=Dict{Int, String}(), labels::Vector{String}=String[])
-    loadCells!(snapshot.cells, pathToOutputFileBase(snapshot), cell_type_to_name_dict, labels)
+    _loadCells!(snapshot.cells, pathToOutputFileBase(snapshot), cell_type_to_name_dict, labels)
 end
 
 function loadCells!(sequence::PhysiCellSequence)
@@ -575,11 +577,11 @@ function loadCells!(sequence::PhysiCellSequence)
 end
 
 """
-    loadSubstrates!(substrates::DataFrame, filepath_base::String, substrate_names::Vector{String}=String[])
+    _loadSubstrates!(substrates::DataFrame, filepath_base::String, substrate_names::Vector{String}=String[])
 
 Internal function to load substrate data into a DataFrame associated with an [`AbstractPhysiCellSequence`](@ref) object.
 """
-function loadSubstrates!(substrates::DataFrame, filepath_base::String, substrate_names::Vector{String})
+function _loadSubstrates!(substrates::DataFrame, filepath_base::String, substrate_names::Vector{String})
     if !isempty(substrates)
         return
     end
@@ -614,7 +616,7 @@ Users do not need to compute and pass these in.
 - `substrate_names::Vector{String}=String[]`: The names of the substrates to load. If not provided, they will be loaded from the XML file.
 """
 function loadSubstrates!(snapshot::PhysiCellSnapshot, substrate_names::Vector{String}=String[])
-    loadSubstrates!(snapshot.substrates, pathToOutputFileBase(snapshot), substrate_names)
+    _loadSubstrates!(snapshot.substrates, pathToOutputFileBase(snapshot), substrate_names)
 end
 
 function loadSubstrates!(sequence::PhysiCellSequence)
@@ -624,11 +626,11 @@ function loadSubstrates!(sequence::PhysiCellSequence)
 end
 
 """
-    loadMesh!(mesh::Dict{String, Vector{Float64}}, xml_doc::XMLDocument)
+    _loadMesh!(mesh::Dict{String, Vector{Float64}}, xml_doc::XMLDocument)
 
 Internal function to load mesh data into a dictionary associated with an [`AbstractPhysiCellSequence`](@ref) object.
 """
-function loadMesh!(mesh::Dict{String, Vector{Float64}}, xml_doc::XMLDocument)
+function _loadMesh!(mesh::Dict{String, Vector{Float64}}, xml_doc::XMLDocument)
     if !isempty(mesh)
         return
     end
@@ -653,7 +655,7 @@ function loadMesh!(snapshot::PhysiCellSnapshot)
     path_to_file = pathToOutputXML(snapshot)
     @assert isfile(path_to_file) "Could not find file $path_to_file. However, snapshot required this file to be created."
     xml_doc = parse_file(path_to_file)
-    loadMesh!(snapshot.mesh, xml_doc)
+    _loadMesh!(snapshot.mesh, xml_doc)
     free(xml_doc)
     return
 end
@@ -679,13 +681,13 @@ end
 meshInfo(sequence::PhysiCellSequence) = meshInfo(sequence.snapshots[1])
 
 """
-    loadGraph!(G::MetaGraph, path_to_txt_file::String)
+    _loadGraph!(G::MetaGraph, path_to_txt_file::String)
 
 Load a graph from a text file into a `MetaGraph`.
 
 Users should use `loadGraph!` with an [`AbstractPhysiCellSequence`](@ref) object instead of this function directly.`
 """
-function loadGraph!(G::MetaGraph, path_to_txt_file::String)
+function _loadGraph!(G::MetaGraph, path_to_txt_file::String)
     if nv(G) > 0 #! If the graph is already loaded, do nothing
         return
     end
@@ -714,7 +716,7 @@ function loadGraph!(snapshot::PhysiCellSnapshot, graph::Symbol)
     elseif graph == :neighbors
         path_to_txt_file = pathToOutputFileBase(snapshot) * "_cell_neighbor_graph.txt"
     end
-    loadGraph!(getfield(snapshot, graph), path_to_txt_file)
+    _loadGraph!(getfield(snapshot, graph), path_to_txt_file)
 end
 
 function loadGraph!(sequence::PhysiCellSequence, graph::Symbol)

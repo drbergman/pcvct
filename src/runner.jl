@@ -296,6 +296,20 @@ Get the simulation IDs from the output of the PCVCT run.
 simulationIDs(output::PCVCTOutput) = simulationIDs(output.trial)
 
 """
+    trialType(output::PCVCTOutput)
+
+Get the type of the trial from the output of the PCVCT run.
+"""
+trialType(output::PCVCTOutput) = trialType(output.trial)
+
+"""
+    trialID(output::PCVCTOutput)
+
+Get the ID of the trial from the output of the PCVCT run.
+"""
+trialID(output::PCVCTOutput) = trialID(output.trial)
+
+"""
     run(T::AbstractTrial[; force_recompile::Bool=false, prune_options::PruneOptions=PruneOptions()])`
 
 Run the given simulation, monad, sampling, or trial.

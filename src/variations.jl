@@ -459,6 +459,7 @@ evs = ElementaryVariation[]
 addDomainVariationDimension!(evs, (x_min=-78, xmax=78, min_y=-30, maxy=[30, 60], z_max=10))
 """
 function addDomainVariationDimension!(evs::Vector{<:ElementaryVariation}, domain::NamedTuple)
+    Base.depwarn("`addDomainVariationDimension!` is deprecated. Use `configPath(\"x_min\")` etc. to create the XML paths and then use `DiscreteVariation` to create the variations.", :addDomainVariationDimension!, force=true)
     dim_chars = ["z", "y", "x"] #! put x at the end to avoid prematurely matching with "max"
     for (tag, value) in pairs(domain)
         tag = String(tag)
@@ -495,6 +496,7 @@ addAttackRateVariationDimension!(evs, "immune", "cancer", [0.1, 0.2, 0.3])
 ```
 """
 function addAttackRateVariationDimension!(evs::Vector{<:ElementaryVariation}, cell_definition::String, target_name::String, values::Vector{T} where T)
+    Base.depwarn("`addAttackRateVariationDimension!` is deprecated. Use `configPath(<attacker_cell_type>, \"attack\", <target_cell_type>)` to create the XML path and then use `DiscreteVariation` to create the variation.", :addAttackRateVariationDimension!, force=true)
     xml_path = attackRatePath(cell_definition, target_name)
     push!(evs, DiscreteVariation(xml_path, values))
 end
@@ -510,6 +512,7 @@ addCustomDataVariationDimension!(evs, "immune", "perforin", [0.1, 0.2, 0.3])
 ```
 """
 function addCustomDataVariationDimension!(evs::Vector{<:ElementaryVariation}, cell_definition::String, field_name::String, values::Vector{T} where T)
+    Base.depwarn("`addCustomDataVariationDimension!` is deprecated. Use `configPath(<cell_definition>, \"custom\", <tag>)` to create the XML path and then use `DiscreteVariation` to create the variation.", :addCustomDataVariationDimension!, force=true)
     xml_path = customDataPath(cell_definition, field_name)
     push!(evs, DiscreteVariation(xml_path, values))
 end
