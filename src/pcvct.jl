@@ -91,9 +91,12 @@ function pcvctLogo()
 end
 
 """
+    initializeModelManager()
     initializeModelManager(path_to_physicell::String, path_to_data::String)
 
-Initialize the VCT environment by setting the paths to PhysiCell and data directories, and initializing the database.
+Initialize the pcvct project model manager, identifying the data folder, PhysiCell folder, and loading the central database.
+
+If no arguments are provided, it assumes that the PhysiCell and data directories are in the current working directory.
 
 # Arguments
 - `path_to_physicell::String`: Path to the PhysiCell directory as either an absolute or relative path.
@@ -129,11 +132,6 @@ function initializeModelManager(path_to_physicell::String, path_to_data::String;
     flush(stdout)
 end
 
-"""
-    initializeModelManager()
-
-Initialize the VCT environment assuming that the PhysiCell and data directories are in the current working directory.
-"""
 function initializeModelManager()
     physicell_dir = "PhysiCell"
     data_dir = "data"
