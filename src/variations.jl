@@ -131,7 +131,7 @@ struct DiscreteVariation{T} <: ElementaryVariation
     end
 end
 
-DiscreteVariation(xml_path::Vector{<:AbstractString}, value::T) where T = DiscreteVariation(xml_path, [value])
+DiscreteVariation(xml_path::Vector{<:AbstractString}, value::T) where T = DiscreteVariation(xml_path, Vector{T}([value]))
 
 Base.length(discrete_variation::DiscreteVariation) = length(discrete_variation.values)
 
