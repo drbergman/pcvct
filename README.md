@@ -76,7 +76,7 @@ julia> out = run(inputs, dv; n_replicates = 3) # 3 replicates per apoptosis rate
 - [x] Parameter variation — discrete, grid, distributed, latent, co-variation. `configPath`/`behaviorPath` build XML paths and reject an unrecognised tag by name
 - [x] Space-filling designs — LHS, Sobol, RBD
 - [x] Simulation execution — local multi-process runner. Executables are named for the PhysiCell version they were built against, in `pcmm_build/` inside the custom code folder; the PhysiCell version is re-resolved before every compilation
-- [x] HPC job submission — ModelManager owns launching; PCMM implements `simulationCommand`. PCMM installs one SLURM default, `cpus-per-task` following each simulation's `omp_num_threads`
+- [x] HPC job submission — ModelManager owns launching; PCMM implements `simulationCommand` (what to run) and `simulationThreads` (each simulation's `omp_num_threads`, which ModelManager requests as `cpus-per-task`)
 - [x] Analysis — population counts and time series (`finalPopulationCount`, `populationTimeSeries`, `meanPopulationTimeSeries`). Replicates whose output has been deleted or pruned are excluded from monad-level aggregates and plots, reported once per call site
   - [x] Plot recipes documented with rendered figures in the manual
 - [x] Sensitivity analysis — MOAT, Sobol, and RBD via ModelManager; a `Dict`-valued `QoI` yields one analysis per key

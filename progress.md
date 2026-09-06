@@ -15,15 +15,16 @@ six threads on one core and finishes several times slower than a single-threaded
 100% CPU efficiency in `sacct` and nothing in any log to explain it. Found by the architecture
 review of the 0.9 HPC path, not by a user, which is the point: it is silent.
 
-The default is installed by PCMM's `initializeModelManager` wrapper, not by ModelManager, because
-ModelManager cannot know where a backend keeps its thread count. It is a `Function` value -- the
-per-simulation hook `setJobOptions` already supports -- reading `parallel/omp_num_threads` through
-`getParameterValue`, so a *varied* thread count is honoured. It is skipped when the user has set
-`cpus-per-task` themselves, and a config whose element cannot be read falls back to 1 with one
-warning rather than failing the submission.
+ModelManager owns the `cpus-per-task` default and asks the backend for the number through a new
+optional interface method, `simulationThreads(sim, simulation)`; PCMM implements it by reading
+`parallel/omp_num_threads` through `getParameterValue`, so a *varied* thread count is honoured. A
+config whose element cannot be read falls back to 1 with one warning rather than failing the
+submission; a user's own `cpus-per-task` replaces the default.
 
-Rejected: putting a `cpus-per-task` default in ModelManager's `defaultJobOptions`. Only the backend
-knows the number, and a fixed number is wrong for a varied one.
+Rejected (first draft): installing the option from PCMM's `initializeModelManager` wrapper as a
+`Function` job option. Review asked for the example function to be real and to take a `Simulation`;
+stubbing it in ModelManager and implementing it here is the same mechanism without the wrapper, and
+lets every backend fill the default the same way.
 
 ### ModelManager 0.10: a refused submission throws
 `runSimulation` no longer returns a failed `SimulationProcess` when `sbatch` refuses a job (or is

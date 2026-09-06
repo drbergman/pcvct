@@ -182,9 +182,7 @@ function initializeModelManager(path_to_physicell::AbstractString, path_to_data:
         throw(PCMMMissingProject("Could not find PhysiCell and/or data directories. Looked for them in: $path_to_physicell, $path_to_data"))
     end
     simulator().dir = path_to_physicell
-    initialized = initializeModelManager(simulator(), path_to_data; auto_upgrade)
-    initialized && _installDefaultJobOptions()
-    return initialized
+    return initializeModelManager(simulator(), path_to_data; auto_upgrade)
 end
 
 function initializeModelManager(path_to_project::AbstractString; kwargs...)

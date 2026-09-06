@@ -127,7 +127,7 @@
 - `run(inputs, variation; n_replicates=N)` sweeps over all variation points.
 - Local execution: spawns PhysiCell subprocesses, up to `setNumberOfParallelSims` (or `PCMM_NUM_PARALLEL_SIMS`) at a time.
 - HPC execution: PCMM supplies the simulation command via `simulationCommand`; ModelManager submits it (`sbatch --wrap`, no script file is written) and detects completion with a filesystem sentinel. PBS/`qsub` support is deferred — see the `-march` to-do in CLAUDE.md.
-- PCMM adds one SLURM default of its own at initialization: `cpus-per-task` resolves per simulation to that simulation's `parallel/omp_num_threads` (so a varied thread count is honoured), because PhysiCell starts that many threads regardless of what SLURM allocated. It is not installed when the user has already set `cpus-per-task`; a config whose element cannot be read falls back to 1 with one warning.
+- PCMM implements ModelManager's `simulationThreads` from the simulation's `parallel/omp_num_threads` (read through the variation record, so a varied thread count is honoured), because PhysiCell starts that many threads regardless of what SLURM allocated; ModelManager's default `cpus-per-task` job option requests it per submission. A config whose element cannot be read falls back to 1 with one warning; a user's own `cpus-per-task` replaces the default.
 - A submission `sbatch` refuses is ModelManager's to handle (retried when transient, otherwise the run stops with the scheduler's message); it is never recorded as a failed PhysiCell simulation.
 - Returns an `MMOutput` (alias `PCMMOutput`) wrapping the trial object, with the counts of simulations scheduled and completed.
 
