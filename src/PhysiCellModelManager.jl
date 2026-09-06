@@ -38,12 +38,9 @@ include("pcmm_version.jl")
 include("physicell_version.jl")
 include("components.jl")
 
-include("user_api.jl")
-
 include("loader.jl")
 
 include("analysis/analysis.jl")
-include("sensitivity.jl")
 include("import.jl")
 include("movie.jl")
 
