@@ -5,6 +5,46 @@
 
 ---
 
+## 2026-09-05 — SLURM defaults PhysiCell needs; ModelManager 0.10
+
+### `cpus-per-task` follows `omp_num_threads`
+PhysiCell's `main.cpp` calls `omp_set_num_threads(PhysiCell_settings.omp_num_threads)`, so a job
+starts as many threads as its config says whatever SLURM allocated -- and SLURM allocates one CPU
+unless asked. Every shipped sample config asks for 6-12. Left alone, a cluster campaign time-slices
+six threads on one core and finishes several times slower than a single-threaded run would, with
+100% CPU efficiency in `sacct` and nothing in any log to explain it. Found by the architecture
+review of the 0.9 HPC path, not by a user, which is the point: it is silent.
+
+ModelManager owns the `cpus-per-task` default and asks the backend for the number through a new
+optional interface method, `simulationThreads(sim, simulation)`; PCMM implements it by reading
+`parallel/omp_num_threads` through `getParameterValue`, so a *varied* thread count is honoured. A
+config whose element cannot be read falls back to 1 with one warning rather than failing the
+submission; a user's own `cpus-per-task` replaces the default.
+
+Rejected (first draft): installing the option from PCMM's `initializeModelManager` wrapper as a
+`Function` job option. Review asked for the example function to be real and to take a `Simulation`;
+stubbing it in ModelManager and implementing it here is the same mechanism without the wrapper, and
+lets every backend fill the default the same way.
+
+### ModelManager 0.10: a refused submission throws
+`runSimulation` no longer returns a failed `SimulationProcess` when `sbatch` refuses a job (or is
+not installed); it throws `ModelManager._SubmissionRefused` and `run` fails fast with the row left
+at `Not Started`. `HPCTests` asserted the old shape on the no-`sbatch` path and now asserts the
+exception. Nothing in PCMM's source changed for this: `postSimulationCleanup` is never reached for a
+refused submission, as before.
+
+### Housekeeping
+- `requestHeaders` treats an empty `PCMM_PUBLIC_REPO_AUTH` as unset. An empty value sent
+  `Authorization: token ` and GitHub answered 401 to a request that succeeds anonymously, so a shell
+  exporting the variable empty broke `createProject(; clone_physicell=false)` locally.
+- `src/sensitivity.jl` and `src/user_api.jl` were comment-only placeholders left from the
+  modularization; deleted with their includes. The docs pages of the same names render
+  ModelManager's files by filename and are unaffected.
+- Version 0.5.0: the compat bound moves to ModelManager 0.10, whose `runSimulation` behaviour
+  change is user-visible on a cluster.
+
+---
+
 ## 2026-09-02 — ModelManager 0.9 migration and the release backlog
 
 ### Scope, and why the triage is recorded
