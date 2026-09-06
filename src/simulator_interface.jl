@@ -237,7 +237,6 @@ function postSimulationCleanup(::PhysiCellSimulator, simulation_process::Simulat
         return
     end
     simulation = simulation_process.simulation
-    p = simulation_process.process
     path_to_simulation_folder = trialFolder(simulation)
     path_to_err = joinpath(path_to_simulation_folder, "output.err")
     if simulation_process.success

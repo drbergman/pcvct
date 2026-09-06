@@ -31,6 +31,15 @@ spec = PhysiCellModelManager.ModelManager.SimulationSpec(simulation, monad.id)
 # the scheduler's message instead. A direct caller of `runSimulation` sees the exception itself.
 @test_throws PhysiCellModelManager.ModelManager._SubmissionRefused PhysiCellModelManager.ModelManager.runSimulation(PhysiCellModelManager.simulator(), spec)
 
+#! `march_flag` follows ModelManager's HPC probe, applied by `initializeModelManager` rather than by
+#! the `PhysiCellSimulator` constructor -- which used to shell out to `which sbatch` during every
+#! dependent package's precompilation. `useHPC()` above does not re-run it, so this is the value
+#! initialization chose for this machine.
+@test PhysiCellModelManager.simulator().march_flag ==
+      (PhysiCellModelManager.isRunningOnHPC() ? "x86-64" : "native")
+#! The constructor itself no longer probes: a fresh one is always "native".
+@test PhysiCellModelManager.PhysiCellSimulator().march_flag == "native"
+
 #! PhysiCell reads its OpenMP thread count from the config, so ModelManager's default `cpus-per-task`
 #! -- resolved per simulation through `simulationThreads` -- asks SLURM for that many CPUs; the test
 #! config sets 6. A user's own `cpus-per-task` replaces the default (checked below).
