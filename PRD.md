@@ -10,34 +10,6 @@
 
 **Target Framework:** PhysiCell only. Generalization to other ABM frameworks is explicitly deferred to v2.
 
-**Business Objectives:**
-1. Reduce time spent on manual file management and simulation bookkeeping.
-2. Enable reproducible workflows that collaborators and reviewers can re-run and validate.
-3. Lower the barrier to structured parameter studies, sensitivity analysis, and calibration.
-
-**Quality Success Metrics (no user telemetry):**
-- Test pass rate on all supported platforms (macOS, Linux, Windows).
-- Number of reproducible end-to-end tutorial workflows available.
-- Failure isolation rate in batch campaigns: a single failed simulation must not halt remaining queued runs.
-
----
-
-## User Personas
-
-### Persona 1: Research Lead
-- **Role:** PI or senior researcher running a computational biology lab.
-- **Technical proficiency:** High — comfortable with Julia, PhysiCell, and HPC environments.
-- **Goals:** Reproducible simulation workflows; publication-quality data generation; model calibration to experimental data.
-- **Pain points:** Managing hundreds of output files manually; avoiding duplicate runs; linking simulation batches to analysis code.
-- **Key flow:** Import project → define variation → run campaign → sensitivity analysis → calibrate to data.
-
-### Persona 2: Research Trainee
-- **Role:** PhD student, undergraduate, or advanced high-school researcher in the lab.
-- **Technical proficiency:** Variable — may be new to Julia and PhysiCell.
-- **Goals:** Run guided parameter studies; visualize outputs quickly; identify which parameters matter.
-- **Pain points:** Manual PhysiCell setup; not knowing which outputs to analyze; file path errors.
-- **Key flow:** Import project (via wizard when available) → run a grid search → inspect population time series → share results.
-
 ---
 
 ## Feature: Project Initialization
@@ -450,10 +422,6 @@
 
 ## Non-Functional Requirements
 
-### Performance
-- PCMM's own execution overhead is not a performance concern; ABM simulations dominate wall-clock time.
-- PCMM scheduling, bookkeeping, and analysis functions must not measurably delay simulation campaigns.
-
 ### Reliability
 - **Failure isolation:** A single failed simulation must not halt remaining queued simulations in a campaign. Failed runs are marked in the database; the run loop continues.
 - **Idempotency:** Import, compilation, and database migrations must be safe to re-run against already-processed inputs without side effects.
@@ -465,34 +433,15 @@
 | macOS | Fully supported |
 | Linux | Fully supported (primary CI target) |
 | Windows | Fully supported |
-| Slurm HPC (`sbatch`) | Fully supported (current release) |
-| PBS HPC (`qsub`) | Deferred — Phase 3 |
+| Slurm HPC (`sbatch`) | Fully supported |
+| PBS HPC (`qsub`) | Deferred |
 
-### Framework Scope
-- PhysiCell is the only supported ABM framework in this release. Generalization to other frameworks is explicitly deferred to v2.
+## Deferred work
 
----
-
-## Release Plan
-
-### Phase 1 — Workflow Templates *(current focus)*
-- **Goal:** Ship predefined workflow templates for common study types (parameter sweeps, sensitivity analysis, calibration to population data).
-- **In scope:** At least one reproducible end-to-end tutorial workflow usable from a clean checkout.
-- **Acceptance gate:** Tutorial workflow runs end-to-end on all supported platforms.
-
-### Phase 2 — Import Wizard
-- **Goal:** Ship an interactive GUI for the model import process to support less experienced users.
-- **In scope:** `importProject` wizard with browse/validate/status table UI (see Feature: Model Import Wizard).
-- **Acceptance gate:** Wizard surfaces validation feedback correctly; import result is equivalent to CLI behavior.
-
-### Phase 3 — HPC Enhancements (qsub + Generalized Scheduler)
-- **Goal:** Add PBS/`qsub` support alongside existing Slurm/`sbatch`; unify the HPC job submission API.
-- **In scope:** `qsub` submission backend, generalized cluster workflow support.
-
-### Future (v2) — Framework Generalization
-- Generalize PCMM to support ABM frameworks beyond PhysiCell.
-- Split ModelManager.jl exports into a developer API (for building simulator packages like PCMM) and a user API (re-exported by simulator packages for end users running campaigns). Consider a `ModelManager.UserAPI` submodule pattern so simulator packages can selectively re-export.
-- Could-have features revisited: interactive dashboards, automated report generation.
+- Import wizard (see Feature: Model Import Wizard).
+- PBS/`qsub` and a generalised scheduler; SLURM and local execution are the supported paths.
+- PhysiPKPD as an input location (dosing schedules: representation, placement under `inputs/`, participation in variation).
+- Generalisation beyond PhysiCell, including splitting ModelManager's exports into a developer API and a re-exportable user API.
 
 ---
 
@@ -504,9 +453,6 @@
 3. **PhysiPKPD inputs:** PhysiPKPD is not yet representable as a PCMM input location. Needs a design covering how dosing schedules are described, where they live under `inputs/`, and how they participate in parameter variation.
 
 ### Assumptions
-1. PhysiCell is the only supported ABM framework in this release; generalization is deferred to v2.
-2. No user-facing telemetry or usage tracking will be implemented. Success is measured through test pass rates, tutorial reproducibility, and failure isolation rates.
-3. `qsub` (PBS) is not required for the current release; Slurm (`sbatch`) and local execution are the supported execution paths.
-4. Users are responsible for providing a working `g++` compiler; PCMM does not manage compiler installation.
-5. Primary deployment is on researcher workstations or HPC clusters; cloud-native execution is not targeted in this release.
+1. Users are responsible for providing a working `g++` compiler; PCMM does not manage compiler installation.
+2. Primary deployment is on researcher workstations or HPC clusters; cloud-native execution is not targeted.
 
